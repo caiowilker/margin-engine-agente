@@ -21,30 +21,58 @@ if %errorLevel% neq 0 (
 )
 echo [OK] Rodando como Administrador
 
-:: -- Verificar se Node.js esta instalado ------------------------------------
+:: -- Verificar e instalar Node.js -------------------------------------------
 where node >nul 2>&1
 if %errorLevel% neq 0 (
     echo.
-    echo [ERRO] Node.js nao encontrado no sistema.
+    echo [AVISO] Node.js nao encontrado. Baixando e instalando automaticamente...
+    echo         Aguarde, isso pode levar alguns minutos.
     echo.
-    echo  Baixe e instale o Node.js LTS em: https://nodejs.org
-    echo  Depois execute este instalador novamente.
-    echo.
-    pause
-    exit /b 1
+
+    :: Baixa o instalador LTS via PowerShell
+    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+      "Invoke-WebRequest -Uri 'https://nodejs.org/dist/v20.19.2/node-v20.19.2-x64.msi' -OutFile '%TEMP%\node-setup.msi' -UseBasicParsing"
+
+    if not exist "%TEMP%\node-setup.msi" (
+        echo [ERRO] Falha ao baixar o Node.js.
+        echo  Verifique sua conexao com a internet e tente novamente.
+        echo  Ou baixe manualmente em: https://nodejs.org
+        pause
+        exit /b 1
+    )
+
+    echo  Instalando Node.js (instalacao silenciosa)...
+    msiexec /i "%TEMP%\node-setup.msi" /quiet /norestart ADDLOCAL=ALL
+
+    :: Atualiza o PATH da sessao atual para encontrar o node recem instalado
+    set "PATH=%PATH%;C:\Program Files\nodejs"
+
+    :: Aguarda instalacao finalizar
+    timeout /t 5 /nobreak >nul
+
+    where node >nul 2>&1
+    if %errorLevel% neq 0 (
+        echo [ERRO] Instalacao do Node.js falhou ou PATH nao foi atualizado.
+        echo  Reinicie o computador e execute este instalador novamente.
+        pause
+        exit /b 1
+    )
+    echo [OK] Node.js instalado com sucesso
+) else (
+    :: Verifica versao minima (18+)
+    node -e "var v=parseInt(process.version.slice(1));if(v<18){process.exit(1)}" >nul 2>&1
+    if %errorLevel% neq 0 (
+        echo [AVISO] Node.js desatualizado detectado. Atualizando para LTS...
+        powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+          "Invoke-WebRequest -Uri 'https://nodejs.org/dist/v20.19.2/node-v20.19.2-x64.msi' -OutFile '%TEMP%\node-setup.msi' -UseBasicParsing"
+        msiexec /i "%TEMP%\node-setup.msi" /quiet /norestart ADDLOCAL=ALL
+        set "PATH=%PATH%;C:\Program Files\nodejs"
+        timeout /t 5 /nobreak >nul
+        echo [OK] Node.js atualizado
+    )
 )
 
-:: Verifica versao minima do Node (18+)
-for /f "tokens=1 delims=v." %%A in ('node --version 2^>nul') do set NODE_MAJOR=%%A
-for /f "tokens=2 delims=v." %%A in ('node --version 2^>nul') do set NODE_MAJOR=%%A
-node -e "var v=parseInt(process.version.slice(1));if(v<18){process.exit(1)}" >nul 2>&1
-if %errorLevel% neq 0 (
-    echo [ERRO] Node.js versao muito antiga. Versao minima: 18.
-    echo  Baixe a versao LTS em: https://nodejs.org
-    pause
-    exit /b 1
-)
-for /f %%V in ('node --version') do echo [OK] Node.js %%V encontrado
+for /f %%V in ('node --version 2^>nul') do echo [OK] Node.js %%V pronto
 
 :: -- Verificar se os arquivos do projeto estao presentes --------------------
 if not exist "%~dp0index.js" (
@@ -114,6 +142,9 @@ if %errorLevel% neq 0 (
     pause
     exit /b 1
 )
+
+:: -- Limpar instalador temporario -------------------------------------------
+if exist "%TEMP%\node-setup.msi" del /q "%TEMP%\node-setup.msi" >nul 2>&1
 
 :: -- Conclusao ---------------------------------------------------------------
 echo.
