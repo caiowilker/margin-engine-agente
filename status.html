@@ -1094,6 +1094,17 @@
       let pollingTimer = null;
       let lastDiag = null;
 
+      // Busca o token local automaticamente — sem precisar colar manualmente
+      async function carregarToken() {
+        try {
+          const r = await fetch(API + "/token");
+          if (r.ok) {
+            const d = await r.json();
+            localToken = d.token || "";
+          }
+        } catch (_) {}
+      }
+
       // ── TOAST ──
       function toast(msg, type = "info", dur = 3000) {
         const el = document.getElementById("toast");
@@ -1520,8 +1531,10 @@
       });
 
       // ── START ──
-      poll();
-      pollingTimer = setInterval(poll, POLL_INTERVAL);
+      carregarToken().then(() => {
+        poll();
+        pollingTimer = setInterval(poll, POLL_INTERVAL);
+      });
     </script>
   </body>
 </html>

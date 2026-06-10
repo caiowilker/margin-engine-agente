@@ -794,6 +794,12 @@ app.get("/contingencia/epec/pendentes", autenticarLocal, (req, res) => {
 });
 
 // Updater
+// Endpoint público (só localhost) que retorna o token local para o status.html
+// Não expõe risco pois só serve de localhost — qualquer processo local já tem acesso total.
+app.get("/token", (req, res) => {
+  res.json({ token: LOCAL_TOKEN });
+});
+
 app.post("/updater/verificar", autenticarLocal, async (req, res) => {
   if (updaterState.atualizando)
     return res.json({ ok: false, mensagem: "Atualizacao ja em andamento." });
