@@ -570,7 +570,7 @@ app.post("/ativar", async (req, res) => {
     const resp = await fetch(`${backendUrl}/pdv/ativar`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ codigo }),
+      body: JSON.stringify({ codigoAtivacao: codigo }),
     });
     if (!resp.ok) {
       const texto = await resp.text();
