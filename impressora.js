@@ -42,23 +42,64 @@ const PRINTER_NAME = process.env.PRINTER_NAME || "";
 // ─────────────────────────────────────────────────────────────────────────────
 // ── Obter device ─────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
+// Retorna o device configurado, ou null se não houver impressora disponível.
+// Nunca lança exceção por ausência de impressora — quem chama decide o que fazer.
+//
+// Estratégia de auto-descoberta:
+//   1. Tenta o tipo configurado em PRINTER_TYPE (usb ou network).
+//   2. Se USB configurado mas nenhuma encontrada → tenta rede como fallback.
+//   3. Se rede configurada mas escpos-network não instalado → tenta USB como fallback.
+//   4. Só retorna null se realmente não houver nada disponível no PC.
 function obterDevice() {
-  if (PRINTER_TYPE === "network") {
-    if (!escposNetwork) throw new Error("escpos-network nao instalado.");
+  // ── Tenta USB ────────────────────────────────────────────────────────────
+  function tentarUSB() {
+    if (!escposUSB) return null;
+    let devices;
+    try {
+      devices = escpos.USB.findPrinter();
+    } catch (_) {
+      return null;
+    }
+    if (!devices || devices.length === 0) return null;
+
+    const device =
+      devices.length === 1 || !PRINTER_NAME
+        ? devices[0]
+        : devices.find((d) => d.deviceDescriptor?.iProduct === PRINTER_NAME) ||
+          devices[0];
+
+    logger.info(
+      { iProduct: device.deviceDescriptor?.iProduct || "desconhecido" },
+      "impressora: USB encontrada",
+    );
+    return new escpos.USB(device);
+  }
+
+  // ── Tenta rede ───────────────────────────────────────────────────────────
+  function tentarNetwork() {
+    if (!escposNetwork) return null;
+    logger.info(
+      { host: PRINTER_HOST, porta: PRINTER_PORT },
+      "impressora: usando impressora de rede",
+    );
     return new escpos.Network(PRINTER_HOST, PRINTER_PORT);
   }
 
-  if (!escposUSB) throw new Error("escpos-usb nao instalado.");
-  const devices = escpos.USB.findPrinter();
-  if (!devices || devices.length === 0) {
-    throw new Error("Nenhuma impressora USB encontrada.");
+  // ── Auto-descoberta ──────────────────────────────────────────────────────
+  if (PRINTER_TYPE === "network") {
+    const device = tentarNetwork() || tentarUSB();
+    if (!device) {
+      logger.warn("impressora: nenhuma impressora encontrada (rede nem USB).");
+    }
+    return device;
   }
-  return devices.length === 1 || !PRINTER_NAME
-    ? new escpos.USB(devices[0])
-    : new escpos.USB(
-        devices.find((d) => d.deviceDescriptor?.iProduct === PRINTER_NAME) ||
-          devices[0],
-      );
+
+  // USB (padrão) — com fallback para rede se não achar nada USB
+  const device = tentarUSB() || tentarNetwork();
+  if (!device) {
+    logger.warn("impressora: nenhuma impressora encontrada (USB nem rede).");
+  }
+  return device;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -66,24 +107,33 @@ function obterDevice() {
 // ─────────────────────────────────────────────────────────────────────────────
 function testar() {
   return new Promise((resolve) => {
+    let device;
     try {
-      const device = obterDevice();
-      device.open((err) => {
-        if (err) {
-          logger.warn(
-            { err: err.message },
-            "impressora: falha ao abrir na verificacao",
-          );
-          resolve(false);
-          return;
-        }
-        device.close();
-        resolve(true);
-      });
+      device = obterDevice();
     } catch (err) {
-      logger.warn({ err: err.message }, "impressora: device nao encontrado");
-      resolve(false);
+      logger.warn(
+        { err: err.message },
+        "impressora: erro inesperado ao obter device",
+      );
+      return resolve(false);
     }
+
+    if (!device) {
+      return resolve(false);
+    }
+
+    device.open((err) => {
+      if (err) {
+        logger.warn(
+          { err: err.message },
+          "impressora: falha ao abrir na verificacao",
+        );
+        resolve(false);
+        return;
+      }
+      device.close();
+      resolve(true);
+    });
   });
 }
 
@@ -102,6 +152,11 @@ function imprimirCupom(payload) {
         "impressora: nao foi possivel obter device",
       );
       return reject(err);
+    }
+
+    if (!device) {
+      logger.warn("impressora: impressora nao disponivel, cupom nao impresso.");
+      return resolve(false);
     }
 
     device.open((err) => {
@@ -347,6 +402,11 @@ function abrirGaveta() {
       return reject(err);
     }
 
+    if (!device) {
+      logger.warn("impressora: impressora nao disponivel, gaveta nao aberta.");
+      return resolve(false);
+    }
+
     device.open((err) => {
       if (err) {
         logger.error(
@@ -378,6 +438,13 @@ function imprimirFechamento(payload) {
         "impressora: nao foi possivel obter device para fechamento",
       );
       return reject(err);
+    }
+
+    if (!device) {
+      logger.warn(
+        "impressora: impressora nao disponivel, fechamento nao impresso.",
+      );
+      return resolve(false);
     }
 
     device.open((err) => {
@@ -548,6 +615,13 @@ function imprimirMovimentoCaixa(payload) {
         "impressora: nao foi possivel obter device para movimento",
       );
       return reject(err);
+    }
+
+    if (!device) {
+      logger.warn(
+        "impressora: impressora nao disponivel, movimento de caixa nao impresso.",
+      );
+      return resolve(false);
     }
 
     device.open((err) => {
