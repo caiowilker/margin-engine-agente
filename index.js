@@ -506,6 +506,8 @@ app.get("/diagnostico", async (req, res) => {
       ativado: config.ativado,
       pdvNome: config.pdvNome || "PDV",
       backendUrl: config.backendUrl || null,
+      tenantId: config.tenantId || null,
+      dispositivoId: config.dispositivoId || null,
       temFrontend: fs.existsSync(FRONTEND_DIST),
       porta: PORT,
       autenticacaoLocal: (process.env.LOCAL_AUTH || "true") !== "false",
