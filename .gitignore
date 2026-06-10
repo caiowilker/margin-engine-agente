@@ -1,0 +1,29 @@
+# Dependencias
+node_modules/
+
+# Build / executavel gerado
+dist/
+
+# Configuracao local com dados sensiveis
+.env
+
+# Dados locais da maquina (banco, logs, vault criptografado)
+data/
+
+# Frontend (tem repo proprio — copie o build como frontend-dist/)
+frontend-dist/
+
+# Fallback criptografado do cofre de credenciais
+.vault
+
+# Backup pre-atualizacao (gerado pelo updater automatico)
+data/backup-pre-update/
+
+# Logs do npm
+npm-debug.log*
+
+# Editores
+.vscode/
+.idea/
+*.swp
+*.swo

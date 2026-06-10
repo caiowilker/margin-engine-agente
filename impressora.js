@@ -1,20 +1,18 @@
 // ============================================================
-// PDV Margin Engine — Módulo Impressora Térmica v4.1
+// PDV Margin Engine — Módulo Impressora Térmica v4.2
 //
-// CORREÇÃO v4.1:
-//   ✓ Título do cupom muda conforme o modo:
-//       - Sem chaveNfe: "CUPOM NÃO FISCAL" (padrão)
-//       - Com chaveNfe: "CUPOM FISCAL NFC-e" (cabeçalho correto)
-//     Antes o título era sempre "CUPOM NÃO FISCAL" mesmo quando havia
-//     NFC-e emitida — causava inconsistência visual e potencial autuação.
-//   ✓ Rodapé também diferencia: cupom fiscal imprime chave completa e
-//     instrução de consulta; cupom não fiscal imprime aviso de documento
-//     sem validade fiscal (exigência legal).
+// v4.2 — Troca console.log por logger estruturado (pino)
+//   Todos os logs de erro/info agora vão para o arquivo
+//   rotativo em vez de stdout avulso.
+//
+// v4.1 — Título do cupom muda conforme o modo:
+//   - Sem chaveNfe: "CUPOM NAO FISCAL" (padrão)
+//   - Com chaveNfe: "CUPOM FISCAL NFC-e" (cabeçalho correto)
+//   Rodapé diferencia: fiscal imprime chave completa e instrução;
+//   não fiscal imprime aviso sem validade fiscal.
 //
 // v4.0 — Sprint 1.1: IBPT no cupom (Lei 12.741/2012)
-//   Adiciona seção obrigatória de carga tributária aproximada.
-//   Formato: "Valor aprox. dos tributos: R$ X,XX (XX.XX%)"
-//   Federal: R$ X,XX  Estadual: R$ X,XX
+//   Seção obrigatória de carga tributária aproximada.
 //
 // Suporta:
 //   - USB  (Windows: detecta automaticamente)
@@ -24,6 +22,7 @@
 require("dotenv").config();
 
 const escpos = require("escpos");
+const logger = require("./logger");
 
 let escposUSB, escposNetwork;
 try {
@@ -37,7 +36,7 @@ try {
 
 const PRINTER_TYPE = (process.env.PRINTER_TYPE || "usb").toLowerCase();
 const PRINTER_HOST = process.env.PRINTER_HOST || "192.168.1.100";
-const PRINTER_PORT = parseInt(process.env.PRINTER_PORT || "9101"); // 9101 evita colisão com agente (9100)
+const PRINTER_PORT = parseInt(process.env.PRINTER_PORT || "9101");
 const PRINTER_NAME = process.env.PRINTER_NAME || "";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -45,11 +44,11 @@ const PRINTER_NAME = process.env.PRINTER_NAME || "";
 // ─────────────────────────────────────────────────────────────────────────────
 function obterDevice() {
   if (PRINTER_TYPE === "network") {
-    if (!escposNetwork) throw new Error("escpos-network não instalado.");
+    if (!escposNetwork) throw new Error("escpos-network nao instalado.");
     return new escpos.Network(PRINTER_HOST, PRINTER_PORT);
   }
 
-  if (!escposUSB) throw new Error("escpos-usb não instalado.");
+  if (!escposUSB) throw new Error("escpos-usb nao instalado.");
   const devices = escpos.USB.findPrinter();
   if (!devices || devices.length === 0) {
     throw new Error("Nenhuma impressora USB encontrada.");
@@ -71,13 +70,18 @@ function testar() {
       const device = obterDevice();
       device.open((err) => {
         if (err) {
+          logger.warn(
+            { err: err.message },
+            "impressora: falha ao abrir na verificacao",
+          );
           resolve(false);
           return;
         }
         device.close();
         resolve(true);
       });
-    } catch (_) {
+    } catch (err) {
+      logger.warn({ err: err.message }, "impressora: device nao encontrado");
       resolve(false);
     }
   });
@@ -93,21 +97,29 @@ function imprimirCupom(payload) {
     try {
       device = obterDevice();
     } catch (err) {
+      logger.error(
+        { err: err.message },
+        "impressora: nao foi possivel obter device",
+      );
       return reject(err);
     }
 
     device.open((err) => {
-      if (err)
+      if (err) {
+        logger.error(
+          { err: err.message },
+          "impressora: falha ao abrir para cupom",
+        );
         return reject(new Error("Falha ao abrir impressora: " + err.message));
+      }
 
       try {
         const printer = new escpos.Printer(device, { encoding: "CP860" });
         const empresa = payload.empresa || {};
         const itens = payload.itens || [];
-        const ibpt = payload.ibpt; // CargaTributariaIbpt | undefined
+        const ibpt = payload.ibpt;
         const largura = 42;
 
-        // CORREÇÃO v4.1: determina o modo fiscal pelo campo chaveNfe
         const isFiscal = !!(payload.chaveNfe && payload.chaveNfe.trim());
 
         const linha = (txt) => txt.padEnd(largura, " ").slice(0, largura);
@@ -125,7 +137,7 @@ function imprimirCupom(payload) {
           return esq + " ".repeat(espaco) + dir;
         };
 
-        // ── Cabeçalho da empresa ──────────────────────────────────────────────
+        // ── Cabeçalho da empresa ─────────────────────────────────────────────
         printer
           .font("a")
           .align("ct")
@@ -147,18 +159,16 @@ function imprimirCupom(payload) {
 
         printer.align("lt").text(sep()).style("b");
 
-        // CORREÇÃO v4.1: título correto por modo
         if (isFiscal) {
           printer.text(centro("CUPOM FISCAL NFC-e"));
         } else {
-          printer.text(centro("CUPOM NÃO FISCAL"));
+          printer.text(centro("CUPOM NAO FISCAL"));
         }
 
         printer.style("normal").text(sep());
 
-        // Número e data
         printer.text(
-          `Nº: ${payload.numeroVenda || ""}    ${new Date(payload.emitidoEm || Date.now()).toLocaleString("pt-BR")}`,
+          `N: ${payload.numeroVenda || ""}    ${new Date(payload.emitidoEm || Date.now()).toLocaleString("pt-BR")}`,
         );
         if (payload.operador) printer.text(`Operador: ${payload.operador}`);
         if (payload.nomeCliente && payload.nomeCliente !== "Consumidor") {
@@ -167,11 +177,11 @@ function imprimirCupom(payload) {
         if (payload.cpfCliente) printer.text(`CPF: ${payload.cpfCliente}`);
         printer.text(sep());
 
-        // ── Cabeçalho da tabela de itens ─────────────────────────────────────
-        printer.text(linha("ITEM  DESCRIÇÃO           QTD    TOTAL"));
+        // ── Cabeçalho da tabela de itens ────────────────────────────────────
+        printer.text(linha("ITEM  DESCRICAO           QTD    TOTAL"));
         printer.text(sep());
 
-        // ── Itens ─────────────────────────────────────────────────────────────
+        // ── Itens ────────────────────────────────────────────────────────────
         itens.forEach((item, i) => {
           const num = String(i + 1).padStart(2, "0");
           const nome = (item.nome || "").slice(0, 20).padEnd(20);
@@ -185,7 +195,7 @@ function imprimirCupom(payload) {
 
         printer.text(sep());
 
-        // ── Totais ────────────────────────────────────────────────────────────
+        // ── Totais ───────────────────────────────────────────────────────────
         if (payload.desconto && payload.desconto > 0) {
           printer.text(
             direita(
@@ -224,14 +234,12 @@ function imprimirCupom(payload) {
 
         printer.text(sep());
 
-        // ── IBPT — Lei 12.741/2012 ────────────────────────────────────────────
-        // Exibição obrigatória em TODOS os cupons (fiscais e não fiscais).
-        // Multa por ausência: R$ 200 a R$ 1.000 por autuação.
+        // ── IBPT — Lei 12.741/2012 ───────────────────────────────────────────
         if (ibpt && ibpt.total > 0) {
           const pct =
             typeof ibpt.percentualTotal === "number"
               ? ibpt.percentualTotal.toFixed(2) + "%"
-              : "—";
+              : "-";
 
           printer
             .align("lt")
@@ -240,28 +248,17 @@ function imprimirCupom(payload) {
             .text("conforme Lei Fed. 12.741/13 (IBPT):")
             .text(direita(`Total: ${pct}`, moeda(ibpt.total)));
 
-          if (ibpt.federal > 0) {
+          if (ibpt.federal > 0)
             printer.text(direita(`  Federal:`, moeda(ibpt.federal)));
-          }
-          if (ibpt.estadual > 0) {
+          if (ibpt.estadual > 0)
             printer.text(direita(`  Estadual:`, moeda(ibpt.estadual)));
-          }
-          if (ibpt.municipal > 0) {
+          if (ibpt.municipal > 0)
             printer.text(direita(`  Municipal:`, moeda(ibpt.municipal)));
-          }
           printer.text(sep());
         }
 
-        // ── Dados NFC-e / rodapé fiscal ───────────────────────────────────────
-        //
-        // CORREÇÃO v4.1: separa claramente os dois modos:
-        //
-        //   Fiscal:     imprime chave, série, número e QR Code
-        //   Não fiscal: imprime aviso de documento sem validade fiscal
-        //               + número do PDV para rastreabilidade interna
-        //   Offline:    imprime aviso de sincronização pendente
+        // ── Dados NFC-e / rodapé ─────────────────────────────────────────────
         if (isFiscal) {
-          // Modo NFC-e — imprime dados completos do documento fiscal
           printer
             .align("ct")
             .style("b")
@@ -286,7 +283,6 @@ function imprimirCupom(payload) {
             }
           }
         } else if (payload.origem === "offline") {
-          // Modo offline — venda enfileirada, será sincronizada depois
           printer
             .align("ct")
             .text(sep())
@@ -294,7 +290,6 @@ function imprimirCupom(payload) {
             .text(`N: ${payload.numeroVenda || ""}`)
             .text("Sera sincronizada quando a internet retornar.");
         } else {
-          // Modo cupom não fiscal padrão
           printer
             .align("ct")
             .text(sep())
@@ -305,7 +300,7 @@ function imprimirCupom(payload) {
             .text(`Ref. interno: ${payload.numeroVenda || ""}`);
         }
 
-        // ── Rodapé ────────────────────────────────────────────────────────────
+        // ── Rodapé ───────────────────────────────────────────────────────────
         printer
           .align("ct")
           .text(sep())
@@ -315,11 +310,21 @@ function imprimirCupom(payload) {
           .text("")
           .text("")
           .cut()
-          .close(() => resolve(true));
+          .close(() => {
+            logger.info(
+              { numeroVenda: payload.numeroVenda },
+              "impressora: cupom impresso",
+            );
+            resolve(true);
+          });
       } catch (err) {
         try {
           device.close();
         } catch (_) {}
+        logger.error(
+          { err: err.message },
+          "impressora: erro ao imprimir cupom",
+        );
         reject(err);
       }
     });
@@ -327,7 +332,7 @@ function imprimirCupom(payload) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ── Abrir gaveta ──────────────────────────────────────────────────────────────
+// ── Abrir gaveta ─────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 function abrirGaveta() {
   return new Promise((resolve, reject) => {
@@ -335,34 +340,54 @@ function abrirGaveta() {
     try {
       device = obterDevice();
     } catch (err) {
+      logger.error(
+        { err: err.message },
+        "impressora: nao foi possivel obter device para gaveta",
+      );
       return reject(err);
     }
 
     device.open((err) => {
-      if (err)
+      if (err) {
+        logger.error(
+          { err: err.message },
+          "impressora: falha ao abrir para gaveta",
+        );
         return reject(
           new Error("Falha ao abrir impressora para gaveta: " + err.message),
         );
+      }
       const printer = new escpos.Printer(device);
-      printer.cashdraw(2).close(() => resolve(true));
+      printer.cashdraw(2).close(() => {
+        logger.info("impressora: gaveta aberta");
+        resolve(true);
+      });
     });
   });
 }
 
 // ── Relatório de fechamento de caixa ─────────────────────────────────────────
-// payload: ImpressaoFechamento (veja agenteLocal.ts)
 function imprimirFechamento(payload) {
   return new Promise((resolve, reject) => {
     let device;
     try {
       device = obterDevice();
     } catch (err) {
+      logger.error(
+        { err: err.message },
+        "impressora: nao foi possivel obter device para fechamento",
+      );
       return reject(err);
     }
 
     device.open((err) => {
-      if (err)
+      if (err) {
+        logger.error(
+          { err: err.message },
+          "impressora: falha ao abrir para fechamento",
+        );
         return reject(new Error("Falha ao abrir impressora: " + err.message));
+      }
 
       try {
         const printer = new escpos.Printer(device, { encoding: "CP860" });
@@ -470,7 +495,7 @@ function imprimirFechamento(payload) {
         const diff = payload.diferenca;
         const diffStr =
           Math.abs(diff) < 0.02
-            ? "OK — caixa confere"
+            ? "OK - caixa confere"
             : diff > 0
               ? "Sobra: " + fmt(diff)
               : "Falta: " + fmt(Math.abs(diff));
@@ -490,11 +515,21 @@ function imprimirFechamento(payload) {
           .text("Caixa encerrado em " + payload.fechamentoEm)
           .feed(4)
           .cut()
-          .close(() => resolve(true));
+          .close(() => {
+            logger.info(
+              { operador: payload.operador },
+              "impressora: fechamento impresso",
+            );
+            resolve(true);
+          });
       } catch (err) {
         try {
           device.close();
         } catch (_) {}
+        logger.error(
+          { err: err.message },
+          "impressora: erro ao imprimir fechamento",
+        );
         reject(err);
       }
     });
@@ -502,19 +537,27 @@ function imprimirFechamento(payload) {
 }
 
 // ── Comprovante de suprimento / sangria ──────────────────────────────────────
-// payload: ImpressaoMovimentoCaixa (veja agenteLocal.ts)
 function imprimirMovimentoCaixa(payload) {
   return new Promise((resolve, reject) => {
     let device;
     try {
       device = obterDevice();
     } catch (err) {
+      logger.error(
+        { err: err.message },
+        "impressora: nao foi possivel obter device para movimento",
+      );
       return reject(err);
     }
 
     device.open((err) => {
-      if (err)
+      if (err) {
+        logger.error(
+          { err: err.message },
+          "impressora: falha ao abrir para movimento de caixa",
+        );
         return reject(new Error("Falha ao abrir impressora: " + err.message));
+      }
 
       try {
         const printer = new escpos.Printer(device, { encoding: "CP860" });
@@ -553,11 +596,21 @@ function imprimirMovimentoCaixa(payload) {
           .text(linha)
           .feed(3)
           .cut()
-          .close(() => resolve(true));
+          .close(() => {
+            logger.info(
+              { tipo: payload.tipo, valor: payload.valor },
+              "impressora: movimento de caixa impresso",
+            );
+            resolve(true);
+          });
       } catch (err) {
         try {
           device.close();
         } catch (_) {}
+        logger.error(
+          { err: err.message },
+          "impressora: erro ao imprimir movimento de caixa",
+        );
         reject(err);
       }
     });

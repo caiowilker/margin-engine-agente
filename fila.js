@@ -1,46 +1,44 @@
 // ============================================================
-// PDV Margin Engine — Módulo de Fila Offline com SQLite v3.0
+// PDV Margin Engine — Modulo de Fila Offline com SQLite v4.0
 //
-// NOVIDADES v3.0:
-//   ✓ atualizarConfig() — recebe novo token/url após ativação sem reiniciar
-//   ✓ Configuração via config.json (priority) ou process.env (fallback)
-//   ✓ Resto igual v2: WAL, idempotência, lote de 50, MAX_TENTATIVAS
+// MUDANCAS v4.0:
+//   ✓ Instancia do banco INJETADA via inicializar(db, url, token)
+//     Fim do problema de multiplos writers no mesmo arquivo SQLite.
+//     index.js cria o Database uma unica vez e passa para ca.
+//   ✓ atualizarConfig() continua funcionando para atualizacao
+//     de token apos ativacao sem reiniciar o servico.
+//   ✓ Todos os console.log substituidos por logger estruturado.
+//   ✓ Resto identico v3: WAL, idempotencia, lote de 50, MAX_TENTATIVAS.
 // ============================================================
 
-const Database = require("better-sqlite3");
 const path = require("path");
-const fs = require("fs");
+const log = require("./logger").child({ modulo: "fila" });
 
-// ── Configuração ──────────────────────────────────────────────────────────────
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data", "fila.db");
 const MAX_TENTATIVAS = parseInt(process.env.MAX_TENTATIVAS || "10");
 const TIMEOUT_MS = parseInt(process.env.BACKEND_TIMEOUT_MS || "5000");
 
 // Carregadas dinamicamente (podem ser atualizadas por atualizarConfig)
-let BACKEND_URL = process.env.BACKEND_URL || "";
-let BACKEND_TOKEN = process.env.BACKEND_TOKEN || "";
+let BACKEND_URL = "";
+let BACKEND_TOKEN = "";
+let db = null;
 
-let db;
-
-// ── Atualizar config sem reiniciar (chamado após ativação) ────────────────────
+// ── Atualizar config sem reiniciar (chamado apos ativacao) ────────────────────
 function atualizarConfig(url, token) {
   BACKEND_URL = url;
   BACKEND_TOKEN = token;
   process.env.BACKEND_URL = url;
   process.env.BACKEND_TOKEN = token;
-  console.log(`[Fila] Config atualizada — backend: ${url}`);
+  log.info({ backend: url }, "Config atualizada");
 }
 
-// ── Inicialização do banco ────────────────────────────────────────────────────
-function inicializar() {
-  const dir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+// ── Inicializacao do modulo ───────────────────────────────────────────────────
+// Recebe a instancia do banco JA CRIADA por index.js.
+// Cria as tabelas se nao existirem.
+function inicializar(instanciaDb, backendUrl, backendToken) {
+  db = instanciaDb;
 
-  db = new Database(DB_PATH);
-  db.pragma("journal_mode = WAL");
-  db.pragma("synchronous = NORMAL");
-  db.pragma("foreign_keys = ON");
-  db.pragma("temp_store = MEMORY");
+  if (backendUrl) BACKEND_URL = backendUrl;
+  if (backendToken) BACKEND_TOKEN = backendToken;
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS fila_vendas (
@@ -61,7 +59,7 @@ function inicializar() {
       ON fila_vendas(numero_venda);
   `);
 
-  console.log(`[Fila SQLite] Banco iniciado em ${DB_PATH}`);
+  log.info("Modulo de fila inicializado");
 }
 
 // ── Enfileirar venda ──────────────────────────────────────────────────────────
@@ -71,17 +69,16 @@ function enfileirar(payload) {
     VALUES (?, ?)
   `);
   stmt.run(payload.numeroVenda, JSON.stringify(payload));
+  log.debug({ numeroVenda: payload.numeroVenda }, "Venda enfileirada");
 }
 
 // ── Tentar backend diretamente ────────────────────────────────────────────────
 async function tentarBackend(payload) {
   if (!BACKEND_URL || !BACKEND_TOKEN) {
-    return { ok: false, erro: "Agente não configurado — ative primeiro." };
+    return { ok: false, erro: "Agente nao configurado — ative primeiro." };
   }
 
-  // node-fetch v2 (CommonJS)
   const fetch = require("node-fetch");
-
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
@@ -122,13 +119,11 @@ async function sincronizar() {
 
   const pendentes = db
     .prepare(
-      `
-    SELECT id, numero_venda, payload, tentativas
-    FROM   fila_vendas
-    WHERE  status = 'PENDENTE'
-    ORDER  BY id
-    LIMIT  50
-  `,
+      `SELECT id, numero_venda, payload, tentativas
+       FROM   fila_vendas
+       WHERE  status = 'PENDENTE'
+       ORDER  BY id
+       LIMIT  50`,
     )
     .all();
 
@@ -200,6 +195,11 @@ async function sincronizar() {
   });
 
   processarLote(respostas);
+
+  if (sincronizadas > 0 || falhas > 0) {
+    log.info({ sincronizadas, falhas }, "Sincronizacao concluida");
+  }
+
   return { sincronizadas, falhas };
 }
 
@@ -219,18 +219,20 @@ function registrarFalhaLote(pendentes, erro) {
     for (const row of rows) stmt.run(erro, row.id);
   });
   tx(pendentes);
+  log.warn(
+    { erro, quantidade: pendentes.length },
+    "Falha no lote de sincronizacao",
+  );
 }
 
 // ── Consultas ─────────────────────────────────────────────────────────────────
 function contadores() {
   const row = db
     .prepare(
-      `
-    SELECT
-      SUM(CASE WHEN status = 'PENDENTE'         THEN 1 ELSE 0 END) AS pendentes,
-      SUM(CASE WHEN status = 'FALHA_PERMANENTE' THEN 1 ELSE 0 END) AS falhas
-    FROM fila_vendas
-  `,
+      `SELECT
+        SUM(CASE WHEN status = 'PENDENTE'         THEN 1 ELSE 0 END) AS pendentes,
+        SUM(CASE WHEN status = 'FALHA_PERMANENTE' THEN 1 ELSE 0 END) AS falhas
+       FROM fila_vendas`,
     )
     .get();
   return {
@@ -242,19 +244,17 @@ function contadores() {
 function listar() {
   return db
     .prepare(
-      `
-    SELECT id, numero_venda, status, tentativas, ultimo_erro, criado_em, sincronizado_em
-    FROM   fila_vendas
-    ORDER  BY id DESC
-    LIMIT  200
-  `,
+      `SELECT id, numero_venda, status, tentativas, ultimo_erro, criado_em, sincronizado_em
+       FROM   fila_vendas
+       ORDER  BY id DESC
+       LIMIT  200`,
     )
     .all();
 }
 
 module.exports = {
   inicializar,
-  atualizarConfig, // ← novo
+  atualizarConfig,
   enfileirar,
   tentarBackend,
   sincronizar,
