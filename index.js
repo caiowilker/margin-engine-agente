@@ -545,18 +545,22 @@ app.get("/config", (req, res) => {
 });
 
 app.post("/ativar", async (req, res) => {
-  const { codigo, backendUrl } = req.body || {};
-  if (!codigo || !backendUrl)
+  const { codigo, codigoAtivacao, backendUrl, pdvNome } = req.body || {};
+  const codigoFinal = codigoAtivacao || codigo;
+  if (!codigoFinal || !backendUrl)
     return res
       .status(400)
-      .json({ erro: "codigo e backendUrl são obrigatórios." });
+      .json({ erro: "codigoAtivacao e backendUrl são obrigatórios." });
 
   const fetch = require("node-fetch");
   try {
     const resp = await fetch(`${backendUrl}/pdv/ativar`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ codigo }),
+      body: JSON.stringify({
+        codigoAtivacao: codigoFinal,
+        ...(pdvNome ? { pdvNome } : {}),
+      }),
     });
     if (!resp.ok) {
       const texto = await resp.text();
