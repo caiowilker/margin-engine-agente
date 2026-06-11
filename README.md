@@ -10,6 +10,9 @@ e ao modo de contingência EPEC automático.
 
 **Basta executar o `setup.bat` como Administrador.**
 
+> Se aparecer erro `'cho' não é reconhecido` ou `'PDV' não é reconhecido`, o arquivo
+> estava com codificação errada. Use o `setup.bat` atual (ele chama o `setup.ps1`).
+
 O instalador:
 - Detecta se o Node.js 18+ está instalado
 - Se não estiver → instala automaticamente via `winget` ou baixando o `.msi`
@@ -96,9 +99,12 @@ modernos (localhost é exceção de mixed-content).
 | GET    | /fila                             | Lista vendas na fila SQLite                 |
 | POST   | /fila/sincronizar                 | Força sync manual com o backend             |
 | POST   | /impressora/imprimir              | Imprime cupom na térmica                    |
+| POST   | /impressora/cupom                 | Alias de /impressora/imprimir (compat. PDV) |
 | POST   | /impressora/fechamento            | Imprime relatório de fechamento de caixa    |
 | POST   | /impressora/movimento-caixa       | Imprime comprovante de suprimento/sangria   |
 | GET    | /impressora/status                | Verifica conexão com a impressora           |
+| GET    | /impressora/listar                | Lista impressoras Windows/USB detectadas    |
+| POST   | /impressora/detectar              | Força nova detecção da impressora           |
 | POST   | /acbr/nfce/emitir                 | Emite NFC-e via ACBr Monitor                |
 | POST   | /acbr/nfce/cancelar               | Cancela NFC-e                               |
 | GET    | /contingencia/status              | Estado atual do modo EPEC                   |
@@ -133,17 +139,19 @@ Quando o backend está inacessível:
 
 ## Impressora
 
-Suporta ESC/POS via USB ou rede TCP/IP.
+Suporta ESC/POS via **auto-detect** (recomendado), Windows spooler RAW, USB ou rede TCP/IP.
 
-| Configuração    | USB                          | Rede                          |
+| Configuração    | auto (padrão)                | usb / network / windows       |
 |-----------------|------------------------------|-------------------------------|
-| PRINTER_TYPE    | usb                          | network                       |
-| PRINTER_NAME    | vazio (auto-detectar)        | —                             |
-| PRINTER_HOST    | —                            | IP da impressora (ex: 192.168.1.100) |
-| PRINTER_PORT    | —                            | Porta (geralmente 9100 ou 9101) |
+| PRINTER_TYPE    | detecta sozinho              | força um modo específico      |
+| PRINTER_NAME    | nome no Windows (opcional)   | filtra impressora instalada   |
+| PRINTER_HOST    | IP da impressora (rede)      | —                             |
+| PRINTER_PORT    | porta TCP (9100/9101)        | —                             |
 
-> ⚠️ **Atenção:** Se a impressora usar a porta 9100 e o agente também usar 9100,
-> o `setup.bat` detecta e corrige automaticamente (`PRINTER_PORT` vira 9101).
+**Ordem de detecção no modo `auto` (Windows):**
+1. Impressora instalada no Windows (spooler RAW — funciona como serviço)
+2. Impressora de rede TCP (9100, 9101)
+3. USB direto (escpos-usb)
 
 Modelos testados: Bematech MP-4200, Elgin i9, Epson TM-T20, Daruma DR800.
 

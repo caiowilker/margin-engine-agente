@@ -1,40 +1,54 @@
 // ============================================================
-// PDV Margin Engine — Modulo ACBr Monitor v3.3
+// PDV Margin Engine — Módulo ACBr Monitor v3.2
 //
-// MUDANCAS v3.3:
-//   ✓ Logs estruturados (pino) em vez de console.log
-//   Funcionalidade identica a v3.2.
-//
-// v3.2 (mantido):
+// CORREÇÕES v3.2:
 //   ✓ emitirNfce retorna { chave, numero, serie, qrcode }
-//   ✓ Guard EMISSAO_FISCAL
-//   ✓ cancelarNfce aceita chave e chaveNfe (retrocompat)
-//   ✓ flag settled garante Promise resolvida exatamente uma vez
+//     (anteriormente retornava { chaveNfe, numeroNfe, serieNfe, qrcodeNfe }
+//      causando undefined no frontend — FIX CRÍTICO)
+//   ✓ Guard EMISSAO_FISCAL: se false/ausente, emitirNfce lança erro
+//     descritivo em vez de tentar conectar ao ACBr (falha silenciosa
+//     virava "ACBr não retornou ChaveNFe")
+//   ✓ cancelarNfce aceita tanto `chave` (campo correto) quanto
+//     `chaveNfe` (legado) para retrocompatibilidade
 //
 // Comunica com o ACBr Monitor via socket TCP (protocolo texto).
+// O ACBr Monitor deve estar rodando na mesma máquina ou LAN.
+//
+// Protocolo ACBr Monitor:
 //   Envio:   COMANDO|PARAMETROS\n
-//   Retorno: "OK\n" ou "ERRO: mensagem\n"
+//   Retorno: "OK\n" ou "ERRO: mensagem\n" (texto simples)
+//
+// Comandos usados:
+//   NFCe.EnviarMensagemTEFImprimir   — emite NFC-e
+//   NFCe.Cancelar                    — cancela NFC-e
+//   NFCe.Status                      — verifica conexão
+//
+// CORRIGIDO v3.1:
+//   - socket.on('close') não dispara resolve/reject após timeout ou error
+//     (flag `settled` garante que a Promise é resolvida exatamente uma vez)
 // ============================================================
 
 require("dotenv").config();
 const net = require("net");
-const log = require("./logger").child({ modulo: "acbr" });
 
 const ACBR_HOST = process.env.ACBR_HOST || "127.0.0.1";
 const ACBR_PORT = parseInt(process.env.ACBR_PORT || "9200");
 const ACBR_TIMEOUT = parseInt(process.env.ACBR_TIMEOUT_MS || "10000");
 
+// EMISSAO_FISCAL=true é necessário para emitir NFC-e.
+// Sem isso, retornamos { fiscal: false } silenciosamente — o frontend
+// já trata esse caso e imprime cupom não fiscal.
 const EMISSAO_FISCAL =
   (process.env.EMISSAO_FISCAL || "false").toLowerCase() === "true";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ── Comunicacao TCP com o Monitor ────────────────────────────────────────────
+// ── Comunicação TCP com o Monitor ────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 function enviarComando(comando) {
   return new Promise((resolve, reject) => {
     const socket = new net.Socket();
     let resposta = "";
-    let settled = false;
+    let settled = false; // garante que resolve/reject é chamado exatamente uma vez
 
     const done = (fn, val) => {
       if (settled) return;
@@ -50,12 +64,14 @@ function enviarComando(comando) {
 
     socket.on("data", (data) => {
       resposta += data.toString();
+      // Monitor encerra com \r\n\r\n ou com linha final vazia
       if (resposta.includes("\r\n\r\n") || resposta.endsWith("\n\n")) {
         socket.destroy();
       }
     });
 
     socket.on("close", () => {
+      // Só executa se nenhum timeout/error já resolveu a Promise
       const texto = resposta.trim();
       if (texto.toUpperCase().startsWith("ERRO")) {
         done(reject, new Error(texto));
@@ -65,32 +81,32 @@ function enviarComando(comando) {
     });
 
     socket.on("timeout", () => {
-      socket.destroy();
-      done(reject, new Error(`ACBr Monitor timeout apos ${ACBR_TIMEOUT}ms`));
+      socket.destroy(); // aciona 'close', mas settled=true já bloqueia
+      done(reject, new Error(`ACBr Monitor timeout após ${ACBR_TIMEOUT}ms`));
     });
 
     socket.on("error", (err) => {
-      done(reject, new Error(`ACBr Monitor inacessivel: ${err.message}`));
+      // 'error' antes de 'close' — settled=true bloqueia o 'close' posterior
+      done(reject, new Error(`ACBr Monitor inacessível: ${err.message}`));
     });
   });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ── Testar conexao ────────────────────────────────────────────────────────────
+// ── Testar conexão ────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 async function testar() {
-  if (!EMISSAO_FISCAL) return false;
+  if (!EMISSAO_FISCAL) return false; // sem fiscal, ACBr não precisa estar ativo
   try {
     await enviarComando("NFCe.Status");
     return true;
-  } catch (err) {
-    log.debug({ err: err.message }, "ACBr offline");
+  } catch (_) {
     return false;
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ── Montar INI NFC-e ──────────────────────────────────────────────────────────
+// ── Montar INI NFC-e a partir do payload da venda ────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 function montarIniNfce(payload) {
   const empresa = payload.empresa || {};
@@ -162,13 +178,54 @@ function montarIniNfce(payload) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ── Emitir NFC-e ──────────────────────────────────────────────────────────────
+//
+// CORREÇÃO v3.2: retorna campos normalizados sem sufixo "Nfe":
+//   { chave, numero, serie, qrcode }
+//
+// Antes retornava { chaveNfe, numeroNfe, serieNfe, qrcodeNfe }, mas
+// agenteLocal.ts (frontend) lê .chave / .numero / .serie / .qrcode.
+// O mismatch causava undefined silencioso e a NFC-e "sumia" no cupom.
+//
+// Se EMISSAO_FISCAL=false, retorna { fiscal: false } — o endpoint
+// /acbr/nfce/emitir no index.js detecta e responde 200 com fiscal:false,
+// e o frontend trata imprimindo cupom não fiscal.
 // ─────────────────────────────────────────────────────────────────────────────
 async function emitirNfce(payload) {
   if (!EMISSAO_FISCAL) {
     return { fiscal: false };
   }
 
-  log.info({ numeroVenda: payload.numeroVenda }, "Emitindo NFC-e");
+  // Retransmissao EPEC — envia XML pronto ao ACBr (nao monta INI)
+  if (payload?.xml || payload?.xmlEpec || payload?.modoEpec) {
+    const xml = payload.xml || payload.xmlEpec;
+    if (!xml) {
+      throw new Error("XML EPEC ausente para retransmissao.");
+    }
+    const resposta = await enviarComando(`NFCe.EnviarEPEC|${xml}`);
+    const linhas = resposta.split("\n").filter(Boolean);
+    const get = (chave) => {
+      const linha = linhas.find((l) => l.startsWith(chave + "="));
+      return linha ? linha.split("=").slice(1).join("=").trim() : null;
+    };
+    const chave = get("ChaveNFe") || get("Chave");
+    if (!chave) {
+      throw new Error(`ACBr EPEC nao retornou chave. Resposta: ${resposta}`);
+    }
+    const numero = get("NumeroNFe") || get("Numero");
+    const serie = get("SerieNFe") || get("Serie") || "001";
+    const qrcode = get("QRCode") || get("URLConsulta");
+    return {
+      chave,
+      numero,
+      serie,
+      qrcode,
+      fiscal: true,
+      chaveNfe: chave,
+      numeroNfe: numero,
+      serieNfe: serie,
+      qrcodeNfe: qrcode,
+    };
+  }
 
   const ini = montarIniNfce(payload);
   const resposta = await enviarComando(`NFCe.EnviarMensagemTEFImprimir|${ini}`);
@@ -179,30 +236,43 @@ async function emitirNfce(payload) {
     return linha ? linha.split("=").slice(1).join("=").trim() : null;
   };
 
+  // ACBr pode retornar tanto ChaveNFe quanto Chave — normaliza para `chave`
   const chave = get("ChaveNFe") || get("Chave");
   const numero = get("NumeroNFe") || get("Numero");
   const serie = get("SerieNFe") || get("Serie") || "001";
   const qrcode = get("QRCode") || get("URLConsulta");
 
   if (!chave) {
-    throw new Error(`ACBr nao retornou ChaveNFe. Resposta: ${resposta}`);
+    throw new Error(`ACBr não retornou ChaveNFe. Resposta: ${resposta}`);
   }
 
-  log.info({ chave, numero }, "NFC-e emitida com sucesso");
-  return { chave, numero, serie, qrcode, fiscal: true };
+  return {
+    chave,
+    numero,
+    serie,
+    qrcode,
+    fiscal: true,
+    // Compatibilidade com impressora.js e frontend legado
+    chaveNfe: chave,
+    numeroNfe: numero,
+    serieNfe: serie,
+    qrcodeNfe: qrcode,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ── Cancelar NFC-e ────────────────────────────────────────────────────────────
+//
+// CORREÇÃO v3.2: aceita tanto `chaveNfe` (legado) quanto `chave` (correto)
+// para retrocompatibilidade com chamadas antigas.
 // ─────────────────────────────────────────────────────────────────────────────
 async function cancelarNfce(chaveNfeOuChave, motivo) {
-  const chave = chaveNfeOuChave;
-  if (!chave) throw new Error("chave da NFC-e obrigatoria para cancelamento.");
+  const chave = chaveNfeOuChave; // aceita ambos os nomes
+  if (!chave) throw new Error("chave da NFC-e obrigatória para cancelamento.");
   const motivoTexto = (motivo || "Cancelamento solicitado pelo operador").slice(
     0,
     255,
   );
-  log.info({ chave }, "Cancelando NFC-e");
   await enviarComando(`NFCe.Cancelar|${chave}|${motivoTexto}`);
   return true;
 }

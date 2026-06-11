@@ -1212,8 +1212,14 @@
           pOk ? "Online" : "Offline",
           pOk ? "green" : "red",
         );
+        // Para USB/winusb mostra o path (ex: USB001); para rede mostra o host
+        const pDesc = d.impressora?.host
+          ? d.impressora.host
+          : d.impressora?.path && d.impressora.path !== "auto-detect"
+            ? d.impressora.path
+            : null;
         document.getElementById("desc-printer").textContent =
-          pTipo + (d.impressora?.host ? " · " + d.impressora.host : "");
+          pTipo + (pDesc ? " · " + pDesc : "");
 
         // ACBr
         const aEmit = d.acbr?.emissaoFiscal;
