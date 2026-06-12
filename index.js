@@ -414,6 +414,8 @@ app.get("/diagnostico", async (req, res) => {
       ok: true,
       ativado: config.ativado === true,
       pdvNome: config.pdvNome || "PDV",
+      tenantId: config.tenantId || null,
+      dispositivoId: config.dispositivoId || null,
       backendUrl: config.backendUrl || null,
       temFrontend: fs.existsSync(FRONTEND_DIST),
       porta: PORT,
@@ -445,6 +447,7 @@ app.get("/diagnostico", async (req, res) => {
     fila: {
       pendentes: filaOffline,
       falhas: filaFalhas,
+      auth: fila.statusAuth ? fila.statusAuth() : undefined,
     },
 
     contingencia: {
@@ -526,6 +529,8 @@ app.get("/status", async (req, res) => {
     timestamp: new Date().toISOString(),
     ativado: config.ativado === true,
     pdvNome: config.pdvNome || "PDV",
+    tenantId: config.tenantId || null,
+    dispositivoId: config.dispositivoId || null,
     temFrontend: fs.existsSync(FRONTEND_DIST),
     filaOffline: { pendentes, falhas },
     contingencia: { ativa: contingencia.ativa, epecPendentes },
@@ -572,7 +577,7 @@ app.post("/ativar", async (req, res) => {
       backendToken: dados.token,
       tenantId: dados.tenantId,
       pdvNome: dados.pdvNome || "PDV",
-      dispositivoId: dados.dispositivoId || null,
+      dispositivoId: dados.pdvId || dados.dispositivoId || null,
       ativado: true,
     };
     salvarConfig(novoConfig);

@@ -31,10 +31,16 @@ try {
 } catch (_) {}
 
 const IS_WIN = process.platform === "win32";
-const PRINTER_TYPE = (process.env.PRINTER_TYPE || "auto").toLowerCase();
+const PRINTER_TYPE = (process.env.PRINTER_TYPE || "auto")
+  .toLowerCase()
+  // "winusb" é alias de "windows" — usa o spooler do Windows (RAW) via winspool.drv
+  .replace(/^winusb$/, "windows");
 const PRINTER_HOST = (process.env.PRINTER_HOST || "").trim();
 const PRINTER_PORT = parseInt(process.env.PRINTER_PORT || "9100", 10);
 const PRINTER_NAME = (process.env.PRINTER_NAME || "").trim();
+// Porta física da impressora no Windows (USB001, USB002, COM3...).
+// Quando definida, é usada para localizar a impressora correta mesmo sem PRINTER_NAME.
+const PRINTER_PATH = (process.env.PRINTER_PATH || "").trim();
 
 const TERMICA_RX =
   /epson|elgin|bematech|daruma|tanca|jetway|thermal|tm-|mp-|i9|i7|pos|cupom|nfce|receipt|termica/i;
@@ -126,6 +132,7 @@ function listarImpressorasWindows() {
 function escolherImpressoraWindows(lista) {
   if (!lista.length) return null;
 
+  // 1. Busca por nome exato ou parcial (PRINTER_NAME)
   if (PRINTER_NAME) {
     const exata = lista.find(
       (p) => p.Name && p.Name.toLowerCase() === PRINTER_NAME.toLowerCase(),
@@ -136,6 +143,15 @@ function escolherImpressoraWindows(lista) {
         p.Name && p.Name.toLowerCase().includes(PRINTER_NAME.toLowerCase()),
     );
     if (parcial) return parcial;
+  }
+
+  // 2. Busca pela porta física (PRINTER_PATH: USB001, USB002, COM3...)
+  if (PRINTER_PATH) {
+    const porta = lista.find(
+      (p) =>
+        p.PortName && p.PortName.toLowerCase() === PRINTER_PATH.toLowerCase(),
+    );
+    if (porta) return porta;
   }
 
   const termicas = lista.filter(
@@ -160,10 +176,10 @@ function enviarRawWindows(nomeImpressora, buffer) {
   );
 
   const scriptPath = path.join(os.tmpdir(), "pdv-raw-print.ps1");
-  if (!fs.existsSync(scriptPath)) {
-    fs.writeFileSync(
-      scriptPath,
-      `$cfg = Get-Content -Raw $args[0] | ConvertFrom-Json
+  // Sempre regrava o script para garantir que está atualizado
+  fs.writeFileSync(
+    scriptPath,
+    `$cfg = Get-Content -Raw $args[0] | ConvertFrom-Json
 $bytes = [System.IO.File]::ReadAllBytes($cfg.file)
 Add-Type -TypeDefinition @'
 using System;
@@ -208,9 +224,8 @@ try {
 } finally { [RawPrinterHelper]::ClosePrinter($h) | Out-Null }
 Remove-Item $cfg.file -Force -ErrorAction SilentlyContinue
 `,
-      "utf8",
-    );
-  }
+    "utf8",
+  );
 
   try {
     execFileSync(

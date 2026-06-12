@@ -1,5 +1,18 @@
 // ============================================================
-// PDV Margin Engine — Modulo de Fila Offline com SQLite v3.1
+// PDV Margin Engine — Modulo de Fila Offline com SQLite v3.3
+//
+// v3.3 — Alinhamento com backend confirmado
+//   - processarLote: prioriza r.numeroVenda (campo exato do
+//     SyncResultadoItem { numeroVenda, status, erro } do backend)
+//     mantendo fallbacks para compatibilidade futura
+//
+// v3.2 — Diagnostico de token / autenticacao
+//   - Loga (mascarado) qual token esta sendo usado e de onde veio
+//   - Detecta 401/403 do backend e marca "tokenInvalido" para
+//     aparecer no /diagnostico e no /status, em vez de falhar
+//     silenciosamente e so reportar "falhas" genericas
+//   - tentarBackend/sincronizar nunca mais retornam silenciosos
+//     quando faltam url/token — sempre logam o motivo
 //
 // v3.1 — Estabilidade
 //   - Carrega config.json no startup (token persistido apos ativacao)
@@ -22,6 +35,32 @@ let BACKEND_TOKEN = process.env.BACKEND_TOKEN || "";
 let db;
 let syncEmAndamento = false;
 
+// ── Diagnostico de autenticacao ─────────────────────────────────────────────
+// Guardamos o estado da ultima tentativa de comunicacao com o backend para
+// que /diagnostico e /status possam mostrar exatamente o que esta acontecendo
+// (ex: "token invalido/expirado") em vez de um simples "falhas: N".
+let authState = {
+  tokenInvalido: false,
+  ultimoErro: null,
+  ultimaTentativaEm: null,
+  ultimoSucessoEm: null,
+};
+
+function mascararToken(token) {
+  if (!token) return null;
+  if (token.length <= 8) return "****";
+  return `${token.slice(0, 4)}...${token.slice(-4)} (${token.length} chars)`;
+}
+
+function statusAuth() {
+  return {
+    backendUrl: BACKEND_URL || null,
+    temToken: !!BACKEND_TOKEN,
+    tokenPreview: mascararToken(BACKEND_TOKEN),
+    ...authState,
+  };
+}
+
 function extrairNumeroVenda(payload) {
   return (
     payload?.numeroVendaCliente ||
@@ -33,10 +72,24 @@ function extrairNumeroVenda(payload) {
 
 function carregarConfigPersistida() {
   try {
-    if (!fs.existsSync(CONFIG_PATH)) return;
+    if (!fs.existsSync(CONFIG_PATH)) {
+      console.warn(
+        `[Fila] config.json nao encontrado em ${CONFIG_PATH} — usando variaveis de ambiente (BACKEND_URL/BACKEND_TOKEN).`,
+      );
+      return;
+    }
     const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
     if (cfg.backendUrl) BACKEND_URL = cfg.backendUrl;
     if (cfg.backendToken) BACKEND_TOKEN = cfg.backendToken;
+    console.log(
+      `[Fila] Config carregada de config.json — backend=${BACKEND_URL || "(vazio)"} token=${mascararToken(BACKEND_TOKEN) || "(ausente)"}`,
+    );
+    if (BACKEND_URL && !BACKEND_TOKEN) {
+      console.warn(
+        "[Fila] ⚠️  backendUrl configurado mas backendToken está vazio/ausente em config.json. " +
+          "A sincronização vai ficar enfileirando sem nunca enviar até reativar o agente pelo painel.",
+      );
+    }
   } catch (err) {
     console.warn("[Fila] Falha ao ler config.json:", err.message);
   }
@@ -45,9 +98,19 @@ function carregarConfigPersistida() {
 function atualizarConfig(url, token) {
   BACKEND_URL = url || "";
   BACKEND_TOKEN = token || "";
+  authState.tokenInvalido = false;
+  authState.ultimoErro = null;
   if (url) process.env.BACKEND_URL = url;
   if (token) process.env.BACKEND_TOKEN = token;
-  console.log(`[Fila] Config atualizada — backend: ${url}`);
+  console.log(
+    `[Fila] Config atualizada — backend: ${url || "(vazio)"} token: ${mascararToken(token) || "(ausente)"}`,
+  );
+  if (url && !token) {
+    console.warn(
+      "[Fila] ⚠️  atualizarConfig recebeu backendUrl sem backendToken. " +
+        "Verifique a resposta de /pdv/ativar — a sincronização não vai funcionar sem o token.",
+    );
+  }
 }
 
 function inicializar() {
@@ -102,12 +165,23 @@ async function tentarBackend(payload) {
   const url = BACKEND_URL || process.env.BACKEND_URL || "";
   const token = BACKEND_TOKEN || process.env.BACKEND_TOKEN || "";
   if (!url || !token) {
-    return { ok: false, erro: "Agente nao configurado — ative primeiro." };
+    const motivo = !url
+      ? "backendUrl não configurado"
+      : "backendToken não configurado";
+    console.warn(
+      `[Fila] /venda não enviado ao backend: ${motivo}. Agente provavelmente não está ativado (ver /config ou ative pelo painel).`,
+    );
+    return {
+      ok: false,
+      erro: `Agente nao configurado (${motivo}) — ative primeiro.`,
+    };
   }
 
   const fetch = require("node-fetch");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  authState.ultimaTentativaEm = new Date().toISOString();
 
   try {
     const resp = await fetch(`${url}/pdv/vendas`, {
@@ -124,14 +198,32 @@ async function tentarBackend(payload) {
 
     if (!resp.ok) {
       const texto = await resp.text().catch(() => `HTTP ${resp.status}`);
-      return { ok: false, erro: texto };
+      if (resp.status === 401 || resp.status === 403) {
+        authState.tokenInvalido = true;
+        authState.ultimoErro = `HTTP ${resp.status}: ${texto}`;
+        console.warn(
+          `[Fila] ❌ Backend rejeitou o token (HTTP ${resp.status}) ao enviar venda online. ` +
+            `Token atual: ${mascararToken(token)}. Reative o agente pelo painel para obter um token novo.`,
+        );
+      } else {
+        authState.ultimoErro = `HTTP ${resp.status}: ${texto}`;
+        console.warn(
+          `[Fila] Backend retornou erro em /pdv/vendas: HTTP ${resp.status} - ${texto}`,
+        );
+      }
+      return { ok: false, erro: texto, status: resp.status };
     }
 
+    authState.tokenInvalido = false;
+    authState.ultimoErro = null;
+    authState.ultimoSucessoEm = new Date().toISOString();
     const dados = await resp.json();
     return { ok: true, dados };
   } catch (err) {
     clearTimeout(timer);
     const motivo = err.name === "AbortError" ? "Timeout" : err.message;
+    authState.ultimoErro = motivo;
+    console.warn(`[Fila] Falha de rede ao enviar /pdv/vendas: ${motivo}`);
     return { ok: false, erro: motivo };
   }
 }
@@ -172,18 +264,38 @@ async function sincronizarInterno(url, token) {
 
   if (pendentes.length === 0) return { sincronizadas: 0, falhas: 0 };
 
+  // Monta mapa numero_venda → row para lookup eficiente na resposta
+  const mapaNumero = {};
+  for (const row of pendentes) {
+    mapaNumero[String(row.numero_venda)] = row;
+  }
+
   const lote = pendentes.map((row) => JSON.parse(row.payload));
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS * 3);
+
+  // Lê tenantId do config para enviar no header (alguns backends exigem)
+  let tenantId = "";
+  try {
+    const fs = require("fs");
+    const path = require("path");
+    if (fs.existsSync(CONFIG_PATH)) {
+      const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+      tenantId = cfg.tenantId || "";
+    }
+  } catch (_) {}
+
+  const headers = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+  if (tenantId) headers["X-Tenant-Id"] = tenantId;
 
   let respostas;
   try {
     const resp = await fetch(`${url}/pdv/vendas/sync`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+      headers,
       body: JSON.stringify(lote),
       signal: controller.signal,
     });
@@ -191,6 +303,15 @@ async function sincronizarInterno(url, token) {
 
     if (!resp.ok) {
       const erro = await resp.text().catch(() => `HTTP ${resp.status}`);
+      if (resp.status === 401 || resp.status === 403) {
+        authState.tokenInvalido = true;
+        authState.ultimoErro = `HTTP ${resp.status}: ${erro}`;
+        console.warn(
+          `[Fila] ❌ Backend rejeitou token no sync (HTTP ${resp.status}). Reative o agente.`,
+        );
+      } else {
+        authState.ultimoErro = `HTTP ${resp.status}: ${erro}`;
+      }
       registrarFalhaLote(pendentes, erro);
       return { sincronizadas: 0, falhas: pendentes.length };
     }
@@ -199,6 +320,7 @@ async function sincronizarInterno(url, token) {
   } catch (err) {
     clearTimeout(timer);
     const motivo = err.name === "AbortError" ? "Timeout" : err.message;
+    authState.ultimoErro = motivo;
     registrarFalhaLote(pendentes, motivo);
     return { sincronizadas: 0, falhas: pendentes.length };
   }
@@ -224,25 +346,72 @@ async function sincronizarInterno(url, token) {
     WHERE  numero_venda = ?
   `);
 
+  const respostasArray = Array.isArray(respostas) ? respostas : [];
+
+  // Conjunto dos numeros_venda já processados pela resposta do backend
+  const processados = new Set();
+
   const processarLote = db.transaction((resps) => {
     for (const r of resps) {
+      // Backend retorna SyncResultadoItem { numeroVenda, status, erro }
+      // onde numeroVenda contém o numeroVendaCliente que foi enviado
       const numero =
-        r.numeroVenda || r.numeroVendaCliente || r.numero_venda || null;
+        r.numeroVenda ||
+        r.numeroVendaCliente ||
+        r.numero_venda ||
+        r.numero ||
+        r.id ||
+        r.vendaId ||
+        null;
+
       if (!numero) {
-        falhas++;
+        // Resposta sem identificador: log para diagnóstico, mas não conta falha
+        // pois pode ser formato diferente de backend
+        console.warn(
+          "[Fila] Resposta do backend sem identificador de venda:",
+          JSON.stringify(r),
+        );
         continue;
       }
-      if (r.status === "ok" || r.status === "duplicata") {
-        marcarSincronizado.run(String(numero));
+
+      const chave = String(numero);
+      processados.add(chave);
+
+      if (
+        r.status === "ok" ||
+        r.status === "duplicata" ||
+        r.sucesso === true ||
+        r.ok === true
+      ) {
+        marcarSincronizado.run(chave);
         sincronizadas++;
       } else {
-        marcarFalha.run(r.erro || "Erro desconhecido", String(numero));
+        const erroMsg = r.erro || r.error || r.mensagem || "Erro desconhecido";
+        marcarFalha.run(erroMsg, chave);
+        falhas++;
+      }
+    }
+
+    // Vendas que foram enviadas mas não apareceram na resposta:
+    // se o backend retornou array vazio ou omitiu itens, não deixa pendurado
+    for (const chave of Object.keys(mapaNumero)) {
+      if (!processados.has(chave)) {
+        // Backend não confirmou nem negou — deixa PENDENTE para próximo ciclo
+        // mas incrementa tentativa para não ficar em loop infinito silencioso
+        marcarFalha.run("Sem confirmação do backend no lote", chave);
         falhas++;
       }
     }
   });
 
-  processarLote(Array.isArray(respostas) ? respostas : []);
+  processarLote(respostasArray);
+
+  authState.tokenInvalido = false;
+  if (sincronizadas > 0) {
+    authState.ultimoSucessoEm = new Date().toISOString();
+    authState.ultimoErro = null;
+  }
+
   return { sincronizadas, falhas };
 }
 
@@ -352,4 +521,5 @@ module.exports = {
   contadores,
   listar,
   resetarFalhas,
+  statusAuth,
 };
