@@ -703,6 +703,15 @@ async function imprimirCupomHandler(req, res) {
 app.post("/impressora/imprimir", imprimirCupomHandler);
 app.post("/impressora/cupom", imprimirCupomHandler);
 
+app.post("/impressora/abertura", async (req, res) => {
+  try {
+    await impressora.imprimirAbertura(req.body);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
 app.post("/impressora/fechamento", async (req, res) => {
   try {
     await impressora.imprimirFechamento(req.body);
@@ -765,6 +774,17 @@ app.get("/fila", (req, res) => res.json(fila.listar()));
 
 app.post("/fila/sincronizar", async (req, res) => {
   res.json(await fila.sincronizar());
+});
+
+// Reseta itens FALHA_PERMANENTE de volta para PENDENTE e dispara sync imediato.
+// Body opcional: { numeros: ["PDV-...", "PDV-..."] } para resetar itens específicos.
+// Sem body (ou numeros vazio): reseta TODOS os itens em FALHA_PERMANENTE.
+app.post("/fila/reprocessar", async (req, res) => {
+  const numeros = Array.isArray(req.body?.numeros) ? req.body.numeros : [];
+  const resultado = fila.resetarFalhas(numeros.length > 0 ? numeros : null);
+  // Dispara sync automático para tentar enviar imediatamente
+  fila.sincronizar().catch(() => {});
+  res.json({ ok: true, ...resultado });
 });
 
 // ── Contingência: funções internas ────────────────────────────────────────────

@@ -88,7 +88,8 @@ function inicializar() {
 function enfileirar(payload) {
   if (!db) throw new Error("Fila SQLite nao inicializada.");
   const numero = extrairNumeroVenda(payload);
-  if (!numero) throw new Error("numeroVendaCliente obrigatorio para enfileirar.");
+  if (!numero)
+    throw new Error("numeroVendaCliente obrigatorio para enfileirar.");
 
   const stmt = db.prepare(`
     INSERT OR IGNORE INTO fila_vendas (numero_venda, payload)
@@ -304,6 +305,44 @@ function listar() {
   }
 }
 
+/**
+ * Reseta itens FALHA_PERMANENTE de volta para PENDENTE para nova tentativa.
+ * Opcionalmente recebe um array de numero_venda para resetar apenas itens específicos.
+ */
+function resetarFalhas(numeros) {
+  try {
+    if (!db) return { resetados: 0 };
+    let stmt;
+    let result;
+    if (numeros && numeros.length > 0) {
+      const placeholders = numeros.map(() => "?").join(",");
+      stmt = db.prepare(`
+        UPDATE fila_vendas
+        SET    status     = 'PENDENTE',
+               tentativas = 0,
+               ultimo_erro = NULL
+        WHERE  status = 'FALHA_PERMANENTE'
+        AND    numero_venda IN (${placeholders})
+      `);
+      result = stmt.run(...numeros.map(String));
+    } else {
+      stmt = db.prepare(`
+        UPDATE fila_vendas
+        SET    status     = 'PENDENTE',
+               tentativas = 0,
+               ultimo_erro = NULL
+        WHERE  status = 'FALHA_PERMANENTE'
+      `);
+      result = stmt.run();
+    }
+    console.log(`[Fila] ${result.changes} item(s) resetado(s) para PENDENTE.`);
+    return { resetados: result.changes };
+  } catch (err) {
+    console.warn("[Fila] Erro ao resetar falhas:", err.message);
+    return { resetados: 0 };
+  }
+}
+
 module.exports = {
   inicializar,
   atualizarConfig,
@@ -312,4 +351,5 @@ module.exports = {
   sincronizar,
   contadores,
   listar,
+  resetarFalhas,
 };

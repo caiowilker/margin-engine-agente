@@ -132,7 +132,8 @@ function escolherImpressoraWindows(lista) {
     );
     if (exata) return exata;
     const parcial = lista.find(
-      (p) => p.Name && p.Name.toLowerCase().includes(PRINTER_NAME.toLowerCase()),
+      (p) =>
+        p.Name && p.Name.toLowerCase().includes(PRINTER_NAME.toLowerCase()),
     );
     if (parcial) return parcial;
   }
@@ -313,7 +314,12 @@ async function detectarRede() {
   for (const host of hosts) {
     for (const port of portas) {
       if (await testarRede(host, port, 1500)) {
-        return { metodo: "network", host, porta: port, nome: `${host}:${port}` };
+        return {
+          metodo: "network",
+          host,
+          porta: port,
+          nome: `${host}:${port}`,
+        };
       }
     }
   }
@@ -368,7 +374,12 @@ async function detectarImpressora(force = false) {
   else if (PRINTER_TYPE === "usb" && usb) escolhida = usb;
   else if (PRINTER_TYPE === "network" && rede) escolhida = rede;
   else if (PRINTER_TYPE === "network" && PRINTER_HOST)
-    escolhida = { metodo: "network", host: PRINTER_HOST, porta: PRINTER_PORT, nome: `${PRINTER_HOST}:${PRINTER_PORT}` };
+    escolhida = {
+      metodo: "network",
+      host: PRINTER_HOST,
+      porta: PRINTER_PORT,
+      nome: `${PRINTER_HOST}:${PRINTER_PORT}`,
+    };
   else if (IS_WIN && win) escolhida = win;
   else if (rede) escolhida = rede;
   else if (usb) escolhida = usb;
@@ -406,9 +417,9 @@ async function enviarBuffer(buffer) {
   if (PRINTER_TYPE === "network" || PRINTER_TYPE === "auto") {
     add("network", async () => {
       const rede = await detectarRede();
-      const alvo = rede || (PRINTER_HOST
-        ? { host: PRINTER_HOST, porta: PRINTER_PORT }
-        : null);
+      const alvo =
+        rede ||
+        (PRINTER_HOST ? { host: PRINTER_HOST, porta: PRINTER_PORT } : null);
       if (!alvo) throw new Error("Impressora de rede inacessivel.");
       await enviarRede(alvo.host, alvo.porta, buffer);
       ultimaImpressoraUsada = {
@@ -420,24 +431,26 @@ async function enviarBuffer(buffer) {
   }
 
   if (PRINTER_TYPE === "usb" || PRINTER_TYPE === "auto") {
-    add("usb", () =>
-      new Promise((resolve, reject) => {
-        if (!escposUSB) return reject(new Error("escpos-usb nao instalado."));
-        const devices = escpos.USB.findPrinter();
-        if (!devices || !devices.length)
-          return reject(new Error("Nenhuma impressora USB encontrada."));
-        const device = new escpos.USB(devices[0]);
-        device.open((err) => {
-          if (err) return reject(err);
-          device.write(buffer, (wErr) => {
-            device.close(() => {
-              if (wErr) return reject(wErr);
-              ultimaImpressoraUsada = { metodo: "usb" };
-              resolve(true);
+    add(
+      "usb",
+      () =>
+        new Promise((resolve, reject) => {
+          if (!escposUSB) return reject(new Error("escpos-usb nao instalado."));
+          const devices = escpos.USB.findPrinter();
+          if (!devices || !devices.length)
+            return reject(new Error("Nenhuma impressora USB encontrada."));
+          const device = new escpos.USB(devices[0]);
+          device.open((err) => {
+            if (err) return reject(err);
+            device.write(buffer, (wErr) => {
+              device.close(() => {
+                if (wErr) return reject(wErr);
+                ultimaImpressoraUsada = { metodo: "usb" };
+                resolve(true);
+              });
             });
           });
-        });
-      }),
+        }),
     );
   }
 
@@ -555,7 +568,10 @@ function renderCupom(printer, payload) {
 
   if (payload.desconto && payload.desconto > 0) {
     printer.text(
-      direita("Subtotal:", moeda((payload.total || 0) + (payload.desconto || 0))),
+      direita(
+        "Subtotal:",
+        moeda((payload.total || 0) + (payload.desconto || 0)),
+      ),
     );
     printer
       .style("b")
@@ -580,7 +596,10 @@ function renderCupom(printer, payload) {
   if (payload.valorRecebido && payload.valorRecebido > payload.total) {
     const troco = payload.valorRecebido - payload.total;
     printer.text(direita("Recebido:", moeda(payload.valorRecebido)));
-    printer.style("b").text(direita("Troco:", moeda(troco))).style("normal");
+    printer
+      .style("b")
+      .text(direita("Troco:", moeda(troco)))
+      .style("normal");
   }
 
   printer.text(sep());
@@ -596,9 +615,12 @@ function renderCupom(printer, payload) {
       .text("Valor aprox. dos tributos desta operacao")
       .text("conforme Lei Fed. 12.741/13 (IBPT):")
       .text(direita(`Total: ${pct}`, moeda(ibpt.total)));
-    if (ibpt.federal > 0) printer.text(direita("  Federal:", moeda(ibpt.federal)));
-    if (ibpt.estadual > 0) printer.text(direita("  Estadual:", moeda(ibpt.estadual)));
-    if (ibpt.municipal > 0) printer.text(direita("  Municipal:", moeda(ibpt.municipal)));
+    if (ibpt.federal > 0)
+      printer.text(direita("  Federal:", moeda(ibpt.federal)));
+    if (ibpt.estadual > 0)
+      printer.text(direita("  Estadual:", moeda(ibpt.estadual)));
+    if (ibpt.municipal > 0)
+      printer.text(direita("  Municipal:", moeda(ibpt.municipal)));
     printer.text(sep());
   }
 
@@ -609,12 +631,18 @@ function renderCupom(printer, payload) {
       .text("DOCUMENTO FISCAL NFC-e")
       .style("normal")
       .text(`Chave: ${payload.chaveNfe}`)
-      .text(`NF: ${payload.numeroNfe || ""} Serie: ${payload.serieNfe || "001"}`)
+      .text(
+        `NF: ${payload.numeroNfe || ""} Serie: ${payload.serieNfe || "001"}`,
+      )
       .text("")
       .text("Consulte em: nfce.fazenda.gov.br");
     if (payload.qrcodeNfe) {
       try {
-        printer.qrimage(payload.qrcodeNfe, { type: "png", mode: "dhdw", size: 3 });
+        printer.qrimage(payload.qrcodeNfe, {
+          type: "png",
+          mode: "dhdw",
+          size: 3,
+        });
       } catch (_) {
         printer.text("[QR Code indisponivel]");
       }
@@ -663,7 +691,12 @@ function renderFechamento(printer, payload) {
   if (payload.empresa?.cnpj) printer.text("CNPJ: " + payload.empresa.cnpj);
   if (payload.empresa?.endereco) printer.text(payload.empresa.endereco);
 
-  printer.text(linha()).style("b").text("FECHAMENTO DE CAIXA").style("normal").text(linha());
+  printer
+    .text(linha())
+    .style("b")
+    .text("FECHAMENTO DE CAIXA")
+    .style("normal")
+    .text(linha());
 
   printer
     .align("lt")
@@ -676,11 +709,19 @@ function renderFechamento(printer, payload) {
     const h = Math.floor(payload.minutosAberto / 60);
     const m = payload.minutosAberto % 60;
     printer.text(
-      "Tempo   : " + (h > 0 ? h + "h " : "") + String(m).padStart(2, "0") + "min",
+      "Tempo   : " +
+        (h > 0 ? h + "h " : "") +
+        String(m).padStart(2, "0") +
+        "min",
     );
   }
 
-  printer.align("ct").text(linha()).style("b").text("RESUMO DO DIA").style("normal");
+  printer
+    .align("ct")
+    .text(linha())
+    .style("b")
+    .text("RESUMO DO DIA")
+    .style("normal");
   printer
     .align("lt")
     .text("Vendas      : " + payload.quantidadeVendas)
@@ -688,7 +729,12 @@ function renderFechamento(printer, payload) {
     .text("Lucro total : " + fmt(payload.totalLucro))
     .text("Margem media: " + Number(payload.margemMedia).toFixed(1) + "%");
 
-  printer.align("ct").text(linha()).style("b").text("POR FORMA DE PAGAMENTO").style("normal");
+  printer
+    .align("ct")
+    .text(linha())
+    .style("b")
+    .text("POR FORMA DE PAGAMENTO")
+    .style("normal");
 
   const formas = payload.resumoPorForma || {};
   Object.entries(formas)
@@ -732,7 +778,11 @@ function renderFechamento(printer, payload) {
   printer.text("Diferenca     : " + diffStr);
 
   if (payload.observacao) {
-    printer.align("ct").text(linha()).align("lt").text("Obs: " + payload.observacao);
+    printer
+      .align("ct")
+      .text(linha())
+      .align("lt")
+      .text("Obs: " + payload.observacao);
   }
 
   printer
@@ -740,6 +790,45 @@ function renderFechamento(printer, payload) {
     .text(linha())
     .text("Caixa encerrado em " + payload.fechamentoEm)
     .feed(4)
+    .cut();
+}
+
+function renderAbertura(printer, payload) {
+  const { sep: linha, fmt } = helpers();
+
+  printer
+    .font("a")
+    .align("ct")
+    .style("b")
+    .size(1, 1)
+    .text("ABERTURA DE CAIXA")
+    .style("normal")
+    .size(0, 0);
+
+  if (payload.empresa?.nome) {
+    printer.text(payload.empresa.nome);
+  }
+  if (payload.empresa?.cnpj) {
+    printer.text("CNPJ: " + payload.empresa.cnpj);
+  }
+
+  printer
+    .text(linha())
+    .align("lt")
+    .text("Caixa   : " + (payload.numeroCaixa || "Principal"))
+    .text("Operador: " + (payload.operador || "-"))
+    .text(
+      "Data/Hr : " + (payload.aberturaEm || new Date().toLocaleString("pt-BR")),
+    )
+    .align("ct")
+    .text(linha())
+    .style("b")
+    .align("lt")
+    .text("Fundo   : " + fmt(payload.valorAbertura || 0))
+    .style("normal")
+    .align("ct")
+    .text(linha())
+    .feed(3)
     .cut();
 }
 
@@ -825,6 +914,10 @@ function imprimirFechamento(payload) {
   return imprimirRender((printer) => renderFechamento(printer, payload));
 }
 
+function imprimirAbertura(payload) {
+  return imprimirRender((printer) => renderAbertura(printer, payload));
+}
+
 function imprimirMovimentoCaixa(payload) {
   return imprimirRender((printer) => renderMovimentoCaixa(printer, payload));
 }
@@ -841,6 +934,7 @@ module.exports = {
   detectar: () => detectarImpressora(true),
   imprimirCupom,
   abrirGaveta,
+  imprimirAbertura,
   imprimirFechamento,
   imprimirMovimentoCaixa,
 };
