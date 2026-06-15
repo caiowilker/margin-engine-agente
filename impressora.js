@@ -532,125 +532,258 @@ function helpers() {
   return { largura, linha, sep, centro, moeda, direita, fmt };
 }
 
+// ── Formatadores locais ───────────────────────────────────────────────────────
+const COLS = 42; // colunas da fonte "A" em 80 mm
+
+function padR(txt, len) {
+  return String(txt).slice(0, len).padEnd(len);
+}
+function padL(txt, len) {
+  return String(txt).slice(0, len).padStart(len);
+}
+function col2(esq, dir, total = COLS) {
+  const e = String(esq);
+  const d = String(dir);
+  const sp = Math.max(1, total - e.length - d.length);
+  return e + " ".repeat(sp) + d;
+}
+function centro(txt, total = COLS) {
+  const t = String(txt).slice(0, total);
+  const pad = Math.max(0, Math.floor((total - t.length) / 2));
+  return " ".repeat(pad) + t;
+}
+function fmtR$(v) {
+  return (
+    "R$ " +
+    Number(v || 0).toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+  );
+}
+function sepEq() {
+  return "=".repeat(COLS);
+}
+function sepDash() {
+  return "-".repeat(COLS);
+}
+
+// ── Layout do cupom ───────────────────────────────────────────────────────────
+//
+// Estratégia visual e emocional:
+//
+//  ┌ CABEÇALHO ──────────────────────────────────────┐
+//  │  Nome da loja  GRANDE + BOLD  → âncora de marca │
+//  │  CNPJ / endereço / telefone   → credibilidade   │
+//  └─────────────────────────────────────────────────┘
+//  ┌ IDENTIFICAÇÃO ──────────────────────────────────┐
+//  │  Nro | Data | Hora | Operador | Cliente / CPF   │
+//  └─────────────────────────────────────────────────┘
+//  ┌ ITENS ──────────────────────────────────────────┐
+//  │  00 NOME DO PRODUTO              R$ 00,00        │
+//  │     2 un × R$ 00,00                              │
+//  │  Produto por peso:                               │
+//  │     0,250 kg × R$ 00,00/kg      R$ 00,00        │
+//  └─────────────────────────────────────────────────┘
+//  ┌ TOTAIS ─────────────────────────────────────────┐
+//  │  Subtotal:                      R$ 000,00        │
+//  │  Desconto:                    - R$ 000,00        │
+//  ╠══════════════════════════════════════════════════╣
+//  │  TOTAL:         R$ 000,00   ← FONTE DUPLA BOLD  │   ← momento emocional
+//  ╠══════════════════════════════════════════════════╣
+//  │  Pagamento: DINHEIRO                             │
+//  │  Recebido:                      R$ 000,00        │
+//  │  TROCO:         R$ 00,00    ← bold, satisfação  │
+//  └─────────────────────────────────────────────────┘
+//  ┌ RODAPÉ ─────────────────────────────────────────┐
+//  │  Obrigado pela preferencia! Volte sempre!        │
+//  │  PDV Margin Engine                               │
+//  └─────────────────────────────────────────────────┘
+//
 function renderCupom(printer, payload) {
-  const { linha, sep, centro, moeda, direita } = helpers();
   const empresa = payload.empresa || {};
   const itens = payload.itens || [];
-  const ibpt = payload.ibpt;
   const isFiscal = !!(payload.chaveNfe && payload.chaveNfe.trim());
+  const isOffline = payload.origem === "offline";
 
+  const LABEL_PGTO = {
+    dinheiro: "DINHEIRO",
+    pix: "PIX",
+    debito: "CARTAO DEBITO",
+    credito: "CARTAO CREDITO",
+    fiado: "FIADO",
+    voucher: "VOUCHER",
+  };
+
+  // ── 1. Cabeçalho — tudo centralizado ────────────────────────────────────────
+  printer.font("a").align("ct");
+
+  // Nome da loja: tamanho duplo (largura + altura) → âncora de marca
+  const nomeEmpresa = (
+    empresa.nomeFantasia ||
+    empresa.razaoSocial ||
+    "ESTABELECIMENTO"
+  ).toUpperCase();
+  printer.style("b").size(1, 1).text(nomeEmpresa).size(0, 0).style("normal");
+
+  if (empresa.razaoSocial && empresa.razaoSocial !== empresa.nomeFantasia)
+    printer.text(empresa.razaoSocial);
+  if (empresa.cnpj) printer.text("CNPJ: " + empresa.cnpj);
+  if (empresa.endereco) {
+    const end = [empresa.endereco, empresa.numero, empresa.bairro]
+      .filter(Boolean)
+      .join(", ");
+    printer.text(end.slice(0, COLS));
+  }
+  if (empresa.cidade)
+    printer.text(
+      `${empresa.cidade}${empresa.uf ? " - " + empresa.uf : ""}`.slice(0, COLS),
+    );
+  if (empresa.telefone) printer.text("Tel: " + empresa.telefone);
+
+  // ── 2. Título do cupom — centralizado entre separadores duplos ──────────────
+  printer.align("lt").text(sepEq());
+  printer.align("ct").style("b");
+  printer.text(isFiscal ? "CUPOM FISCAL NFC-e" : "CUPOM NAO FISCAL");
+  printer.style("normal");
+  printer.align("lt").text(sepEq());
+
+  // ── 3. Identificação — alinhada col2 (esq:dir) ──────────────────────────────
+  const dtVenda = new Date(payload.emitidoEm || Date.now());
+  const dataStr = dtVenda.toLocaleDateString("pt-BR");
+  const horaStr = dtVenda.toLocaleTimeString("pt-BR");
+
+  printer.align("lt");
+  printer.text(col2("Nro:", payload.numeroVenda || ""));
+  printer.text(col2("Data:", dataStr + "  " + horaStr));
+  if (payload.operador) printer.text(col2("Operador:", payload.operador));
+  if (payload.nomeCliente && payload.nomeCliente !== "Consumidor")
+    printer.text(col2("Cliente:", payload.nomeCliente.slice(0, 28)));
+  if (payload.cpfCliente) printer.text(col2("CPF:", payload.cpfCliente));
+
+  // ── 4. Itens ─────────────────────────────────────────────────────────────────
+  printer.text(sepDash());
+  // Cabeçalho de coluna: DESCRICAO à esq, UNIT centralizado, TOTAL à dir
+  printer.text(padR("DESCRICAO", 26) + padL("UNIT", 8) + padL("TOTAL", 8));
+  printer.text(sepDash());
+
+  itens.forEach((item, idx) => {
+    const num = String(idx + 1).padStart(2, "0");
+    const nome = String(item.nome || "").slice(0, COLS);
+    const total = item.total ?? item.precoUnitario * item.quantidade;
+    // Valores sem "R$ " para economizar colunas na tabela
+    const valUnit = Number(item.precoUnitario).toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const valTotal = Number(total).toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const fUnit = fmtR$(item.precoUnitario);
+
+    if (nome.length <= 24) {
+      // Nome curto: tudo em uma linha
+      printer.text(
+        num + " " + padR(nome, 23) + padL(valUnit, 9) + padL(valTotal, 9),
+      );
+    } else {
+      // Nome longo: nome em linha própria, valores na linha seguinte
+      printer.text(num + " " + nome.slice(0, COLS - 3));
+      printer.text("   " + padR("", 22) + padL(valUnit, 9) + padL(valTotal, 9));
+    }
+
+    // Linha de detalhe de quantidade — discreta, indentada
+    if (item.porPeso) {
+      const kg = Number(item.quantidade).toLocaleString("pt-BR", {
+        minimumFractionDigits: 3,
+        maximumFractionDigits: 3,
+      });
+      printer.text(`   ${kg} kg x ${fUnit}/kg`);
+    } else {
+      const qtd = Number(item.quantidade);
+      if (qtd > 1) printer.text(`   ${qtd} un x ${fUnit}`);
+    }
+  });
+
+  // ── 5. Totais ────────────────────────────────────────────────────────────────
+  const desconto = Number(payload.desconto || 0);
+  const totalFinal = Number(payload.total || 0);
+  const subtotal = totalFinal + desconto;
+  const valorRecebido = Number(payload.valorRecebido || 0);
+  const troco = Number(
+    payload.troco ??
+      (valorRecebido > totalFinal ? valorRecebido - totalFinal : 0),
+  );
+
+  printer.align("lt").text(sepDash());
+
+  if (desconto > 0) {
+    printer.text(col2("Subtotal:", fmtR$(subtotal)));
+    printer
+      .style("b")
+      .text(col2("Desconto:", "- " + fmtR$(desconto)))
+      .style("normal");
+  }
+
+  // ── TOTAL — destaque máximo ──────────────────────────────────────────────────
+  // size(1,1) = largura E altura duplas, como o original
+  // Centralizamos o texto manualmente com espaços porque em size grande
+  // o .align("ct") nem sempre é honrado por todos os firmwares
+  printer.text(sepEq());
+  const totalStr = "TOTAL: " + fmtR$(totalFinal);
+  const totalPad = Math.max(0, Math.floor(COLS / 2 - totalStr.length / 2));
   printer
-    .font("a")
     .align("ct")
     .style("b")
     .size(1, 1)
-    .text(empresa.nomeFantasia || empresa.razaoSocial || "ESTABELECIMENTO")
-    .style("normal")
-    .size(0, 0);
-
-  if (empresa.cnpj) printer.text(`CNPJ: ${empresa.cnpj}`);
-  if (empresa.endereco) printer.text(empresa.endereco);
-  if (empresa.cidade)
-    printer.text(`${empresa.cidade}${empresa.uf ? " - " + empresa.uf : ""}`);
-  if (empresa.telefone) printer.text(`Tel: ${empresa.telefone}`);
-
-  printer.align("lt").text(sep()).style("b");
-  printer.text(centro(isFiscal ? "CUPOM FISCAL NFC-e" : "CUPOM NAO FISCAL"));
-  printer.style("normal").text(sep());
-
-  printer.text(
-    `No: ${payload.numeroVenda || ""}    ${new Date(payload.emitidoEm || Date.now()).toLocaleString("pt-BR")}`,
-  );
-  if (payload.operador) printer.text(`Operador: ${payload.operador}`);
-  if (payload.nomeCliente && payload.nomeCliente !== "Consumidor")
-    printer.text(`Cliente: ${payload.nomeCliente}`);
-  if (payload.cpfCliente) printer.text(`CPF: ${payload.cpfCliente}`);
-  printer.text(sep());
-
-  printer.text(linha("ITEM  DESCRICAO           QTD    TOTAL"));
-  printer.text(sep());
-
-  itens.forEach((item, i) => {
-    const num = String(i + 1).padStart(2, "0");
-    const nome = (item.nome || "").slice(0, 20).padEnd(20);
-    const qtd = String(item.quantidade || 1).padStart(3);
-    const total = moeda(item.total || item.precoUnitario * item.quantidade);
-    printer.text(`${num}    ${nome} ${qtd}  ${total}`);
-    printer.text(`       ${moeda(item.precoUnitario)}/un`);
-  });
-
-  printer.text(sep());
-
-  if (payload.desconto && payload.desconto > 0) {
-    printer.text(
-      direita(
-        "Subtotal:",
-        moeda((payload.total || 0) + (payload.desconto || 0)),
-      ),
-    );
-    printer
-      .style("b")
-      .text(direita("Desconto:", "- " + moeda(payload.desconto)))
-      .style("normal");
-  }
-  printer
-    .style("b")
-    .size(0, 1)
-    .text(direita("TOTAL:", moeda(payload.total)))
+    .text(totalStr)
     .size(0, 0)
     .style("normal");
+  printer.align("lt").text(sepEq());
 
-  if (payload.formaPagamento) {
-    printer.text(
-      direita(
-        "Pagamento:",
-        (payload.labelPagamento || payload.formaPagamento).toUpperCase(),
-      ),
-    );
-  }
-  if (payload.valorRecebido && payload.valorRecebido > payload.total) {
-    const troco = payload.valorRecebido - payload.total;
-    printer.text(direita("Recebido:", moeda(payload.valorRecebido)));
+  // ── Pagamento ────────────────────────────────────────────────────────────────
+  const formaLabel =
+    LABEL_PGTO[payload.formaPagamento] ||
+    (payload.formaPagamento || "").toUpperCase();
+  if (formaLabel) printer.text(col2("Pagamento:", formaLabel));
+
+  if (valorRecebido > 0 && payload.formaPagamento === "dinheiro") {
+    printer.text(col2("Recebido:", fmtR$(valorRecebido)));
+    // TROCO em destaque — altura dupla, sensação positiva imediata
+    printer.text(sepDash());
     printer
+      .align("ct")
       .style("b")
-      .text(direita("Troco:", moeda(troco)))
+      .size(0, 1)
+      .text("TROCO: " + fmtR$(troco))
+      .size(0, 0)
       .style("normal");
+    printer.align("lt").text(sepDash());
   }
 
-  printer.text(sep());
+  // Volumes
+  const totalVols = itens.reduce((s, i) => s + Number(i.quantidade || 0), 0);
+  printer.text(col2("Volumes:", Math.round(totalVols) + " item(ns)"));
 
-  if (ibpt && ibpt.total > 0) {
-    const pct =
-      typeof ibpt.percentualTotal === "number"
-        ? ibpt.percentualTotal.toFixed(2) + "%"
-        : "-";
-    printer
-      .align("lt")
-      .text(sep())
-      .text("Valor aprox. dos tributos desta operacao")
-      .text("conforme Lei Fed. 12.741/13 (IBPT):")
-      .text(direita(`Total: ${pct}`, moeda(ibpt.total)));
-    if (ibpt.federal > 0)
-      printer.text(direita("  Federal:", moeda(ibpt.federal)));
-    if (ibpt.estadual > 0)
-      printer.text(direita("  Estadual:", moeda(ibpt.estadual)));
-    if (ibpt.municipal > 0)
-      printer.text(direita("  Municipal:", moeda(ibpt.municipal)));
-    printer.text(sep());
-  }
-
+  // ── 6. NFC-e ─────────────────────────────────────────────────────────────────
   if (isFiscal) {
+    printer.text(sepDash());
     printer
       .align("ct")
       .style("b")
       .text("DOCUMENTO FISCAL NFC-e")
       .style("normal")
-      .text(`Chave: ${payload.chaveNfe}`)
       .text(
-        `NF: ${payload.numeroNfe || ""} Serie: ${payload.serieNfe || "001"}`,
-      )
-      .text("")
-      .text("Consulte em: nfce.fazenda.gov.br");
+        `NF-e: ${payload.numeroNfe || ""}  Serie: ${payload.serieNfe || "001"}`,
+      );
+    const chave = String(payload.chaveNfe || "");
+    if (chave) {
+      printer.text("Chave:");
+      printer.text(chave.slice(0, 22));
+      printer.text(chave.slice(22, 44));
+    }
+    printer.text("Consulte: nfce.fazenda.gov.br");
     if (payload.qrcodeNfe) {
       try {
         printer.qrimage(payload.qrcodeNfe, {
@@ -662,29 +795,30 @@ function renderCupom(printer, payload) {
         printer.text("[QR Code indisponivel]");
       }
     }
-  } else if (payload.origem === "offline") {
-    printer
-      .align("ct")
-      .text(sep())
-      .text("** VENDA OFFLINE **")
-      .text(`N: ${payload.numeroVenda || ""}`)
-      .text("Sera sincronizada quando a internet retornar.");
-  } else {
-    printer
-      .align("ct")
-      .text(sep())
-      .style("b")
-      .text("*** CUPOM NAO FISCAL ***")
-      .style("normal")
-      .text("Documento sem validade fiscal.")
-      .text(`Ref. interno: ${payload.numeroVenda || ""}`);
   }
 
+  // ── 7. Offline ───────────────────────────────────────────────────────────────
+  if (isOffline) {
+    printer.text(sepDash());
+    printer
+      .align("ct")
+      .style("b")
+      .text("** VENDA OFFLINE **")
+      .style("normal")
+      .text("Sera sincronizada com a internet em breve.");
+  }
+
+  // ── 8. Rodapé — tudo centralizado, emocional ─────────────────────────────────
+  printer.align("lt").text(sepEq());
   printer
     .align("ct")
-    .text(sep())
-    .text(new Date().toLocaleString("pt-BR"))
+    .style("b")
     .text("Obrigado pela preferencia!")
+    .style("normal")
+    .text("Volte sempre. Voce e especial pra nos!")
+    .text("")
+    .text("PDV Margin Engine")
+    .text(new Date().toLocaleString("pt-BR"))
     .text("")
     .text("")
     .text("")

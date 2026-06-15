@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PDV Margin Engine — Agente Local</title>
     <style>
-      @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap");
+      @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
 
       :root {
         --bg: #0d0f12;
@@ -14,16 +14,13 @@
         --border-hi: #2a2f3a;
         --text: #c8cdd8;
         --muted: #555d6e;
-        --label: #7a8494;
         --green: #00e676;
         --green-dim: #00c85320;
         --amber: #ffab00;
         --amber-dim: #ffab0018;
         --red: #ff3d5a;
         --red-dim: #ff3d5a18;
-        --blue: #4fc3f7;
-        --blue-dim: #4fc3f715;
-        --accent: #7c6af7;
+        --grey-dim: #1e2229;
         --mono: "IBM Plex Mono", monospace;
         --sans: "IBM Plex Sans", sans-serif;
       }
@@ -56,22 +53,22 @@
         padding: 18px 28px;
         border-bottom: 1px solid var(--border);
         background: var(--surface);
-        position: sticky;
-        top: 0;
-        z-index: 100;
+        flex-wrap: wrap;
+        gap: 12px;
       }
 
       .header-left {
         display: flex;
         align-items: center;
         gap: 14px;
+        min-width: 0;
       }
 
       .logo-mark {
-        width: 32px;
-        height: 32px;
-        background: var(--accent);
-        border-radius: 8px;
+        width: 36px;
+        height: 36px;
+        background: #7c6af7;
+        border-radius: 9px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -88,13 +85,36 @@
         font-weight: 600;
         color: #fff;
         letter-spacing: -0.2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       .header-subtitle {
         font-size: 11px;
         color: var(--muted);
         font-family: var(--mono);
-        margin-top: 1px;
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .header-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0;
+      }
+
+      .version-pill {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--muted);
+        background: var(--grey-dim);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 4px 12px;
       }
 
       .pulse-ring {
@@ -131,12 +151,6 @@
         border-color: var(--red);
       }
 
-      .header-right {
-        display: flex;
-        align-items: center;
-        gap: 20px;
-      }
-
       .status-pill {
         display: flex;
         align-items: center;
@@ -155,21 +169,14 @@
         border-color: #ff3d5a30;
       }
 
-      #last-update {
-        font-family: var(--mono);
-        font-size: 11px;
-        color: var(--muted);
-      }
-
       /* ── LAYOUT ── */
       main {
-        max-width: 1200px;
+        max-width: 920px;
         margin: 0 auto;
-        padding: 28px 28px 60px;
+        padding: 28px 24px 48px;
       }
 
-      /* ── ALERT BANNER ── */
-      .alert {
+      .activation-banner {
         display: none;
         align-items: center;
         gap: 12px;
@@ -181,22 +188,24 @@
         font-size: 13px;
         color: var(--amber);
       }
-      .alert.visible {
+      .activation-banner.visible {
         display: flex;
       }
-      .alert-icon {
+      .activation-icon {
         font-size: 18px;
         flex-shrink: 0;
       }
 
-      /* ── SECTION TITLE ── */
       .section-head {
         display: flex;
         align-items: center;
         gap: 10px;
-        margin-bottom: 14px;
+        margin: 0 0 14px;
         padding-bottom: 10px;
         border-bottom: 1px solid var(--border);
+      }
+      .section-head:not(:first-of-type) {
+        margin-top: 28px;
       }
       .section-label {
         font-family: var(--mono);
@@ -212,87 +221,37 @@
         background: var(--border);
       }
 
-      /* ── GRID ── */
-      .grid-4 {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 14px;
-        margin-bottom: 28px;
-      }
-      .grid-3 {
+      /* ── GRID / CARDS ── */
+      .grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 14px;
-        margin-bottom: 28px;
       }
       .grid-2 {
-        display: grid;
         grid-template-columns: repeat(2, 1fr);
-        gap: 14px;
-        margin-bottom: 28px;
+      }
+      .grid-4 {
+        grid-template-columns: repeat(4, 1fr);
       }
 
-      /* ── CARD ── */
-      .card {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 18px 20px;
-        transition: border-color 0.2s;
-      }
-      .card:hover {
-        border-color: var(--border-hi);
-      }
-
-      .card-label {
-        font-family: var(--mono);
-        font-size: 10px;
-        letter-spacing: 1px;
-        text-transform: uppercase;
-        color: var(--muted);
-        margin-bottom: 10px;
-      }
-      .card-value {
-        font-family: var(--mono);
-        font-size: 26px;
-        font-weight: 600;
-        color: #fff;
-        line-height: 1;
-        margin-bottom: 4px;
-      }
-      .card-value.big {
-        font-size: 32px;
-      }
-      .card-meta {
-        font-size: 11px;
-        color: var(--muted);
-        margin-top: 6px;
-      }
-
-      /* ── STATUS CARD ── */
       .status-card {
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: 12px;
-        padding: 16px 20px;
+        padding: 16px 18px;
         display: flex;
         align-items: center;
         gap: 14px;
-        transition: border-color 0.2s;
-        cursor: default;
-      }
-      .status-card:hover {
-        border-color: var(--border-hi);
       }
 
       .status-icon {
-        width: 40px;
-        height: 40px;
+        width: 38px;
+        height: 38px;
         border-radius: 10px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 20px;
+        font-size: 19px;
         flex-shrink: 0;
       }
       .status-icon.green {
@@ -304,11 +263,8 @@
       .status-icon.amber {
         background: var(--amber-dim);
       }
-      .status-icon.blue {
-        background: var(--blue-dim);
-      }
       .status-icon.grey {
-        background: #1e2229;
+        background: var(--grey-dim);
       }
 
       .status-info {
@@ -328,6 +284,9 @@
         font-size: 11px;
         color: var(--muted);
         margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       .status-badge {
@@ -355,350 +314,73 @@
         border: 1px solid #ffab0030;
       }
       .badge-grey {
-        background: #1e2229;
+        background: var(--grey-dim);
         color: var(--muted);
         border: 1px solid var(--border);
       }
 
-      /* ── FILA CARD ── */
-      .fila-card {
+      /* ── METRIC CARDS (sistema) ── */
+      .metric-card {
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 14px;
+        padding: 14px 16px;
       }
-      .fila-numbers {
-        display: flex;
-        gap: 28px;
-        margin: 14px 0;
-      }
-      .fila-num {
-        text-align: center;
-      }
-      .fila-num-value {
-        font-family: var(--mono);
-        font-size: 36px;
-        font-weight: 600;
-        color: #fff;
-        line-height: 1;
-      }
-      .fila-num-value.warn {
-        color: var(--amber);
-      }
-      .fila-num-value.danger {
-        color: var(--red);
-      }
-      .fila-num-label {
-        font-size: 11px;
-        color: var(--muted);
-        margin-top: 4px;
-      }
-
-      /* ── BUTTONS ── */
-      .btn-row {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-        margin-top: 14px;
-      }
-
-      .btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 8px 16px;
-        border-radius: 8px;
-        border: 1px solid var(--border-hi);
-        background: #1a1e26;
-        color: var(--text);
-        font-family: var(--sans);
-        font-size: 12px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.15s;
-        user-select: none;
-      }
-      .btn:hover {
-        background: #1e2430;
-        border-color: #353d4e;
-        color: #fff;
-      }
-      .btn:active {
-        transform: scale(0.97);
-      }
-      .btn.primary {
-        background: var(--accent);
-        border-color: var(--accent);
-        color: #fff;
-      }
-      .btn.primary:hover {
-        background: #9380ff;
-        border-color: #9380ff;
-      }
-      .btn.danger {
-        background: var(--red-dim);
-        border-color: #ff3d5a30;
-        color: var(--red);
-      }
-      .btn.danger:hover {
-        background: #ff3d5a28;
-      }
-      .btn:disabled {
-        opacity: 0.4;
-        cursor: not-allowed;
-        transform: none;
-      }
-
-      /* ── UPDATER CARD ── */
-      .updater-card {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 20px;
-      }
-      .updater-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 20px;
-        flex-wrap: wrap;
-      }
-      .updater-info {
-        flex: 1;
-        min-width: 180px;
-      }
-      .updater-version {
-        font-family: var(--mono);
-        font-size: 22px;
-        font-weight: 600;
-        color: #fff;
-      }
-      .updater-last {
-        font-family: var(--mono);
-        font-size: 11px;
-        color: var(--muted);
-        margin-top: 4px;
-      }
-
-      /* ── CHANGELOG ── */
-      .changelog-box {
-        display: none;
-        margin-top: 14px;
-        padding: 14px;
-        background: var(--bg);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        font-family: var(--mono);
-        font-size: 12px;
-        color: var(--text);
-        white-space: pre-wrap;
-        max-height: 160px;
-        overflow-y: auto;
-      }
-      .changelog-box.visible {
-        display: block;
-      }
-
-      /* ── SISTEMA ── */
-      .sys-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 10px;
-      }
-      .sys-item {
-        background: var(--bg);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 12px 14px;
-      }
-      .sys-key {
+      .metric-label {
         font-family: var(--mono);
         font-size: 10px;
-        letter-spacing: 0.8px;
-        color: var(--muted);
+        letter-spacing: 1px;
         text-transform: uppercase;
-        margin-bottom: 5px;
+        color: var(--muted);
+        margin-bottom: 8px;
       }
-      .sys-val {
+      .metric-value {
         font-family: var(--mono);
-        font-size: 13px;
-        color: var(--text);
+        font-size: 18px;
+        font-weight: 600;
+        color: #fff;
         word-break: break-all;
       }
 
-      /* ── LOADING ── */
-      .skeleton {
-        background: linear-gradient(
-          90deg,
-          var(--surface) 25%,
-          var(--border) 50%,
-          var(--surface) 75%
-        );
-        background-size: 200% 100%;
-        animation: shimmer 1.4s infinite;
-        border-radius: 6px;
-        height: 26px;
-      }
-      @keyframes shimmer {
-        0% {
-          background-position: 200% 0;
-        }
-        100% {
-          background-position: -200% 0;
-        }
-      }
-
-      /* ── TOAST ── */
-      #toast {
-        position: fixed;
-        bottom: 28px;
-        right: 28px;
-        padding: 12px 18px;
-        border-radius: 10px;
-        font-size: 13px;
-        font-weight: 500;
-        z-index: 999;
-        transform: translateY(80px);
-        opacity: 0;
-        transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-        max-width: 320px;
-        pointer-events: none;
-      }
-      #toast.show {
-        transform: translateY(0);
-        opacity: 1;
-      }
-      #toast.success {
-        background: #00e67615;
-        border: 1px solid #00e67640;
-        color: var(--green);
-      }
-      #toast.error {
-        background: var(--red-dim);
-        border: 1px solid #ff3d5a40;
-        color: var(--red);
-      }
-      #toast.info {
-        background: var(--blue-dim);
-        border: 1px solid #4fc3f740;
-        color: var(--blue);
-      }
-
-      /* ── ATIVACAO ── */
-      .activation-overlay {
-        display: none;
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.85);
-        z-index: 200;
-        align-items: center;
-        justify-content: center;
-        backdrop-filter: blur(4px);
-      }
-      .activation-overlay.visible {
-        display: flex;
-      }
-      .activation-box {
+      /* ── FOOTER ── */
+      .footer-note {
+        margin-top: 28px;
+        padding: 14px 18px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
         background: var(--surface);
-        border: 1px solid var(--border-hi);
-        border-radius: 16px;
-        padding: 32px;
-        width: 100%;
-        max-width: 440px;
-        position: relative;
-      }
-      .activation-title {
-        font-size: 20px;
-        font-weight: 600;
-        color: #fff;
-        margin-bottom: 6px;
-      }
-      .activation-sub {
-        font-size: 13px;
+        font-size: 12px;
         color: var(--muted);
-        margin-bottom: 24px;
+        text-align: center;
       }
-      label {
-        display: block;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.5px;
-        color: var(--label);
-        text-transform: uppercase;
-        margin-bottom: 6px;
-      }
-      input[type="text"],
-      input[type="url"] {
-        width: 100%;
-        background: var(--bg);
-        border: 1px solid var(--border-hi);
-        border-radius: 8px;
-        color: #fff;
-        font-family: var(--mono);
-        font-size: 13px;
-        padding: 10px 14px;
-        margin-bottom: 16px;
-        outline: none;
-        transition: border-color 0.15s;
-      }
-      input:focus {
-        border-color: var(--accent);
-      }
-      .close-btn {
-        position: absolute;
-        top: 16px;
-        right: 16px;
-        background: none;
-        border: none;
-        color: var(--muted);
-        font-size: 20px;
-        cursor: pointer;
-        line-height: 1;
-        padding: 4px;
-      }
-      .close-btn:hover {
+      .footer-note strong {
         color: var(--text);
       }
 
       /* ── RESPONSIVO ── */
-      @media (max-width: 900px) {
+      @media (max-width: 760px) {
+        .grid,
+        .grid-2,
         .grid-4 {
           grid-template-columns: repeat(2, 1fr);
         }
       }
-      @media (max-width: 600px) {
-        .grid-4,
-        .grid-3,
-        .grid-2 {
-          grid-template-columns: 1fr;
-        }
+      @media (max-width: 520px) {
         header {
           padding: 14px 16px;
         }
         main {
-          padding: 20px 16px 60px;
+          padding: 20px 16px 40px;
         }
-        .fila-numbers {
-          gap: 16px;
+        .grid,
+        .grid-2,
+        .grid-4 {
+          grid-template-columns: 1fr;
         }
-      }
-
-      /* ── SCROLLBAR ── */
-      ::-webkit-scrollbar {
-        width: 6px;
-      }
-      ::-webkit-scrollbar-track {
-        background: var(--bg);
-      }
-      ::-webkit-scrollbar-thumb {
-        background: var(--border-hi);
-        border-radius: 3px;
       }
     </style>
   </head>
   <body>
-    <!-- ── HEADER ── -->
     <header>
       <div class="header-left">
         <div class="logo-mark">PDV</div>
@@ -708,7 +390,7 @@
         </div>
       </div>
       <div class="header-right">
-        <span id="last-update">Carregando...</span>
+        <span class="version-pill" id="version-pill">—</span>
         <div id="status-pill" class="status-pill">
           <div id="pulse" class="pulse-ring"></div>
           <span id="status-text">Conectando...</span>
@@ -716,57 +398,23 @@
       </div>
     </header>
 
-    <!-- ── MAIN ── -->
     <main>
-      <!-- Banner de contingência -->
-      <div id="contingencia-alert" class="alert">
-        <span class="alert-icon">⚠️</span>
+      <div id="activation-banner" class="activation-banner">
+        <span class="activation-icon">🔑</span>
         <div>
-          <strong>Modo de Contingência EPEC ativo</strong>
-          <div style="font-size: 12px; margin-top: 2px; opacity: 0.8">
-            A SEFAZ está indisponível. As notas estão sendo salvas como EPEC e
-            serão transmitidas automaticamente quando a conexão for
-            restabelecida.
-            <span id="epec-count" style="font-weight: 600"></span>
+          <strong>PDV ainda não ativado neste terminal.</strong>
+          <div style="font-size: 12px; margin-top: 2px; opacity: 0.85">
+            Abra o painel web e siga o processo de ativação para vincular este
+            agente a um tenant.
           </div>
         </div>
       </div>
 
-      <!-- ── MÉTRICAS PRINCIPAIS ── -->
-      <div class="section-head">
-        <span class="section-label">Visão geral</span>
-        <div class="section-line"></div>
-      </div>
-      <div class="grid-4" style="margin-bottom: 28px">
-        <div class="card">
-          <div class="card-label">Fila offline</div>
-          <div class="card-value big" id="m-pendentes">—</div>
-          <div class="card-meta">vendas aguardando sync</div>
-        </div>
-        <div class="card">
-          <div class="card-label">Uptime</div>
-          <div class="card-value big" id="m-uptime">—</div>
-          <div class="card-meta">tempo ativo</div>
-        </div>
-        <div class="card">
-          <div class="card-label">Memória usada</div>
-          <div class="card-value big" id="m-mem">—</div>
-          <div class="card-meta">MB heap Node.js</div>
-        </div>
-        <div class="card">
-          <div class="card-label">Banco SQLite</div>
-          <div class="card-value big" id="m-db">—</div>
-          <div class="card-meta">tamanho em disco</div>
-        </div>
-      </div>
-
-      <!-- ── MÓDULOS ── -->
       <div class="section-head">
         <span class="section-label">Status dos módulos</span>
         <div class="section-line"></div>
       </div>
-      <div class="grid-3" style="margin-bottom: 28px">
-        <!-- Impressora -->
+      <div class="grid">
         <div class="status-card">
           <div id="icon-printer" class="status-icon grey">🖨️</div>
           <div class="status-info">
@@ -775,25 +423,16 @@
           </div>
           <span id="badge-printer" class="status-badge badge-grey">—</span>
         </div>
-        <!-- ACBr -->
+
         <div class="status-card">
-          <div id="icon-acbr" class="status-icon grey">📄</div>
+          <div id="icon-fiscal" class="status-icon grey">🧾</div>
           <div class="status-info">
-            <div class="status-name">ACBr Monitor</div>
-            <div class="status-desc" id="desc-acbr">verificando...</div>
+            <div class="status-name">Emissão fiscal (NFC-e)</div>
+            <div class="status-desc" id="desc-fiscal">verificando...</div>
           </div>
-          <span id="badge-acbr" class="status-badge badge-grey">—</span>
+          <span id="badge-fiscal" class="status-badge badge-grey">—</span>
         </div>
-        <!-- Backend -->
-        <div class="status-card">
-          <div id="icon-backend" class="status-icon grey">☁️</div>
-          <div class="status-info">
-            <div class="status-name">Backend / Nuvem</div>
-            <div class="status-desc" id="desc-backend">verificando...</div>
-          </div>
-          <span id="badge-backend" class="status-badge badge-grey">—</span>
-        </div>
-        <!-- Banco -->
+
         <div class="status-card">
           <div id="icon-db" class="status-icon grey">🗄️</div>
           <div class="status-info">
@@ -802,347 +441,60 @@
           </div>
           <span id="badge-db" class="status-badge badge-grey">—</span>
         </div>
-        <!-- Fiscal -->
+
         <div class="status-card">
-          <div id="icon-fiscal" class="status-icon grey">🧾</div>
+          <div id="icon-fila" class="status-icon grey">📦</div>
           <div class="status-info">
-            <div class="status-name">Emissão fiscal</div>
-            <div class="status-desc" id="desc-fiscal">verificando...</div>
+            <div class="status-name">Fila offline</div>
+            <div class="status-desc" id="desc-fila">verificando...</div>
           </div>
-          <span id="badge-fiscal" class="status-badge badge-grey">—</span>
+          <span id="badge-fila" class="status-badge badge-grey">—</span>
         </div>
-        <!-- Frontend -->
+
         <div class="status-card">
-          <div id="icon-frontend" class="status-icon grey">💻</div>
+          <div id="icon-contingencia" class="status-icon grey">⚡</div>
           <div class="status-info">
-            <div class="status-name">App offline (frontend)</div>
-            <div class="status-desc" id="desc-frontend">verificando...</div>
+            <div class="status-name">Contingência EPEC</div>
+            <div class="status-desc" id="desc-contingencia">verificando...</div>
           </div>
-          <span id="badge-frontend" class="status-badge badge-grey">—</span>
+          <span id="badge-contingencia" class="status-badge badge-grey">—</span>
         </div>
       </div>
 
-      <!-- ── FILA OFFLINE ── -->
-      <div class="section-head">
-        <span class="section-label">Fila offline</span>
-        <div class="section-line"></div>
-      </div>
-      <div class="fila-card" style="margin-bottom: 28px">
-        <div
-          style="
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 14px;
-          "
-        >
-          <div>
-            <div
-              style="
-                font-size: 13px;
-                font-weight: 500;
-                color: #fff;
-                margin-bottom: 2px;
-              "
-            >
-              Sincronização automática de vendas
-            </div>
-            <div style="font-size: 12px; color: var(--muted)">
-              Vendas feitas sem internet são salvas localmente e sincronizadas
-              automaticamente quando a conexão é restabelecida.
-            </div>
-          </div>
-          <div class="fila-numbers">
-            <div class="fila-num">
-              <div class="fila-num-value" id="fila-pendentes">—</div>
-              <div class="fila-num-label">Pendentes</div>
-            </div>
-            <div class="fila-num">
-              <div class="fila-num-value" id="fila-falhas">—</div>
-              <div class="fila-num-label">Falhas</div>
-            </div>
-          </div>
-        </div>
-        <div class="btn-row">
-          <button class="btn primary" onclick="sincronizar()">
-            ↑ Sincronizar agora
-          </button>
-          <button class="btn" onclick="verFila()">Ver itens da fila</button>
-        </div>
-      </div>
-
-      <!-- ── ATUALIZADOR ── -->
-      <div class="section-head">
-        <span class="section-label">Atualização</span>
-        <div class="section-line"></div>
-      </div>
-      <div class="updater-card" style="margin-bottom: 28px">
-        <div class="updater-row">
-          <div class="updater-info">
-            <div
-              style="
-                font-size: 11px;
-                font-family: var(--mono);
-                color: var(--muted);
-                letter-spacing: 0.5px;
-                margin-bottom: 4px;
-              "
-            >
-              VERSÃO ATUAL
-            </div>
-            <div class="updater-version" id="u-versao">—</div>
-            <div class="updater-last" id="u-ultima">Última verificação: —</div>
-          </div>
-          <div>
-            <div
-              id="u-nova-badge"
-              style="
-                display: none;
-                margin-bottom: 10px;
-                padding: 8px 14px;
-                background: #7c6af720;
-                border: 1px solid #7c6af750;
-                border-radius: 8px;
-                font-size: 12px;
-                color: var(--accent);
-              "
-            >
-              🆕 Nova versão disponível: <strong id="u-nova-ver"></strong>
-            </div>
-            <div class="btn-row" style="margin-top: 0">
-              <button
-                class="btn primary"
-                id="btn-check-update"
-                onclick="checkUpdate()"
-              >
-                🔄 Verificar atualização
-              </button>
-              <button
-                class="btn"
-                id="btn-changelog"
-                style="display: none"
-                onclick="toggleChangelog()"
-              >
-                📋 Ver changelog
-              </button>
-            </div>
-          </div>
-        </div>
-        <div class="changelog-box" id="changelog-box"></div>
-      </div>
-
-      <!-- ── PDV NÃO ATIVADO ── -->
-      <div id="activation-section" style="display: none; margin-bottom: 28px">
-        <div class="section-head">
-          <span class="section-label">Ativação</span>
-          <div class="section-line"></div>
-        </div>
-        <div
-          class="status-card"
-          style="background: var(--amber-dim); border-color: #ffab0030"
-        >
-          <div class="status-icon amber">🔑</div>
-          <div class="status-info">
-            <div class="status-name" style="color: var(--amber)">
-              PDV não ativado
-            </div>
-            <div class="status-desc">
-              Este agente ainda não foi vinculado a um tenant. Clique para
-              ativar.
-            </div>
-          </div>
-          <button class="btn primary" onclick="abrirAtivacao()">
-            Ativar PDV
-          </button>
-        </div>
-      </div>
-
-      <!-- ── SISTEMA ── -->
       <div class="section-head">
         <span class="section-label">Sistema</span>
         <div class="section-line"></div>
       </div>
-      <div class="sys-grid" id="sys-grid">
-        <div class="sys-item">
-          <div class="sys-key">Plataforma</div>
-          <div class="sys-val" id="s-platform">—</div>
+      <div class="grid grid-4">
+        <div class="metric-card">
+          <div class="metric-label">Plataforma</div>
+          <div class="metric-value" id="s-platform">—</div>
         </div>
-        <div class="sys-item">
-          <div class="sys-key">Arquitetura</div>
-          <div class="sys-val" id="s-arch">—</div>
+        <div class="metric-card">
+          <div class="metric-label">Node.js</div>
+          <div class="metric-value" id="s-node">—</div>
         </div>
-        <div class="sys-item">
-          <div class="sys-key">Hostname</div>
-          <div class="sys-val" id="s-hostname">—</div>
+        <div class="metric-card">
+          <div class="metric-label">Uptime</div>
+          <div class="metric-value" id="s-uptime">—</div>
         </div>
-        <div class="sys-item">
-          <div class="sys-key">Node.js</div>
-          <div class="sys-val" id="s-node">—</div>
+        <div class="metric-card">
+          <div class="metric-label">Memória (heap)</div>
+          <div class="metric-value" id="s-mem">—</div>
         </div>
-        <div class="sys-item">
-          <div class="sys-key">Porta</div>
-          <div class="sys-val" id="s-porta">—</div>
-        </div>
-        <div class="sys-item">
-          <div class="sys-key">Tenant ID</div>
-          <div class="sys-val" id="s-tenant">—</div>
-        </div>
-        <div class="sys-item">
-          <div class="sys-key">Autenticação local</div>
-          <div class="sys-val" id="s-auth">—</div>
-        </div>
-        <div class="sys-item">
-          <div class="sys-key">Impressora tipo</div>
-          <div class="sys-val" id="s-printer-type">—</div>
-        </div>
+      </div>
+
+      <div class="footer-note">
+        Esta página é apenas informativa. Para gerenciar vendas, configurações,
+        atualizações e o diagnóstico completo deste terminal, acesse
+        <strong>o painel web</strong> e entre em
+        <strong>PDV → Diagnóstico</strong>.
       </div>
     </main>
 
-    <!-- ── MODAL FILA ── -->
-    <div
-      id="modal-fila"
-      style="
-        display: none;
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.85);
-        z-index: 200;
-        align-items: flex-start;
-        justify-content: center;
-        padding: 40px 20px;
-        overflow-y: auto;
-        backdrop-filter: blur(4px);
-      "
-    >
-      <div
-        style="
-          background: var(--surface);
-          border: 1px solid var(--border-hi);
-          border-radius: 16px;
-          width: 100%;
-          max-width: 720px;
-          padding: 28px;
-          position: relative;
-        "
-      >
-        <button class="close-btn" onclick="fecharFila()">✕</button>
-        <div
-          style="
-            font-size: 18px;
-            font-weight: 600;
-            color: #fff;
-            margin-bottom: 16px;
-          "
-        >
-          Itens na fila offline
-        </div>
-        <div
-          id="fila-list"
-          style="font-family: var(--mono); font-size: 12px; color: var(--text)"
-        >
-          Carregando...
-        </div>
-      </div>
-    </div>
-
-    <!-- ── MODAL ATIVAÇÃO ── -->
-    <div id="modal-ativacao" class="activation-overlay">
-      <div class="activation-box">
-        <button class="close-btn" onclick="fecharAtivacao()">✕</button>
-        <div class="activation-title">Ativar PDV</div>
-        <div class="activation-sub">
-          Insira o código de ativação gerado no painel do PDV Margin Engine.
-        </div>
-        <label>URL do backend</label>
-        <input
-          type="url"
-          id="inp-url"
-          placeholder="https://api.marginengine.com.br"
-        />
-        <label>Código de ativação</label>
-        <input
-          type="text"
-          id="inp-codigo"
-          placeholder="XXXX-XXXX-XXXX"
-          style="
-            font-size: 18px;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-          "
-          maxlength="20"
-        />
-        <label>Nome deste terminal</label>
-        <input type="text" id="inp-nome" placeholder="Caixa 1" />
-        <div class="btn-row" style="justify-content: flex-end">
-          <button class="btn" onclick="fecharAtivacao()">Cancelar</button>
-          <button class="btn primary" id="btn-ativar" onclick="ativar()">
-            Ativar →
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── TOAST ── -->
-    <div id="toast"></div>
-
     <script>
-      // ── CONFIG ──
-      const API = ""; // mesmo host/porta
-      const POLL_INTERVAL = 5000; // ms
-      let localToken = "";
-      let pollingTimer = null;
-      let lastDiag = null;
+      const POLL_INTERVAL = 8000; // ms
 
-      // Busca o token local automaticamente — sem precisar colar manualmente
-      async function carregarToken() {
-        try {
-          const r = await fetch(API + "/token");
-          if (r.ok) {
-            const d = await r.json();
-            localToken = d.token || "";
-          }
-        } catch (_) {}
-      }
-
-      // ── TOAST ──
-      function toast(msg, type = "info", dur = 3000) {
-        const el = document.getElementById("toast");
-        el.textContent = msg;
-        el.className = "show " + type;
-        clearTimeout(el._t);
-        el._t = setTimeout(() => el.classList.remove("show"), dur);
-      }
-
-      // ── FORMAT HELPERS ──
-      function fmt_uptime(s) {
-        s = Math.floor(s);
-        const d = Math.floor(s / 86400);
-        const h = Math.floor((s % 86400) / 3600);
-        const m = Math.floor((s % 3600) / 60);
-        const sec = s % 60;
-        if (d > 0) return d + "d " + h + "h " + m + "m";
-        if (h > 0) return h + "h " + m + "m " + sec + "s";
-        return m + "m " + sec + "s";
-      }
-
-      function fmt_bytes(b) {
-        if (!b || b === 0) return "0 B";
-        if (b < 1024) return b + " B";
-        if (b < 1048576) return (b / 1024).toFixed(1) + " KB";
-        return (b / 1048576).toFixed(2) + " MB";
-      }
-
-      function fmt_time(iso) {
-        if (!iso) return "—";
-        try {
-          return new Date(iso).toLocaleTimeString("pt-BR");
-        } catch {
-          return iso;
-        }
-      }
-
-      // ── BADGE HELPER ──
       function setBadge(id, text, cls) {
         const el = document.getElementById(id);
         el.textContent = text;
@@ -1153,394 +505,126 @@
         document.getElementById(id).className = "status-icon " + cls;
       }
 
-      // ── RENDER DIAGNOSTICO ──
-      function renderDiag(d) {
-        lastDiag = d;
+      function fmtMem(mb) {
+        if (mb == null) return "—";
+        return mb + " MB";
+      }
 
-        // Header
+      function render(d) {
+        // Header: nome do PDV e versão
+        document.getElementById("header-pdv-nome").textContent =
+          d.pdvNome || "Agente Local";
+        document.getElementById("version-pill").textContent =
+          "v" + (d.versao || "—");
+
+        // Indicador online
         const pill = document.getElementById("status-pill");
         const pulse = document.getElementById("pulse");
         const statusTxt = document.getElementById("status-text");
-        if (d.agente?.ok) {
-          pill.className = "status-pill";
-          pulse.className = "pulse-ring";
-          statusTxt.textContent = "Online";
-        } else {
-          pill.className = "status-pill offline";
-          pulse.className = "pulse-ring offline";
-          statusTxt.textContent = "Offline";
-        }
+        pill.className = "status-pill";
+        pulse.className = "pulse-ring";
+        statusTxt.textContent = "Online";
 
-        const pdvNome = d.agente?.pdvNome || "Agente Local";
-        document.getElementById("header-pdv-nome").textContent = pdvNome;
-        document.getElementById("last-update").textContent =
-          "Atualizado " + new Date().toLocaleTimeString("pt-BR");
-
-        // Métricas principais
-        const pend = d.fila?.pendentes ?? "—";
-        const falhas = d.fila?.falhas ?? "—";
-        document.getElementById("m-pendentes").textContent = pend;
-        document.getElementById("m-pendentes").className =
-          "card-value big" + (pend > 0 ? " " : "");
-        document.getElementById("m-uptime").textContent =
-          d.uptime != null ? fmt_uptime(d.uptime) : "—";
-        document.getElementById("m-mem").textContent =
-          d.sistema?.memUsedMb != null ? d.sistema.memUsedMb : "—";
-        document.getElementById("m-db").textContent =
-          d.banco?.tamanho != null ? fmt_bytes(d.banco.tamanho) : "—";
-
-        // Fila
-        document.getElementById("fila-pendentes").textContent = pend;
-        const fPend = document.getElementById("fila-pendentes");
-        fPend.className =
-          "fila-num-value" +
-          (pend > 10 ? " warn" : "") +
-          (pend > 50 ? " danger" : "");
-        document.getElementById("fila-falhas").textContent = falhas;
-        const fFalh = document.getElementById("fila-falhas");
-        fFalh.className =
-          "fila-num-value" +
-          (falhas > 0 ? " warn" : "") +
-          (falhas > 5 ? " danger" : "");
+        // Banner de ativação
+        document
+          .getElementById("activation-banner")
+          .classList.toggle("visible", !d.ativado);
 
         // Impressora
         const pOk = d.impressora?.ok;
-        const pTipo = d.impressora?.tipo || "—";
         setIcon("icon-printer", pOk ? "green" : "red");
         setBadge(
           "badge-printer",
-          pOk ? "Online" : "Offline",
+          pOk ? "Conectada" : "Desconectada",
           pOk ? "green" : "red",
         );
-        // Para USB/winusb mostra o path (ex: USB001); para rede mostra o host
-        const pDesc = d.impressora?.host
-          ? d.impressora.host
-          : d.impressora?.path && d.impressora.path !== "auto-detect"
-            ? d.impressora.path
-            : null;
         document.getElementById("desc-printer").textContent =
-          pTipo + (pDesc ? " · " + pDesc : "");
+          d.impressora?.tipo || "—";
 
-        // ACBr
-        const aEmit = d.acbr?.emissaoFiscal;
-        const aOk = d.acbr?.ok;
-        if (!aEmit) {
-          setIcon("icon-acbr", "grey");
-          setBadge("badge-acbr", "Desativado", "grey");
-          document.getElementById("desc-acbr").textContent =
-            "Emissão fiscal desabilitada";
+        // Fiscal / ACBr
+        const fiscalAtivo = d.fiscal?.emissaoFiscal;
+        if (!fiscalAtivo) {
+          setIcon("icon-fiscal", "grey");
+          setBadge("badge-fiscal", "Desativado", "grey");
+          document.getElementById("desc-fiscal").textContent =
+            "Cupom não fiscal";
         } else {
-          setIcon("icon-acbr", aOk ? "green" : "red");
+          const fOk = d.fiscal?.ok;
+          setIcon("icon-fiscal", fOk ? "green" : "red");
           setBadge(
-            "badge-acbr",
-            aOk ? "Conectado" : "Offline",
-            aOk ? "green" : "red",
+            "badge-fiscal",
+            fOk ? "Conectado" : "Offline",
+            fOk ? "green" : "red",
           );
-          document.getElementById("desc-acbr").textContent =
-            (d.acbr?.host || "127.0.0.1") + ":" + (d.acbr?.porta || "9200");
+          document.getElementById("desc-fiscal").textContent = "ACBr Monitor";
         }
 
-        // Backend
-        const bUrl = d.agente?.backendUrl;
-        const bAtiv = d.agente?.ativado;
-        setIcon("icon-backend", bAtiv ? "green" : "amber");
-        setBadge(
-          "badge-backend",
-          bAtiv ? "Ativado" : "Não ativado",
-          bAtiv ? "green" : "amber",
-        );
-        document.getElementById("desc-backend").textContent =
-          bUrl || "PDV não ativado";
-
-        // Banco
+        // Banco de dados
         const dbOk = d.banco?.ok;
         setIcon("icon-db", dbOk ? "green" : "red");
         setBadge("badge-db", dbOk ? "OK" : "Erro", dbOk ? "green" : "red");
-        document.getElementById("desc-db").textContent = d.banco?.path
-          ? d.banco.path.split(/[\\/]/).pop()
-          : "—";
+        document.getElementById("desc-db").textContent = "SQLite local";
 
-        // Fiscal (contingência)
+        // Fila offline
+        const pend = d.fila?.pendentes ?? 0;
+        const falhas = d.fila?.falhas ?? 0;
+        if (falhas > 0) {
+          setIcon("icon-fila", "red");
+          setBadge("badge-fila", falhas + " falha(s)", "red");
+        } else if (pend > 0) {
+          setIcon("icon-fila", "amber");
+          setBadge("badge-fila", pend + " pendente(s)", "amber");
+        } else {
+          setIcon("icon-fila", "green");
+          setBadge("badge-fila", "Vazia", "green");
+        }
+        document.getElementById("desc-fila").textContent =
+          pend + " pendente(s) · " + falhas + " falha(s)";
+
+        // Contingência EPEC
         const cAtiva = d.contingencia?.ativa;
         const ePend = d.contingencia?.epecPendentes || 0;
-        setIcon("icon-fiscal", cAtiva ? "amber" : aEmit ? "green" : "grey");
-        if (cAtiva) {
-          setBadge("badge-fiscal", "Contingência", "amber");
-          document.getElementById("desc-fiscal").textContent =
-            ePend + " EPEC(s) pendente(s)";
-        } else {
-          setBadge(
-            "badge-fiscal",
-            aEmit ? "Normal" : "Desativado",
-            aEmit ? "green" : "grey",
-          );
-          document.getElementById("desc-fiscal").textContent = aEmit
-            ? "Emissão normal"
-            : "NFC-e desabilitado";
-        }
-
-        // Banner contingência
-        const alertEl = document.getElementById("contingencia-alert");
-        if (cAtiva) {
-          alertEl.classList.add("visible");
-          document.getElementById("epec-count").textContent =
-            " " + ePend + " EPEC(s) aguardando transmissão.";
-        } else {
-          alertEl.classList.remove("visible");
-        }
-
-        // Frontend offline
-        const fOk = d.agente?.temFrontend;
-        setIcon("icon-frontend", fOk ? "green" : "amber");
+        setIcon("icon-contingencia", cAtiva ? "amber" : "green");
         setBadge(
-          "badge-frontend",
-          fOk ? "Disponível" : "Sem cache",
-          fOk ? "green" : "amber",
+          "badge-contingencia",
+          cAtiva ? "Ativa" : "Normal",
+          cAtiva ? "amber" : "green",
         );
-        document.getElementById("desc-frontend").textContent = fOk
-          ? "App carrega sem internet"
-          : "Requer internet";
-
-        // Ativação
-        document.getElementById("activation-section").style.display = bAtiv
-          ? "none"
-          : "block";
-
-        // Updater
-        const uv = d.updater;
-        if (uv) {
-          document.getElementById("u-versao").textContent =
-            "v" + (uv.versaoAtual || "—");
-          document.getElementById("u-ultima").textContent =
-            "Última verificação: " +
-            (uv.ultimaVerificacao ? fmt_time(uv.ultimaVerificacao) : "nunca");
-          if (uv.versaoDisponivel) {
-            document.getElementById("u-nova-badge").style.display = "block";
-            document.getElementById("u-nova-ver").textContent =
-              uv.versaoDisponivel;
-            document.getElementById("btn-changelog").style.display =
-              uv.changelog ? "inline-flex" : "none";
-            document.getElementById("changelog-box").textContent =
-              uv.changelog || "";
-          } else {
-            document.getElementById("u-nova-badge").style.display = "none";
-          }
-          if (uv.atualizando) {
-            document.getElementById("btn-check-update").disabled = true;
-            document.getElementById("btn-check-update").textContent =
-              "⏳ Atualizando...";
-          }
-        }
+        document.getElementById("desc-contingencia").textContent = cAtiva
+          ? ePend + " EPEC(s) pendente(s)"
+          : "Emissão normal";
 
         // Sistema
         const sis = d.sistema || {};
-        document.getElementById("s-platform").textContent = sis.platform || "—";
-        document.getElementById("s-arch").textContent = sis.arch || "—";
-        document.getElementById("s-hostname").textContent = sis.hostname || "—";
+        document.getElementById("s-platform").textContent =
+          (sis.platform || "—") + (sis.arch ? " / " + sis.arch : "");
         document.getElementById("s-node").textContent = sis.nodeVersao || "—";
-        document.getElementById("s-porta").textContent = d.agente?.porta || "—";
-        document.getElementById("s-tenant").textContent =
-          d.agente?.tenantId || "—";
-        document.getElementById("s-auth").textContent = d.agente
-          ?.autenticacaoLocal
-          ? "Ativada"
-          : "Desativada";
-        document.getElementById("s-printer-type").textContent =
-          d.impressora?.tipo || "—";
+        document.getElementById("s-uptime").textContent = d.uptimeHuman || "—";
+        document.getElementById("s-mem").textContent = fmtMem(sis.memUsedMb);
       }
 
-      // ── POLL ──
+      function renderOffline(mensagem) {
+        const pill = document.getElementById("status-pill");
+        const pulse = document.getElementById("pulse");
+        pill.className = "status-pill offline";
+        pulse.className = "pulse-ring offline";
+        document.getElementById("status-text").textContent = "Sem resposta";
+        document.getElementById("header-pdv-nome").textContent =
+          mensagem || "Agente Local";
+      }
+
       async function poll() {
         try {
-          const r = await fetch(API + "/diagnostico");
+          const r = await fetch("/status-basico");
           if (!r.ok) throw new Error("HTTP " + r.status);
-          const d = await r.json();
-          renderDiag(d);
+          render(await r.json());
         } catch (e) {
-          const pill = document.getElementById("status-pill");
-          pill.className = "status-pill offline";
-          document.getElementById("pulse").className = "pulse-ring offline";
-          document.getElementById("status-text").textContent = "Sem resposta";
-          document.getElementById("last-update").textContent =
-            "Falha: " + e.message;
+          renderOffline("Agente sem resposta");
         }
       }
 
-      // ── SINCRONIZAR ──
-      async function sincronizar() {
-        toast("Sincronizando...", "info", 8000);
-        try {
-          const headers = { "Content-Type": "application/json" };
-          if (localToken) headers["Authorization"] = "Bearer " + localToken;
-          const r = await fetch(API + "/fila/sincronizar", {
-            method: "POST",
-            headers,
-          });
-          const d = await r.json();
-          if (r.ok) {
-            toast(
-              "✓ Sincronizadas: " +
-                (d.sincronizadas || 0) +
-                "  Falhas: " +
-                (d.falhas || 0),
-              "success",
-              4000,
-            );
-            poll();
-          } else {
-            toast("Erro: " + (d.erro || "desconhecido"), "error");
-          }
-        } catch (e) {
-          toast("Erro de rede: " + e.message, "error");
-        }
-      }
-
-      // ── VER FILA ──
-      async function verFila() {
-        document.getElementById("modal-fila").style.display = "flex";
-        document.getElementById("fila-list").innerHTML =
-          '<div style="color:var(--muted)">Carregando...</div>';
-        try {
-          const headers = {};
-          if (localToken) headers["Authorization"] = "Bearer " + localToken;
-          const r = await fetch(API + "/fila", { headers });
-          const rows = await r.json();
-          if (!rows || rows.length === 0) {
-            document.getElementById("fila-list").innerHTML =
-              '<div style="color:var(--muted);padding:20px 0">Fila vazia 🎉</div>';
-            return;
-          }
-          const html = rows
-            .map((row) => {
-              const statusCls =
-                row.status === "SINCRONIZADO"
-                  ? "var(--green)"
-                  : row.status === "FALHA_PERMANENTE"
-                    ? "var(--red)"
-                    : row.status === "PENDENTE"
-                      ? "var(--amber)"
-                      : "var(--text)";
-              return `<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-        <div>
-          <div style="color:#fff;font-size:13px">${row.numero_venda}</div>
-          ${row.ultimo_erro ? '<div style="color:var(--red);font-size:11px;margin-top:2px">' + row.ultimo_erro + "</div>" : ""}
-        </div>
-        <div style="font-size:11px;color:var(--muted)">${row.tentativas} tent.</div>
-        <div style="font-size:10px;font-weight:600;color:${statusCls}">${row.status}</div>
-      </div>`;
-            })
-            .join("");
-          document.getElementById("fila-list").innerHTML = html;
-        } catch (e) {
-          document.getElementById("fila-list").innerHTML =
-            '<div style="color:var(--red)">Erro: ' + e.message + "</div>";
-        }
-      }
-      function fecharFila() {
-        document.getElementById("modal-fila").style.display = "none";
-      }
-
-      // ── UPDATER ──
-      async function checkUpdate() {
-        const btn = document.getElementById("btn-check-update");
-        btn.disabled = true;
-        btn.textContent = "⏳ Verificando...";
-        toast("Verificando atualização...", "info", 5000);
-        try {
-          const headers = { "Content-Type": "application/json" };
-          if (localToken) headers["Authorization"] = "Bearer " + localToken;
-          const r = await fetch(API + "/updater/verificar", {
-            method: "POST",
-            headers,
-          });
-          const d = await r.json();
-          if (r.ok) {
-            toast(
-              "✓ " + (d.mensagem || "Verificação iniciada"),
-              "success",
-              4000,
-            );
-          } else {
-            toast("Erro: " + (d.erro || "desconhecido"), "error");
-          }
-        } catch (e) {
-          toast("Erro: " + e.message, "error");
-        } finally {
-          setTimeout(() => {
-            btn.disabled = false;
-            btn.textContent = "🔄 Verificar atualização";
-            poll();
-          }, 3000);
-        }
-      }
-
-      function toggleChangelog() {
-        const box = document.getElementById("changelog-box");
-        box.classList.toggle("visible");
-      }
-
-      // ── ATIVAÇÃO ──
-      function abrirAtivacao() {
-        document.getElementById("modal-ativacao").classList.add("visible");
-      }
-      function fecharAtivacao() {
-        document.getElementById("modal-ativacao").classList.remove("visible");
-      }
-
-      async function ativar() {
-        const url = document.getElementById("inp-url").value.trim();
-        const codigo = document
-          .getElementById("inp-codigo")
-          .value.trim()
-          .toUpperCase();
-        if (!url || !codigo) {
-          toast("Preencha todos os campos", "error");
-          return;
-        }
-        const btn = document.getElementById("btn-ativar");
-        btn.disabled = true;
-        btn.textContent = "Ativando...";
-        try {
-          const r = await fetch(API + "/ativar", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              codigoAtivacao: codigo,
-              backendUrl: url,
-              pdvNome:
-                document.getElementById("inp-nome").value.trim() ||
-                "PDV Principal",
-            }),
-          });
-          const d = await r.json();
-          if (r.ok) {
-            toast("✓ PDV ativado: " + (d.pdvNome || ""), "success", 5000);
-            fecharAtivacao();
-            poll();
-          } else {
-            toast("Erro: " + (d.erro || "Falha na ativação"), "error", 5000);
-          }
-        } catch (e) {
-          toast("Erro de rede: " + e.message, "error");
-        } finally {
-          btn.disabled = false;
-          btn.textContent = "Ativar →";
-        }
-      }
-
-      // ── FECHAR MODAIS COM ESC ──
-      document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") {
-          fecharFila();
-          fecharAtivacao();
-        }
-      });
-
-      // ── START ──
-      carregarToken().then(() => {
-        poll();
-        pollingTimer = setInterval(poll, POLL_INTERVAL);
-      });
+      poll();
+      setInterval(poll, POLL_INTERVAL);
     </script>
   </body>
 </html>
