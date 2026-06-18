@@ -1159,10 +1159,10 @@ function iniciarServidor() {
     }
   }
 
-  app.post("/impressora/imprimir", exigirAgentToken, imprimirCupomHandler);
-  app.post("/impressora/cupom", exigirAgentToken, imprimirCupomHandler);
+  app.post("/impressora/imprimir", privateNetworkHeaders, exigirAgentToken, imprimirCupomHandler);
+  app.post("/impressora/cupom", privateNetworkHeaders, exigirAgentToken, imprimirCupomHandler);
 
-  app.post("/impressora/abertura", exigirAgentToken, async (req, res) => {
+  app.post("/impressora/abertura", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       await impressora.imprimirAbertura(req.body);
       res.json({ ok: true });
@@ -1171,7 +1171,7 @@ function iniciarServidor() {
     }
   });
 
-  app.post("/impressora/fechamento", exigirAgentToken, async (req, res) => {
+  app.post("/impressora/fechamento", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       await impressora.imprimirFechamento(req.body);
       res.json({ ok: true });
@@ -1182,6 +1182,7 @@ function iniciarServidor() {
 
   app.post(
     "/impressora/movimento-caixa",
+    privateNetworkHeaders,
     exigirAgentToken,
     async (req, res) => {
       try {
@@ -1193,7 +1194,7 @@ function iniciarServidor() {
     },
   );
 
-  app.post("/impressora/gaveta", exigirAgentToken, async (req, res) => {
+  app.post("/impressora/gaveta", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       await impressora.abrirGaveta();
       res.json({ ok: true });
@@ -1202,7 +1203,7 @@ function iniciarServidor() {
     }
   });
 
-  app.get("/impressora/status", exigirAgentToken, async (req, res) => {
+  app.get("/impressora/status", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     const [ok, info] = await Promise.all([
       impressora.testar().catch(() => false),
       impressora.getInfo().catch(() => null),
