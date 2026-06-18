@@ -70,6 +70,16 @@ function extrairNumeroVenda(payload) {
   );
 }
 
+function isErroPermanente(erroMsg) {
+  if (!erroMsg) return false;
+  const msg = String(erroMsg).toLowerCase();
+  return (
+    msg.includes("estoque insuficiente") ||
+    msg.includes("produto não encontrado") ||
+    msg.includes("produto nao encontrado")
+  );
+}
+
 function carregarConfigPersistida() {
   try {
     if (!fs.existsSync(CONFIG_PATH)) {
@@ -340,6 +350,7 @@ async function sincronizarInterno(url, token) {
     SET    tentativas  = tentativas + 1,
            ultimo_erro = ?,
            status      = CASE
+                           WHEN ? = 1 THEN 'FALHA_PERMANENTE'
                            WHEN tentativas + 1 >= ${MAX_TENTATIVAS} THEN 'FALHA_PERMANENTE'
                            ELSE 'PENDENTE'
                          END
@@ -387,7 +398,7 @@ async function sincronizarInterno(url, token) {
         sincronizadas++;
       } else {
         const erroMsg = r.erro || r.error || r.mensagem || "Erro desconhecido";
-        marcarFalha.run(erroMsg, chave);
+        marcarFalha.run(erroMsg, isErroPermanente(erroMsg) ? 1 : 0, chave);
         falhas++;
       }
     }
@@ -398,7 +409,7 @@ async function sincronizarInterno(url, token) {
       if (!processados.has(chave)) {
         // Backend não confirmou nem negou — deixa PENDENTE para próximo ciclo
         // mas incrementa tentativa para não ficar em loop infinito silencioso
-        marcarFalha.run("Sem confirmação do backend no lote", chave);
+        marcarFalha.run("Sem confirmação do backend no lote", 0, chave);
         falhas++;
       }
     }
