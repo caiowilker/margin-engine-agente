@@ -159,15 +159,22 @@ Modelos testados: Bematech MP-4200, Elgin i9, Epson TM-T20, Daruma DR800.
 
 ## ACBr Monitor
 
+O agente é um **adaptador TCP**: monta o INI da venda, envia `NFE.CriarEnviarNFe` e interpreta a resposta.
+Certificado A1, CSC, URLs SEFAZ e ambiente devem estar configurados **no ACBr Monitor** (aba DFe / WebServices).
+
 Configure no `.env`:
 ```
-ACBR_HOST=127.0.0.1   # mesma máquina
-ACBR_PORT=9200        # porta padrão do Monitor
-EMISSAO_FISCAL=false  # true para habilitar NFC-e
+ACBR_HOST=127.0.0.1
+ACBR_PORT=9200
+EMISSAO_FISCAL=false
+ACBR_AUTO_PATCH=false   # não editar ACBrNFeServicos.ini automaticamente
+ACBR_AUTO_CSC=false     # não gravar CSC via TCP automaticamente
 ```
 
-O ACBr Monitor deve estar configurado com certificado digital A1
-e apontando para o ambiente correto (homologação ou produção).
+Comunicação TCP: terminador oficial `CR+LF + '.' + CR+LF`.
+Emissão NFC-e: `NFE.CriarEnviarNFe(ini, 1, 0, 1, 0, 0, 0, 0)` — síncrono, sem PDF/DANFE no ACBr (impressão ESC/POS pelo agente).
+
+Diagnóstico completo: `GET /diagnostico/fiscal` ou `node scripts/setup-acbr-nfce.js`
 
 ---
 

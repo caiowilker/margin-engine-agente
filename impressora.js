@@ -48,11 +48,69 @@ const TERMICA_RX =
 const REDE_PORTAS = [9100, 9101, 515];
 const CACHE_TTL_MS = 30000;
 const AGENT_PORT = parseInt(process.env.PORT || "9100", 10);
+const IMPRIMIR_QR_NFCE =
+  (process.env.IMPRIMIR_QR_NFCE || "false").toLowerCase() === "true";
 
 let cacheDescoberta = null;
 let cacheDescobertaEm = 0;
+let cacheImpressoraEscolhida = null;
 let ultimaImpressoraUsada = null;
 let printLock = Promise.resolve();
+
+const RAW_PRINT_SCRIPT = path.join(os.tmpdir(), "pdv-margin-raw-print.ps1");
+if (IS_WIN) {
+  try {
+    fs.writeFileSync(
+      RAW_PRINT_SCRIPT,
+      `$cfg = Get-Content -Raw $args[0] | ConvertFrom-Json
+$bytes = [System.IO.File]::ReadAllBytes($cfg.file)
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class RawPrinterHelper {
+  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]
+  public class DOCINFOA {
+    [MarshalAs(UnmanagedType.LPStr)] public string pDocName;
+    [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
+    [MarshalAs(UnmanagedType.LPStr)] public string pDatatype;
+  }
+  [DllImport("winspool.drv", EntryPoint="OpenPrinterA", SetLastError=true, CharSet=CharSet.Ansi)]
+  public static extern bool OpenPrinter(string szPrinter, out IntPtr hPrinter, IntPtr pd);
+  [DllImport("winspool.drv", SetLastError=true)] public static extern bool ClosePrinter(IntPtr hPrinter);
+  [DllImport("winspool.drv", EntryPoint="StartDocPrinterA", SetLastError=true, CharSet=CharSet.Ansi)]
+  public static extern bool StartDocPrinter(IntPtr hPrinter, int level, [In] DOCINFOA di);
+  [DllImport("winspool.drv", SetLastError=true)] public static extern bool EndDocPrinter(IntPtr hPrinter);
+  [DllImport("winspool.drv", SetLastError=true)] public static extern bool StartPagePrinter(IntPtr hPrinter);
+  [DllImport("winspool.drv", SetLastError=true)] public static extern bool EndPagePrinter(IntPtr hPrinter);
+  [DllImport("winspool.drv", SetLastError=true)]
+  public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);
+}
+'@
+$h = [IntPtr]::Zero
+if (-not [RawPrinterHelper]::OpenPrinter($cfg.printer, [ref]$h, [IntPtr]::Zero)) {
+  throw "Nao foi possivel abrir a impressora: $($cfg.printer)"
+}
+try {
+  $di = New-Object RawPrinterHelper+DOCINFOA
+  $di.pDocName = "PDV Cupom"
+  $di.pDatatype = "RAW"
+  if (-not [RawPrinterHelper]::StartDocPrinter($h, 1, $di)) { throw "StartDocPrinter falhou" }
+  try {
+    if (-not [RawPrinterHelper]::StartPagePrinter($h)) { throw "StartPagePrinter falhou" }
+    $p = [Runtime.InteropServices.Marshal]::AllocHGlobal($bytes.Length)
+    [Runtime.InteropServices.Marshal]::Copy($bytes, 0, $p, $bytes.Length)
+    $written = 0
+    if (-not [RawPrinterHelper]::WritePrinter($h, $p, $bytes.Length, [ref]$written)) { throw "WritePrinter falhou" }
+    [Runtime.InteropServices.Marshal]::FreeHGlobal($p)
+    [RawPrinterHelper]::EndPagePrinter($h) | Out-Null
+  } finally { [RawPrinterHelper]::EndDocPrinter($h) | Out-Null }
+} finally { [RawPrinterHelper]::ClosePrinter($h) | Out-Null }
+Remove-Item $cfg.file -Force -ErrorAction SilentlyContinue
+`,
+      "utf8",
+    );
+  } catch (_) {}
+}
 
 function comLockImpressao(fn) {
   const exec = printLock.then(() => fn());
@@ -175,63 +233,18 @@ function enviarRawWindows(nomeImpressora, buffer) {
     "utf8",
   );
 
-  const scriptPath = path.join(os.tmpdir(), "pdv-raw-print.ps1");
-  // Sempre regrava o script para garantir que está atualizado
-  fs.writeFileSync(
-    scriptPath,
-    `$cfg = Get-Content -Raw $args[0] | ConvertFrom-Json
-$bytes = [System.IO.File]::ReadAllBytes($cfg.file)
-Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-public class RawPrinterHelper {
-  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]
-  public class DOCINFOA {
-    [MarshalAs(UnmanagedType.LPStr)] public string pDocName;
-    [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
-    [MarshalAs(UnmanagedType.LPStr)] public string pDatatype;
-  }
-  [DllImport("winspool.drv", EntryPoint="OpenPrinterA", SetLastError=true, CharSet=CharSet.Ansi)]
-  public static extern bool OpenPrinter(string szPrinter, out IntPtr hPrinter, IntPtr pd);
-  [DllImport("winspool.drv", SetLastError=true)] public static extern bool ClosePrinter(IntPtr hPrinter);
-  [DllImport("winspool.drv", EntryPoint="StartDocPrinterA", SetLastError=true, CharSet=CharSet.Ansi)]
-  public static extern bool StartDocPrinter(IntPtr hPrinter, int level, [In] DOCINFOA di);
-  [DllImport("winspool.drv", SetLastError=true)] public static extern bool EndDocPrinter(IntPtr hPrinter);
-  [DllImport("winspool.drv", SetLastError=true)] public static extern bool StartPagePrinter(IntPtr hPrinter);
-  [DllImport("winspool.drv", SetLastError=true)] public static extern bool EndPagePrinter(IntPtr hPrinter);
-  [DllImport("winspool.drv", SetLastError=true)]
-  public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);
-}
-'@
-$h = [IntPtr]::Zero
-if (-not [RawPrinterHelper]::OpenPrinter($cfg.printer, [ref]$h, [IntPtr]::Zero)) {
-  throw "Nao foi possivel abrir a impressora: $($cfg.printer)"
-}
-try {
-  $di = New-Object RawPrinterHelper+DOCINFOA
-  $di.pDocName = "PDV Cupom"
-  $di.pDatatype = "RAW"
-  if (-not [RawPrinterHelper]::StartDocPrinter($h, 1, $di)) { throw "StartDocPrinter falhou" }
-  try {
-    if (-not [RawPrinterHelper]::StartPagePrinter($h)) { throw "StartPagePrinter falhou" }
-    $p = [Runtime.InteropServices.Marshal]::AllocHGlobal($bytes.Length)
-    [Runtime.InteropServices.Marshal]::Copy($bytes, 0, $p, $bytes.Length)
-    $written = 0
-    if (-not [RawPrinterHelper]::WritePrinter($h, $p, $bytes.Length, [ref]$written)) { throw "WritePrinter falhou" }
-    [Runtime.InteropServices.Marshal]::FreeHGlobal($p)
-    [RawPrinterHelper]::EndPagePrinter($h) | Out-Null
-  } finally { [RawPrinterHelper]::EndDocPrinter($h) | Out-Null }
-} finally { [RawPrinterHelper]::ClosePrinter($h) | Out-Null }
-Remove-Item $cfg.file -Force -ErrorAction SilentlyContinue
-`,
-    "utf8",
-  );
-
   try {
     execFileSync(
       "powershell",
-      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, tmpCfg],
-      { timeout: 30000, windowsHide: true },
+      [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        RAW_PRINT_SCRIPT,
+        tmpCfg,
+      ],
+      { timeout: 15000, windowsHide: true },
     );
     return true;
   } finally {
@@ -372,6 +385,13 @@ function detectarWindows() {
 
 async function detectarImpressora(force = false) {
   const agora = Date.now();
+  if (
+    !force &&
+    cacheImpressoraEscolhida &&
+    agora - cacheImpressoraEscolhida.em < CACHE_TTL_MS
+  ) {
+    return cacheImpressoraEscolhida.resultado;
+  }
   if (!force && cacheDescoberta && agora - cacheDescobertaEm < CACHE_TTL_MS) {
     return cacheDescoberta;
   }
@@ -411,6 +431,9 @@ async function detectarImpressora(force = false) {
 
   cacheDescoberta = resultado;
   cacheDescobertaEm = agora;
+  if (escolhida) {
+    cacheImpressoraEscolhida = { em: agora, resultado };
+  }
   return resultado;
 }
 
@@ -422,7 +445,10 @@ async function enviarBuffer(buffer) {
 
   if (PRINTER_TYPE === "windows" || PRINTER_TYPE === "auto") {
     add("windows", async () => {
-      const win = detectarWindows();
+      const win =
+        cacheImpressoraEscolhida?.resultado?.impressora?.metodo === "windows"
+          ? cacheImpressoraEscolhida.resultado.impressora
+          : detectarWindows();
       if (!win) throw new Error("Nenhuma impressora Windows encontrada.");
       enviarRawWindows(win.nome, buffer);
       ultimaImpressoraUsada = { metodo: "windows", nome: win.nome };
@@ -431,16 +457,25 @@ async function enviarBuffer(buffer) {
 
   if (PRINTER_TYPE === "network" || PRINTER_TYPE === "auto") {
     add("network", async () => {
-      const rede = await detectarRede();
-      const alvo =
-        rede ||
-        (PRINTER_HOST ? { host: PRINTER_HOST, porta: PRINTER_PORT } : null);
-      if (!alvo) throw new Error("Impressora de rede inacessivel.");
-      await enviarRede(alvo.host, alvo.porta, buffer);
+      let rede =
+        cacheImpressoraEscolhida?.resultado?.impressora?.metodo === "network"
+          ? cacheImpressoraEscolhida.resultado.impressora
+          : null;
+      if (!rede && PRINTER_HOST) {
+        rede = { host: PRINTER_HOST, porta: PRINTER_PORT };
+      }
+      if (!rede && PRINTER_TYPE === "network") {
+        rede = await detectarRede();
+      }
+      if (!rede && PRINTER_TYPE === "auto" && !IS_WIN) {
+        rede = await detectarRede();
+      }
+      if (!rede) throw new Error("Impressora de rede inacessivel.");
+      await enviarRede(rede.host, rede.porta || rede.port, buffer);
       ultimaImpressoraUsada = {
         metodo: "network",
-        host: alvo.host,
-        porta: alvo.porta,
+        host: rede.host,
+        porta: rede.porta || rede.port,
       };
     });
   }
@@ -485,7 +520,6 @@ async function enviarBuffer(buffer) {
     if (!t) continue;
     try {
       await t.fn();
-      cacheDescoberta = null;
       return { ok: true, metodo, ultima: ultimaImpressoraUsada };
     } catch (err) {
       erros.push(`${metodo}: ${err.message}`);
@@ -775,7 +809,7 @@ function renderCupom(printer, payload) {
       printer.text(chave.slice(22, 44));
     }
     printer.text("Consulte: nfce.fazenda.gov.br");
-    if (payload.qrcodeNfe) {
+    if (payload.qrcodeNfe && IMPRIMIR_QR_NFCE) {
       try {
         printer.qrimage(payload.qrcodeNfe, {
           type: "png",

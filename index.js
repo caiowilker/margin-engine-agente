@@ -53,16 +53,18 @@ const fila = require("./fila");
 const credenciais = require("./credenciais");
 const marginPaths = require("./marginPaths");
 const filaFiscal = require("./filaFiscal");
+const acbrNfceSetup = require("./acbrNfceSetup");
 const fiscalService = require("./fiscalService");
 const reconciliacaoFiscal = require("./reconciliacaoFiscal");
 const fiscalPreflight = require("./fiscalPreflight");
+const fiscalNumeracao = require("./fiscalNumeracao");
 const watchdog = require("./watchdog");
 
 const app = express();
 const PORT = process.env.PORT || 9100;
 
 // ── Versão atual do agente ────────────────────────────────────────────────────
-const VERSAO_ATUAL = "5.1.0";
+const VERSAO_ATUAL = "5.3.0";
 
 // ── Config persistida ─────────────────────────────────────────────────────────
 // Apenas dados NÃO-SENSÍVEIS ficam no config.json (url, nome, ids, flags).
@@ -182,11 +184,33 @@ async function boot() {
   }
 
   marginPaths.ensureDirs();
+  fiscalNumeracao.init();
   filaFiscal.init();
+  const cancelados = filaFiscal.cancelarEmissaoPendente(
+    "Cancelado no boot — refaça a emissão após atualizar dados fiscais/ACBr",
+  );
+  if (cancelados > 0) {
+    console.log(
+      `[Fila fiscal] ${cancelados} job(s) de emissão pendente(s) cancelado(s) no boot`,
+    );
+  }
   fiscalService.registrarHandlersFila(lerConfig);
   filaFiscal.iniciarWorker(5000);
   watchdog.iniciar();
   reconciliacaoFiscal.iniciar(lerConfig);
+
+  if (acbr.EMISSAO_FISCAL) {
+    acbrNfceSetup.inicializar().then((r) => {
+      if (r.pronto || r.ok) {
+        console.log("[ACBr NFC-e] Configuração validada");
+      } else {
+        console.warn(
+          "[ACBr NFC-e] Pendências:",
+          (r.acoes || []).join(" | ") || r.erro || "verifique ACBr Monitor",
+        );
+      }
+    });
+  }
 
   iniciarServidor();
 }
@@ -273,6 +297,11 @@ const corsMiddleware = cors({
     console.warn(`[CORS] Origem bloqueada: ${origin}`);
     return callback(null, false);
   },
+  allowedHeaders: [
+    "Content-Type",
+    "X-Agent-Token",
+    "X-Correlation-Id",
+  ],
 });
 
 // ── Private Network Access (Chrome 94+) ──────────────────────────────────────
@@ -285,7 +314,10 @@ const corsMiddleware = cors({
 function privateNetworkHeaders(req, res, next) {
   res.setHeader("Access-Control-Allow-Private-Network", "true");
   res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Agent-Token");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, X-Agent-Token, X-Correlation-Id",
+  );
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   if (req.method === "OPTIONS") {
     return res.status(204).end();
@@ -552,7 +584,7 @@ function iniciarServidor() {
   if (fs.existsSync(FRONTEND_DIST)) {
     app.use(express.static(FRONTEND_DIST));
     app.get(
-      /^(?!\/api|\/status|\/venda|\/fila|\/impressora|\/acbr|\/ativar|\/config|\/contingencia|\/diagnostico|\/updater).*$/,
+      /^(?!\/api|\/status|\/venda|\/fila|\/impressora|\/acbr|\/ativar|\/auth|\/config|\/contingencia|\/diagnostico|\/updater).*$/,
       (req, res) => res.sendFile(path.join(FRONTEND_DIST, "index.html")),
     );
   } else if (fs.existsSync(path.join(__dirname, "status.html"))) {
@@ -778,6 +810,10 @@ function iniciarServidor() {
         epecPendentes,
       },
 
+      auth: {
+        requerToken: !!config.agentToken,
+      },
+
       sistema: {
         platform: os.platform(),
         arch: os.arch(),
@@ -843,6 +879,16 @@ function iniciarServidor() {
     });
   });
 
+  // Sincroniza X-Agent-Token no browser após reativação/reinstalação do agente
+  // (localhost apenas — mesma restrição de rede privada das demais rotas públicas).
+  app.get("/auth/local-token", privateNetworkHeaders, async (req, res) => {
+    const cfg = await lerConfig();
+    if (!cfg.ativado || !cfg.agentToken) {
+      return res.status(404).json({ erro: "Agente não ativado ou sem token." });
+    }
+    res.json({ agentToken: cfg.agentToken });
+  });
+
   // ── Ativação ─────────────────────────────────────────────────────────────────
   app.post("/ativar", privateNetworkHeaders, async (req, res) => {
     const { codigo, codigoAtivacao, backendUrl, pdvNome } = req.body || {};
@@ -904,7 +950,7 @@ function iniciarServidor() {
   });
 
   // ── ACBr / Fiscal ────────────────────────────────────────────────────────────
-  app.post("/acbr/nfce/emitir", exigirAgentToken, async (req, res) => {
+  app.post("/acbr/nfce/emitir", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     if (!acbr.EMISSAO_FISCAL) return res.json({ fiscal: false });
     try {
       const cfg = await lerConfig();
@@ -949,7 +995,7 @@ function iniciarServidor() {
     }
   });
 
-  app.post("/fiscal/emitir", exigirAgentToken, async (req, res) => {
+  app.post("/fiscal/emitir", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     if (!acbr.EMISSAO_FISCAL) return res.json({ fiscal: false });
     try {
       const cfg = await lerConfig();
@@ -965,15 +1011,17 @@ function iniciarServidor() {
     }
   });
 
-  app.get("/acbr/fiscal/preflight", exigirAgentToken, async (req, res) => {
+  app.get("/acbr/fiscal/preflight", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
-      res.json(await fiscalPreflight.validarEmissao());
+      const completo =
+        req.query.completo === "1" || req.query.completo === "true";
+      res.json(await fiscalPreflight.validarEmissao({ completo }));
     } catch (err) {
       res.status(400).json({ ok: false, erro: err.message });
     }
   });
 
-  app.post("/fiscal/cancelar", exigirAgentToken, async (req, res) => {
+  app.post("/fiscal/cancelar", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       const cfg = await lerConfig();
       const resultado = await fiscalService.cancelarCompleto(cfg, req.body);
@@ -983,7 +1031,7 @@ function iniciarServidor() {
     }
   });
 
-  app.post("/acbr/nfce/cancelar", exigirAgentToken, async (req, res) => {
+  app.post("/acbr/nfce/cancelar", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     const chave = req.body?.chave || req.body?.chaveNfe;
     if (!chave) return res.status(400).json({ erro: "chave é obrigatória." });
     try {
@@ -1003,7 +1051,7 @@ function iniciarServidor() {
     }
   });
 
-  app.get("/acbr/sefaz/status", exigirAgentToken, async (req, res) => {
+  app.get("/acbr/sefaz/status", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       res.json(await acbr.statusServico());
     } catch (err) {
@@ -1011,7 +1059,7 @@ function iniciarServidor() {
     }
   });
 
-  app.get("/acbr/nfce/consultar/:chave", exigirAgentToken, async (req, res) => {
+  app.get("/acbr/nfce/consultar/:chave", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       res.json(await acbr.consultarChave(req.params.chave));
     } catch (err) {
@@ -1019,7 +1067,7 @@ function iniciarServidor() {
     }
   });
 
-  app.post("/acbr/nfce/inutilizar", exigirAgentToken, async (req, res) => {
+  app.post("/acbr/nfce/inutilizar", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       const cfg = await lerConfig();
       const body = req.body || {};
@@ -1036,7 +1084,7 @@ function iniciarServidor() {
     }
   });
 
-  app.post("/acbr/nfce/reimprimir", exigirAgentToken, async (req, res) => {
+  app.post("/acbr/nfce/reimprimir", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     const { chave, numeroVenda } = req.body || {};
     try {
       const resultado = await fiscalService.reimprimirDanfceCompleto(
@@ -1058,12 +1106,31 @@ function iniciarServidor() {
     res.json({ ok: true, ...filaFiscal.status() });
   });
 
-  app.get("/diagnostico/fiscal", exigirAgentToken, async (req, res) => {
+  app.post("/fila/fiscal/limpar", exigirAgentToken, (req, res) => {
+    const n = filaFiscal.cancelarEmissaoPendente(
+      req.body?.motivo || "Cancelado manualmente pelo operador",
+    );
+    res.json({ ok: true, cancelados: n, ...filaFiscal.status() });
+  });
+
+  app.get("/diagnostico/fiscal", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    let preflight = null;
+    try {
+      preflight = await fiscalPreflight.validarEmissao({ completo: true });
+    } catch (err) {
+      preflight = { ok: false, erro: err.message };
+    }
     res.json({
       filaFiscal: filaFiscal.status(),
       watchdog: watchdog.statusWatchdog(),
       paths: marginPaths.PATHS,
       emissaoFiscal: acbr.EMISSAO_FISCAL,
+      numeracao: {
+        serie: fiscalNumeracao.SERIE_PADRAO,
+        ultimoNumero: fiscalNumeracao.consultarUltimo(),
+      },
+      nfceSetup: acbrNfceSetup.status(),
+      preflight,
     });
   });
 

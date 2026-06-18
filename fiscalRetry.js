@@ -40,6 +40,12 @@ function isPermanente(err) {
   const msg = err?.message || String(err || "");
   if (/certificado.*(venc|expir|inv[aá]lid)/i.test(msg)) return true;
   if (/csc.*inv[aá]lid/i.test(msg)) return true;
+  if (/munic[ií]pio/i.test(msg)) return true;
+  if (/dados fiscais incompletos/i.test(msg)) return true;
+  if (/c[oó]digo ibge/i.test(msg)) return true;
+  if (/url-qrcode/i.test(msg)) return true;
+  if (/acbrnfeservicos/i.test(msg)) return true;
+  if (/csc/i.test(msg) && /n[aã]o/i.test(msg)) return true;
   if (/rejei[cç][aã]o/i.test(msg) && cStat && cStat.startsWith("2")) {
     return true;
   }

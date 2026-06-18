@@ -182,6 +182,15 @@ async function processarUm() {
       marcarIncerto(job.id, msg);
     } else if (fiscalRetry.isPermanente(err) || tentativas >= MAX_TENTATIVAS) {
       marcar(job.id, STATUS.FALHA_PERMANENTE, msg);
+      if (job.tipo === "EMISSAO" && payload?.correlationId) {
+        salvarResultadoEmissao(
+          payload.correlationId,
+          payload.numeroVenda,
+          "FALHA_PERMANENTE",
+          null,
+          msg,
+        );
+      }
     } else {
       db.prepare(
         `UPDATE fila_fiscal SET status = 'PENDENTE', erro = ?, tentativas = ? WHERE id = ?`,
@@ -308,6 +317,7 @@ function obterResultadoEmissao(correlationId) {
 
 function aguardarConclusao(correlationId, timeoutMs = 120000) {
   const inicio = Date.now();
+  const pollMs = parseInt(process.env.FISCAL_POLL_MS || "200", 10);
   return new Promise((resolve, reject) => {
     const poll = () => {
       const row = obterResultadoEmissao(correlationId);
@@ -328,9 +338,19 @@ function aguardarConclusao(correlationId, timeoutMs = 120000) {
         reject(new Error("Timeout aguardando emissão fiscal na fila"));
         return;
       }
-      setTimeout(poll, 500);
+      setTimeout(poll, pollMs);
     };
     poll();
+  });
+}
+
+function dispararProcessamento() {
+  if (filaPausada) return;
+  setImmediate(async () => {
+    let again = true;
+    while (again && !filaPausada) {
+      again = await processarUm();
+    }
   });
 }
 
@@ -352,6 +372,18 @@ function buscarJobEmissaoPorVenda(numeroVenda) {
     .get(`%"numeroVenda":"${numeroVenda}"%`);
 }
 
+/** Cancela jobs de emissão pendentes (evita retentativas com payload antigo após reinício). */
+function cancelarEmissaoPendente(motivo = "Cancelado — reinício do agente") {
+  init();
+  const r = db
+    .prepare(
+      `UPDATE fila_fiscal SET status = 'FALHA_PERMANENTE', erro = ?
+       WHERE tipo = 'EMISSAO' AND status IN ('PENDENTE', 'INCERTO', 'PROCESSANDO')`,
+    )
+    .run(motivo);
+  return r.changes;
+}
+
 module.exports = {
   TIPOS,
   STATUS,
@@ -371,5 +403,7 @@ module.exports = {
   aguardarConclusao,
   reprocessarIncertos,
   buscarJobEmissaoPorVenda,
+  cancelarEmissaoPendente,
   marcarIncerto,
+  dispararProcessamento,
 };

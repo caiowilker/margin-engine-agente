@@ -9,6 +9,9 @@ const fiscalPreflight = require("./fiscalPreflight");
 const fiscalRetry = require("./fiscalRetry");
 const { PATHS } = require("./marginPaths");
 
+const GERAR_PDF_EMIT =
+  (process.env.FISCAL_GERAR_PDF_ON_EMIT || "false").toLowerCase() === "true";
+
 function httpRequest(url, options, body) {
   return new Promise((resolve, reject) => {
     const lib = url.startsWith("https") ? https : http;
@@ -53,7 +56,6 @@ async function callbackBackend(cfg, numeroVenda, payload, correlationId) {
 async function persistirDocumentosFiscais(cfg, numeroVenda, correlationId, resultado) {
   let xmlPath = null;
   let pdfPath = null;
-  let pdfContentBase64 = null;
 
   if (resultado.xml) {
     xmlPath = docs.salvarXmlAutorizado(resultado.chave, resultado.xml);
@@ -62,14 +64,18 @@ async function persistirDocumentosFiscais(cfg, numeroVenda, correlationId, resul
   try {
     pdfPath = await acbr.gerarPdfDanfce(resultado.chave, xmlPath);
   } catch (err) {
-    throw new Error(`Falha ao gerar DANFC-e PDF: ${err.message}`);
+    if (GERAR_PDF_EMIT) {
+      throw new Error(`Falha ao gerar DANFC-e PDF: ${err.message}`);
+    }
+    pdfPath = null;
   }
 
-  if (!docs.isPdfValid(pdfPath)) {
+  let pdfContentBase64 = null;
+  if (pdfPath && docs.isPdfValid(pdfPath)) {
+    pdfContentBase64 = docs.lerArquivoBase64(pdfPath);
+  } else if (GERAR_PDF_EMIT) {
     throw new Error("PDF DANFC-e inválido ou ausente após geração ACBr");
   }
-
-  pdfContentBase64 = docs.lerArquivoBase64(pdfPath);
 
   filaFiscal.salvarDocumento({
     chave: resultado.chave,
@@ -121,7 +127,7 @@ async function emitirCompleto(cfg, body) {
   const { numeroVenda, correlationId, ...payload } = body;
   if (!numeroVenda) throw new Error("numeroVenda obrigatório");
 
-  await fiscalPreflight.validarEmissao();
+  await fiscalPreflight.validarEmissao({ completo: false });
 
   let resultado;
   try {
@@ -171,8 +177,6 @@ async function enfileirarEmissao(cfg, body) {
     return JSON.parse(existente.resultado);
   }
 
-  await fiscalPreflight.validarEmissao();
-
   filaFiscal.enfileirar(
     "EMISSAO",
     {
@@ -182,6 +186,8 @@ async function enfileirarEmissao(cfg, body) {
     },
     correlationId,
   );
+
+  filaFiscal.dispararProcessamento();
 
   return filaFiscal.aguardarConclusao(
     correlationId,

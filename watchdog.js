@@ -24,7 +24,7 @@ async function tick(restartAcbrFn) {
       degraded = false;
       return;
     }
-    throw new Error("NFCe.Status falhou");
+    throw new Error("NFE.StatusServico falhou");
   } catch (err) {
     falhasConsecutivas++;
     if (falhasConsecutivas >= MAX_FALHAS && !degraded) {
