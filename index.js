@@ -51,12 +51,18 @@ const impressora = require("./impressora");
 const acbr = require("./acbr");
 const fila = require("./fila");
 const credenciais = require("./credenciais");
+const marginPaths = require("./marginPaths");
+const filaFiscal = require("./filaFiscal");
+const fiscalService = require("./fiscalService");
+const reconciliacaoFiscal = require("./reconciliacaoFiscal");
+const fiscalPreflight = require("./fiscalPreflight");
+const watchdog = require("./watchdog");
 
 const app = express();
 const PORT = process.env.PORT || 9100;
 
 // ── Versão atual do agente ────────────────────────────────────────────────────
-const VERSAO_ATUAL = "5.0.0";
+const VERSAO_ATUAL = "5.1.0";
 
 // ── Config persistida ─────────────────────────────────────────────────────────
 // Apenas dados NÃO-SENSÍVEIS ficam no config.json (url, nome, ids, flags).
@@ -175,6 +181,13 @@ async function boot() {
     fila.atualizarConfig(config.backendUrl, config.backendToken);
   }
 
+  marginPaths.ensureDirs();
+  filaFiscal.init();
+  fiscalService.registrarHandlersFila(lerConfig);
+  filaFiscal.iniciarWorker(5000);
+  watchdog.iniciar();
+  reconciliacaoFiscal.iniciar(lerConfig);
+
   iniciarServidor();
 }
 
@@ -261,6 +274,24 @@ const corsMiddleware = cors({
     return callback(null, false);
   },
 });
+
+// ── Private Network Access (Chrome 94+) ──────────────────────────────────────
+// Browsers modernos bloqueiam requisições de origens HTTPS (ex: app no painel
+// em https://app.marginengine.com.br) para localhost HTTP sem este header.
+// O browser envia um preflight OPTIONS com Access-Control-Request-Private-Network
+// e o agente deve responder com Access-Control-Allow-Private-Network: true.
+// Sem isso, o fetch falha com ERR_FAILED antes mesmo de chegar ao agente,
+// e o frontend interpreta incorretamente como "agente offline".
+function privateNetworkHeaders(req, res, next) {
+  res.setHeader("Access-Control-Allow-Private-Network", "true");
+  res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Agent-Token");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+  next();
+}
 
 // ── Segurança: token do agente ────────────────────────────────────────────────
 function exigirAgentToken(req, res, next) {
@@ -496,6 +527,23 @@ function calcularSha256(filePath) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function iniciarServidor() {
+  // ── FIX CRÍTICO: ordem dos middlewares de CORS ────────────────────────────
+  // O pacote `cors` (preflightContinue=false por padrão) responde sozinho a
+  // requisições OPTIONS (preflight) com 204 e ENCERRA a resposta ali mesmo.
+  // Quando `app.use(corsMiddleware)` vinha ANTES do `app.options("*", ...)`,
+  // o preflight nunca chegava no `privateNetworkHeaders` — saía sem o header
+  // "Access-Control-Allow-Private-Network: true".
+  //
+  // Resultado: o Chrome bloqueia a requisição real com ERR_FAILED (Private
+  // Network Access) ANTES mesmo de chegar no agente. O frontend recebe um
+  // erro de rede no fetch e marca o agente como "offline" — mesmo com o
+  // processo Node rodando perfeitamente na porta 9100.
+  //
+  // Solução: tratar o preflight OPTIONS com privateNetworkHeaders ANTES do
+  // corsMiddleware, garantindo que o header Private-Network sempre vá na
+  // resposta 204 do preflight.
+  app.options("*", privateNetworkHeaders, (req, res) => res.status(204).end());
+
   app.use(corsMiddleware);
   app.use(express.json({ limit: "2mb" }));
 
@@ -507,142 +555,164 @@ function iniciarServidor() {
       /^(?!\/api|\/status|\/venda|\/fila|\/impressora|\/acbr|\/ativar|\/config|\/contingencia|\/diagnostico|\/updater).*$/,
       (req, res) => res.sendFile(path.join(FRONTEND_DIST, "index.html")),
     );
+  } else if (fs.existsSync(path.join(__dirname, "status.html"))) {
+    app.get(["/", "/status.html"], (req, res) => {
+      res.sendFile(path.join(__dirname, "status.html"));
+    });
   }
 
   // ── Diagnóstico ─────────────────────────────────────────────────────────────
   // Expõe dados sensíveis (backendUrl, tenantId, dispositivoId, hostname,
   // caminho do banco etc.) — exige X-Agent-Token quando o PDV está ativado.
   // Consumido pela tela /pdv/diagnostico do painel web.
-  app.get("/diagnostico", exigirAgentToken, async (req, res) => {
-    config = await lerConfig();
+  app.get(
+    "/diagnostico",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    async (req, res) => {
+      config = await lerConfig();
 
-    const [impressoraOk, impressoraInfo, acbrOk] = await Promise.all([
-      impressora.testar().catch(() => false),
-      impressora.getInfo().catch(() => null),
-      acbr.EMISSAO_FISCAL
-        ? acbr.testar().catch(() => false)
-        : Promise.resolve(false),
-    ]);
+      const [impressoraOk, impressoraInfo, acbrOk] = await Promise.all([
+        impressora.testar().catch(() => false),
+        impressora.getInfo().catch(() => null),
+        acbr.EMISSAO_FISCAL
+          ? acbr.testar().catch(() => false)
+          : Promise.resolve(false),
+      ]);
 
-    const { pendentes: filaOffline, falhas: filaFalhas } =
-      await fila.contadores();
-    const contingencia = lerContingencia();
+      const { pendentes: filaOffline, falhas: filaFalhas } =
+        await fila.contadores();
+      const contingencia = lerContingencia();
 
-    let epecPendentes = 0;
-    let dbOk = false;
-    let dbSize = 0;
-    if (db) {
-      try {
-        const row = db
-          .prepare(
-            "SELECT COUNT(*) as n FROM epec_pendentes WHERE status='PENDENTE'",
-          )
-          .get();
-        epecPendentes = row ? row.n : 0;
-        dbOk = true;
-        const stat = fs.statSync(DB_PATH);
-        dbSize = stat.size;
-      } catch {}
-    }
+      let epecPendentes = 0;
+      let dbOk = false;
+      let dbSize = 0;
+      if (db) {
+        try {
+          const row = db
+            .prepare(
+              "SELECT COUNT(*) as n FROM epec_pendentes WHERE status='PENDENTE'",
+            )
+            .get();
+          epecPendentes = row ? row.n : 0;
+          dbOk = true;
+          const stat = fs.statSync(DB_PATH);
+          dbSize = stat.size;
+        } catch {}
+      }
 
-    const uptime = process.uptime();
-    const memUsed = process.memoryUsage().heapUsed;
-    const cpuArch = os.arch();
-    const platform = os.platform();
-    const hostname = os.hostname();
-    const nodeVersao = process.version;
+      const uptime = process.uptime();
+      const memUsed = process.memoryUsage().heapUsed;
+      const cpuArch = os.arch();
+      const platform = os.platform();
+      const hostname = os.hostname();
+      const nodeVersao = process.version;
 
-    res.json({
-      versao: VERSAO_ATUAL,
-      timestamp: new Date().toISOString(),
-      uptime,
+      res.json({
+        versao: VERSAO_ATUAL,
+        timestamp: new Date().toISOString(),
+        uptime,
 
-      agente: {
-        ok: true,
-        ativado: config.ativado === true,
-        pdvNome: config.pdvNome || "PDV",
-        tenantId: config.tenantId || null,
-        dispositivoId: config.dispositivoId || null,
-        backendUrl: config.backendUrl || null,
-        temFrontend: fs.existsSync(FRONTEND_DIST),
-        porta: PORT,
-      },
+        agente: {
+          ok: true,
+          ativado: config.ativado === true,
+          pdvNome: config.pdvNome || "PDV",
+          tenantId: config.tenantId || null,
+          dispositivoId: config.dispositivoId || null,
+          backendUrl: config.backendUrl || null,
+          temFrontend: fs.existsSync(FRONTEND_DIST),
+          porta: PORT,
+        },
 
-      impressora: {
-        ok: impressoraOk,
-        tipo: process.env.PRINTER_TYPE || "auto",
-        host: process.env.PRINTER_HOST || null,
-        porta: process.env.PRINTER_PORT || null,
-        detectada: impressoraInfo?.impressora || null,
-        candidatos: impressoraInfo?.candidatos?.length || 0,
-        ultimaUsada: impressoraInfo?.ultimaUsada || null,
-      },
+        impressora: {
+          ok: impressoraOk,
+          tipo: process.env.PRINTER_TYPE || "auto",
+          host: process.env.PRINTER_HOST || null,
+          porta: process.env.PRINTER_PORT || null,
+          detectada: impressoraInfo?.impressora || null,
+          candidatos: impressoraInfo?.candidatos?.length || 0,
+          ultimaUsada: impressoraInfo?.ultimaUsada || null,
+        },
 
-      acbr: {
-        ok: acbrOk,
-        emissaoFiscal: acbr.EMISSAO_FISCAL,
-        host: process.env.ACBR_HOST || "127.0.0.1",
-        porta: process.env.ACBR_PORT || "9200",
-      },
+        acbr: {
+          ok: acbrOk,
+          emissaoFiscal: acbr.EMISSAO_FISCAL,
+          host: process.env.ACBR_HOST || "127.0.0.1",
+          porta: process.env.ACBR_PORT || "9200",
+        },
 
-      banco: {
-        ok: dbOk,
-        tamanho: dbSize,
-        path: DB_PATH,
-      },
+        banco: {
+          ok: dbOk,
+          tamanho: dbSize,
+          path: DB_PATH,
+        },
 
-      fila: {
-        pendentes: filaOffline,
-        falhas: filaFalhas,
-        auth: fila.statusAuth ? fila.statusAuth() : undefined,
-      },
+        fila: {
+          pendentes: filaOffline,
+          falhas: filaFalhas,
+          auth: fila.statusAuth ? fila.statusAuth() : undefined,
+        },
 
-      contingencia: {
-        ativa: contingencia.ativa,
-        iniciadaEm: contingencia.iniciadaEm || null,
-        epecPendentes,
-      },
+        contingencia: {
+          ativa: contingencia.ativa,
+          iniciadaEm: contingencia.iniciadaEm || null,
+          epecPendentes,
+        },
 
-      updater: {
-        versaoAtual: VERSAO_ATUAL,
-        versaoDisponivel: updaterState.versaoDisponivel,
-        ultimaVerificacao: updaterState.ultimaVerificacao,
-        atualizando: updaterState.atualizando,
-        ultimoErro: updaterState.ultimoErro,
-        changelog: updaterState.changelog,
-      },
+        updater: {
+          versaoAtual: VERSAO_ATUAL,
+          versaoDisponivel: updaterState.versaoDisponivel,
+          ultimaVerificacao: updaterState.ultimaVerificacao,
+          atualizando: updaterState.atualizando,
+          ultimoErro: updaterState.ultimoErro,
+          changelog: updaterState.changelog,
+        },
 
-      sistema: {
-        platform,
-        arch: cpuArch,
-        hostname,
-        nodeVersao,
-        memUsedMb: Math.round(memUsed / 1024 / 1024),
-        uptimeHuman: formatUptime(uptime),
-      },
-    });
-  });
+        sistema: {
+          platform,
+          arch: cpuArch,
+          hostname,
+          nodeVersao,
+          memUsedMb: Math.round(memUsed / 1024 / 1024),
+          uptimeHuman: formatUptime(uptime),
+        },
+      });
+    },
+  );
 
   // ── Updater ─────────────────────────────────────────────────────────────────
-  app.post("/updater/verificar", exigirAgentToken, async (req, res) => {
-    if (updaterState.atualizando) {
-      return res.json({ ok: false, mensagem: "Atualização já em andamento." });
-    }
-    verificarAtualizacao().catch(() => {});
-    res.json({
-      ok: true,
-      mensagem: "Verificação iniciada.",
-      estado: updaterState,
-    });
-  });
+  app.post(
+    "/updater/verificar",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    async (req, res) => {
+      if (updaterState.atualizando) {
+        return res.json({
+          ok: false,
+          mensagem: "Atualização já em andamento.",
+        });
+      }
+      verificarAtualizacao().catch(() => {});
+      res.json({
+        ok: true,
+        mensagem: "Verificação iniciada.",
+        estado: updaterState,
+      });
+    },
+  );
 
   // Estado detalhado do updater (changelog, erros) — protegido.
-  app.get("/updater/status", exigirAgentToken, (req, res) => {
-    res.json({ versaoAtual: VERSAO_ATUAL, ...updaterState });
-  });
+  app.get(
+    "/updater/status",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    (req, res) => {
+      res.json({ versaoAtual: VERSAO_ATUAL, ...updaterState });
+    },
+  );
 
   // ── Rotas básicas ────────────────────────────────────────────────────────────
-  app.get("/health", (req, res) => {
+  app.get("/health", privateNetworkHeaders, (req, res) => {
     res.json({ ok: true, versao: VERSAO_ATUAL, uptime: process.uptime() });
   });
 
@@ -650,7 +720,7 @@ function iniciarServidor() {
   // Mostra apenas informações não sensíveis (sem backendUrl, tenantId,
   // dispositivoId, hostname ou caminhos de arquivo). Pensado para o instalador
   // confirmar visualmente que o agente está rodando, sem expor dados do tenant.
-  app.get("/status-basico", async (req, res) => {
+  app.get("/status-basico", privateNetworkHeaders, async (req, res) => {
     config = await lerConfig();
 
     const [impressoraOk, impressoraInfo, acbrOk] = await Promise.all([
@@ -720,43 +790,48 @@ function iniciarServidor() {
   // Status completo — usado pelo painel web autenticado (frente de caixa,
   // diagnóstico). Inclui tenantId/dispositivoId, por isso exige token quando
   // o PDV está ativado.
-  app.get("/status", exigirAgentToken, async (req, res) => {
-    config = await lerConfig();
-    const impressoraOk = await impressora.testar().catch(() => false);
-    const acbrOk = acbr.EMISSAO_FISCAL
-      ? await acbr.testar().catch(() => false)
-      : false;
-    const { pendentes, falhas } = await fila.contadores();
-    const contingencia = lerContingencia();
+  app.get(
+    "/status",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    async (req, res) => {
+      config = await lerConfig();
+      const impressoraOk = await impressora.testar().catch(() => false);
+      const acbrOk = acbr.EMISSAO_FISCAL
+        ? await acbr.testar().catch(() => false)
+        : false;
+      const { pendentes, falhas } = await fila.contadores();
+      const contingencia = lerContingencia();
 
-    let epecPendentes = 0;
-    if (db) {
-      const row = db
-        .prepare(
-          "SELECT COUNT(*) as n FROM epec_pendentes WHERE status='PENDENTE'",
-        )
-        .get();
-      epecPendentes = row ? row.n : 0;
-    }
+      let epecPendentes = 0;
+      if (db) {
+        const row = db
+          .prepare(
+            "SELECT COUNT(*) as n FROM epec_pendentes WHERE status='PENDENTE'",
+          )
+          .get();
+        epecPendentes = row ? row.n : 0;
+      }
 
-    res.json({
-      online: true,
-      impressoraConectada: impressoraOk,
-      acbrConectado: acbrOk,
-      emissaoFiscal: acbr.EMISSAO_FISCAL,
-      versao: VERSAO_ATUAL,
-      timestamp: new Date().toISOString(),
-      ativado: config.ativado === true,
-      pdvNome: config.pdvNome || "PDV",
-      tenantId: config.tenantId || null,
-      dispositivoId: config.dispositivoId || null,
-      temFrontend: fs.existsSync(path.join(__dirname, "frontend-dist")),
-      filaOffline: { pendentes, falhas },
-      contingencia: { ativa: contingencia.ativa, epecPendentes },
-    });
-  });
+      res.json({
+        online: true,
+        impressoraConectada: impressoraOk,
+        acbrConectado: acbrOk,
+        emissaoFiscal: acbr.EMISSAO_FISCAL,
+        versao: VERSAO_ATUAL,
+        timestamp: new Date().toISOString(),
+        ativado: config.ativado === true,
+        pdvNome: config.pdvNome || "PDV",
+        tenantId: config.tenantId || null,
+        dispositivoId: config.dispositivoId || null,
+        temFrontend: fs.existsSync(path.join(__dirname, "frontend-dist")),
+        filaOffline: { pendentes, falhas },
+        contingencia: { ativa: contingencia.ativa, epecPendentes },
+      });
+    },
+  );
 
-  app.get("/config", async (req, res) => {
+  app.get("/config", privateNetworkHeaders, async (req, res) => {
     config = await lerConfig();
     res.json({
       ativado: config.ativado === true,
@@ -769,7 +844,7 @@ function iniciarServidor() {
   });
 
   // ── Ativação ─────────────────────────────────────────────────────────────────
-  app.post("/ativar", async (req, res) => {
+  app.post("/ativar", privateNetworkHeaders, async (req, res) => {
     const { codigo, codigoAtivacao, backendUrl, pdvNome } = req.body || {};
     const codigoFinal = codigoAtivacao || codigo;
     if (!codigoFinal || !backendUrl)
@@ -828,10 +903,25 @@ function iniciarServidor() {
     }
   });
 
-  // ── ACBr ─────────────────────────────────────────────────────────────────────
+  // ── ACBr / Fiscal ────────────────────────────────────────────────────────────
   app.post("/acbr/nfce/emitir", exigirAgentToken, async (req, res) => {
     if (!acbr.EMISSAO_FISCAL) return res.json({ fiscal: false });
     try {
+      const cfg = await lerConfig();
+      if (req.body?.numeroVenda) {
+        const resultado = await fiscalService.emitirCompleto(cfg, {
+          ...req.body,
+          correlationId:
+            req.headers["x-correlation-id"] || req.body.correlationId,
+        });
+        if (!resultado || resultado.fiscal === false)
+          return res.json({ fiscal: false });
+        if (estadoContingencia.ativa)
+          await encerrarContingenciaAutomatico(
+            "SEFAZ voltou — emissão normal restaurada.",
+          );
+        return res.json(resultado);
+      }
       const resultado = await acbr.emitirNfce(req.body);
       if (!resultado || resultado.fiscal === false)
         return res.json({ fiscal: false });
@@ -859,14 +949,122 @@ function iniciarServidor() {
     }
   });
 
+  app.post("/fiscal/emitir", exigirAgentToken, async (req, res) => {
+    if (!acbr.EMISSAO_FISCAL) return res.json({ fiscal: false });
+    try {
+      const cfg = await lerConfig();
+      const correlationId =
+        req.headers["x-correlation-id"] || req.body.correlationId;
+      const resultado = await fiscalService.enfileirarEmissao(cfg, {
+        ...req.body,
+        correlationId,
+      });
+      res.json(resultado);
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
+  });
+
+  app.get("/acbr/fiscal/preflight", exigirAgentToken, async (req, res) => {
+    try {
+      res.json(await fiscalPreflight.validarEmissao());
+    } catch (err) {
+      res.status(400).json({ ok: false, erro: err.message });
+    }
+  });
+
+  app.post("/fiscal/cancelar", exigirAgentToken, async (req, res) => {
+    try {
+      const cfg = await lerConfig();
+      const resultado = await fiscalService.cancelarCompleto(cfg, req.body);
+      res.json(resultado);
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
+  });
+
   app.post("/acbr/nfce/cancelar", exigirAgentToken, async (req, res) => {
     const chave = req.body?.chave || req.body?.chaveNfe;
     if (!chave) return res.status(400).json({ erro: "chave é obrigatória." });
     try {
-      res.json(await acbr.cancelarNfce(chave));
+      const cfg = await lerConfig();
+      if (req.body?.numeroVenda) {
+        const resultado = await fiscalService.cancelarCompleto(cfg, {
+          chave,
+          motivo: req.body.motivo,
+          numeroVenda: req.body.numeroVenda,
+          correlationId: req.headers["x-correlation-id"],
+        });
+        return res.json(resultado);
+      }
+      res.json(await acbr.cancelarNfce(chave, req.body?.motivo));
     } catch (err) {
       res.status(500).json({ erro: err.message });
     }
+  });
+
+  app.get("/acbr/sefaz/status", exigirAgentToken, async (req, res) => {
+    try {
+      res.json(await acbr.statusServico());
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
+  });
+
+  app.get("/acbr/nfce/consultar/:chave", exigirAgentToken, async (req, res) => {
+    try {
+      res.json(await acbr.consultarChave(req.params.chave));
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
+  });
+
+  app.post("/acbr/nfce/inutilizar", exigirAgentToken, async (req, res) => {
+    try {
+      const cfg = await lerConfig();
+      const body = req.body || {};
+      const ano = body.ano || new Date().getFullYear();
+      const empresa = body.empresa || {};
+      const resultado = await fiscalService.inutilizarCompleto(cfg, {
+        ...body,
+        ano,
+        cnpj: body.cnpj || empresa.cnpj,
+      });
+      res.json(resultado);
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
+  });
+
+  app.post("/acbr/nfce/reimprimir", exigirAgentToken, async (req, res) => {
+    const { chave, numeroVenda } = req.body || {};
+    try {
+      const resultado = await fiscalService.reimprimirDanfceCompleto(
+        chave,
+        numeroVenda,
+      );
+      res.json(resultado);
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
+  });
+
+  app.get("/fila/fiscal", exigirAgentToken, (req, res) => {
+    res.json({ ...filaFiscal.status(), itens: filaFiscal.listar(30) });
+  });
+
+  app.post("/fila/fiscal/reprocessar", exigirAgentToken, async (req, res) => {
+    filaFiscal.retomarFila();
+    res.json({ ok: true, ...filaFiscal.status() });
+  });
+
+  app.get("/diagnostico/fiscal", exigirAgentToken, async (req, res) => {
+    res.json({
+      filaFiscal: filaFiscal.status(),
+      watchdog: watchdog.statusWatchdog(),
+      paths: marginPaths.PATHS,
+      emissaoFiscal: acbr.EMISSAO_FISCAL,
+    });
   });
 
   // ── Contingência ──────────────────────────────────────────────────────────────
@@ -877,12 +1075,29 @@ function iniciarServidor() {
         .status(400)
         .json({ erro: "numeroVenda e xmlEpec são obrigatórios." });
     try {
+      const cfg = await lerConfig();
+      let backendEpecId = epecId || null;
+      if (cfg.backendUrl && cfg.backendToken) {
+        try {
+          backendEpecId = await registrarEpecNoBackend(
+            cfg,
+            numeroVenda,
+            xmlEpec,
+          );
+        } catch (syncErr) {
+          console.warn(
+            "[EPEC] Falha ao registrar no backend:",
+            syncErr.message,
+          );
+        }
+      }
+      const idLocal = backendEpecId || `epec-${Date.now()}`;
       if (db) {
         db.prepare(
-          `INSERT OR IGNORE INTO epec_pendentes (epec_id, numero_venda, xml_epec) VALUES (?, ?, ?)`,
-        ).run(epecId || `epec-${Date.now()}`, numeroVenda, xmlEpec);
+          `INSERT OR REPLACE INTO epec_pendentes (epec_id, numero_venda, xml_epec) VALUES (?, ?, ?)`,
+        ).run(idLocal, numeroVenda, xmlEpec);
       }
-      res.json({ ok: true });
+      res.json({ ok: true, epecId: idLocal });
     } catch (err) {
       res.status(500).json({ erro: err.message });
     }
@@ -1137,6 +1352,24 @@ function formatUptime(seconds) {
 }
 
 // ── Contingência: funções internas ────────────────────────────────────────────
+async function registrarEpecNoBackend(cfg, numeroVenda, xmlEpec) {
+  const fetch = require("node-fetch");
+  const resp = await fetch(`${cfg.backendUrl}/pdv/contingencia/epec`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${cfg.backendToken}`,
+    },
+    body: JSON.stringify({ numeroVenda, xmlEpec }),
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Backend EPEC ${resp.status}: ${text}`);
+  }
+  const data = await resp.json();
+  return data.epecId;
+}
+
 async function ativarContingencia(motivoErro) {
   if (estadoContingencia.ativa) return;
   const fetch = require("node-fetch");
@@ -1193,6 +1426,18 @@ async function encerrarContingenciaAutomatico(observacao) {
 
 async function tentarSincronizarEpecs() {
   if (!db) return;
+  const cfg = await lerConfig();
+  if (cfg.backendUrl && cfg.backendToken) {
+    try {
+      const fetch = require("node-fetch");
+      await fetch(`${cfg.backendUrl}/pdv/contingencia/epec/sincronizar`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${cfg.backendToken}` },
+      });
+    } catch (e) {
+      console.warn("[EPEC] Falha ao sincronizar com backend:", e.message);
+    }
+  }
   const pendentes = db
     .prepare(
       `SELECT id, epec_id, numero_venda, xml_epec, tentativas FROM epec_pendentes WHERE status='PENDENTE' ORDER BY id LIMIT 20`,
@@ -1214,13 +1459,18 @@ async function tentarSincronizarEpecs() {
         const cfg = await lerConfig();
         if (cfg.backendUrl && cfg.backendToken && row.epec_id) {
           const fetch = require("node-fetch");
-          await fetch(
-            `${cfg.backendUrl}/pdv/contingencia/epec/${row.epec_id}/transmitido?chaveEpec=${resultado.chave}`,
+          const patch = await fetch(
+            `${cfg.backendUrl}/pdv/contingencia/epec/${row.epec_id}/transmitido?chaveEpec=${encodeURIComponent(resultado.chave)}`,
             {
               method: "PATCH",
               headers: { Authorization: `Bearer ${cfg.backendToken}` },
             },
-          ).catch(() => {});
+          );
+          if (!patch.ok) {
+            console.warn(
+              `[EPEC] Backend PATCH transmitido falhou (${patch.status}) para ${row.epec_id}`,
+            );
+          }
         }
         console.log(`[EPEC] ✅ ${row.numero_venda} transmitido.`);
       }

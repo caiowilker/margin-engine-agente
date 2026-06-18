@@ -1,54 +1,32 @@
-// ============================================================
-// PDV Margin Engine — Módulo ACBr Monitor v3.2
-//
-// CORREÇÕES v3.2:
-//   ✓ emitirNfce retorna { chave, numero, serie, qrcode }
-//     (anteriormente retornava { chaveNfe, numeroNfe, serieNfe, qrcodeNfe }
-//      causando undefined no frontend — FIX CRÍTICO)
-//   ✓ Guard EMISSAO_FISCAL: se false/ausente, emitirNfce lança erro
-//     descritivo em vez de tentar conectar ao ACBr (falha silenciosa
-//     virava "ACBr não retornou ChaveNFe")
-//   ✓ cancelarNfce aceita tanto `chave` (campo correto) quanto
-//     `chaveNfe` (legado) para retrocompatibilidade
-//
-// Comunica com o ACBr Monitor via socket TCP (protocolo texto).
-// O ACBr Monitor deve estar rodando na mesma máquina ou LAN.
-//
-// Protocolo ACBr Monitor:
-//   Envio:   COMANDO|PARAMETROS\n
-//   Retorno: "OK\n" ou "ERRO: mensagem\n" (texto simples)
-//
-// Comandos usados:
-//   NFCe.EnviarMensagemTEFImprimir   — emite NFC-e
-//   NFCe.Cancelar                    — cancela NFC-e
-//   NFCe.Status                      — verifica conexão
-//
-// CORRIGIDO v3.1:
-//   - socket.on('close') não dispara resolve/reject após timeout ou error
-//     (flag `settled` garante que a Promise é resolvida exatamente uma vez)
-// ============================================================
-
+// PDV Margin Engine — Módulo ACBr Monitor (mutex global + consultas fiscais)
 require("dotenv").config();
 const net = require("net");
 
 const ACBR_HOST = process.env.ACBR_HOST || "127.0.0.1";
 const ACBR_PORT = parseInt(process.env.ACBR_PORT || "9200");
 const ACBR_TIMEOUT = parseInt(process.env.ACBR_TIMEOUT_MS || "10000");
-
-// EMISSAO_FISCAL=true é necessário para emitir NFC-e.
-// Sem isso, retornamos { fiscal: false } silenciosamente — o frontend
-// já trata esse caso e imprime cupom não fiscal.
+const ACBR_TIMEOUT_EMISSAO = parseInt(
+  process.env.ACBR_TIMEOUT_EMISSAO_MS || "120000",
+);
 const EMISSAO_FISCAL =
   (process.env.EMISSAO_FISCAL || "false").toLowerCase() === "true";
+const { PATHS } = require("./marginPaths");
+const path = require("path");
+const fs = require("fs");
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ── Comunicação TCP com o Monitor ────────────────────────────────────────────
-// ─────────────────────────────────────────────────────────────────────────────
-function enviarComando(comando) {
+let acbrLock = Promise.resolve();
+
+function withAcbrLock(fn, label = "acbr") {
+  const run = acbrLock.then(() => fn());
+  acbrLock = run.catch(() => {});
+  return run;
+}
+
+function enviarComandoRaw(comando, timeoutMs = ACBR_TIMEOUT) {
   return new Promise((resolve, reject) => {
     const socket = new net.Socket();
     let resposta = "";
-    let settled = false; // garante que resolve/reject é chamado exatamente uma vez
+    let settled = false;
 
     const done = (fn, val) => {
       if (settled) return;
@@ -56,22 +34,17 @@ function enviarComando(comando) {
       fn(val);
     };
 
-    socket.setTimeout(ACBR_TIMEOUT);
-
+    socket.setTimeout(timeoutMs);
     socket.connect(ACBR_PORT, ACBR_HOST, () => {
       socket.write(comando + "\n");
     });
-
     socket.on("data", (data) => {
       resposta += data.toString();
-      // Monitor encerra com \r\n\r\n ou com linha final vazia
       if (resposta.includes("\r\n\r\n") || resposta.endsWith("\n\n")) {
         socket.destroy();
       }
     });
-
     socket.on("close", () => {
-      // Só executa se nenhum timeout/error já resolveu a Promise
       const texto = resposta.trim();
       if (texto.toUpperCase().startsWith("ERRO")) {
         done(reject, new Error(texto));
@@ -79,24 +52,52 @@ function enviarComando(comando) {
         done(resolve, texto);
       }
     });
-
     socket.on("timeout", () => {
-      socket.destroy(); // aciona 'close', mas settled=true já bloqueia
-      done(reject, new Error(`ACBr Monitor timeout após ${ACBR_TIMEOUT}ms`));
+      socket.destroy();
+      const err = new Error(`ACBr Monitor timeout após ${timeoutMs}ms`);
+      err.incerto = true;
+      const chaveParcial =
+        resposta.match(/ChaveNFe=(\d{44})/i)?.[1] ||
+        resposta.match(/Chave=(\d{44})/i)?.[1];
+      if (chaveParcial) err.chaveConsulta = chaveParcial;
+      done(reject, err);
     });
-
     socket.on("error", (err) => {
-      // 'error' antes de 'close' — settled=true bloqueia o 'close' posterior
-      done(reject, new Error(`ACBr Monitor inacessível: ${err.message}`));
+      const e = new Error(`ACBr Monitor inacessível: ${err.message}`);
+      e.incerto = true;
+      done(reject, e);
     });
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ── Testar conexão ────────────────────────────────────────────────────────────
-// ─────────────────────────────────────────────────────────────────────────────
+function enviarComando(comando, timeoutMs) {
+  return withAcbrLock(
+    () => enviarComandoRaw(comando, timeoutMs),
+    comando.split("|")[0],
+  );
+}
+
+function parseResposta(resposta) {
+  const linhas = resposta.split("\n").filter(Boolean);
+  const get = (chave) => {
+    const linha = linhas.find((l) => l.startsWith(chave + "="));
+    return linha ? linha.split("=").slice(1).join("=").trim() : null;
+  };
+  return {
+    raw: resposta,
+    cStat: get("cStat") || get("CStat"),
+    xMotivo: get("xMotivo") || get("XMotivo"),
+    chave: get("ChaveNFe") || get("Chave"),
+    numero: get("NumeroNFe") || get("Numero"),
+    serie: get("SerieNFe") || get("Serie"),
+    qrcode: get("QRCode") || get("URLConsulta"),
+    protocolo: get("nProt") || get("Protocolo"),
+    pathPdf: get("PathPDF") || get("ArquivoPDF") || get("PDF"),
+  };
+}
+
 async function testar() {
-  if (!EMISSAO_FISCAL) return false; // sem fiscal, ACBr não precisa estar ativo
+  if (!EMISSAO_FISCAL) return false;
   try {
     await enviarComando("NFCe.Status");
     return true;
@@ -105,9 +106,43 @@ async function testar() {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ── Montar INI NFC-e a partir do payload da venda ────────────────────────────
-// ─────────────────────────────────────────────────────────────────────────────
+async function statusServico() {
+  const resposta = await enviarComando("NFCe.StatusServico");
+  const p = parseResposta(resposta);
+  return {
+    operacional: !resposta.toUpperCase().startsWith("ERRO"),
+    cStat: p.cStat,
+    xMotivo: p.xMotivo,
+    raw: resposta,
+  };
+}
+
+async function consultarChave(chave) {
+  if (!chave || String(chave).length !== 44) {
+    throw new Error("Chave NFC-e deve ter 44 dígitos.");
+  }
+  const resposta = await enviarComando(`NFCe.Consultar|${chave}`);
+  const p = parseResposta(resposta);
+  return {
+    chave,
+    cStat: p.cStat,
+    xMotivo: p.xMotivo,
+    protocolo: p.protocolo,
+    situacao: inferirSituacao(p.cStat, resposta),
+    raw: resposta,
+  };
+}
+
+function inferirSituacao(cStat, raw) {
+  const t = (raw || "").toUpperCase();
+  if (t.includes("CANCEL")) return "CANCELADA";
+  if (cStat === "100" || t.includes("AUTORIZ")) return "AUTORIZADA";
+  if (cStat === "101") return "CANCELADA";
+  if (cStat === "110") return "DENEGADA";
+  if (cStat && cStat.startsWith("2")) return "REJEITADA";
+  return "DESCONHECIDA";
+}
+
 function montarIniNfce(payload) {
   const empresa = payload.empresa || {};
   const itens = payload.itens || [];
@@ -115,7 +150,8 @@ function montarIniNfce(payload) {
 
   let ini = `[NFCe]\n`;
   ini += `Modelo=65\n`;
-  ini += `Serie=001\n`;
+  ini += `Versao=4.00\n`;
+  ini += `Serie=${payload.serieNfe || "001"}\n`;
   ini += `Numero=${payload.numeroNfe || "000001"}\n`;
   ini += `DataHoraEmissao=${dataHora}\n`;
   ini += `NaturezaOperacao=VENDA AO CONSUMIDOR\n`;
@@ -123,7 +159,7 @@ function montarIniNfce(payload) {
   ini += `FinalidadeEmissao=1\n`;
   ini += `CNPJ=${(empresa.cnpj || "").replace(/\D/g, "")}\n`;
   ini += `IE=${empresa.inscricaoEstadual || ""}\n`;
-  ini += `RegimeTributario=${empresa.regimeTributario || "1"}\n`;
+  ini += `RegimeTributario=${empresa.regimeTributario || empresa.regimeTributarioCodigo || "1"}\n`;
   ini += `RazaoSocial=${empresa.razaoSocial || empresa.nomeFantasia || ""}\n`;
   ini += `UF=${empresa.uf || "MG"}\n`;
   ini += `CEP=${(empresa.cep || "").replace(/\D/g, "")}\n`;
@@ -176,105 +212,152 @@ function montarIniNfce(payload) {
   return ini;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ── Emitir NFC-e ──────────────────────────────────────────────────────────────
-//
-// CORREÇÃO v3.2: retorna campos normalizados sem sufixo "Nfe":
-//   { chave, numero, serie, qrcode }
-//
-// Antes retornava { chaveNfe, numeroNfe, serieNfe, qrcodeNfe }, mas
-// agenteLocal.ts (frontend) lê .chave / .numero / .serie / .qrcode.
-// O mismatch causava undefined silencioso e a NFC-e "sumia" no cupom.
-//
-// Se EMISSAO_FISCAL=false, retorna { fiscal: false } — o endpoint
-// /acbr/nfce/emitir no index.js detecta e responde 200 com fiscal:false,
-// e o frontend trata imprimindo cupom não fiscal.
-// ─────────────────────────────────────────────────────────────────────────────
 async function emitirNfce(payload) {
-  if (!EMISSAO_FISCAL) {
-    return { fiscal: false };
-  }
+  if (!EMISSAO_FISCAL) return { fiscal: false };
 
-  // Retransmissao EPEC — envia XML pronto ao ACBr (nao monta INI)
   if (payload?.xml || payload?.xmlEpec || payload?.modoEpec) {
     const xml = payload.xml || payload.xmlEpec;
-    if (!xml) {
-      throw new Error("XML EPEC ausente para retransmissao.");
-    }
+    if (!xml) throw new Error("XML EPEC ausente para retransmissao.");
     const resposta = await enviarComando(`NFCe.EnviarEPEC|${xml}`);
-    const linhas = resposta.split("\n").filter(Boolean);
-    const get = (chave) => {
-      const linha = linhas.find((l) => l.startsWith(chave + "="));
-      return linha ? linha.split("=").slice(1).join("=").trim() : null;
-    };
-    const chave = get("ChaveNFe") || get("Chave");
-    if (!chave) {
+    const p = parseResposta(resposta);
+    if (!p.chave) {
       throw new Error(`ACBr EPEC nao retornou chave. Resposta: ${resposta}`);
     }
-    const numero = get("NumeroNFe") || get("Numero");
-    const serie = get("SerieNFe") || get("Serie") || "001";
-    const qrcode = get("QRCode") || get("URLConsulta");
-    return {
-      chave,
-      numero,
-      serie,
-      qrcode,
-      fiscal: true,
-      chaveNfe: chave,
-      numeroNfe: numero,
-      serieNfe: serie,
-      qrcodeNfe: qrcode,
-    };
+    return normalizarResultado(p, resposta);
   }
 
   const ini = montarIniNfce(payload);
-  const resposta = await enviarComando(`NFCe.EnviarMensagemTEFImprimir|${ini}`);
-
-  const linhas = resposta.split("\n").filter(Boolean);
-  const get = (chave) => {
-    const linha = linhas.find((l) => l.startsWith(chave + "="));
-    return linha ? linha.split("=").slice(1).join("=").trim() : null;
-  };
-
-  // ACBr pode retornar tanto ChaveNFe quanto Chave — normaliza para `chave`
-  const chave = get("ChaveNFe") || get("Chave");
-  const numero = get("NumeroNFe") || get("Numero");
-  const serie = get("SerieNFe") || get("Serie") || "001";
-  const qrcode = get("QRCode") || get("URLConsulta");
-
-  if (!chave) {
-    throw new Error(`ACBr não retornou ChaveNFe. Resposta: ${resposta}`);
+  const resposta = await enviarComando(
+    `NFCe.EnviarMensagemTEFImprimir|${ini}`,
+    ACBR_TIMEOUT_EMISSAO,
+  );
+  const p = parseResposta(resposta);
+  if (!p.chave) {
+    const err = new Error(`ACBr não retornou ChaveNFe. Resposta: ${resposta}`);
+    if (resposta.includes("539")) err.permanente = true;
+    throw err;
   }
+  return normalizarResultado(p, resposta);
+}
 
+function normalizarResultado(p, resposta) {
   return {
-    chave,
-    numero,
-    serie,
-    qrcode,
+    chave: p.chave,
+    numero: p.numero,
+    serie: p.serie || "001",
+    qrcode: p.qrcode,
+    protocolo: p.protocolo,
+    cStat: p.cStat,
+    xMotivo: p.xMotivo,
+    xml: require("./documentosFiscais").extrairXmlDaResposta(resposta),
     fiscal: true,
-    // Compatibilidade com impressora.js e frontend legado
-    chaveNfe: chave,
-    numeroNfe: numero,
-    serieNfe: serie,
-    qrcodeNfe: qrcode,
+    chaveNfe: p.chave,
+    numeroNfe: p.numero,
+    serieNfe: p.serie || "001",
+    qrcodeNfe: p.qrcode,
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ── Cancelar NFC-e ────────────────────────────────────────────────────────────
-//
-// CORREÇÃO v3.2: aceita tanto `chaveNfe` (legado) quanto `chave` (correto)
-// para retrocompatibilidade com chamadas antigas.
-// ─────────────────────────────────────────────────────────────────────────────
 async function cancelarNfce(chaveNfeOuChave, motivo) {
-  const chave = chaveNfeOuChave; // aceita ambos os nomes
+  const chave = chaveNfeOuChave;
   if (!chave) throw new Error("chave da NFC-e obrigatória para cancelamento.");
   const motivoTexto = (motivo || "Cancelamento solicitado pelo operador").slice(
     0,
     255,
   );
-  await enviarComando(`NFCe.Cancelar|${chave}|${motivoTexto}`);
-  return true;
+  const resposta = await enviarComando(`NFCe.Cancelar|${chave}|${motivoTexto}`);
+  const p = parseResposta(resposta);
+  return {
+    ok: true,
+    protocolo: p.protocolo,
+    cStat: p.cStat,
+    xml: require("./documentosFiscais").extrairXmlDaResposta(resposta),
+    raw: resposta,
+  };
 }
 
-module.exports = { testar, emitirNfce, cancelarNfce, EMISSAO_FISCAL };
+async function inutilizarNfce(params) {
+  const {
+    ano,
+    cnpj,
+    modelo = "65",
+    serie,
+    numeroInicial,
+    numeroFinal,
+    motivo,
+  } = params;
+  const motivoTexto = (motivo || "Inutilizacao solicitada").slice(0, 255);
+  const cmd = `NFCe.Inutilizar|${ano}|${String(cnpj).replace(/\D/g, "")}|${modelo}|${serie}|${numeroInicial}|${numeroFinal}|${motivoTexto}`;
+  const resposta = await enviarComando(cmd);
+  const p = parseResposta(resposta);
+  return {
+    ok: true,
+    protocolo: p.protocolo,
+    cStat: p.cStat,
+    xMotivo: p.xMotivo,
+    xml: require("./documentosFiscais").extrairXmlDaResposta(resposta),
+    raw: resposta,
+  };
+}
+
+async function gerarPdfDanfce(chave, xmlPath) {
+  const destino = path.join(PATHS.pdf, `${chave}-danfce.pdf`);
+  const comandos = [
+    `NFCe.SalvarPDF|${chave}|${destino}`,
+    `NFCe.ImprimirPDF|${chave}|${destino}`,
+    xmlPath ? `NFCe.ImprimirPDF|${xmlPath}|${destino}` : null,
+    `NFCe.ImprimirDANFCE|${chave}`,
+  ].filter(Boolean);
+
+  for (const cmd of comandos) {
+    try {
+      const resposta = await enviarComando(cmd, ACBR_TIMEOUT_EMISSAO);
+      const p = parseResposta(resposta);
+      const candidato =
+        (p.pathPdf && fs.existsSync(p.pathPdf) && p.pathPdf) ||
+        (fs.existsSync(destino) && destino);
+      if (candidato && fs.statSync(candidato).size > 128) {
+        if (candidato !== destino) fs.copyFileSync(candidato, destino);
+        return destino;
+      }
+    } catch (_) {
+      /* tenta próximo comando */
+    }
+  }
+
+  for (const dir of [PATHS.saida, PATHS.pdf, PATHS.xml]) {
+    if (!fs.existsSync(dir)) continue;
+    const arquivos = fs.readdirSync(dir);
+    const match = arquivos.find(
+      (f) => f.includes(chave) && f.toLowerCase().endsWith(".pdf"),
+    );
+    if (match) {
+      const origem = path.join(dir, match);
+      fs.copyFileSync(origem, destino);
+      return destino;
+    }
+  }
+
+  throw new Error(
+    `ACBr não gerou PDF DANFC-e para chave ${chave}. Verifique PathPDF no ACBr Monitor.`,
+  );
+}
+
+async function imprimirDanfce(chave) {
+  return enviarComando(`NFCe.ImprimirDANFCE|${chave}`, ACBR_TIMEOUT);
+}
+
+module.exports = {
+  testar,
+  statusServico,
+  consultarChave,
+  emitirNfce,
+  cancelarNfce,
+  inutilizarNfce,
+  gerarPdfDanfce,
+  imprimirDanfce,
+  enviarComando,
+  withAcbrLock,
+  EMISSAO_FISCAL,
+  parseResposta,
+};

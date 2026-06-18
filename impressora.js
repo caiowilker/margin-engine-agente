@@ -508,7 +508,7 @@ async function imprimirRender(renderFn) {
 
 // ── Helpers de layout ─────────────────────────────────────────────────────────
 function helpers() {
-  const largura = 42;
+  const largura = 48;
   const linha = (txt) => txt.padEnd(largura, " ").slice(0, largura);
   const sep = () => "-".repeat(largura);
   const centro = (txt) => {
@@ -533,7 +533,7 @@ function helpers() {
 }
 
 // ── Formatadores locais ───────────────────────────────────────────────────────
-const COLS = 42; // colunas da fonte "A" em 80 mm
+const COLS = 48; // colunas da fonte "A" em 80 mm (48 colunas)
 
 function padR(txt, len) {
   return String(txt).slice(0, len).padEnd(len);
@@ -726,20 +726,12 @@ function renderCupom(printer, payload) {
       .style("normal");
   }
 
-  // ── TOTAL — destaque máximo ──────────────────────────────────────────────────
-  // size(1,1) = largura E altura duplas, como o original
-  // Centralizamos o texto manualmente com espaços porque em size grande
-  // o .align("ct") nem sempre é honrado por todos os firmwares
+  // ── TOTAL — destaque com bold, tamanho normal para respeitar largura do papel ─
+  // size(0,0) = tamanho padrão — evita quebra de linha em papel estreito (58/80 mm)
+  // O destaque visual vem do bold + separadores ===
   printer.text(sepEq());
   const totalStr = "TOTAL: " + fmtR$(totalFinal);
-  const totalPad = Math.max(0, Math.floor(COLS / 2 - totalStr.length / 2));
-  printer
-    .align("ct")
-    .style("b")
-    .size(1, 1)
-    .text(totalStr)
-    .size(0, 0)
-    .style("normal");
+  printer.align("ct").style("b").size(0, 0).text(totalStr).style("normal");
   printer.align("lt").text(sepEq());
 
   // ── Pagamento ────────────────────────────────────────────────────────────────
@@ -750,14 +742,13 @@ function renderCupom(printer, payload) {
 
   if (valorRecebido > 0 && payload.formaPagamento === "dinheiro") {
     printer.text(col2("Recebido:", fmtR$(valorRecebido)));
-    // TROCO em destaque — altura dupla, sensação positiva imediata
+    // TROCO em destaque — bold, tamanho normal para respeitar largura
     printer.text(sepDash());
     printer
       .align("ct")
       .style("b")
-      .size(0, 1)
-      .text("TROCO: " + fmtR$(troco))
       .size(0, 0)
+      .text("TROCO: " + fmtR$(troco))
       .style("normal");
     printer.align("lt").text(sepDash());
   }
