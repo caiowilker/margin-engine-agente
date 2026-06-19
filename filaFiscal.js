@@ -128,8 +128,13 @@ function marcar(id, status, erro = null) {
   ).run(status, erro, id);
 }
 
-function agendarRetry(id, tentativas) {
-  const ms = BACKOFF_MS[Math.min(tentativas, BACKOFF_MS.length - 1)];
+function agendarRetry(id, tentativas, err) {
+  const cStat = fiscalRetry.extrairCStat(err);
+  const base =
+    cStat === "999"
+      ? [30000, 60000, 120000]
+      : BACKOFF_MS;
+  const ms = base[Math.min(tentativas - 1, base.length - 1)];
   const proxima = new Date(Date.now() + ms).toISOString();
   db.prepare(
     `UPDATE fila_fiscal SET status = 'PENDENTE', proxima_tentativa = ? WHERE id = ?`,
@@ -180,22 +185,30 @@ async function processarUm() {
     );
     if (fiscalRetry.isIncerto(err)) {
       marcarIncerto(job.id, msg);
-    } else if (fiscalRetry.isPermanente(err) || tentativas >= MAX_TENTATIVAS) {
-      marcar(job.id, STATUS.FALHA_PERMANENTE, msg);
+    } else if (
+      fiscalRetry.isPermanente(err) ||
+      tentativas >= fiscalRetry.maxTentativas(err)
+    ) {
+      const msgFinal =
+        fiscalRetry.extrairCStat(err) === "999" &&
+        tentativas >= fiscalRetry.maxTentativas(err)
+          ? fiscalRetry.mensagem999Exaurido(tentativas)
+          : msg;
+      marcar(job.id, STATUS.FALHA_PERMANENTE, msgFinal);
       if (job.tipo === "EMISSAO" && payload?.correlationId) {
         salvarResultadoEmissao(
           payload.correlationId,
           payload.numeroVenda,
           "FALHA_PERMANENTE",
           null,
-          msg,
+          msgFinal,
         );
       }
     } else {
       db.prepare(
         `UPDATE fila_fiscal SET status = 'PENDENTE', erro = ?, tentativas = ? WHERE id = ?`,
       ).run(msg, tentativas, job.id);
-      agendarRetry(job.id, tentativas);
+      agendarRetry(job.id, tentativas, err);
     }
   }
   processando = false;
@@ -334,8 +347,26 @@ function aguardarConclusao(correlationId, timeoutMs = 120000) {
         reject(new Error(row.erro || "Emissão fiscal falhou"));
         return;
       }
+
+      init();
+      const job = db
+        .prepare(
+          `SELECT status, erro FROM fila_fiscal
+           WHERE correlation_id = ? AND tipo = 'EMISSAO'
+           ORDER BY id DESC LIMIT 1`,
+        )
+        .get(correlationId);
+      if (job?.status === "FALHA_PERMANENTE") {
+        reject(new Error(job.erro || row?.erro || "Emissão fiscal falhou"));
+        return;
+      }
+
       if (Date.now() - inicio >= timeoutMs) {
-        reject(new Error("Timeout aguardando emissão fiscal na fila"));
+        reject(
+          new Error(
+            "Timeout aguardando emissão fiscal na fila — verifique ACBr Monitor (porta 9200) e logs do agente",
+          ),
+        );
         return;
       }
       setTimeout(poll, pollMs);

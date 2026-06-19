@@ -1007,7 +1007,19 @@ function iniciarServidor() {
       });
       res.json(resultado);
     } catch (err) {
-      res.status(500).json({ erro: err.message });
+      const body = { erro: err.message };
+      const cStat =
+        err.cStat || String(err.message || "").match(/cStat\s*(\d{3})/i)?.[1];
+      if (cStat) body.cStat = cStat;
+      if (cStat === "999" || err.sefazIntermitente) {
+        body.sefazIntermitente = true;
+        body.dica =
+          "Erro genérico da SEFAZ (cStat 999). Aguarde 1–2 minutos e tente novamente; homologação MG costuma ser instável.";
+      }
+      if (process.env.FISCAL_DEBUG === "1" && err.acbrRaw) {
+        body.acbrRaw = err.acbrRaw;
+      }
+      res.status(500).json(body);
     }
   });
 

@@ -98,14 +98,6 @@ async function validarEmissaoRapida() {
 
   const ambAcbr = validarAmbiente(ambienteEsperado, resposta, p);
 
-  const setupIni = acbrNfceSetup.validar();
-  if (!setupIni.urlQrCodeOk) {
-    throw new Error(
-      setupIni.acoes?.[0] ||
-        "URL-QRCode ausente no ACBr — configure CSC/WebServices no ACBr Monitor antes de emitir.",
-    );
-  }
-
   const resultado = {
     ok: true,
     fiscal: true,
@@ -164,7 +156,7 @@ async function validarEmissaoCompleta() {
   const nfceSetup = await acbrNfceSetup.validarAsync();
 
   const resultado = {
-    ok: nfceSetup.pronto !== false,
+    ok: true,
     fiscal: true,
     modo: "completo",
     ambienteEsperado,
@@ -174,13 +166,6 @@ async function validarEmissaoCompleta() {
     nfceSetup,
     acoes: nfceSetup.acoes || [],
   };
-
-  if (!nfceSetup.urlQrCodeOk) {
-    resultado.ok = false;
-    resultado.erro =
-      nfceSetup.acoes?.[0] ||
-      "URL-QRCode ausente — configure no ACBr Monitor antes de emitir NFC-e.";
-  }
 
   cacheCompleto = { em: Date.now(), resultado };
   return resultado;

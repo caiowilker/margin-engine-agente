@@ -13,6 +13,7 @@ const payload = {
   total: 10,
   desconto: 0,
   formaPagamento: "dinheiro",
+  ibpt: { federal: 0.94, estadual: 0.59, municipal: 0, total: 1.53, percentualTotal: 15.3 },
   empresa: {
     cnpj: "00000000000191",
     inscricaoEstadual: "123456789",
@@ -62,6 +63,14 @@ const numeracao = fiscalNumeracao.reservarProximoNumero("1");
   }
   if (/\[Produto001\][\s\S]*CSOSN=/m.test(ini)) {
     console.error("ERRO: CSOSN não deve ficar inline em [Produto] — use [ICMS001]");
+    process.exit(1);
+  }
+  const vTotTribItem = ini.match(/\[Produto001\][\s\S]*?vTotTrib=([\d.]+)/)?.[1];
+  const vTotTribTotal = ini.match(/\[Total\][\s\S]*?vTotTrib=([\d.]+)/)?.[1];
+  if (vTotTribItem && vTotTribTotal && vTotTribItem !== vTotTribTotal) {
+    console.error(
+      `ERRO cStat 685: vTotTrib item (${vTotTribItem}) != total (${vTotTribTotal})`,
+    );
     process.exit(1);
   }
   console.log("--- INI gerado ---");

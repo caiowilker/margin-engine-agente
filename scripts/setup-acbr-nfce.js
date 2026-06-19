@@ -7,8 +7,7 @@ const acbrNfceSetup = require("../acbrNfceSetup");
   console.log("EMISSAO_FISCAL:", process.env.EMISSAO_FISCAL);
   console.log("NFE_UF:", process.env.NFE_UF || "MG");
   console.log("AMBIENTE_SEFAZ:", process.env.AMBIENTE_SEFAZ || "homologacao");
-  console.log("ACBR_AUTO_PATCH:", process.env.ACBR_AUTO_PATCH || "false");
-  console.log("ACBR_AUTO_CSC:", process.env.ACBR_AUTO_CSC || "false");
+  console.log("Diagnóstico somente leitura — agente não altera ACBrNFeServicos.ini");
   try {
     const r = await acbrNfceSetup.validarAsync();
     console.log(JSON.stringify(r, null, 2));

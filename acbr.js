@@ -58,6 +58,29 @@ function withAcbrLock(fn, label = "acbr") {
   return run;
 }
 
+function resolverTpAmbAcbr() {
+  const amb = String(process.env.AMBIENTE_SEFAZ || "homologacao").toLowerCase();
+  if (amb === "producao" || amb === "1") return "1";
+  return "2";
+}
+
+function melhorarErroAcbr(err) {
+  const msg = String(err?.message || "");
+  if (/URL-QRCode|URL para o serviço/i.test(msg)) {
+    const e = new Error(
+      "ACBr rejeitou a emissão (URL-QRCode). O ACBrNFeServicos.ini no disco pode estar correto — " +
+        "feche e abra o ACBr Monitor Demo para recarregar o INI. " +
+        "Confirme Homologação (tpAmb 2) no Monitor, igual a AMBIENTE_SEFAZ=homologacao no agente.",
+    );
+    e.cStat = err.cStat;
+    e.permanente = err.permanente;
+    e.incerto = err.incerto;
+    e.reiniciarAcbr = true;
+    return e;
+  }
+  return err;
+}
+
 function respostaTcpCompleta(texto) {
   return texto.includes("\r\n.\r\n") || /\r\n\r\n\s*$/.test(texto);
 }
@@ -219,7 +242,7 @@ function enviarComando(comando, timeoutMs) {
   );
 }
 
-/** Comandos NFE/NFC-e na mesma sessão TCP (modelo 65 + versão 4.00 + comando). */
+/** Comandos NFE/NFC-e na mesma sessão TCP (modelo 65 + versão 4.00 + ambiente + comando). */
 async function enviarNfe(comando, timeoutMs = ACBR_TIMEOUT) {
   return withAcbrLock(async () => {
     const sessao = nfceModeloConfigurado
@@ -227,6 +250,7 @@ async function enviarNfe(comando, timeoutMs = ACBR_TIMEOUT) {
       : [
           "NFE.SetModeloDF(65)",
           'NFE.SetVersaoDF("4.00")',
+          `NFE.SetAmbiente(${resolverTpAmbAcbr()})`,
           comando,
         ];
     try {
@@ -235,7 +259,7 @@ async function enviarNfe(comando, timeoutMs = ACBR_TIMEOUT) {
       return resultado;
     } catch (err) {
       nfceModeloConfigurado = false;
-      throw err;
+      throw melhorarErroAcbr(err);
     }
   }, comando.split("(")[0]);
 }
@@ -246,7 +270,12 @@ async function enviarNfeComandos(comandos, timeoutMs = ACBR_TIMEOUT) {
   return withAcbrLock(async () => {
     const sessao = nfceModeloConfigurado
       ? lista
-      : ["NFE.SetModeloDF(65)", 'NFE.SetVersaoDF("4.00")', ...lista];
+      : [
+          "NFE.SetModeloDF(65)",
+          'NFE.SetVersaoDF("4.00")',
+          `NFE.SetAmbiente(${resolverTpAmbAcbr()})`,
+          ...lista,
+        ];
     try {
       const resultado = await enviarSessaoRaw(sessao, timeoutMs);
       nfceModeloConfigurado = true;
@@ -286,9 +315,9 @@ function parseResposta(resposta) {
   };
 
   let cStat =
+    todosCStat.find((s) => s === "100" || s === "150") ||
     get("cStat") ||
     get("CStat") ||
-    todosCStat.find((s) => s === "100" || s === "150") ||
     todosCStat.find((s) => s.startsWith("2")) ||
     todosCStat[todosCStat.length - 1] ||
     null;
@@ -431,15 +460,20 @@ function fmtQty(n) {
 }
 
 function resolverGtin(item) {
-  const gtin = String(item.gtin || item.codigoBarras || item.ean || "").replace(
-    /\D/g,
-    "",
-  );
-  if (gtin.length >= 8 && gtin.length <= 14) return gtin;
+  const candidatos = [
+    item.gtin,
+    item.codigoBarras,
+    item.ean,
+    item.codigo,
+  ];
+  for (const raw of candidatos) {
+    const gtin = String(raw || "").replace(/\D/g, "");
+    if (gtin.length >= 8 && gtin.length <= 14) return gtin;
+  }
   return "";
 }
 
-function montarSecaoTributosItem(item, n, crt) {
+function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
   const usaSimples = crtUsaSimples(crt);
   const nn = String(n).padStart(3, "0");
   const qtd = Number(item.quantidade);
@@ -460,10 +494,8 @@ function montarSecaoTributosItem(item, n, crt) {
   let bloco = `[Produto${nn}]\n`;
   bloco += `CFOP=${cfop}\n`;
   bloco += `cProd=${sanitizeAcbrText(item.codigo || String(n), 60)}\n`;
-  if (gtin) {
-    bloco += `cEAN=${gtin}\n`;
-    bloco += `cEANTrib=${gtin}\n`;
-  }
+  bloco += `cEAN=${gtin || "SEM GTIN"}\n`;
+  bloco += `cEANTrib=${gtin || "SEM GTIN"}\n`;
   bloco += `xProd=${nome}\n`;
   bloco += `NCM=${ncm}\n`;
   bloco += `uCom=${un}\n`;
@@ -474,6 +506,9 @@ function montarSecaoTributosItem(item, n, crt) {
   bloco += `qTrib=${fmtQty(qtd)}\n`;
   bloco += `vUnTrib=${fmtQty(pu)}\n`;
   if (desc > 0) bloco += `vDesc=${fmtMoney(desc)}\n`;
+  if (Number(vTotTribItem) > 0) {
+    bloco += `vTotTrib=${fmtMoney(vTotTribItem)}\n`;
+  }
   bloco += `indTot=1\n\n`;
 
   bloco += `[ICMS${nn}]\n`;
@@ -489,7 +524,9 @@ function montarSecaoTributosItem(item, n, crt) {
   bloco += `orig=${String(item.origem || item.orig || "0")
     .replace(/\D/g, "")
     .slice(0, 1) || "0"}\n`;
-  bloco += usaSimples ? `modBC=\n` : `modBC=3\n`;
+  if (!usaSimples) {
+    bloco += `modBC=3\n`;
+  }
   bloco += `vBC=0.00\n`;
   bloco += `pICMS=${fmtMoney(usaSimples ? 0 : item.aliquotaIcms || 0)}\n`;
   bloco += `vICMS=0.00\n\n`;
@@ -508,7 +545,7 @@ function montarSecaoTributosItem(item, n, crt) {
     bloco += `CST=01\nvBC=0.00\npCOFINS=3.00\nvCOFINS=0.00\n\n`;
   }
 
-  return { bloco, total, desc };
+  return { bloco, total, desc, vTotTrib: Number(vTotTribItem) || 0 };
 }
 
 function montarSecaoDestinatario(payload, tpAmb) {
@@ -668,12 +705,36 @@ function montarIniNfce(payload, numeracao) {
   const totalVenda = Number(payload.total);
 
   let vProd = 0;
+  let vTotTrib = 0;
   let blocoItens = "";
+  const ibptTotal = Number(payload.ibpt?.total);
+  const ibptCupom =
+    Number.isFinite(ibptTotal) && ibptTotal > 0 ? ibptTotal : 0;
+  let ibptAcum = 0;
+
   itens.forEach((item, i) => {
-    const { bloco, total, desc } = montarSecaoTributosItem(item, i + 1, crt);
+    const itemTotal = Number(item.total ?? Number(item.quantidade) * Number(item.precoUnitario));
+    let vTotTribItem = 0;
+    if (ibptCupom > 0 && totalVenda > 0) {
+      if (i === itens.length - 1) {
+        vTotTribItem = Math.round((ibptCupom - ibptAcum) * 100) / 100;
+      } else {
+        vTotTribItem =
+          Math.round(((ibptCupom * itemTotal) / totalVenda) * 100) / 100;
+        ibptAcum += vTotTribItem;
+      }
+    }
+    const { bloco, total, desc, vTotTrib: vTribItem } = montarSecaoTributosItem(
+      item,
+      i + 1,
+      crt,
+      vTotTribItem,
+    );
     blocoItens += bloco;
     vProd += total - desc;
+    vTotTrib += vTribItem;
   });
+  vTotTrib = Math.round(vTotTrib * 100) / 100;
 
   let ini = `[infNFe]\nversao=4.00\n\n`;
 
@@ -731,7 +792,7 @@ function montarIniNfce(payload, numeracao) {
   ini += `vDesc=${fmtMoney(descontoGeral)}\n`;
   ini += `vPIS=0.00\n`;
   ini += `vCOFINS=0.00\n`;
-  ini += `vTotTrib=0.00\n\n`;
+  ini += `vTotTrib=${fmtMoney(vTotTrib)}\n\n`;
 
   ini += `[Transportador]\nmodFrete=9\n\n`;
 
@@ -741,22 +802,48 @@ function montarIniNfce(payload, numeracao) {
     debito: "04",
     pix: "17",
     voucher: "05",
+    fiado: "99",
     outros: "99",
   };
-  const codigoForma =
-    formaMap[(payload.formaPagamento || "").toLowerCase()] || "01";
-  const troco =
-    payload.valorRecebido && payload.valorRecebido > totalVenda
-      ? payload.valorRecebido - totalVenda
-      : 0;
+  const forma = (payload.formaPagamento || "dinheiro").toLowerCase();
+  const codigoForma = formaMap[forma] || "01";
+
+  // SEFAZ cStat 869: vTroco = vPag - vNF (dinheiro com troco → vPag = valor recebido)
+  let vPagNum = Number(totalVenda);
+  let vTrocoNum = 0;
+  if (codigoForma === "01") {
+    const recebido = Number(payload.valorRecebido);
+    if (Number.isFinite(recebido) && recebido > vPagNum + 0.009) {
+      vPagNum = recebido;
+      vTrocoNum = Math.max(0, recebido - Number(totalVenda));
+    } else if (Number.isFinite(Number(payload.troco)) && Number(payload.troco) > 0) {
+      vTrocoNum = Number(payload.troco);
+      vPagNum = Number(totalVenda) + vTrocoNum;
+    }
+  }
+  vTrocoNum = Math.round(vTrocoNum * 100) / 100;
+  vPagNum = Math.round(vPagNum * 100) / 100;
 
   ini += `[PAG001]\n`;
   ini += `tpag=${codigoForma}\n`;
-  ini += `vPag=${fmtMoney(totalVenda)}\n`;
+  ini += `vPag=${fmtMoney(vPagNum)}\n`;
   ini += `indPag=0\n`;
-  ini += `vTroco=${fmtMoney(troco)}\n`;
+  ini += `vTroco=${fmtMoney(vTrocoNum)}\n`;
+  // cStat 391 — cartão crédito/débito exige grupo card (PDV sem TEF = não integrado)
+  if (codigoForma === "03" || codigoForma === "04") {
+    ini += `tpIntegra=2\n`;
+    ini += `tBand=99\n`;
+  }
   if (codigoForma === "99") {
-    ini += `xPag=${sanitizeAcbrText(payload.labelPagamento || "OUTROS", 60)}\n`;
+    const labels = {
+      fiado: "FIADO",
+      crediario: "CREDIARIO",
+      outros: "OUTROS",
+    };
+    ini += `xPag=${sanitizeAcbrText(
+      payload.labelPagamento || labels[forma] || "OUTROS",
+      60,
+    )}\n`;
   }
   ini += `\n`;
 
@@ -787,7 +874,15 @@ function assertAutorizada(p, resposta) {
     `NFC-e rejeitada (cStat ${cStat || "?"}): ${p.xMotivo || resposta}`,
   );
   err.cStat = cStat;
-  if (cStat.startsWith("2") || cStat === "539") err.permanente = true;
+  err.acbrRaw = String(resposta || "").slice(0, 4000);
+  if (p.chave) err.chaveConsulta = p.chave;
+  if (cStat === "999") {
+    err.incerto = true;
+    err.permanente = false;
+    err.sefazIntermitente = true;
+  } else {
+    err.permanente = true;
+  }
   throw err;
 }
 
