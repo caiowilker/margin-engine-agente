@@ -1,13 +1,22 @@
 {
   "name": "pdv-margin-engine-agente",
-  "version": "5.3.0",
+  "version": "1.0.0",
   "description": "Agente local PDV Margin Engine — impressora térmica, ACBr, fila offline e servidor do frontend",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
     "install-service": "node install-service.js",
-    "uninstall-service": "node install-service.js --uninstall"
+    "uninstall-service": "node install-service.js --uninstall",
+    "test:fiscal": "node test/fiscal-hardening.test.js",
+    "test:production": "node test/fiscal-production.test.js",
+    "test:chaos": "node test/fiscal-chaos.test.js",
+    "test:contract": "node test/contract.test.js",
+    "test": "node test/fiscal-hardening.test.js && node test/fiscal-production.test.js && node test/fiscal-chaos.test.js",
+    "manifest": "node scripts/generate-manifest.js",
+    "predeploy": "node scripts/pre-deploy-check.js",
+    "smoke": "node scripts/smoke-test.js",
+    "smoke:integration": "node scripts/smoke-integration.js"
   },
   "dependencies": {
     "@napi-rs/keyring": "^1.1.4",

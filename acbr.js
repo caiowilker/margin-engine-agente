@@ -24,6 +24,32 @@ const { validarPayloadNfce } = require("./fiscalValidacao");
 
 let acbrLock = Promise.resolve();
 let nfceModeloConfigurado = false;
+let ultimoStatusMemoria = { estado: "offline", atualizadoEm: null };
+
+function atualizarStatusMemoria(ok) {
+  const anterior = ultimoStatusMemoria.estado;
+  ultimoStatusMemoria = {
+    estado: ok ? "online" : "offline",
+    atualizadoEm: new Date().toISOString(),
+  };
+  try {
+    const fiscalAlertas = require("./fiscalAlertas");
+    fiscalAlertas.onAcbrStatusChange(ultimoStatusMemoria.estado);
+  } catch (_) {}
+}
+
+function obterStatusMemoria(watchdogDegraded = false) {
+  if (!EMISSAO_FISCAL) return "offline";
+  if (watchdogDegraded) return "degradado";
+  return ultimoStatusMemoria.estado;
+}
+
+function obterStatusDetalhe(watchdogDegraded = false) {
+  return {
+    estado: obterStatusMemoria(watchdogDegraded),
+    atualizadoEm: ultimoStatusMemoria.atualizadoEm,
+  };
+}
 
 function qAcbr(valor) {
   return `"${String(valor).replace(/"/g, '""')}"`;
@@ -366,13 +392,19 @@ function sefazOperacional(cStat, resposta) {
 }
 
 async function testar() {
-  if (!EMISSAO_FISCAL) return false;
+  if (!EMISSAO_FISCAL) {
+    atualizarStatusMemoria(false);
+    return false;
+  }
   try {
     const resposta = await enviarNfe("NFE.StatusServico");
     const p = parseResposta(resposta);
-    return sefazOperacional(p.cStat, resposta);
+    const ok = sefazOperacional(p.cStat, resposta);
+    atualizarStatusMemoria(ok);
+    return ok;
   } catch (err) {
     console.warn("[ACBr] testar() falhou:", err.message);
+    atualizarStatusMemoria(false);
     return false;
   }
 }
@@ -928,8 +960,16 @@ async function emitirNfce(payload) {
 
   const serie = payload.serieNfe || fiscalNumeracao.SERIE_PADRAO;
   let numeracao = payload.numeroNfe
-    ? { serie, numero: parseInt(String(payload.numeroNfe).replace(/\D/g, ""), 10) }
-    : fiscalNumeracao.reservarProximoNumero(serie);
+    ? {
+        serie: payload.serieNfe || serie,
+        numero: parseInt(String(payload.numeroNfe).replace(/\D/g, ""), 10),
+      }
+    : payload._fiscalMeta?.numeroNfe
+      ? {
+          serie: payload._fiscalMeta.serieNfe || serie,
+          numero: parseInt(String(payload._fiscalMeta.numeroNfe).replace(/\D/g, ""), 10),
+        }
+      : fiscalNumeracao.reservarProximoNumero(serie);
 
   let iniPath;
   let resultado;
@@ -951,7 +991,12 @@ async function emitirNfce(payload) {
       resultado = normalizarResultado(p, resposta);
       break;
     } catch (err) {
-      if (err.cStat === "539" && tentativa === 0 && !payload.numeroNfe) {
+      if (
+        err.cStat === "539" &&
+        tentativa === 0 &&
+        !payload.numeroNfe &&
+        !payload._fiscalMeta?.numeroNfe
+      ) {
         numeracao = fiscalNumeracao.reservarProximoNumero(serie);
         continue;
       }
@@ -1101,4 +1146,7 @@ module.exports = {
   montarIniNfce,
   enriquecerEmpresa,
   validarEmpresaFiscal,
+  obterStatusMemoria,
+  obterStatusDetalhe,
+  atualizarStatusMemoria,
 };

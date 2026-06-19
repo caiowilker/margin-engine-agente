@@ -1,0 +1,9 @@
+services:
+  agente:
+    build: .
+    ports:
+      - "9100:9100"
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+    restart: unless-stopped

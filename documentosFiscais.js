@@ -2,46 +2,81 @@
 const fs = require("fs");
 const path = require("path");
 const { PATHS } = require("./marginPaths");
+const fiscalStorage = require("./fiscalStorage");
+const auditLog = require("./auditLog");
+const log = require("./logger").child({ modulo: "documentos_fiscais" });
+
+function salvarComVerificacaoDisco(tipo, dir, salvarFn) {
+  const minMap = {
+    xml: fiscalStorage.MIN_MB_XML,
+    pdf: fiscalStorage.MIN_MB_PDF,
+    backup: fiscalStorage.MIN_MB_BACKUP,
+  };
+  const minMB = minMap[tipo] || 50;
+  const check = fiscalStorage.checkDiskSpace(dir, minMB);
+  if (!check.ok) {
+    auditLog.registrar("DISK_SPACE_INSUFICIENTE", {
+      tipo,
+      livresMB: check.livresMB,
+      minimoMB: minMB,
+      path: dir,
+    });
+    log.warn(
+      { tipo, livresMB: check.livresMB, minimoMB: minMB },
+      "Salvamento local ignorado — disco insuficiente (emissão continua)",
+    );
+    fiscalStorage.setModoDegradado(true);
+    return null;
+  }
+  return salvarFn();
+}
 
 function salvarXmlAutorizado(chave, xmlContent) {
-  const file = path.join(PATHS.xml, `${chave}-nfe.xml`);
-  fs.writeFileSync(file, xmlContent, "utf8");
-  backup(file);
-  return file;
+  return salvarComVerificacaoDisco("xml", PATHS.xml, () => {
+    const file = path.join(PATHS.xml, `${chave}-nfe.xml`);
+    fs.writeFileSync(file, xmlContent, "utf8");
+    backup(file);
+    return file;
+  });
 }
 
 function salvarXmlCancelamento(chave, xmlContent) {
-  const file = path.join(PATHS.cancelamentos, `${chave}-canc.xml`);
-  fs.writeFileSync(file, xmlContent, "utf8");
-  backup(file);
-  return file;
+  return salvarComVerificacaoDisco("xml", PATHS.cancelamentos, () => {
+    const file = path.join(PATHS.cancelamentos, `${chave}-canc.xml`);
+    fs.writeFileSync(file, xmlContent, "utf8");
+    backup(file);
+    return file;
+  });
 }
 
 function salvarXmlInutilizacao(serie, ini, fim, xmlContent) {
-  const file = path.join(
-    PATHS.xml,
-    `inutilizacao-${serie}-${ini}-${fim}.xml`,
-  );
-  fs.writeFileSync(file, xmlContent, "utf8");
-  backup(file);
-  return file;
+  return salvarComVerificacaoDisco("xml", PATHS.xml, () => {
+    const file = path.join(PATHS.xml, `inutilizacao-${serie}-${ini}-${fim}.xml`);
+    fs.writeFileSync(file, xmlContent, "utf8");
+    backup(file);
+    return file;
+  });
 }
 
 function salvarPdfDanfce(chave, pdfBuffer) {
-  const file = path.join(PATHS.pdf, `${chave}-danfce.pdf`);
-  fs.writeFileSync(file, pdfBuffer);
-  backup(file);
-  return file;
+  return salvarComVerificacaoDisco("pdf", PATHS.pdf, () => {
+    const file = path.join(PATHS.pdf, `${chave}-danfce.pdf`);
+    fs.writeFileSync(file, pdfBuffer);
+    backup(file);
+    return file;
+  });
 }
 
 function salvarPdfPlaceholder(chave, texto) {
-  const file = path.join(PATHS.pdf, `${chave}-danfce.txt`);
-  fs.writeFileSync(
-    file,
-    texto || `DANFC-e ${chave} — gerar via ACBr se PDF indisponível`,
-    "utf8",
-  );
-  return file;
+  return salvarComVerificacaoDisco("pdf", PATHS.pdf, () => {
+    const file = path.join(PATHS.pdf, `${chave}-danfce.txt`);
+    fs.writeFileSync(
+      file,
+      texto || `DANFC-e ${chave} — gerar via ACBr se PDF indisponível`,
+      "utf8",
+    );
+    return file;
+  });
 }
 
 function lerArquivo(filePath) {
@@ -63,11 +98,30 @@ function isPdfValid(filePath) {
 
 function backup(sourceFile) {
   try {
+    const check = fiscalStorage.checkDiskSpace(
+      PATHS.backup,
+      fiscalStorage.MIN_MB_BACKUP,
+    );
+    if (!check.ok) {
+      auditLog.registrar("DISK_SPACE_INSUFICIENTE", {
+        tipo: "backup",
+        livresMB: check.livresMB,
+        minimoMB: fiscalStorage.MIN_MB_BACKUP,
+        path: PATHS.backup,
+      });
+      log.warn(
+        { livresMB: check.livresMB },
+        "Backup local ignorado — disco insuficiente",
+      );
+      fiscalStorage.setModoDegradado(true);
+      return null;
+    }
     const base = path.basename(sourceFile);
     const dest = path.join(PATHS.backup, `${Date.now()}-${base}`);
     fs.copyFileSync(sourceFile, dest);
+    return dest;
   } catch (_) {
-    /* backup best-effort */
+    return null;
   }
 }
 
@@ -75,7 +129,9 @@ function extrairXmlDaResposta(resposta) {
   if (!resposta) return null;
   const idx = resposta.indexOf("<?xml");
   if (idx >= 0) return resposta.slice(idx).trim();
-  const xmlMatch = resposta.match(/<(?:nfeProc|NFe|procEventoNFe)[\s\S]*<\/(?:nfeProc|NFe|procEventoNFe)>/i);
+  const xmlMatch = resposta.match(
+    /<(?:nfeProc|NFe|procEventoNFe)[\s\S]*<\/(?:nfeProc|NFe|procEventoNFe)>/i,
+  );
   return xmlMatch ? xmlMatch[0] : null;
 }
 

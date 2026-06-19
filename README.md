@@ -1,4 +1,4 @@
-# PDV Margin Engine — Agente Local v4.0
+# PDV Margin Engine — Agente Local v1.0
 
 Servidor Node.js que roda na máquina do caixa e conecta o frontend web
 à impressora térmica, ao ACBr Monitor (NFC-e), à fila offline SQLite
@@ -58,6 +58,14 @@ npm run install-service
 
 # Remover o serviço Windows
 npm run uninstall-service
+
+# Deploy produção — gerar manifest com SHA-256 (obrigatório antes de publicar)
+# Gere o manifest NO MESMO AMBIENTE do servidor de destino (evita divergência LF/CRLF).
+# Ver docs/LIMITACOES_ARQUITETURA.md
+npm run manifest
+npm run predeploy
+npm test
+npm run smoke   # com agente rodando + ACBr online
 ```
 
 ---
@@ -154,6 +162,43 @@ Suporta ESC/POS via **auto-detect** (recomendado), Windows spooler RAW, USB ou r
 3. USB direto (escpos-usb)
 
 Modelos testados: Bematech MP-4200, Elgin i9, Epson TM-T20, Daruma DR800.
+
+---
+
+## Deploy via Docker (Linux / servidor)
+
+Alternativa ao deploy Windows nativo. **ACBr Monitor não roda dentro do container** — use este modo apenas se a emissão fiscal for desligada (`EMISSAO_FISCAL=false`) ou se o ACBr estiver acessível via rede no host.
+
+```bash
+cd agente-local
+cp .env.example .env
+# Edite .env (PORT, BACKEND_URL após ativação, etc.)
+docker build -t pdv-agente:1.0.0 .
+docker compose up -d
+```
+
+Verifique saúde:
+
+```bash
+curl http://localhost:9100/diagnostico/saude
+```
+
+Volumes persistentes (definidos no `docker-compose.yml`):
+
+- `./data` → bancos SQLite, config, logs
+- `./.env` → configuração (somente leitura no container)
+
+Para rebuild após update:
+
+```bash
+docker compose down
+docker build -t pdv-agente:1.0.0 .
+docker compose up -d
+```
+
+Guia completo para campo: `docs/OPERACAO.md`.
+
+Documentação técnica completa (arquitetura, API, fiscal, integração front): **`docs/GUIA_COMPLETO.md`**.
 
 ---
 

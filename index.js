@@ -59,12 +59,25 @@ const reconciliacaoFiscal = require("./reconciliacaoFiscal");
 const fiscalPreflight = require("./fiscalPreflight");
 const fiscalNumeracao = require("./fiscalNumeracao");
 const watchdog = require("./watchdog");
+const fiscalMetrics = require("./fiscalMetrics");
+const fiscalRateLimit = require("./fiscalRateLimit");
+const fiscalPurge = require("./fiscalPurge");
+const fiscalStorage = require("./fiscalStorage");
+const auditLog = require("./auditLog");
+const manifestUpdater = require("./manifestUpdater");
+const fiscalAlertas = require("./fiscalAlertas");
+const fiscalRelatorio = require("./fiscalRelatorio");
+const diagnosticoDashboard = require("./diagnosticoDashboard");
+const fiscalRecuperacao = require("./fiscalRecuperacao");
+const diagnosticoRateLimit = require("./diagnosticoRateLimit");
+const log = require("./logger").child({ modulo: "agente" });
+const { execFile } = require("child_process");
 
 const app = express();
 const PORT = process.env.PORT || 9100;
 
 // ── Versão atual do agente ────────────────────────────────────────────────────
-const VERSAO_ATUAL = "5.3.0";
+const VERSAO_ATUAL = "1.0.0";
 
 // ── Config persistida ─────────────────────────────────────────────────────────
 // Apenas dados NÃO-SENSÍVEIS ficam no config.json (url, nome, ids, flags).
@@ -185,19 +198,50 @@ async function boot() {
 
   marginPaths.ensureDirs();
   fiscalNumeracao.init();
+  fiscalMetrics.init();
+  auditLog.init();
+  try {
+    fiscalStorage.integrityCheckBoot();
+  } catch (err) {
+    console.error("[Boot] Falha integrity_check:", err.message);
+    if ((process.env.FISCAL_INTEGRITY_STRICT || "true").toLowerCase() === "true") {
+      throw err;
+    }
+  }
+  const disco = fiscalStorage.verificarEspacoDisco();
+  if (disco.degradado) {
+    console.warn(`[Boot] Modo degradado — disco: ${disco.livreMb}MB livres`);
+  }
+  const manifestCheck = manifestUpdater.verificarManifestBoot();
+  if (!manifestCheck.ok) {
+    console.error(
+      `[Boot] CRÍTICO: ${manifestCheck.motivo}. Auto-update bloqueado. Execute: npm run manifest`,
+    );
+  }
   filaFiscal.init();
-  const cancelados = filaFiscal.cancelarEmissaoPendente(
-    "Cancelado no boot — refaça a emissão após atualizar dados fiscais/ACBr",
-  );
-  if (cancelados > 0) {
+  const bootCancel =
+    (process.env.FISCAL_BOOT_CANCEL || "false").toLowerCase() === "true";
+  if (bootCancel) {
+    const cancelados = filaFiscal.cancelarEmissaoPendente(
+      "Cancelado no boot — refaça a emissão após atualizar dados fiscais/ACBr",
+    );
+    if (cancelados > 0) {
+      console.log(
+        `[Fila fiscal] ${cancelados} job(s) de emissão pendente(s) cancelado(s) no boot`,
+      );
+    }
+  } else {
+    const rec = await filaFiscal.recuperarBoot(lerConfig);
     console.log(
-      `[Fila fiscal] ${cancelados} job(s) de emissão pendente(s) cancelado(s) no boot`,
+      `[Fila fiscal] Boot recovery: ${rec.recuperados} job(s), ${rec.autorizados} recuperado(s)`,
     );
   }
   fiscalService.registrarHandlersFila(lerConfig);
-  filaFiscal.iniciarWorker(5000);
-  watchdog.iniciar();
+  filaFiscal.iniciarWorker();
+  watchdog.iniciar(reiniciarAcbrMonitor);
+  fiscalPurge.iniciar();
   reconciliacaoFiscal.iniciar(lerConfig);
+  fiscalAlertas.iniciarRelatorioAutomatico(fiscalRelatorio.gerarRelatorio);
 
   if (acbr.EMISSAO_FISCAL) {
     acbrNfceSetup.inicializar().then((r) => {
@@ -213,6 +257,23 @@ async function boot() {
   }
 
   iniciarServidor();
+}
+
+async function reiniciarAcbrMonitor() {
+  const exe = process.env.ACBR_MONITOR_EXE;
+  if (!exe) {
+    console.warn("[Watchdog ACBr] ACBR_MONITOR_EXE não configurado — skip restart");
+    return;
+  }
+  const procName = process.env.ACBR_MONITOR_PROC || "ACBrMonitor.exe";
+  await new Promise((resolve, reject) => {
+    execFile("taskkill", ["/F", "/IM", procName], () => {
+      setTimeout(() => {
+        execFile(exe, [], (err) => (err ? reject(err) : resolve()));
+      }, 3000);
+    });
+  });
+  console.log("[Watchdog ACBr] ACBr Monitor reiniciado");
 }
 
 const AUTO_UPDATE =
@@ -270,8 +331,11 @@ function inicializarDb() {
 }
 
 // ── Segurança: CORS controlado ────────────────────────────────────────────────
-const CORS_ORIGENS_ENV = (process.env.AGENTE_CORS_ORIGENS || "")
-  .split(",")
+const CORS_ORIGINS_RAW =
+  process.env.CORS_ORIGINS ||
+  process.env.AGENTE_CORS_ORIGENS ||
+  "";
+const CORS_ORIGENS_ENV = CORS_ORIGINS_RAW.split(",")
   .map((s) => s.trim())
   .filter(Boolean);
 
@@ -289,8 +353,8 @@ const corsMiddleware = cors({
     }
     if (CORS_ORIGENS_ENV.length === 0 && !cfg.frontendOrigin) {
       console.warn(
-        `[CORS] Origem "${origin}" permitida (agente ainda sem AGENTE_CORS_ORIGENS / frontendOrigin configurado). ` +
-          "Ative o terminal pelo painel ou defina AGENTE_CORS_ORIGENS para restringir.",
+        `[CORS] Origem "${origin}" permitida (agente ainda sem CORS_ORIGINS / frontendOrigin configurado). ` +
+          "Ative o terminal pelo painel ou defina CORS_ORIGINS para restringir.",
       );
       return callback(null, true);
     }
@@ -325,12 +389,22 @@ function privateNetworkHeaders(req, res, next) {
   next();
 }
 
+function securityHeaders(req, res, next) {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  next();
+}
+
 // ── Segurança: token do agente ────────────────────────────────────────────────
 function exigirAgentToken(req, res, next) {
   const cfg = lerConfigSync();
-  if (!cfg.agentToken) return next();
+  const obrigatorio =
+    (process.env.AGENT_TOKEN_REQUIRED || "false").toLowerCase() === "true" ||
+    !!cfg.agentToken ||
+    !!cfg.ativado;
+  if (!obrigatorio) return next();
   const recebido = req.headers["x-agent-token"];
-  if (recebido && recebido === cfg.agentToken) return next();
+  if (recebido && cfg.agentToken && recebido === cfg.agentToken) return next();
   return res.status(401).json({
     erro: "Token do agente ausente ou inválido. Reative o terminal pelo painel para sincronizar o token.",
   });
@@ -350,6 +424,15 @@ let updaterState = {
 
 async function verificarAtualizacao() {
   if (!AUTO_UPDATE) return;
+  if (!manifestUpdater.isManifestOk()) {
+    updaterState.ultimoErro =
+      manifestUpdater.getManifestBootMotivo() ||
+      "manifest.json com SHA-256 incompleto";
+    console.error(
+      `[Updater] Auto-update recusado: ${updaterState.ultimoErro}. Execute: npm run manifest`,
+    );
+    return;
+  }
   const cfg = await lerConfig();
   if (!cfg.backendUrl || !cfg.backendToken) return;
 
@@ -425,34 +508,25 @@ async function aplicarAtualizacao(urlDownload, novaVersao, shaEsperado) {
     }
 
     const novoIndex = path.join(tmpDir, "index.js");
-    if (!fs.existsSync(novoIndex)) {
-      throw new Error(
-        "Pacote de atualização inválido: index.js não encontrado.",
-      );
+    const manifestNoPacote = path.join(tmpDir, "manifest.json");
+    if (!fs.existsSync(manifestNoPacote) && !fs.existsSync(novoIndex)) {
+      throw new Error("Pacote inválido: manifest.json ou index.js ausente");
     }
 
     const backupDir = path.join(__dirname, "data", "backup-pre-update");
     if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
 
-    const jsFiles = [
-      "index.js",
-      "impressora.js",
-      "acbr.js",
-      "fila.js",
-      "credenciais.js",
-    ];
-    for (const f of jsFiles) {
-      const src = path.join(__dirname, f);
-      if (fs.existsSync(src)) {
-        fs.copyFileSync(src, path.join(backupDir, f + ".bak"));
-      }
-    }
-
-    for (const f of jsFiles) {
-      const src = path.join(tmpDir, f);
-      if (fs.existsSync(src)) {
-        fs.copyFileSync(src, path.join(__dirname, f));
-        console.log(`[Updater] ✓ ${f} atualizado`);
+    if (fs.existsSync(manifestNoPacote)) {
+      await manifestUpdater.aplicarPacote(tmpDir, shaEsperado, novaVersao);
+    } else {
+      const jsFiles = ["index.js", "impressora.js", "acbr.js", "fila.js", "credenciais.js"];
+      manifestUpdater.backupArquivos(jsFiles);
+      for (const f of jsFiles) {
+        const src = path.join(tmpDir, f);
+        if (fs.existsSync(src)) {
+          fs.copyFileSync(src, path.join(__dirname, f));
+          console.log(`[Updater] ✓ ${f} atualizado (legado)`);
+        }
       }
     }
 
@@ -558,6 +632,25 @@ function calcularSha256(filePath) {
 // ── ROTAS ─────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 
+function coletarDadosAlertas() {
+  const payload = diagnosticoDashboard.montarAlertasPayload({
+    filaFiscal,
+    fiscalStorage,
+    acbr,
+    watchdog,
+    manifestUpdater,
+    versao: VERSAO_ATUAL,
+  });
+  try {
+    fiscalAlertas.verificarIncertos(
+      (payload.incertos || 0) + (payload.recuperando || 0),
+    );
+    fiscalAlertas.verificarDiscoCritico(payload.espacoDisco);
+  } catch (_) {}
+  payload.statusGeral = diagnosticoDashboard.calcularStatusGeral(payload);
+  return payload;
+}
+
 function iniciarServidor() {
   // ── FIX CRÍTICO: ordem dos middlewares de CORS ────────────────────────────
   // O pacote `cors` (preflightContinue=false por padrão) responde sozinho a
@@ -576,6 +669,7 @@ function iniciarServidor() {
   // resposta 204 do preflight.
   app.options("*", privateNetworkHeaders, (req, res) => res.status(204).end());
 
+  app.use(securityHeaders);
   app.use(corsMiddleware);
   app.use(express.json({ limit: "2mb" }));
 
@@ -718,6 +812,7 @@ function iniciarServidor() {
     privateNetworkHeaders,
     exigirAgentToken,
     async (req, res) => {
+      auditLog.registrar("UPDATER_VERIFICAR", {}, req);
       if (updaterState.atualizando) {
         return res.json({
           ok: false,
@@ -730,6 +825,21 @@ function iniciarServidor() {
         mensagem: "Verificação iniciada.",
         estado: updaterState,
       });
+    },
+  );
+
+  app.post(
+    "/updater/rollback",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    (req, res) => {
+      try {
+        auditLog.registrar("UPDATER_ROLLBACK", {}, req);
+        const dir = manifestUpdater.rollbackUltimo();
+        res.json({ ok: true, backup: dir });
+      } catch (err) {
+        res.status(500).json({ erro: err.message });
+      }
     },
   );
 
@@ -951,47 +1061,52 @@ function iniciarServidor() {
 
   // ── ACBr / Fiscal ────────────────────────────────────────────────────────────
   app.post("/acbr/nfce/emitir", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    auditLog.registrar(
+      "ACBR_NFCE_EMITIR_TENTATIVA",
+      {
+        numeroVenda: req.body?.numeroVenda || null,
+        correlationId:
+          req.headers["x-correlation-id"] || req.body?.correlationId || null,
+      },
+      req,
+    );
     if (!acbr.EMISSAO_FISCAL) return res.json({ fiscal: false });
+    const numeroVenda = req.body?.numeroVenda;
+    if (!numeroVenda) {
+      auditLog.registrar(
+        "ACBR_NFCE_EMITIR_DESCONTINUADA",
+        { motivo: "sem numeroVenda" },
+        req,
+      );
+      return res.status(410).json({
+        erro: "rota descontinuada",
+        usar: "/fiscal/emitir",
+      });
+    }
     try {
       const cfg = await lerConfig();
-      if (req.body?.numeroVenda) {
-        const resultado = await fiscalService.emitirCompleto(cfg, {
+      const sync =
+        req.query.sync === "1" ||
+        req.headers["x-fiscal-sync"] === "1" ||
+        (process.env.FISCAL_EMITIR_SYNC || "false").toLowerCase() === "true";
+      const resultado = await fiscalService.enfileirarEmissao(
+        cfg,
+        {
           ...req.body,
           correlationId:
             req.headers["x-correlation-id"] || req.body.correlationId,
-        });
-        if (!resultado || resultado.fiscal === false)
-          return res.json({ fiscal: false });
-        if (estadoContingencia.ativa)
-          await encerrarContingenciaAutomatico(
-            "SEFAZ voltou — emissão normal restaurada.",
-          );
-        return res.json(resultado);
-      }
-      const resultado = await acbr.emitirNfce(req.body);
+        },
+        { sync },
+      );
       if (!resultado || resultado.fiscal === false)
         return res.json({ fiscal: false });
-      if (estadoContingencia.ativa)
+      if (estadoContingencia.ativa && resultado.chave)
         await encerrarContingenciaAutomatico(
           "SEFAZ voltou — emissão normal restaurada.",
         );
       return res.json(resultado);
     } catch (err) {
-      const msg = err.message || "Erro ao emitir NFC-e";
-      const ehFalhaSefaz =
-        msg.includes("timeout") ||
-        msg.includes("inacessível") ||
-        msg.includes("503") ||
-        msg.includes("500");
-      if (ehFalhaSefaz && acbr.EMISSAO_FISCAL) {
-        if (!estadoContingencia.ativa) await ativarContingencia(msg);
-        return res.json({
-          fiscal: true,
-          contingencia: true,
-          mensagem: "SEFAZ indisponível. Emita como EPEC.",
-        });
-      }
-      return res.status(500).json({ erro: msg });
+      return res.status(500).json({ erro: err.message || "Erro ao enfileirar NFC-e" });
     }
   });
 
@@ -1001,10 +1116,18 @@ function iniciarServidor() {
       const cfg = await lerConfig();
       const correlationId =
         req.headers["x-correlation-id"] || req.body.correlationId;
-      const resultado = await fiscalService.enfileirarEmissao(cfg, {
-        ...req.body,
-        correlationId,
-      });
+      const sync =
+        req.query.sync === "1" ||
+        req.query.sync === "true" ||
+        req.headers["x-fiscal-sync"] === "1";
+      const resultado = await fiscalService.enfileirarEmissao(
+        cfg,
+        {
+          ...req.body,
+          correlationId,
+        },
+        { sync },
+      );
       res.json(resultado);
     } catch (err) {
       const body = { erro: err.message };
@@ -1022,6 +1145,24 @@ function iniciarServidor() {
       res.status(500).json(body);
     }
   });
+
+  app.get(
+    "/fiscal/emissao/:correlationId",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    (req, res) => {
+      res.json(fiscalService.consultarStatusEmissao(req.params.correlationId));
+    },
+  );
+
+  app.get(
+    "/fiscal/status/:correlationId",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    (req, res) => {
+      res.json(fiscalService.consultarStatusEmissao(req.params.correlationId));
+    },
+  );
 
   app.get("/acbr/fiscal/preflight", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
@@ -1119,6 +1260,7 @@ function iniciarServidor() {
   });
 
   app.post("/fila/fiscal/limpar", exigirAgentToken, (req, res) => {
+    auditLog.registrar("FILA_FISCAL_LIMPAR", { motivo: req.body?.motivo }, req);
     const n = filaFiscal.cancelarEmissaoPendente(
       req.body?.motivo || "Cancelado manualmente pelo operador",
     );
@@ -1143,6 +1285,95 @@ function iniciarServidor() {
       },
       nfceSetup: acbrNfceSetup.status(),
       preflight,
+    });
+  });
+
+  app.get(
+    "/diagnostico/metricas",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    (req, res) => {
+      res.json({
+        metricas: fiscalMetrics.snapshot(filaFiscal.status()),
+        rateLimit: fiscalRateLimit.status(req.query.cnpj),
+        watchdog: watchdog.statusWatchdog(),
+        storage: fiscalStorage.verificarEspacoDisco(),
+        degradado: fiscalStorage.isModoDegradado(),
+      });
+    },
+  );
+
+  app.get("/diagnostico/alertas", privateNetworkHeaders, (req, res) => {
+    const payload = coletarDadosAlertas();
+    const alertas = filaFiscal.contadoresAlertas();
+    res.json({
+      filaFiscal: payload.filaFiscal,
+      processando: payload.processando,
+      incertos: payload.incertos,
+      recuperando: payload.recuperando,
+      incertosComBackoff: payload.incertosComBackoff,
+      falhasUltimas24h: payload.falhasUltimas24h,
+      acbr: payload.acbr,
+      espacoDisco: payload.espacoDisco,
+      ultimaEmissao: alertas.ultimaEmissao,
+      ultimaEmissaoSucesso: alertas.ultimaEmissaoSucesso,
+      metricas: {
+        emissoesHoje: fiscalMetrics.emissoesHoje(),
+        taxaSucessoPercent: fiscalMetrics.taxaSucessoPercent(),
+      },
+      versao: VERSAO_ATUAL,
+      manifestOk: manifestUpdater.isManifestOk(),
+      statusGeral: payload.statusGeral,
+      timestamp: payload.timestamp,
+    });
+  });
+
+  app.get("/diagnostico/dashboard", privateNetworkHeaders, (req, res) => {
+    const payload = coletarDadosAlertas();
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(diagnosticoDashboard.renderDashboardHtml(payload));
+  });
+
+  app.post(
+    "/diagnostico/recovery",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    diagnosticoRateLimit.middleware(),
+    async (req, res) => {
+      try {
+        auditLog.registrar("RECOVERY_MANUAL", {}, req);
+        const r = await fiscalRecuperacao.forcarRecoveryManual(lerConfig);
+        res.json({
+          ok: true,
+          jobsReprocessados: r.jobsReprocessados,
+          resetados: r.resetados,
+          timestamp: r.timestamp,
+        });
+      } catch (err) {
+        res.status(500).json({ erro: err.message });
+      }
+    },
+  );
+
+  app.get(
+    "/diagnostico/relatorio",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    diagnosticoRateLimit.middleware(),
+    (req, res) => {
+      const data = req.query.data || new Date().toISOString().slice(0, 10);
+      res.json(fiscalRelatorio.gerarRelatorio(String(data)));
+    },
+  );
+
+  app.get("/diagnostico/saude", privateNetworkHeaders, (req, res) => {
+    res.json({
+      ok: true,
+      versao: VERSAO_ATUAL,
+      uptime: process.uptime(),
+      manifestOk: manifestUpdater.isManifestOk(),
+      fiscal: filaFiscal.status(),
+      timestamp: new Date().toISOString(),
     });
   });
 
@@ -1334,6 +1565,7 @@ function iniciarServidor() {
   });
 
   app.post("/fila/reprocessar", exigirAgentToken, async (req, res) => {
+    auditLog.registrar("FILA_REPROCESSAR", { numeros: req.body?.numeros }, req);
     const numeros = Array.isArray(req.body?.numeros) ? req.body.numeros : [];
     const resultado = fila.resetarFalhas(numeros.length > 0 ? numeros : null);
     fila.sincronizar().catch(() => {});
@@ -1389,26 +1621,64 @@ function iniciarServidor() {
     setTimeout(() => verificarAtualizacao().catch(() => {}), 2 * 60 * 1000);
   }
 
+  let httpServer = null;
+  let encerrando = false;
+
+  async function encerrarGracefully(signal, code = 0) {
+    if (encerrando) return;
+    encerrando = true;
+    console.log(`[Agente] Encerrando (${signal})...`);
+    auditLog.registrar("AGENTE_SHUTDOWN", { signal });
+
+    await new Promise((resolve) => {
+      if (!httpServer) return resolve();
+      httpServer.close(() => {
+        console.log("[Agente] HTTP server fechado — novas conexões recusadas");
+        resolve();
+      });
+    });
+
+    const waitJobs = await filaFiscal.aguardarJobsAtivos(30000);
+    if (!waitJobs.ok) {
+      console.error(
+        "[Agente] Timeout 30s aguardando jobs fiscais:",
+        JSON.stringify(waitJobs),
+      );
+      code = 1;
+    }
+
+    try {
+      filaFiscal.pararWorkers();
+      fiscalPurge.parar();
+      watchdog.parar();
+      filaFiscal.close();
+      fiscalMetrics.close();
+      auditLog.close();
+      if (db) db.close();
+    } catch (_) {}
+    process.exit(code);
+  }
+
   process.on("uncaughtException", (err) => {
     console.error("[Agente] uncaughtException:", err);
+    try {
+      auditLog.registrar("UNCAUGHT_EXCEPTION", { message: err.message });
+    } catch (_) {}
+    encerrarGracefully("uncaughtException", 1).catch(() => process.exit(1));
   });
   process.on("unhandledRejection", (err) => {
     console.error("[Agente] unhandledRejection:", err);
   });
+  process.on("SIGINT", () => {
+    encerrarGracefully("SIGINT", 0).catch(() => process.exit(1));
+  });
+  process.on("SIGTERM", () => {
+    encerrarGracefully("SIGTERM", 0).catch(() => process.exit(1));
+  });
 
-  function encerrarGracefully(signal) {
-    console.log(`[Agente] Encerrando (${signal})...`);
-    try {
-      if (db) db.close();
-    } catch (_) {}
-    process.exit(0);
-  }
-  process.on("SIGINT", () => encerrarGracefully("SIGINT"));
-  process.on("SIGTERM", () => encerrarGracefully("SIGTERM"));
-
-  app.listen(PORT, () => {
+  httpServer = app.listen(PORT, () => {
     console.log(`\n╔══════════════════════════════════════════╗`);
-    console.log(`║  PDV Margin Engine — Agente Local v5.0  ║`);
+    console.log(`║  PDV Margin Engine — Agente Local v1.0  ║`);
     console.log(`║  http://localhost:${PORT}                   ║`);
     console.log(`╚══════════════════════════════════════════╝\n`);
     if (!config.ativado)
@@ -1552,7 +1822,7 @@ async function tentarSincronizarEpecs() {
             );
           }
         }
-        console.log(`[EPEC] ✅ ${row.numero_venda} transmitido.`);
+        log.info({ epecId: row.epec_id, registroId: row.id }, "EPEC transmitido com sucesso");
       }
     } catch (err) {
       if (

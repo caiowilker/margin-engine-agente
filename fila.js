@@ -523,6 +523,22 @@ function resetarFalhas(numeros) {
   }
 }
 
+function purgeAntigos(dias = 30) {
+  try {
+    if (!db) inicializar();
+    const r = db
+      .prepare(
+        `DELETE FROM fila_vendas WHERE status = 'CONCLUIDO'
+         AND datetime(criado_em) < datetime('now', ?)`,
+      )
+      .run(`-${dias} days`);
+    return { removidos: r.changes };
+  } catch (err) {
+    console.warn("[Fila] Erro no purge:", err.message);
+    return { removidos: 0 };
+  }
+}
+
 module.exports = {
   inicializar,
   atualizarConfig,
@@ -533,4 +549,5 @@ module.exports = {
   listar,
   resetarFalhas,
   statusAuth,
+  purgeAntigos,
 };

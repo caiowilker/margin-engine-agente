@@ -5,10 +5,12 @@ const acbr = require("./acbr");
 const docs = require("./documentosFiscais");
 const fiscalService = require("./fiscalService");
 
+const fiscalRecuperacao = require("./fiscalRecuperacao");
 const INTERVAL_MS = parseInt(
   process.env.FISCAL_RECONCILIACAO_MS || "300000",
   10,
 );
+const RECOVERY_MS = parseInt(process.env.FISCAL_RECOVERY_MS || "30000", 10);
 
 function httpRequest(url, options, body) {
   const http = require("http");
@@ -72,9 +74,22 @@ async function recuperarDocumentoLocal(cfg, numeroVenda, correlationId) {
 
 async function executarCiclo(lerConfigFn) {
   const cfg = await lerConfigFn();
-  if (!cfg.backendUrl || !cfg.backendToken || !acbr.EMISSAO_FISCAL) return;
+  if (!cfg.backendUrl || !cfg.backendToken || !acbr.EMISSAO_FISCAL) {
+    if (acbr.EMISSAO_FISCAL) {
+      await fiscalRecuperacao.processarFilaRecovery(lerConfigFn).catch((err) =>
+        log.warn({ err: err.message }, "Recovery: falha fila consulta"),
+      );
+    }
+    return;
+  }
 
-  filaFiscal.reprocessarIncertos();
+  await fiscalRecuperacao.processarFilaRecovery(lerConfigFn).catch((err) =>
+    log.warn({ err: err.message }, "Recovery: falha fila consulta"),
+  );
+
+  await filaFiscal.reprocessarIncertos(lerConfigFn).catch((err) =>
+    log.warn({ err: err.message }, "Reconciliação: falha reprocessar INCERTO"),
+  );
 
   let resp;
   try {
@@ -108,7 +123,7 @@ async function executarCiclo(lerConfigFn) {
 
       const job = filaFiscal.buscarJobEmissaoPorVenda(item.numeroVenda);
       if (job && job.status === "FALHA_PERMANENTE") {
-        filaFiscal.reprocessarIncertos();
+        await filaFiscal.reprocessarIncertos(lerConfigFn);
       }
     } catch (err) {
       log.warn(
@@ -125,6 +140,11 @@ function iniciar(lerConfigFn) {
       log.warn({ err: err.message }, "Reconciliação fiscal: erro no ciclo"),
     );
   }, INTERVAL_MS);
+  setInterval(() => {
+    fiscalRecuperacao.processarFilaRecovery(lerConfigFn).catch((err) =>
+      log.warn({ err: err.message }, "Recovery consulta: erro no ciclo"),
+    );
+  }, RECOVERY_MS);
   setTimeout(() => executarCiclo(lerConfigFn).catch(() => {}), 15000);
 }
 
