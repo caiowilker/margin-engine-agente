@@ -13,6 +13,13 @@
 //   node install-service.js --uninstall → remove o serviço
 // ============================================================
 
+require("dotenv").config();
+
+const PORT = Number(process.env.PORT || process.env.AGENT_PORT || 9100);
+const AGENT_PUBLIC_BASE = (
+  process.env.AGENT_PUBLIC_HOST || `http://127.0.0.1:${PORT}`
+).replace(/\/$/, "");
+
 const path = require("path");
 const fs = require("fs");
 const { execSync, exec } = require("child_process");
@@ -156,11 +163,11 @@ const uninstall = process.argv.includes("--uninstall");
 svc.on("install", () => {
   svc.start();
   console.log("\n✓ Serviço instalado e iniciado.");
-  console.log("  PDV disponível em: http://localhost:9100");
+  console.log(`  PDV disponível em: ${AGENT_PUBLIC_BASE}`);
   console.log("  Acesse para ativar o terminal de caixa.\n");
 
   setTimeout(() => {
-    const url = "http://localhost:9100";
+    const url = AGENT_PUBLIC_BASE;
     const cmd =
       process.platform === "win32"
         ? `start ${url}`
@@ -181,7 +188,7 @@ svc.on("uninstall", () => {
 });
 
 svc.on("start", () => {
-  console.log("✓ Serviço iniciado — PDV disponível em http://localhost:9100");
+  console.log(`✓ Serviço iniciado — PDV disponível em ${AGENT_PUBLIC_BASE}`);
 });
 
 svc.on("stop", () => {

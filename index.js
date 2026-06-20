@@ -74,7 +74,10 @@ const log = require("./logger").child({ modulo: "agente" });
 const { execFile } = require("child_process");
 
 const app = express();
-const PORT = process.env.PORT || 9100;
+const PORT = Number(process.env.PORT || process.env.AGENT_PORT || 9100);
+const AGENT_PUBLIC_BASE = (
+  process.env.AGENT_PUBLIC_HOST || `http://127.0.0.1:${PORT}`
+).replace(/\/$/, "");
 
 // ── Versão atual do agente ────────────────────────────────────────────────────
 const VERSAO_ATUAL = "1.0.0";
@@ -1679,12 +1682,12 @@ function iniciarServidor() {
   httpServer = app.listen(PORT, () => {
     console.log(`\n╔══════════════════════════════════════════╗`);
     console.log(`║  PDV Margin Engine — Agente Local v1.0  ║`);
-    console.log(`║  http://localhost:${PORT}                   ║`);
+    console.log(`║  ${AGENT_PUBLIC_BASE.padEnd(40)}║`);
     console.log(`╚══════════════════════════════════════════╝\n`);
     if (!config.ativado)
       console.log(
-        "⚠️  Agente não ativado. Acesse http://localhost:" +
-          PORT +
+        "⚠️  Agente não ativado. Acesse " +
+          AGENT_PUBLIC_BASE +
           " para ativar.",
       );
   });
