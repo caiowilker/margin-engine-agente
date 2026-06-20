@@ -314,6 +314,7 @@ async function enviarNfeComandos(comandos, timeoutMs = ACBR_TIMEOUT) {
 }
 
 function parseResposta(resposta) {
+  const docs = require("./documentosFiscais");
   const bruto = String(resposta || "");
   const linhas = bruto
     .split(/\r?\n/)
@@ -357,6 +358,14 @@ function parseResposta(resposta) {
     bruto.match(/\b(\d{44})\b/)?.[1] ||
     null;
 
+  const xml = docs.extrairXmlDaResposta(resposta);
+  let qrcode =
+    get("QRCode") ||
+    get("URLConsulta") ||
+    get("qrCode") ||
+    bruto.match(/https?:\/\/[^\s"']+qrcode[^\s"']*/i)?.[0];
+  if (!qrcode && xml) qrcode = docs.extrairQrCodeDoXml(xml);
+
   return {
     raw: resposta,
     cStat,
@@ -366,11 +375,7 @@ function parseResposta(resposta) {
     chave,
     numero: get("NumeroNFe") || get("Numero") || get("nNF"),
     serie: get("SerieNFe") || get("Serie"),
-    qrcode:
-      get("QRCode") ||
-      get("URLConsulta") ||
-      get("qrCode") ||
-      bruto.match(/https?:\/\/[^\s"']+qrcode[^\s"']*/i)?.[0],
+    qrcode,
     protocolo: get("nProt") || get("Protocolo"),
     pathPdf:
       get("PathPDF") ||
@@ -582,12 +587,14 @@ function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
 
 function montarSecaoDestinatario(payload, tpAmb) {
   const cpf = String(payload.cpfCliente || "").replace(/\D/g, "");
-  if (cpf.length !== 11) return "";
+  const cnpj = String(payload.cnpjCliente || "").replace(/\D/g, "");
+  const doc = cpf.length === 11 ? cpf : cnpj.length === 14 ? cnpj : "";
+  if (!doc) return "";
   let nome = sanitizeAcbrText(payload.nomeCliente || "CONSUMIDOR", 60);
   if (tpAmb === "2") {
     nome = "NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL";
   }
-  return `[Destinatario]\nCNPJCPF=${cpf}\nxNome=${nome}\nindIEDest=9\n\n`;
+  return `[Destinatario]\nCNPJCPF=${doc}\nxNome=${nome}\nindIEDest=9\n\n`;
 }
 
 function montarSecaoInfRespTec() {
@@ -837,47 +844,55 @@ function montarIniNfce(payload, numeracao) {
     fiado: "99",
     outros: "99",
   };
-  const forma = (payload.formaPagamento || "dinheiro").toLowerCase();
-  const codigoForma = formaMap[forma] || "01";
 
-  // SEFAZ cStat 869: vTroco = vPag - vNF (dinheiro com troco → vPag = valor recebido)
-  let vPagNum = Number(totalVenda);
-  let vTrocoNum = 0;
-  if (codigoForma === "01") {
-    const recebido = Number(payload.valorRecebido);
-    if (Number.isFinite(recebido) && recebido > vPagNum + 0.009) {
-      vPagNum = recebido;
-      vTrocoNum = Math.max(0, recebido - Number(totalVenda));
-    } else if (Number.isFinite(Number(payload.troco)) && Number(payload.troco) > 0) {
-      vTrocoNum = Number(payload.troco);
-      vPagNum = Number(totalVenda) + vTrocoNum;
+  const pagamentosLista =
+    Array.isArray(payload.pagamentos) && payload.pagamentos.length > 0
+      ? payload.pagamentos
+      : [
+          {
+            forma: payload.formaPagamento || "dinheiro",
+            valor: Number(payload.valorRecebido || totalVenda),
+            troco: Number(payload.troco || 0),
+          },
+        ];
+
+  let vTrocoTotal = 0;
+  pagamentosLista.forEach((pg, idx) => {
+    const forma = (pg.forma || "dinheiro").toLowerCase();
+    const codigoForma = formaMap[forma] || "01";
+    const valorPg = Number(pg.valor || 0);
+    const trocoPg = Number(pg.troco || 0);
+    const vPagNum =
+      codigoForma === "01" && trocoPg > 0
+        ? valorPg
+        : Math.max(0, valorPg);
+    const vTrocoNum = codigoForma === "01" ? trocoPg : 0;
+    if (vTrocoNum > 0) vTrocoTotal += vTrocoNum;
+
+    const seq = String(idx + 1).padStart(3, "0");
+    ini += `[PAG${seq}]\n`;
+    ini += `tPag=${codigoForma}\n`;
+    ini += `vPag=${fmtMoney(vPagNum)}\n`;
+    ini += `indPag=0\n`;
+    if (codigoForma === "03" || codigoForma === "04" || codigoForma === "17") {
+      ini += `tpIntegra=2\n`;
     }
-  }
-  vTrocoNum = Math.round(vTrocoNum * 100) / 100;
-  vPagNum = Math.round(vPagNum * 100) / 100;
-
-  ini += `[PAG001]\n`;
-  ini += `tpag=${codigoForma}\n`;
-  ini += `vPag=${fmtMoney(vPagNum)}\n`;
-  ini += `indPag=0\n`;
-  ini += `vTroco=${fmtMoney(vTrocoNum)}\n`;
-  // cStat 391 — cartão crédito/débito exige grupo card (PDV sem TEF = não integrado)
-  if (codigoForma === "03" || codigoForma === "04") {
-    ini += `tpIntegra=2\n`;
-    ini += `tBand=99\n`;
-  }
-  if (codigoForma === "99") {
-    const labels = {
-      fiado: "FIADO",
-      crediario: "CREDIARIO",
-      outros: "OUTROS",
-    };
-    ini += `xPag=${sanitizeAcbrText(
-      payload.labelPagamento || labels[forma] || "OUTROS",
-      60,
-    )}\n`;
-  }
-  ini += `\n`;
+    if (idx === pagamentosLista.length - 1) {
+      ini += `vTroco=${fmtMoney(vTrocoTotal)}\n`;
+    }
+    if (codigoForma === "99") {
+      const labels = {
+        fiado: "FIADO",
+        crediario: "CREDIARIO",
+        outros: "OUTROS",
+      };
+      ini += `xPag=${sanitizeAcbrText(
+        payload.labelPagamento || labels[forma] || "OUTROS",
+        60,
+      )}\n`;
+    }
+    ini += `\n`;
+  });
 
   ini += montarSecaoInfRespTec();
 
@@ -1008,20 +1023,23 @@ async function emitirNfce(payload) {
 }
 
 function normalizarResultado(p, resposta) {
+  const docs = require("./documentosFiscais");
+  const xml = docs.extrairXmlDaResposta(resposta);
+  const qrcode = p.qrcode || (xml ? docs.extrairQrCodeDoXml(xml) : null);
   return {
     chave: p.chave,
     numero: p.numero,
     serie: p.serie || "001",
-    qrcode: p.qrcode,
+    qrcode,
     protocolo: p.protocolo,
     cStat: p.cStat,
     xMotivo: p.xMotivo,
-    xml: require("./documentosFiscais").extrairXmlDaResposta(resposta),
+    xml,
     fiscal: true,
     chaveNfe: p.chave,
     numeroNfe: p.numero,
     serieNfe: p.serie || "001",
-    qrcodeNfe: p.qrcode,
+    qrcodeNfe: qrcode,
   };
 }
 

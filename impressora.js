@@ -49,7 +49,13 @@ const REDE_PORTAS = [9100, 9101, 515];
 const CACHE_TTL_MS = 30000;
 const AGENT_PORT = parseInt(process.env.PORT || "9100", 10);
 const IMPRIMIR_QR_NFCE =
-  (process.env.IMPRIMIR_QR_NFCE || "false").toLowerCase() === "true";
+  (process.env.IMPRIMIR_QR_NFCE ?? "true").toLowerCase() !== "false";
+const IMPRIMIR_QR_NFCE_SIZE = Math.min(
+  8,
+  Math.max(3, parseInt(process.env.IMPRIMIR_QR_NFCE_SIZE || "6", 10) || 6),
+);
+
+const { extrairQrCodeDoXml } = require("./documentosFiscais");
 
 let cacheDescoberta = null;
 let cacheDescobertaEm = 0;
@@ -148,12 +154,24 @@ function gerarBuffer(renderFn) {
     const device = new MemoryDevice();
     device.open((err) => {
       if (err) return reject(err);
-      try {
-        const printer = new escpos.Printer(device, { encoding: "CP860" });
-        renderFn(printer);
-        const finalizar = () => device.close(() => resolve(device.buffer));
+      const printer = new escpos.Printer(device, { encoding: "CP860" });
+      const finalizar = () => {
+        const done = () => device.close(() => resolve(device.buffer));
         if (typeof printer.close === "function") {
-          printer.close(finalizar);
+          printer.close(done);
+        } else {
+          done();
+        }
+      };
+      try {
+        const outcome = renderFn(printer);
+        if (outcome && typeof outcome.then === "function") {
+          outcome.then(finalizar).catch((e) => {
+            try {
+              device.close();
+            } catch (_) {}
+            reject(e);
+          });
         } else {
           finalizar();
         }
@@ -602,6 +620,94 @@ function sepDash() {
   return "-".repeat(COLS);
 }
 
+/** Resolve URL/payload do QR NFC-e a partir do payload de impressão. */
+function resolverQrCodeNfce(payload) {
+  const candidatos = [
+    payload?.qrcodeNfe,
+    payload?.qrcode,
+    payload?.QRCode,
+    payload?.urlConsulta,
+  ];
+  for (const raw of candidatos) {
+    if (typeof raw === "string" && raw.trim()) return raw.trim();
+  }
+  const xml = payload?.xmlContent || payload?.xml;
+  if (xml) {
+    const doXml = extrairQrCodeDoXml(xml);
+    if (doXml) return doXml;
+  }
+  return null;
+}
+
+/** Versão QR ESC/POS (modo byte, nível M) conforme tamanho do conteúdo. */
+function calcularVersaoQrEscpos(texto) {
+  const len = Buffer.byteLength(String(texto), "utf8");
+  const caps = [
+    [1, 14],
+    [2, 26],
+    [3, 42],
+    [4, 62],
+    [5, 84],
+    [6, 106],
+    [7, 124],
+    [8, 152],
+    [9, 180],
+    [10, 213],
+    [11, 251],
+    [12, 287],
+    [13, 331],
+    [14, 362],
+    [15, 412],
+    [16, 450],
+  ];
+  for (const [versao, cap] of caps) {
+    if (len <= cap) return versao;
+  }
+  return 16;
+}
+
+function promisificarQrImage(printer, conteudo, options) {
+  return new Promise((resolve, reject) => {
+    printer.qrimage(conteudo, options, (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+}
+
+/** Imprime QR NFC-e: nativo ESC/POS (síncrono) com fallback raster assíncrono. */
+async function imprimirQrNfce(printer, conteudo) {
+  const version = calcularVersaoQrEscpos(conteudo);
+  try {
+    printer.align("ct").feed(1);
+    printer.qrcode(conteudo, version, "M", IMPRIMIR_QR_NFCE_SIZE);
+    printer.feed(2);
+    return;
+  } catch (err) {
+    console.warn(
+      "[Impressora] QR nativo falhou, tentando raster:",
+      err.message,
+    );
+  }
+  await promisificarQrImage(printer, conteudo, {
+    type: "png",
+    mode: "dhdw",
+    size: 4,
+  });
+  printer.align("ct").feed(2);
+}
+
+function formatarChaveNfe(chave) {
+  const digits = String(chave || "").replace(/\D/g, "");
+  if (!digits) return [];
+  if (digits.length !== 44) return [digits];
+  const grupos = [];
+  for (let i = 0; i < 44; i += 4) {
+    grupos.push(digits.slice(i, i + 4));
+  }
+  return grupos;
+}
+
 // ── Layout do cupom ───────────────────────────────────────────────────────────
 //
 // Estratégia visual e emocional:
@@ -635,6 +741,10 @@ function sepDash() {
 //  └─────────────────────────────────────────────────┘
 //
 function renderCupom(printer, payload) {
+  return renderCupomConteudo(printer, payload);
+}
+
+async function renderCupomConteudo(printer, payload) {
   const empresa = payload.empresa || {};
   const itens = payload.itens || [];
   const isFiscal = !!(payload.chaveNfe && payload.chaveNfe.trim());
@@ -694,6 +804,7 @@ function renderCupom(printer, payload) {
   if (payload.nomeCliente && payload.nomeCliente !== "Consumidor")
     printer.text(col2("Cliente:", payload.nomeCliente.slice(0, 28)));
   if (payload.cpfCliente) printer.text(col2("CPF:", payload.cpfCliente));
+  if (payload.cnpjCliente) printer.text(col2("CNPJ:", payload.cnpjCliente));
 
   // ── 4. Itens ─────────────────────────────────────────────────────────────────
   printer.text(sepDash());
@@ -769,14 +880,28 @@ function renderCupom(printer, payload) {
   printer.align("lt").text(sepEq());
 
   // ── Pagamento ────────────────────────────────────────────────────────────────
-  const formaLabel =
-    LABEL_PGTO[payload.formaPagamento] ||
-    (payload.formaPagamento || "").toUpperCase();
-  if (formaLabel) printer.text(col2("Pagamento:", formaLabel));
+  const pagamentosCupom =
+    Array.isArray(payload.pagamentos) && payload.pagamentos.length > 0
+      ? payload.pagamentos
+      : [
+          {
+            forma: payload.formaPagamento || "dinheiro",
+            valor: valorRecebido > 0 ? valorRecebido : totalFinal,
+            troco,
+          },
+        ];
 
-  if (valorRecebido > 0 && payload.formaPagamento === "dinheiro") {
+  for (const pg of pagamentosCupom) {
+    const formaLabel =
+      LABEL_PGTO[pg.forma] || (pg.forma || "").toUpperCase();
+    const aplicado = Number(pg.valor || 0) - Number(pg.troco || 0);
+    if (formaLabel) {
+      printer.text(col2("Pagamento:", `${formaLabel} ${fmtR$(aplicado)}`));
+    }
+  }
+
+  if (troco > 0) {
     printer.text(col2("Recebido:", fmtR$(valorRecebido)));
-    // TROCO em destaque — bold, tamanho normal para respeitar largura
     printer.text(sepDash());
     printer
       .align("ct")
@@ -785,6 +910,12 @@ function renderCupom(printer, payload) {
       .text("TROCO: " + fmtR$(troco))
       .style("normal");
     printer.align("lt").text(sepDash());
+  } else if (
+    pagamentosCupom.length === 1 &&
+    pagamentosCupom[0].forma === "dinheiro" &&
+    valorRecebido > 0
+  ) {
+    printer.text(col2("Recebido:", fmtR$(valorRecebido)));
   }
 
   // Volumes
@@ -802,23 +933,24 @@ function renderCupom(printer, payload) {
       .text(
         `NF-e: ${payload.numeroNfe || ""}  Serie: ${payload.serieNfe || "001"}`,
       );
-    const chave = String(payload.chaveNfe || "");
-    if (chave) {
-      printer.text("Chave:");
-      printer.text(chave.slice(0, 22));
-      printer.text(chave.slice(22, 44));
+    if (payload.protocolo) {
+      printer.text(`Protocolo: ${String(payload.protocolo).slice(0, 30)}`);
     }
-    printer.text("Consulte: nfce.fazenda.gov.br");
-    if (payload.qrcodeNfe && IMPRIMIR_QR_NFCE) {
-      try {
-        printer.qrimage(payload.qrcodeNfe, {
-          type: "png",
-          mode: "dhdw",
-          size: 3,
-        });
-      } catch (_) {
-        printer.text("[QR Code indisponivel]");
-      }
+    const gruposChave = formatarChaveNfe(payload.chaveNfe);
+    if (gruposChave.length) {
+      printer.align("lt").text("Chave de acesso:");
+      gruposChave.forEach((g) => printer.text(g));
+    }
+    printer.align("ct").text("Consulte em nfce.fazenda.gov.br");
+
+    const qrConteudo = resolverQrCodeNfce(payload);
+    if (qrConteudo && IMPRIMIR_QR_NFCE) {
+      printer.text("Consulta via QR Code");
+      await imprimirQrNfce(printer, qrConteudo);
+    } else if (IMPRIMIR_QR_NFCE && payload.chaveNfe) {
+      console.warn(
+        "[Impressora] NFC-e autorizada sem URL de QR Code — cupom impresso sem QR",
+      );
     }
   }
 
@@ -1081,7 +1213,11 @@ function listar() {
 }
 
 function imprimirCupom(payload) {
-  return imprimirRender((printer) => renderCupom(printer, payload));
+  const qrcodeNfe = resolverQrCodeNfce(payload);
+  const normalizado = qrcodeNfe
+    ? { ...payload, qrcodeNfe, qrcode: qrcodeNfe }
+    : payload;
+  return imprimirRender((printer) => renderCupom(printer, normalizado));
 }
 
 function imprimirFechamento(payload) {
