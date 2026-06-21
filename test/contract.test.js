@@ -259,6 +259,16 @@ async function run() {
     assertType(json.metricas.emissoesHoje, "number", "metricas.emissoesHoje");
   });
 
+  await test("forcarEmissao — bypass quando EMISSAO_FISCAL=false", async () => {
+    acbr.setRuntimeEmissaoFiscal(false);
+    const forcarEmissaoOff = false;
+    const bloqueadoSemForcar = !acbr.EMISSAO_FISCAL && !forcarEmissaoOff;
+    assert.strictEqual(bloqueadoSemForcar, true);
+    const forcarEmissaoOn = true;
+    const bloqueadoComForcar = !acbr.EMISSAO_FISCAL && !forcarEmissaoOn;
+    assert.strictEqual(bloqueadoComForcar, false);
+  });
+
   await test("configSync — aplica fiscalEnabled em runtime sem reiniciar", async () => {
     acbr.setRuntimeEmissaoFiscal(false);
     configSync.aplicarConfigRemota({ fiscalEnabled: true });

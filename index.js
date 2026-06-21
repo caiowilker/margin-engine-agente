@@ -80,8 +80,8 @@ const AGENT_PUBLIC_BASE = (
   process.env.AGENT_PUBLIC_HOST || `http://127.0.0.1:${PORT}`
 ).replace(/\/$/, "");
 
-// ── Versão atual do agente ────────────────────────────────────────────────────
-const VERSAO_ATUAL = "1.0.0";
+// ── Versão atual do agente (fonte: package.json — alinhada ao sync-from-agente.sh) ──
+const { version: VERSAO_ATUAL } = require("./package.json");
 
 // ── Config persistida ─────────────────────────────────────────────────────────
 // Apenas dados NÃO-SENSÍVEIS ficam no config.json (url, nome, ids, flags).
@@ -1116,7 +1116,8 @@ function iniciarServidor() {
   });
 
   app.post("/fiscal/emitir", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
-    if (!acbr.EMISSAO_FISCAL) return res.json({ fiscal: false });
+    const forcarEmissao = req.body?.forcarEmissao === true;
+    if (!acbr.EMISSAO_FISCAL && !forcarEmissao) return res.json({ fiscal: false });
     try {
       const cfg = await lerConfig();
       const correlationId =
