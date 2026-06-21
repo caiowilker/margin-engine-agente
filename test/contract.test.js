@@ -11,15 +11,18 @@ const http = require("http");
 const testDir = path.join(__dirname, "data-contract");
 if (!fs.existsSync(testDir)) fs.mkdirSync(testDir, { recursive: true });
 
+for (const f of fs.readdirSync(testDir)) {
+  try {
+    fs.unlinkSync(path.join(testDir, f));
+  } catch (_) {}
+}
+
 process.env.FISCAL_DB_PATH = path.join(testDir, "fila_fiscal.contract.db");
 process.env.FISCAL_METRICS_DB = path.join(testDir, "metrics.contract.db");
 process.env.FISCAL_INTEGRITY_STRICT = "false";
 process.env.EMISSAO_FISCAL = "true";
+process.env.ACBR_NFE_ENABLED = "true";
 process.env.AGENT_TOKEN_REQUIRED = "false";
-
-try {
-  fs.unlinkSync(process.env.FISCAL_DB_PATH);
-} catch (_) {}
 
 const filaFiscal = require("../filaFiscal");
 const fiscalService = require("../fiscalService");
@@ -31,6 +34,7 @@ const manifestUpdater = require("../manifestUpdater");
 const fiscalStorage = require("../fiscalStorage");
 const watchdog = require("../watchdog");
 const acbr = require("../acbr");
+const configSync = require("../configSync");
 
 let passed = 0;
 let failed = 0;
@@ -99,6 +103,28 @@ function payloadEmitirFront(correlationId, numeroVenda) {
   };
 }
 
+/** Payload NF-e modelo 55 — destinatário completo obrigatório */
+function payloadEmitirNfe(correlationId, numeroVenda) {
+  const base = payloadEmitirFront(correlationId, numeroVenda);
+  return {
+    ...base,
+    destinatario: {
+      cpfCnpj: "12345678909",
+      razaoSocial: "CLIENTE TESTE NF-E",
+      indIEDest: 9,
+      endereco: {
+        logradouro: "Rua Exemplo",
+        numero: "100",
+        bairro: "Centro",
+        cep: "30130000",
+        codigoMunicipio: "3106200",
+        municipio: "Belo Horizonte",
+        uf: "MG",
+      },
+    },
+  };
+}
+
 function httpRequest(baseUrl, method, path, body = null, headers = {}) {
   return new Promise((resolve, reject) => {
     const url = new URL(path, baseUrl);
@@ -138,6 +164,8 @@ async function run() {
 
   filaFiscal.init();
   fiscalMetrics.init();
+  configSync.iniciar(async () => ({}), acbr);
+  configSync.parar();
 
   await test("POST /fiscal/emitir — correlationId string e fiscal pending", async () => {
     const correlationId = `contract-${Date.now()}`;
@@ -231,6 +259,48 @@ async function run() {
     assertType(json.metricas.emissoesHoje, "number", "metricas.emissoesHoje");
   });
 
+  await test("configSync — aplica fiscalEnabled em runtime sem reiniciar", async () => {
+    acbr.setRuntimeEmissaoFiscal(false);
+    configSync.aplicarConfigRemota({ fiscalEnabled: true });
+    assert.strictEqual(acbr.EMISSAO_FISCAL, true);
+    const st = configSync.getStatus();
+    assert.strictEqual(st.fonte, "backend");
+    assert.ok(st.ultimaSincronizacaoOk);
+  });
+
+  await test("configSync — mantém ultimo valor quando backend indisponível", async () => {
+    configSync.aplicarConfigRemota({ fiscalEnabled: true });
+    const antes = configSync.getStatus().fiscalEnabled;
+    const st = await configSync.sincronizar(async () => ({
+      backendUrl: "",
+      backendToken: "",
+    }));
+    assert.strictEqual(st.fiscalEnabled, antes);
+    assert.strictEqual(st.fonte, "ultimo_conhecido");
+  });
+
+  await test("configSync — aplica operacional em runtime (Parte F)", async () => {
+    configSync.aplicarConfigRemota({
+      fiscalEnabled: false,
+      operacional: { maxTentativasConsulta: 20, diskMinMbXml: 80 },
+    });
+    const st = configSync.getStatus();
+    assert.strictEqual(st.operacional.maxTentativasConsulta, 20);
+    assert.strictEqual(st.operacional.diskMinMbXml, 80);
+    assert.strictEqual(process.env.MAX_TENTATIVAS_CONSULTA, "20");
+    assert.strictEqual(process.env.DISK_MIN_MB_XML, "80");
+  });
+
+  await test("GET /diagnostico/alertas — inclui configSync", async () => {
+    const sync = configSync.getStatus();
+    assertKeys(sync, [
+      "fiscalEnabled",
+      "fonte",
+      "ultimaSincronizacaoOk",
+      "pollIntervalMs",
+    ], "configSync");
+  });
+
   await test("GET /diagnostico/saude — contrato mínimo", async () => {
     const json = {
       ok: true,
@@ -306,6 +376,30 @@ async function run() {
     await assert.rejects(
       () => fiscalService.enfileirarEmissao({}, { correlationId: "x" }, { sync: false }),
       /numeroVenda obrigatório/,
+    );
+  });
+
+  await test("POST /fiscal/emitir-nfe — correlationId, fiscal pending e modeloDocumento 55", async () => {
+    acbr.setRuntimeEmissaoFiscal(null);
+    const correlationId = `contract-nfe-${Date.now()}`;
+    const numeroVenda = `V-NFE-${Date.now()}`;
+    const body = payloadEmitirNfe(correlationId, numeroVenda);
+    const res = await fiscalService.enfileirarEmissaoNfe({}, body, { sync: false });
+    assertType(res.correlationId, "string", "correlationId");
+    assert.strictEqual(res.fiscal, "pending");
+    assert.strictEqual(res.modeloDocumento, "55");
+    assert.strictEqual(res.numeroVenda, numeroVenda);
+    const st = fiscalService.consultarStatusEmissao(correlationId);
+    assert.strictEqual(st.modeloDocumento, "55");
+  });
+
+  await test("POST /fiscal/emitir-nfe — destinatário incompleto rejeita antes da fila", async () => {
+    acbr.setRuntimeEmissaoFiscal(null);
+    const correlationId = `contract-nfe-bad-${Date.now()}`;
+    const body = payloadEmitirFront(correlationId, `V-NFE-BAD-${Date.now()}`);
+    await assert.rejects(
+      () => fiscalService.enfileirarEmissaoNfe({}, body, { sync: false }),
+      /Destinatário incompleto para NF-e/,
     );
   });
 

@@ -10,8 +10,31 @@ const ACBR_IDLE_MS = parseInt(process.env.ACBR_IDLE_MS || "180", 10);
 const ACBR_TIMEOUT_EMISSAO = parseInt(
   process.env.ACBR_TIMEOUT_EMISSAO_MS || "120000",
 );
-const EMISSAO_FISCAL =
+const EMISSAO_FISCAL_ENV =
   (process.env.EMISSAO_FISCAL || "false").toLowerCase() === "true";
+/** Runtime override via configSync (Parte D); null = usar env */
+let runtimeEmissaoFiscal = null;
+
+function getEmissaoFiscalAtivo() {
+  if (runtimeEmissaoFiscal !== null) return runtimeEmissaoFiscal;
+  return EMISSAO_FISCAL_ENV;
+}
+
+function setRuntimeEmissaoFiscal(valor) {
+  if (valor === null || valor === undefined) {
+    runtimeEmissaoFiscal = null;
+    return;
+  }
+  runtimeEmissaoFiscal = !!valor;
+}
+
+/** NF-e modelo 55 — mesmo certificado/ambiente do NFC-e por padrão (ACBr Monitor). */
+const NFE_MODELO_55_ENABLED =
+  (process.env.ACBR_NFE_ENABLED || "true").toLowerCase() === "true";
+
+function isNfeModelo55Habilitado() {
+  return getEmissaoFiscalAtivo() && NFE_MODELO_55_ENABLED;
+}
 // Protocolo TCP do ACBr Monitor: cada comando termina com CR+LF+'.'+CR+LF
 // https://acbr.sourceforge.io/ACBrMonitor/Apresentacao.html
 const ACBR_TERMINADOR = "\r\n.\r\n";
@@ -21,9 +44,10 @@ const fs = require("fs");
 const crypto = require("crypto");
 const fiscalNumeracao = require("./fiscalNumeracao");
 const { validarPayloadNfce } = require("./fiscalValidacao");
+const { validarPayloadNfe, normalizarDestinatario } = require("./fiscalValidacaoNfe");
 
 let acbrLock = Promise.resolve();
-let nfceModeloConfigurado = false;
+let ultimoModeloSessao = null;
 let ultimoStatusMemoria = { estado: "offline", atualizadoEm: null };
 
 function atualizarStatusMemoria(ok) {
@@ -39,7 +63,7 @@ function atualizarStatusMemoria(ok) {
 }
 
 function obterStatusMemoria(watchdogDegraded = false) {
-  if (!EMISSAO_FISCAL) return "offline";
+  if (!getEmissaoFiscalAtivo()) return "offline";
   if (watchdogDegraded) return "degradado";
   return ultimoStatusMemoria.estado;
 }
@@ -268,46 +292,54 @@ function enviarComando(comando, timeoutMs) {
   );
 }
 
-/** Comandos NFE/NFC-e na mesma sessão TCP (modelo 65 + versão 4.00 + ambiente + comando). */
-async function enviarNfe(comando, timeoutMs = ACBR_TIMEOUT) {
+/** Comandos NFE/NFC-e na mesma sessão TCP com modelo explícito (55 ou 65). */
+async function enviarNfeModelo(comando, modeloDF = 65, timeoutMs = ACBR_TIMEOUT) {
+  const modelo = Number(modeloDF) === 55 ? 55 : 65;
   return withAcbrLock(async () => {
-    const sessao = nfceModeloConfigurado
-      ? [comando]
-      : [
-          "NFE.SetModeloDF(65)",
-          'NFE.SetVersaoDF("4.00")',
-          `NFE.SetAmbiente(${resolverTpAmbAcbr()})`,
-          comando,
-        ];
+    const sessao =
+      ultimoModeloSessao === modelo
+        ? [comando]
+        : [
+            `NFE.SetModeloDF(${modelo})`,
+            'NFE.SetVersaoDF("4.00")',
+            `NFE.SetAmbiente(${resolverTpAmbAcbr()})`,
+            comando,
+          ];
     try {
       const resultado = await enviarSessaoRaw(sessao, timeoutMs);
-      nfceModeloConfigurado = true;
+      ultimoModeloSessao = modelo;
       return resultado;
     } catch (err) {
-      nfceModeloConfigurado = false;
+      ultimoModeloSessao = null;
       throw melhorarErroAcbr(err);
     }
   }, comando.split("(")[0]);
+}
+
+/** NFC-e modelo 65 — compatibilidade com código existente. */
+async function enviarNfe(comando, timeoutMs = ACBR_TIMEOUT) {
+  return enviarNfeModelo(comando, 65, timeoutMs);
 }
 
 /** Vários comandos NFE na mesma sessão TCP (ex.: ConfigGravarValor + ConfigGravar). */
 async function enviarNfeComandos(comandos, timeoutMs = ACBR_TIMEOUT) {
   const lista = Array.isArray(comandos) ? comandos : [comandos];
   return withAcbrLock(async () => {
-    const sessao = nfceModeloConfigurado
-      ? lista
-      : [
-          "NFE.SetModeloDF(65)",
-          'NFE.SetVersaoDF("4.00")',
-          `NFE.SetAmbiente(${resolverTpAmbAcbr()})`,
-          ...lista,
-        ];
+    const sessao =
+      ultimoModeloSessao === 65
+        ? lista
+        : [
+            "NFE.SetModeloDF(65)",
+            'NFE.SetVersaoDF("4.00")',
+            `NFE.SetAmbiente(${resolverTpAmbAcbr()})`,
+            ...lista,
+          ];
     try {
       const resultado = await enviarSessaoRaw(sessao, timeoutMs);
-      nfceModeloConfigurado = true;
+      ultimoModeloSessao = 65;
       return resultado;
     } catch (err) {
-      nfceModeloConfigurado = false;
+      ultimoModeloSessao = null;
       throw err;
     }
   }, lista[0]?.split("(")[0] || "NFE");
@@ -397,7 +429,7 @@ function sefazOperacional(cStat, resposta) {
 }
 
 async function testar() {
-  if (!EMISSAO_FISCAL) {
+  if (!getEmissaoFiscalAtivo()) {
     atualizarStatusMemoria(false);
     return false;
   }
@@ -595,6 +627,45 @@ function montarSecaoDestinatario(payload, tpAmb) {
     nome = "NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL";
   }
   return `[Destinatario]\nCNPJCPF=${doc}\nxNome=${nome}\nindIEDest=9\n\n`;
+}
+
+function montarSecaoDestinatarioNfe(dest, tpAmb) {
+  const doc = String(dest.cpfCnpj || "").replace(/\D/g, "");
+  const end = dest.endereco || {};
+  let nome = sanitizeAcbrText(dest.razaoSocial, 60);
+  if (tpAmb === "2") {
+    nome = "NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL";
+  }
+  const indIE = dest.indIEDest ?? (limparTexto(dest.inscricaoEstadual) ? 1 : doc.length === 14 ? 1 : 9);
+  const logradouro = sanitizeAcbrText(end.logradouro, 60);
+  const numero = sanitizeAcbrText(end.numero, 10) || "SN";
+  const complemento = sanitizeAcbrText(end.complemento, 60);
+  const bairro = sanitizeAcbrText(end.bairro, 60);
+  const cidade = sanitizeAcbrText(end.municipio, 60);
+  const uf = sanitizeAcbrText(end.uf, 2).toUpperCase();
+  const cep = String(end.cep || "").replace(/\D/g, "");
+  const codMun = normalizarIbge(end.codigoMunicipio);
+
+  let ini = `[Destinatario]\n`;
+  ini += `CNPJCPF=${doc}\n`;
+  ini += `xNome=${nome}\n`;
+  ini += `indIEDest=${indIE}\n`;
+  if (indIE === 1 && dest.inscricaoEstadual) {
+    ini += `IE=${sanitizeAcbrText(dest.inscricaoEstadual, 20)}\n`;
+  }
+  ini += `xLgr=${logradouro}\n`;
+  ini += `nro=${numero}\n`;
+  if (complemento) ini += `xCpl=${complemento}\n`;
+  ini += `xBairro=${bairro}\n`;
+  ini += `cMun=${codMun}\n`;
+  ini += `xMun=${cidade}\n`;
+  ini += `UF=${uf}\n`;
+  ini += `CEP=${cep}\n`;
+  ini += `cPais=1058\n`;
+  ini += `xPais=BRASIL\n`;
+  if (dest.email) ini += `email=${sanitizeAcbrText(dest.email, 60)}\n`;
+  ini += `\n`;
+  return ini;
 }
 
 function montarSecaoInfRespTec() {
@@ -904,6 +975,161 @@ function montarIniNfce(payload, numeracao) {
   return ini;
 }
 
+function cfopPadraoNfe(payload, emitenteUf, destUf) {
+  if (payload.cfopPadrao) return String(payload.cfopPadrao).replace(/\D/g, "").slice(0, 4);
+  const envCfop = process.env.NFE_CFOP_PADRAO;
+  if (envCfop) return String(envCfop).replace(/\D/g, "").slice(0, 4);
+  const eu = String(emitenteUf || "").toUpperCase();
+  const du = String(destUf || "").toUpperCase();
+  if (eu && du && eu !== du) return "6102";
+  return "5102";
+}
+
+function montarIniNfe(payload, numeracao, destinatario) {
+  const empresa = payload.empresa || {};
+  const itens = payload.itens || [];
+  const tpAmb = resolverTpAmb();
+  const cnpj = String(empresa.cnpj || "").replace(/\D/g, "");
+  const crt = String(
+    empresa.regimeTributario || empresa.regimeTributarioCodigo || "1",
+  ).slice(0, 1);
+  const logradouro = sanitizeAcbrText(empresa.logradouro || empresa.endereco, 60);
+  const numero = sanitizeAcbrText(empresa.numero, 10) || "SN";
+  const complemento = sanitizeAcbrText(empresa.complemento, 60);
+  const bairro = sanitizeAcbrText(empresa.bairro, 60) || "CENTRO";
+  const cidade = sanitizeAcbrText(empresa.cidade, 60);
+  const ufEmit = sanitizeAcbrText(empresa.uf, 2).toUpperCase();
+  const cep = String(empresa.cep || "").replace(/\D/g, "");
+  const codMun = normalizarIbge(empresa.codigoMunicipio);
+  const razao = sanitizeAcbrText(empresa.razaoSocial || empresa.nomeFantasia, 60);
+  const fantasia = sanitizeAcbrText(empresa.nomeFantasia || empresa.razaoSocial, 60);
+  const serie = String(numeracao?.serie || payload.serieNfe || fiscalNumeracao.SERIE_NFE_55);
+  const nNF = String(numeracao?.numero || payload.numeroNfe || "1");
+  const cNF = gerarCodigoNumerico();
+  const descontoGeral = Number(payload.desconto || 0);
+  const totalVenda = Number(payload.total);
+  const destUf = sanitizeAcbrText(destinatario.endereco?.uf, 2).toUpperCase();
+  const idDest = ufEmit && destUf && ufEmit !== destUf ? "2" : "1";
+  const cfopDefault = cfopPadraoNfe(payload, ufEmit, destUf);
+
+  let vProd = 0;
+  let vTotTrib = 0;
+  let blocoItens = "";
+
+  itens.forEach((item, i) => {
+    const itemComCfop = { ...item, cfop: item.cfop || cfopDefault };
+    const itemTotal = Number(item.total ?? Number(item.quantidade) * Number(item.precoUnitario));
+    const { bloco, total, desc, vTotTrib: vTribItem } = montarSecaoTributosItem(
+      itemComCfop,
+      i + 1,
+      crt,
+      0,
+    );
+    blocoItens += bloco;
+    vProd += total - desc;
+    vTotTrib += vTribItem;
+  });
+  vTotTrib = Math.round(vTotTrib * 100) / 100;
+
+  let ini = `[infNFe]\nversao=4.00\n\n`;
+  ini += `[Identificacao]\n`;
+  ini += `cNF=${cNF}\n`;
+  ini += `natOp=${sanitizeAcbrText(payload.natOp || "VENDA DE MERCADORIA", 60)}\n`;
+  ini += `mod=55\n`;
+  ini += `serie=${serie}\n`;
+  ini += `nNF=${nNF}\n`;
+  ini += `dhEmi=${formatarDhEmi()}\n`;
+  ini += `tpNF=1\n`;
+  ini += `idDest=${idDest}\n`;
+  ini += `indFinal=0\n`;
+  ini += `indPres=0\n`;
+  ini += `tpImp=1\n`;
+  ini += `tpAmb=${tpAmb}\n`;
+  ini += `finNFe=1\n`;
+  ini += `tpEmis=1\n`;
+  ini += `procEmi=0\n`;
+  ini += `verProc=MarginEnginePDV/5.3\n`;
+  if (codMun) ini += `cMunFG=${codMun}\n`;
+  ini += `\n`;
+
+  ini += `[Emitente]\n`;
+  ini += `CNPJCPF=${cnpj}\n`;
+  ini += `xNome=${razao}\n`;
+  ini += `xFant=${fantasia}\n`;
+  ini += `IE=${sanitizeAcbrText(empresa.inscricaoEstadual, 20)}\n`;
+  ini += `CRT=${crt}\n`;
+  ini += `xLgr=${logradouro}\n`;
+  ini += `nro=${numero}\n`;
+  if (complemento) ini += `xCpl=${complemento}\n`;
+  ini += `xBairro=${bairro}\n`;
+  ini += `cMun=${codMun}\n`;
+  ini += `xMun=${cidade}\n`;
+  ini += `UF=${ufEmit}\n`;
+  ini += `CEP=${cep}\n`;
+  ini += `cUF=${ibgeUfParaCodigo(ufEmit)}\n`;
+  ini += `cPais=1058\n`;
+  ini += `xPais=BRASIL\n`;
+  if (empresa.telefone) {
+    ini += `Fone=${String(empresa.telefone).replace(/\D/g, "").slice(0, 14)}\n`;
+  }
+  ini += `\n`;
+
+  ini += montarSecaoDestinatarioNfe(destinatario, tpAmb);
+  ini += blocoItens;
+
+  ini += `[Total]\n`;
+  ini += `vNF=${fmtMoney(totalVenda)}\n`;
+  ini += `vBC=0.00\n`;
+  ini += `vICMS=0.00\n`;
+  ini += `vProd=${fmtMoney(vProd)}\n`;
+  ini += `vDesc=${fmtMoney(descontoGeral)}\n`;
+  ini += `vPIS=0.00\n`;
+  ini += `vCOFINS=0.00\n`;
+  ini += `vTotTrib=${fmtMoney(vTotTrib)}\n\n`;
+
+  ini += `[Transportador]\nmodFrete=9\n\n`;
+
+  const formaMap = {
+    dinheiro: "01",
+    credito: "03",
+    debito: "04",
+    pix: "17",
+    voucher: "05",
+    fiado: "99",
+    outros: "99",
+  };
+  const pagamentosLista =
+    Array.isArray(payload.pagamentos) && payload.pagamentos.length > 0
+      ? payload.pagamentos
+      : [
+          {
+            forma: payload.formaPagamento || "dinheiro",
+            valor: Number(payload.valorRecebido || totalVenda),
+            troco: Number(payload.troco || 0),
+          },
+        ];
+
+  pagamentosLista.forEach((pg, idx) => {
+    const forma = (pg.forma || "dinheiro").toLowerCase();
+    const codigoForma = formaMap[forma] || "01";
+    const valorPg = Number(pg.valor || 0);
+    const seq = String(idx + 1).padStart(3, "0");
+    ini += `[PAG${seq}]\n`;
+    ini += `tPag=${codigoForma}\n`;
+    ini += `vPag=${fmtMoney(valorPg)}\n`;
+    ini += `indPag=0\n\n`;
+  });
+
+  ini += montarSecaoInfRespTec();
+
+  if (payload.numeroVenda) {
+    ini += `[DadosAdicionais]\n`;
+    ini += `infCpl=NF-E VENDA ${sanitizeAcbrText(String(payload.numeroVenda), 40)}\n\n`;
+  }
+
+  return ini;
+}
+
 function ibgeUfParaCodigo(uf) {
   const map = {
     AC: "12", AL: "27", AM: "13", AP: "16", BA: "29", CE: "23", DF: "53",
@@ -914,11 +1140,12 @@ function ibgeUfParaCodigo(uf) {
   return map[String(uf || "").toUpperCase()] || "";
 }
 
-function assertAutorizada(p, resposta) {
+function assertAutorizada(p, resposta, modeloDF = 65) {
   const cStat = String(p.cStat || "");
   if (cStat === "100" || cStat === "150") return;
+  const tipo = Number(modeloDF) === 55 ? "NF-e" : "NFC-e";
   const err = new Error(
-    `NFC-e rejeitada (cStat ${cStat || "?"}): ${p.xMotivo || resposta}`,
+    `${tipo} rejeitada (cStat ${cStat || "?"}): ${p.xMotivo || resposta}`,
   );
   err.cStat = cStat;
   err.acbrRaw = String(resposta || "").slice(0, 4000);
@@ -934,8 +1161,13 @@ function assertAutorizada(p, resposta) {
 }
 
 async function criarEnviarIni(iniPath) {
-  const resposta = await enviarNfe(
+  return criarEnviarIniModelo(iniPath, 65);
+}
+
+async function criarEnviarIniModelo(iniPath, modeloDF = 65) {
+  const resposta = await enviarNfeModelo(
     `NFE.CriarEnviarNFe(${qAcbr(iniPath)},1,0,0,0,0,0,0)`,
+    modeloDF,
     ACBR_TIMEOUT_EMISSAO,
   );
   const p = parseResposta(resposta);
@@ -945,12 +1177,12 @@ async function criarEnviarIni(iniPath) {
     if (p.cStat === "539") err.permanente = true;
     throw err;
   }
-  assertAutorizada(p, resposta);
+  assertAutorizada(p, resposta, modeloDF);
   return { p, resposta };
 }
 
 async function emitirNfce(payload) {
-  if (!EMISSAO_FISCAL) return { fiscal: false };
+  if (!getEmissaoFiscalAtivo()) return { fiscal: false };
 
   if (payload?.xml || payload?.xmlEpec || payload?.modoEpec) {
     const xml = payload.xml || payload.xmlEpec;
@@ -1022,7 +1254,67 @@ async function emitirNfce(payload) {
   return resultado;
 }
 
-function normalizarResultado(p, resposta) {
+async function emitirNfe(payload) {
+  if (!isNfeModelo55Habilitado()) return { fiscal: false };
+
+  const destinatario = validarPayloadNfe(payload);
+  const empresa = await enriquecerEmpresa(payload.empresa || {});
+  validarEmpresaFiscal(empresa);
+
+  const serie = payload.serieNfe || fiscalNumeracao.SERIE_NFE_55;
+  const modeloNum = "55";
+  let numeracao = payload.numeroNfe
+    ? {
+        serie: payload.serieNfe || serie,
+        numero: parseInt(String(payload.numeroNfe).replace(/\D/g, ""), 10),
+        modelo: modeloNum,
+      }
+    : payload._fiscalMeta?.numeroNfe
+      ? {
+          serie: payload._fiscalMeta.serieNfe || serie,
+          numero: parseInt(String(payload._fiscalMeta.numeroNfe).replace(/\D/g, ""), 10),
+          modelo: modeloNum,
+        }
+      : fiscalNumeracao.reservarProximoNumero(serie, modeloNum);
+
+  let iniPath;
+  let resultado;
+
+  for (let tentativa = 0; tentativa < 2; tentativa++) {
+    const ini = montarIniNfe({ ...payload, empresa }, numeracao, destinatario);
+    iniPath = path.join(
+      PATHS.ini,
+      `nfe-${payload.numeroVenda || Date.now()}-${numeracao.numero}.ini`,
+    );
+    fs.writeFileSync(iniPath, ini, "utf8");
+
+    try {
+      const { p, resposta } = await criarEnviarIniModelo(iniPath, 55);
+      fiscalNumeracao.sincronizarNumeroAutorizado(
+        numeracao.serie,
+        p.numero || numeracao.numero,
+        modeloNum,
+      );
+      resultado = normalizarResultado(p, resposta, "55");
+      break;
+    } catch (err) {
+      if (
+        err.cStat === "539" &&
+        tentativa === 0 &&
+        !payload.numeroNfe &&
+        !payload._fiscalMeta?.numeroNfe
+      ) {
+        numeracao = fiscalNumeracao.reservarProximoNumero(serie, modeloNum);
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  return resultado;
+}
+
+function normalizarResultado(p, resposta, modeloDocumento = "65") {
   const docs = require("./documentosFiscais");
   const xml = docs.extrairXmlDaResposta(resposta);
   const qrcode = p.qrcode || (xml ? docs.extrairQrCodeDoXml(xml) : null);
@@ -1036,6 +1328,7 @@ function normalizarResultado(p, resposta) {
     xMotivo: p.xMotivo,
     xml,
     fiscal: true,
+    modeloDocumento,
     chaveNfe: p.chave,
     numeroNfe: p.numero,
     serieNfe: p.serie || "001",
@@ -1096,13 +1389,38 @@ async function inutilizarNfce(params) {
   };
 }
 
-async function gerarPdfDanfce(chave, xmlPath) {
-  const destino = path.join(PATHS.pdf, `${chave}-danfce.pdf`);
+function suffixPdfModelo(modeloDocumento = "65") {
+  return String(modeloDocumento) === "55" ? "danfe" : "danfce";
+}
+
+function destinoPdfFiscal(chave, modeloDocumento = "65") {
+  return path.join(PATHS.pdf, `${chave}-${suffixPdfModelo(modeloDocumento)}.pdf`);
+}
+
+function inferirModeloDaChave(chave) {
+  const k = String(chave || "").replace(/\D/g, "");
+  if (k.length >= 22) {
+    const mod = k.substring(20, 22);
+    if (mod === "55" || mod === "65") return mod;
+  }
+  return "65";
+}
+
+async function gerarPdfFiscal(chave, xmlPath, modeloDocumento = "65") {
+  const modelo = String(modeloDocumento || "65");
+  const destino = destinoPdfFiscal(chave, modelo);
   const xml = resolverXmlChave(chave, xmlPath);
-  const comandos = [
-    `NFE.ImprimirDANFEPDF(${qAcbr(xml)},,,"1","1")`,
-    `NFE.ImprimirDanfe(${qAcbr(xml)},,,,0,,1,1)`,
-  ];
+  // NFC-e 65: DANFC-e (cupom). NF-e 55: DANFE A4 retrato (tpImp=1 no XML) — sem QR no layout clássico.
+  const comandos =
+    modelo === "55"
+      ? [
+          `NFE.ImprimirDANFEPDF(${qAcbr(xml)},,,"1","0")`,
+          `NFE.ImprimirDanfe(${qAcbr(xml)},,,,0,,1,0)`,
+        ]
+      : [
+          `NFE.ImprimirDANFEPDF(${qAcbr(xml)},,,"1","1")`,
+          `NFE.ImprimirDanfe(${qAcbr(xml)},,,,0,,1,1)`,
+        ];
 
   for (const cmd of comandos) {
     try {
@@ -1133,9 +1451,18 @@ async function gerarPdfDanfce(chave, xmlPath) {
     }
   }
 
+  const rotulo = modelo === "55" ? "DANFE NF-e" : "DANFC-e";
   throw new Error(
-    `ACBr não gerou PDF DANFC-e para chave ${chave}. Verifique PathPDF no ACBr Monitor.`,
+    `ACBr não gerou PDF ${rotulo} para chave ${chave}. Verifique PathPDF no ACBr Monitor.`,
   );
+}
+
+async function gerarPdfDanfce(chave, xmlPath) {
+  return gerarPdfFiscal(chave, xmlPath, "65");
+}
+
+async function gerarPdfDanfe(chave, xmlPath) {
+  return gerarPdfFiscal(chave, xmlPath, "55");
 }
 
 async function imprimirDanfce(chave, xmlPath) {
@@ -1151,15 +1478,27 @@ module.exports = {
   statusServico,
   consultarChave,
   emitirNfce,
+  emitirNfe,
+  isNfeModelo55Habilitado,
+  montarIniNfe,
+  criarEnviarIniModelo,
+  enviarNfeModelo,
   cancelarNfce,
   inutilizarNfce,
+  gerarPdfFiscal,
   gerarPdfDanfce,
+  gerarPdfDanfe,
+  inferirModeloDaChave,
   imprimirDanfce,
   enviarComando: enviarNfe,
   enviarNfe,
   enviarNfeComandos,
   withAcbrLock,
-  EMISSAO_FISCAL,
+  setRuntimeEmissaoFiscal,
+  getRuntimeEmissaoFiscal: getEmissaoFiscalAtivo,
+  get EMISSAO_FISCAL() {
+    return getEmissaoFiscalAtivo();
+  },
   parseResposta,
   montarIniNfce,
   enriquecerEmpresa,

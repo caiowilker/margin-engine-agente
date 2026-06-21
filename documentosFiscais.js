@@ -135,6 +135,15 @@ function extrairXmlDaResposta(resposta) {
   return xmlMatch ? xmlMatch[0] : null;
 }
 
+/** URL/payload do QR Code NFC-e (tag infNFeSupl/qrCode no XML autorizado). */
+function extrairQrCodeDoXml(xml) {
+  if (!xml || typeof xml !== "string") return null;
+  const cdata = xml.match(/<qrCode>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/qrCode>/i);
+  if (cdata?.[1]) return cdata[1].trim();
+  const simples = xml.match(/<qrCode>([^<]+)<\/qrCode>/i);
+  return simples?.[1]?.trim() || null;
+}
+
 module.exports = {
   salvarXmlAutorizado,
   salvarXmlCancelamento,
@@ -145,4 +154,5 @@ module.exports = {
   lerArquivoBase64,
   isPdfValid,
   extrairXmlDaResposta,
+  extrairQrCodeDoXml,
 };

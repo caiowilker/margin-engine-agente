@@ -558,6 +558,12 @@ async function imprimirRender(renderFn) {
   });
 }
 
+const { toThermalText, toThermalDoc } = require("./thermalText");
+
+function tx(value) {
+  return toThermalText(value);
+}
+
 // ── Helpers de layout ─────────────────────────────────────────────────────────
 function helpers() {
   const largura = 48;
@@ -762,28 +768,34 @@ async function renderCupomConteudo(printer, payload) {
   // ── 1. Cabeçalho — tudo centralizado ────────────────────────────────────────
   printer.font("a").align("ct");
 
-  // Nome da loja: tamanho duplo (largura + altura) → âncora de marca
-  const nomeEmpresa = (
-    empresa.nomeFantasia ||
-    empresa.razaoSocial ||
-    "ESTABELECIMENTO"
-  ).toUpperCase();
-  printer.style("b").size(1, 1).text(nomeEmpresa).size(0, 0).style("normal");
+  // Nome da loja em negrito (sem size duplo — evita espaço excessivo no topo)
+  const nomeEmpresa = tx(
+    (
+      empresa.nomeFantasia ||
+      empresa.razaoSocial ||
+      "ESTABELECIMENTO"
+    ).toUpperCase(),
+  );
+  printer.style("b").text(nomeEmpresa).style("normal");
 
   if (empresa.razaoSocial && empresa.razaoSocial !== empresa.nomeFantasia)
-    printer.text(empresa.razaoSocial);
-  if (empresa.cnpj) printer.text("CNPJ: " + empresa.cnpj);
+    printer.text(tx(empresa.razaoSocial));
+  if (empresa.cnpj) printer.text("CNPJ: " + toThermalDoc(empresa.cnpj));
   if (empresa.endereco) {
     const end = [empresa.endereco, empresa.numero, empresa.bairro]
       .filter(Boolean)
+      .map(tx)
       .join(", ");
     printer.text(end.slice(0, COLS));
   }
   if (empresa.cidade)
     printer.text(
-      `${empresa.cidade}${empresa.uf ? " - " + empresa.uf : ""}`.slice(0, COLS),
+      tx(`${empresa.cidade}${empresa.uf ? " - " + empresa.uf : ""}`).slice(
+        0,
+        COLS,
+      ),
     );
-  if (empresa.telefone) printer.text("Tel: " + empresa.telefone);
+  if (empresa.telefone) printer.text("Tel: " + toThermalDoc(empresa.telefone));
 
   // ── 2. Título do cupom — centralizado entre separadores duplos ──────────────
   printer.align("lt").text(sepEq());
@@ -800,11 +812,12 @@ async function renderCupomConteudo(printer, payload) {
   printer.align("lt");
   printer.text(col2("Nro:", payload.numeroVenda || ""));
   printer.text(col2("Data:", dataStr + "  " + horaStr));
-  if (payload.operador) printer.text(col2("Operador:", payload.operador));
+  if (payload.operador) printer.text(col2("Operador:", tx(payload.operador)));
   if (payload.nomeCliente && payload.nomeCliente !== "Consumidor")
-    printer.text(col2("Cliente:", payload.nomeCliente.slice(0, 28)));
-  if (payload.cpfCliente) printer.text(col2("CPF:", payload.cpfCliente));
-  if (payload.cnpjCliente) printer.text(col2("CNPJ:", payload.cnpjCliente));
+    printer.text(col2("Cliente:", tx(payload.nomeCliente).slice(0, 28)));
+  if (payload.cpfCliente) printer.text(col2("CPF:", toThermalDoc(payload.cpfCliente)));
+  if (payload.cnpjCliente)
+    printer.text(col2("CNPJ:", toThermalDoc(payload.cnpjCliente)));
 
   // ── 4. Itens ─────────────────────────────────────────────────────────────────
   printer.text(sepDash());
@@ -814,7 +827,7 @@ async function renderCupomConteudo(printer, payload) {
 
   itens.forEach((item, idx) => {
     const num = String(idx + 1).padStart(2, "0");
-    const nome = String(item.nome || "").slice(0, COLS);
+    const nome = tx(String(item.nome || "")).slice(0, COLS);
     const total = item.total ?? item.precoUnitario * item.quantidade;
     // Valores sem "R$ " para economizar colunas na tabela
     const valUnit = Number(item.precoUnitario).toLocaleString("pt-BR", {
@@ -994,8 +1007,9 @@ function renderFechamento(printer, payload) {
     .style("normal")
     .size(0, 0);
 
-  if (payload.empresa?.cnpj) printer.text("CNPJ: " + payload.empresa.cnpj);
-  if (payload.empresa?.endereco) printer.text(payload.empresa.endereco);
+  if (payload.empresa?.cnpj)
+    printer.text("CNPJ: " + toThermalDoc(payload.empresa.cnpj));
+  if (payload.empresa?.endereco) printer.text(tx(payload.empresa.endereco));
 
   printer
     .text(linha())
@@ -1112,10 +1126,10 @@ function renderAbertura(printer, payload) {
     .size(0, 0);
 
   if (payload.empresa?.nome) {
-    printer.text(payload.empresa.nome);
+    printer.text(tx(payload.empresa.nome));
   }
   if (payload.empresa?.cnpj) {
-    printer.text("CNPJ: " + payload.empresa.cnpj);
+    printer.text("CNPJ: " + toThermalDoc(payload.empresa.cnpj));
   }
 
   printer

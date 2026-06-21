@@ -470,7 +470,9 @@ function iniciarWorker(intervalMs = WORKER_MS) {
     }
   }, intervalMs);
 
-  if (!pdfWorkerTimer) {
+  const pdfWorkerEnabled =
+    (process.env.FISCAL_GERAR_PDF || "false").toLowerCase() === "true";
+  if (pdfWorkerEnabled && !pdfWorkerTimer) {
     pdfWorkerTimer = setInterval(async () => {
       let again = true;
       while (again && !filaPausada) {
@@ -683,6 +685,16 @@ function obterResultadoPorVenda(numeroVenda) {
        ORDER BY datetime(atualizado_em) DESC LIMIT 1`,
     )
     .get(numeroVenda);
+}
+
+function obterJobEmissao(correlationId) {
+  init();
+  return db
+    .prepare(
+      `SELECT id, payload, status, correlation_id, numero_venda FROM fila_fiscal
+       WHERE correlation_id = ? AND tipo = 'EMISSAO' ORDER BY id DESC LIMIT 1`,
+    )
+    .get(correlationId);
 }
 
 function consultarStatusEmissao(correlationId) {
@@ -978,6 +990,19 @@ function purgeAntigos(diasFila = 30, diasResultados = 180, diasDocumentos = 180)
   };
 }
 
+function descartarJobsGerarPdfPendentes(
+  motivo = "PDF DANFC-e desabilitado (FISCAL_GERAR_PDF=false)",
+) {
+  init();
+  const r = db
+    .prepare(
+      `UPDATE fila_fiscal SET status = 'CONCLUIDO', erro = ?
+       WHERE tipo = 'GERAR_PDF' AND status NOT IN ('CONCLUIDO','FALHA_PERMANENTE')`,
+    )
+    .run(motivo);
+  return r.changes;
+}
+
 function cancelarEmissaoPendente(motivo = "Cancelado manualmente") {
   init();
   const r = db
@@ -1021,6 +1046,7 @@ module.exports = {
   obterResultadoEmissao,
   obterResultadoPorVenda,
   consultarStatusEmissao,
+  obterJobEmissao,
   aguardarConclusao,
   reprocessarIncertos,
   vendaTemJobAtivo,
@@ -1028,6 +1054,7 @@ module.exports = {
   recuperarBoot,
   purgeAntigos,
   cancelarEmissaoPendente,
+  descartarJobsGerarPdfPendentes,
   marcarJob,
   buscarJobEmissaoPorVenda,
   dispararProcessamento,

@@ -12,9 +12,29 @@ const fiscalRateLimit = require("./fiscalRateLimit");
 const fiscalRecuperacao = require("./fiscalRecuperacao");
 const fiscalStorage = require("./fiscalStorage");
 const fiscalNumeracao = require("./fiscalNumeracao");
+const { validarPayloadNfe } = require("./fiscalValidacaoNfe");
 const { PATHS } = require("./marginPaths");
 
+function inferirModeloDocumento(doc, chave) {
+  if (doc?.modelo_documento) return String(doc.modelo_documento);
+  return acbr.inferirModeloDaChave(chave || doc?.chave);
+}
+
+async function gerarPdfParaModelo(chave, xmlPath, modeloDocumento) {
+  const modelo = String(modeloDocumento || "65");
+  if (modelo === "55") return acbr.gerarPdfDanfe(chave, xmlPath);
+  return acbr.gerarPdfDanfce(chave, xmlPath);
+}
+
+function deveGerarPdfSincrono(resultado) {
+  return GERAR_PDF_EMIT || resultado?.modeloDocumento === "55";
+}
+
+/** PDF DANFC-e via ACBr — desligado por padrão (cupom térmico ESC/POS pelo agente). */
+const GERAR_PDF_HABILITADO =
+  (process.env.FISCAL_GERAR_PDF || "false").toLowerCase() === "true";
 const GERAR_PDF_EMIT =
+  GERAR_PDF_HABILITADO &&
   (process.env.FISCAL_GERAR_PDF_ON_EMIT || "false").toLowerCase() === "true";
 
 function httpRequest(url, options, body, timeoutMs = 15000) {
@@ -99,7 +119,7 @@ async function persistirAposAutorizacao(cfg, numeroVenda, correlationId, resulta
     pdfPath: null,
     pdfContentBase64: null,
     contentType: "application/xml",
-    pdfPendente: true,
+    pdfPendente: GERAR_PDF_HABILITADO && !GERAR_PDF_EMIT,
     recuperado: !!resultado.recuperado,
   };
 
@@ -114,10 +134,29 @@ async function persistirAposAutorizacao(cfg, numeroVenda, correlationId, resulta
     );
   }
 
-  if (!GERAR_PDF_EMIT) {
+  if (GERAR_PDF_HABILITADO && !GERAR_PDF_EMIT && resultado.modeloDocumento !== "55") {
     filaFiscal.enfileirar(
       "GERAR_PDF",
-      { chave: resultado.chave, xmlPath, numeroVenda, correlationId },
+      {
+        chave: resultado.chave,
+        xmlPath,
+        numeroVenda,
+        correlationId,
+        modeloDocumento: resultado.modeloDocumento || "65",
+      },
+      correlationId,
+      numeroVenda,
+    );
+  } else if (resultado.modeloDocumento === "55" && !GERAR_PDF_EMIT) {
+    filaFiscal.enfileirar(
+      "GERAR_PDF",
+      {
+        chave: resultado.chave,
+        xmlPath,
+        numeroVenda,
+        correlationId,
+        modeloDocumento: "55",
+      },
       correlationId,
       numeroVenda,
     );
@@ -130,22 +169,32 @@ async function persistirAposAutorizacao(cfg, numeroVenda, correlationId, resulta
     xmlPath,
     pdfPath: null,
     pdfContentBase64: null,
-    pdfPendente: !GERAR_PDF_EMIT,
+    pdfPendente: GERAR_PDF_HABILITADO && !GERAR_PDF_EMIT,
     numeroVenda,
   };
 }
 
 async function persistirDocumentosFiscais(cfg, numeroVenda, correlationId, resultado) {
-  if (GERAR_PDF_EMIT) {
+  if (deveGerarPdfSincrono(resultado)) {
     fiscalStorage.exigirEspacoParaEscrita();
     let xmlPath = null;
     let pdfPath = null;
+    let pdfErro = null;
     if (resultado.xml) {
       xmlPath = docs.salvarXmlAutorizado(resultado.chave, resultado.xml);
     }
     const tPdf = Date.now();
-    pdfPath = await acbr.gerarPdfDanfce(resultado.chave, xmlPath);
-    fiscalMetrics.registrarEmissao(0, { pdfMs: Date.now() - tPdf, pdf: true });
+    try {
+      pdfPath = await gerarPdfParaModelo(
+        resultado.chave,
+        xmlPath,
+        resultado.modeloDocumento || "65",
+      );
+      fiscalMetrics.registrarEmissao(0, { pdfMs: Date.now() - tPdf, pdf: true });
+    } catch (err) {
+      pdfErro = err.message || String(err);
+      fiscalMetrics.registrarEmissao(0, { pdfMs: Date.now() - tPdf, pdf: false });
+    }
     const pdfContentBase64 =
       pdfPath && docs.isPdfValid(pdfPath) ? docs.lerArquivoBase64(pdfPath) : null;
     filaFiscal.salvarDocumento({
@@ -159,6 +208,7 @@ async function persistirDocumentosFiscais(cfg, numeroVenda, correlationId, resul
       xmlPath,
       pdfPath,
       tipo: "AUTORIZADA",
+      modeloDocumento: resultado.modeloDocumento || "65",
     });
     const callbackPayload = {
       correlationId,
@@ -175,6 +225,9 @@ async function persistirDocumentosFiscais(cfg, numeroVenda, correlationId, resul
       pdfPath,
       pdfContentBase64,
       contentType: "application/xml",
+      modeloDocumento: resultado.modeloDocumento || "65",
+      pdfPendente: !pdfPath && !!pdfErro,
+      pdfErro,
     };
     try {
       await callbackBackend(cfg, numeroVenda, callbackPayload, correlationId);
@@ -186,7 +239,15 @@ async function persistirDocumentosFiscais(cfg, numeroVenda, correlationId, resul
         numeroVenda,
       );
     }
-    return { ...resultado, xmlPath, pdfPath, pdfContentBase64, numeroVenda };
+    return {
+      ...resultado,
+      xmlPath,
+      pdfPath,
+      pdfContentBase64,
+      pdfPendente: !pdfPath && !!pdfErro,
+      pdfErro,
+      numeroVenda,
+    };
   }
   return persistirAposAutorizacao(cfg, numeroVenda, correlationId, resultado);
 }
@@ -202,15 +263,35 @@ function reservarNumeracaoJob(payload, job) {
   if (payload._fiscalMeta?.numeroNfe && payload._fiscalMeta?.serieNfe) {
     return payload._fiscalMeta;
   }
-  const serie = payload.serieNfe || fiscalNumeracao.SERIE_PADRAO;
-  const res = fiscalNumeracao.reservarProximoNumero(serie);
+  const isNfe55 =
+    payload.modeloDocumento === "55" ||
+    payload.modelo === 55 ||
+    payload.modelo === "55";
+  const modelo = isNfe55 ? fiscalNumeracao.MODELO_NFE : fiscalNumeracao.MODELO_NFCE;
+  const serie = payload.serieNfe
+    || (isNfe55 ? fiscalNumeracao.SERIE_NFE_55 : fiscalNumeracao.SERIE_PADRAO);
+  const res = fiscalNumeracao.reservarProximoNumero(serie, modelo);
   const meta = {
     numeroNfe: String(res.numero),
     serieNfe: res.serie,
+    modeloDocumento: modelo,
     reservadoEm: new Date().toISOString(),
   };
-  filaFiscal.atualizarPayload(job.id, { _fiscalMeta: meta, numeroNfe: meta.numeroNfe, serieNfe: meta.serieNfe });
+  filaFiscal.atualizarPayload(job.id, {
+    _fiscalMeta: meta,
+    numeroNfe: meta.numeroNfe,
+    serieNfe: meta.serieNfe,
+    modeloDocumento: modelo,
+  });
   return meta;
+}
+
+function isPayloadNfe55(payload) {
+  return (
+    payload?.modeloDocumento === "55" ||
+    payload?.modelo === 55 ||
+    payload?.modelo === "55"
+  );
 }
 
 async function emitirCompleto(cfg, body, job = null) {
@@ -247,9 +328,12 @@ async function emitirCompleto(cfg, body, job = null) {
 
   const inicio = Date.now();
   let resultado;
+  const nfe55 = isPayloadNfe55(payload);
   try {
     const tAcbr = Date.now();
-    resultado = await acbr.emitirNfce(payload);
+    resultado = nfe55
+      ? await acbr.emitirNfe(payload)
+      : await acbr.emitirNfce(payload);
     const acbrMs = Date.now() - tAcbr;
     fiscalMetrics.registrarEmissao(Date.now() - inicio, {
       ok: true,
@@ -331,6 +415,7 @@ async function enfileirarEmissao(cfg, body, opts = {}) {
       numeroVenda,
       async: true,
       deduplicado: true,
+      modeloDocumento: body.modeloDocumento || "65",
     };
   }
 
@@ -355,11 +440,44 @@ async function enfileirarEmissao(cfg, body, opts = {}) {
     numeroVenda,
     async: true,
     deduplicado: !!enq.deduplicado,
+    modeloDocumento: body.modeloDocumento || "65",
   };
 }
 
+async function enfileirarEmissaoNfe(cfg, body, opts = {}) {
+  if (!acbr.isNfeModelo55Habilitado()) {
+    const err = new Error(
+      "NF-e modelo 55 desabilitada (ACBR_NFE_ENABLED ou EMISSAO_FISCAL)",
+    );
+    err.permanente = true;
+    throw err;
+  }
+  const destinatario = validarPayloadNfe(body);
+  return enfileirarEmissao(
+    cfg,
+    { ...body, modeloDocumento: "55", destinatario },
+    opts,
+  );
+}
+
 function consultarStatusEmissao(correlationId) {
-  return filaFiscal.consultarStatusEmissao(correlationId);
+  const st = filaFiscal.consultarStatusEmissao(correlationId);
+  const modelo =
+    st.resultado?.modeloDocumento ||
+    extrairModeloJob(correlationId) ||
+    "65";
+  return { ...st, modeloDocumento: modelo };
+}
+
+function extrairModeloJob(correlationId) {
+  try {
+    const job = filaFiscal.obterJobEmissao(correlationId);
+    if (!job?.payload) return null;
+    const p = JSON.parse(job.payload);
+    return p.modeloDocumento || (isPayloadNfe55(p) ? "55" : "65");
+  } catch {
+    return null;
+  }
 }
 
 async function reimprimirDanfceCompleto(chave, numeroVenda) {
@@ -368,9 +486,10 @@ async function reimprimirDanfceCompleto(chave, numeroVenda) {
     (numeroVenda && filaFiscal.buscarDocumentoPorVenda(numeroVenda));
   if (!doc) throw new Error("Documento fiscal não encontrado localmente");
   const chaveDoc = doc.chave || chave;
+  const modelo = inferirModeloDocumento(doc, chaveDoc);
   let pdfPath = doc.pdf_path;
   if (!docs.isPdfValid(pdfPath) && chaveDoc) {
-    pdfPath = await acbr.gerarPdfDanfce(chaveDoc, doc.xml_path);
+    pdfPath = await gerarPdfParaModelo(chaveDoc, doc.xml_path, modelo);
     filaFiscal.salvarDocumento({
       chave: chaveDoc,
       numeroVenda: doc.numero_venda || numeroVenda,
@@ -382,10 +501,61 @@ async function reimprimirDanfceCompleto(chave, numeroVenda) {
       xmlPath: doc.xml_path,
       pdfPath,
       tipo: doc.tipo || "AUTORIZADA",
+      modeloDocumento: modelo,
     });
   }
-  await acbr.imprimirDanfce(chaveDoc);
-  return { ok: true, chave: chaveDoc, pdfPath, tipo: "pdf" };
+  if (modelo === "65") {
+    await acbr.imprimirDanfce(chaveDoc);
+  }
+  return {
+    ok: true,
+    chave: chaveDoc,
+    pdfPath,
+    tipo: modelo === "55" ? "danfe" : "danfce",
+    modeloDocumento: modelo,
+  };
+}
+
+async function obterPdfDocumento(chave, numeroVenda) {
+  const doc =
+    (chave && filaFiscal.buscarDocumentoPorChave(chave)) ||
+    (numeroVenda && filaFiscal.buscarDocumentoPorVenda(numeroVenda));
+  const chaveDoc = doc?.chave || chave;
+  if (!chaveDoc && !numeroVenda) {
+    throw new Error("Informe chave ou numeroVenda");
+  }
+  const modelo = inferirModeloDocumento(doc, chaveDoc);
+  let pdfPath = doc?.pdf_path;
+  if (!docs.isPdfValid(pdfPath)) {
+    if (!doc?.xml_path && !chaveDoc) {
+      throw new Error("PDF não disponível — documento fiscal não encontrado");
+    }
+    pdfPath = await gerarPdfParaModelo(
+      chaveDoc,
+      doc?.xml_path,
+      modelo,
+    );
+    if (doc) {
+      filaFiscal.salvarDocumento({
+        chave: chaveDoc,
+        numeroVenda: doc.numero_venda || numeroVenda,
+        correlationId: doc.correlation_id,
+        serieNfe: doc.serie_nfe,
+        numeroNfe: doc.numero_nfe,
+        cStat: doc.c_stat,
+        protocolo: doc.protocolo,
+        xmlPath: doc.xml_path,
+        pdfPath,
+        tipo: doc.tipo || "AUTORIZADA",
+        modeloDocumento: modelo,
+      });
+    }
+  }
+  const buffer = docs.lerArquivo(pdfPath);
+  if (!buffer || buffer.length < 128) {
+    throw new Error("PDF inválido ou corrompido");
+  }
+  return { pdfPath, buffer, modeloDocumento: modelo, chave: chaveDoc };
 }
 
 async function cancelarCompleto(cfg, body) {
@@ -534,12 +704,20 @@ function registrarHandlersFila(lerConfigFn) {
   });
 
   filaFiscal.registrarHandler("GERAR_PDF", async (payload) => {
-    const { chave, xmlPath, numeroVenda, correlationId } = payload;
+    const { chave, xmlPath, numeroVenda, correlationId, modeloDocumento } =
+      payload;
     if (!chave) throw new Error("chave obrigatória para GERAR_PDF");
     const doc = filaFiscal.buscarDocumentoPorChave(chave);
+    const modelo =
+      modeloDocumento || inferirModeloDocumento(doc, chave);
+    if (!GERAR_PDF_HABILITADO && modelo !== "55") return;
     if (doc?.pdf_path && docs.isPdfValid(doc.pdf_path)) return;
     const t0 = Date.now();
-    const pdfPath = await acbr.gerarPdfDanfce(chave, xmlPath || doc?.xml_path);
+    const pdfPath = await gerarPdfParaModelo(
+      chave,
+      xmlPath || doc?.xml_path,
+      modelo,
+    );
     fiscalMetrics.registrarEmissao(0, { pdfMs: Date.now() - t0, pdf: true });
     filaFiscal.salvarDocumento({
       chave,
@@ -552,6 +730,7 @@ function registrarHandlersFila(lerConfigFn) {
       xmlPath: xmlPath || doc?.xml_path,
       pdfPath,
       tipo: doc?.tipo || "AUTORIZADA",
+      modeloDocumento: modelo,
     });
   });
 
@@ -602,14 +781,27 @@ function registrarHandlersFila(lerConfigFn) {
     }
     await inutilizarCompleto(cfg, payload.body);
   });
+
+  if (!GERAR_PDF_HABILITADO) {
+    const n = filaFiscal.descartarJobsGerarPdfPendentes();
+    if (n > 0) {
+      console.log(
+        `[Fila fiscal] ${n} job(s) GERAR_PDF descartado(s) — FISCAL_GERAR_PDF=false`,
+      );
+    }
+  }
 }
 
 module.exports = {
   emitirCompleto,
   enfileirarEmissao,
+  enfileirarEmissaoNfe,
   consultarStatusEmissao,
   finalizarEmissaoRecuperada,
   reimprimirDanfceCompleto,
+  obterPdfDocumento,
+  inferirModeloDocumento,
+  gerarPdfParaModelo,
   cancelarCompleto,
   inutilizarCompleto,
   callbackBackend,

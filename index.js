@@ -50,6 +50,7 @@ const crypto = require("crypto");
 const impressora = require("./impressora");
 const acbr = require("./acbr");
 const fila = require("./fila");
+const configSync = require("./configSync");
 const credenciais = require("./credenciais");
 const marginPaths = require("./marginPaths");
 const filaFiscal = require("./filaFiscal");
@@ -651,6 +652,7 @@ function coletarDadosAlertas() {
     fiscalAlertas.verificarDiscoCritico(payload.espacoDisco);
   } catch (_) {}
   payload.statusGeral = diagnosticoDashboard.calcularStatusGeral(payload);
+  payload.configSync = configSync.getStatus();
   return payload;
 }
 
@@ -1149,6 +1151,69 @@ function iniciarServidor() {
     }
   });
 
+  app.post("/fiscal/emitir-nfe", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    if (!acbr.isNfeModelo55Habilitado()) {
+      return res.status(503).json({
+        erro: "NF-e modelo 55 desabilitada (ACBR_NFE_ENABLED ou EMISSAO_FISCAL)",
+      });
+    }
+    try {
+      const cfg = await lerConfig();
+      const correlationId =
+        req.headers["x-correlation-id"] || req.body.correlationId;
+      const sync =
+        req.query.sync === "1" ||
+        req.query.sync === "true" ||
+        req.headers["x-fiscal-sync"] === "1";
+      const resultado = await fiscalService.enfileirarEmissaoNfe(
+        cfg,
+        {
+          ...req.body,
+          correlationId,
+        },
+        { sync },
+      );
+      res.json(resultado);
+    } catch (err) {
+      const status = err.permanente ? 400 : 500;
+      const body = { erro: err.message, camposFaltando: err.camposFaltando || undefined, permanente: !!err.permanente };
+      const cStat =
+        err.cStat || String(err.message || "").match(/cStat\s*(\d{3})/i)?.[1];
+      if (cStat) body.cStat = cStat;
+      if (cStat === "999" || err.sefazIntermitente) {
+        body.sefazIntermitente = true;
+        body.dica =
+          "Erro genérico da SEFAZ (cStat 999). Aguarde 1–2 minutos e tente novamente.";
+      }
+      if (process.env.FISCAL_DEBUG === "1" && err.acbrRaw) {
+        body.acbrRaw = err.acbrRaw;
+      }
+      res.status(status).json(body);
+    }
+  });
+
+  app.get(
+    "/fiscal/documento/pdf",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    async (req, res) => {
+      const { chave, numeroVenda } = req.query || {};
+      try {
+        const doc = await fiscalService.obterPdfDocumento(
+          chave ? String(chave) : null,
+          numeroVenda ? String(numeroVenda) : null,
+        );
+        const suffix = doc.modeloDocumento === "55" ? "danfe" : "danfce";
+        const nome = `${doc.chave || numeroVenda || "documento"}-${suffix}.pdf`;
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `inline; filename="${nome}"`);
+        res.send(doc.buffer);
+      } catch (err) {
+        res.status(404).json({ erro: err.message });
+      }
+    },
+  );
+
   app.get(
     "/fiscal/emissao/:correlationId",
     privateNetworkHeaders,
@@ -1328,6 +1393,7 @@ function iniciarServidor() {
       manifestOk: manifestUpdater.isManifestOk(),
       statusGeral: payload.statusGeral,
       timestamp: payload.timestamp,
+      configSync: payload.configSync,
     });
   });
 
@@ -1601,6 +1667,7 @@ function iniciarServidor() {
   // ── Inicialização ─────────────────────────────────────────────────────────────
   fila.inicializar();
   inicializarDb();
+  configSync.iniciar(lerConfig, acbr);
 
   const SYNC_INTERVAL = parseInt(process.env.SYNC_INTERVAL_MS || "30000", 10);
   setInterval(() => {
@@ -1632,6 +1699,7 @@ function iniciarServidor() {
     encerrando = true;
     console.log(`[Agente] Encerrando (${signal})...`);
     auditLog.registrar("AGENTE_SHUTDOWN", { signal });
+    configSync.parar();
 
     await new Promise((resolve) => {
       if (!httpServer) return resolve();

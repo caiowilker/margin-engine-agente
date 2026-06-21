@@ -13,9 +13,11 @@ process.env.FISCAL_RATE_LIMIT_HORA = "10";
 process.env.FISCAL_DB_PATH = path.join(testDir, "fila_fiscal.test.db");
 process.env.FISCAL_METRICS_DB = path.join(testDir, "metrics.test.db");
 
-try {
-  fs.unlinkSync(process.env.FISCAL_DB_PATH);
-} catch (_) {}
+for (const f of fs.readdirSync(testDir)) {
+  try {
+    fs.unlinkSync(path.join(testDir, f));
+  } catch (_) {}
+}
 
 const fiscalRateLimit = require("../fiscalRateLimit");
 const fiscalMetrics = require("../fiscalMetrics");

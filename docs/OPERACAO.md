@@ -124,6 +124,152 @@ Limite: **10 requisições por minuto** neste endpoint.
 
 ---
 
+## 3.1 NF-e modelo 55 (além do NFC-e)
+
+O agente suporta **dois modelos em paralelo**:
+
+| Modelo | Documento | Endpoint | Uso típico |
+|--------|-----------|----------|------------|
+| 65 | NFC-e | `POST /fiscal/emitir` | Varejo / consumidor final no PDV |
+| 55 | NF-e | `POST /fiscal/emitir-nfe` | Conversão de cupom / cliente com cadastro completo |
+
+**NFC-e não muda** — o fluxo existente permanece igual.
+
+### Configuração ACBr
+
+O **mesmo ACBr Monitor** e o **mesmo certificado A1** costumam atender NFC-e e NF-e. No ACBr Monitor:
+
+1. Certificado A1 válido (mesmo usado para NFC-e).
+2. Ambiente SEFAZ: homologação ou produção (igual ao NFC-e).
+3. Layout NF-e habilitado na instalação (padrão no ACBr Monitor Pro).
+4. **Não** é necessário duplicar certificado — só garantir que o emitente está cadastrado para NF-e na UF.
+
+No `.env` do agente:
+
+```
+EMISSAO_FISCAL=true
+ACBR_NFE_ENABLED=true
+NFE_SERIE_55=1
+NFE_CFOP_PADRAO=5102
+AMBIENTE_SEFAZ=homologacao
+```
+
+| Variável | Efeito |
+|----------|--------|
+| `EMISSAO_FISCAL` | Liga emissão fiscal (NFC-e e base para NF-e) |
+| `ACBR_NFE_ENABLED` | `false` desliga **somente** NF-e; NFC-e continua |
+| `NFE_SERIE_55` | Série da NF-e (contador local separado do NFC-e) |
+| `NFE_CFOP_PADRAO` | CFOP padrão quando o item não informa |
+
+### Emissão NF-e
+
+- Endpoint: `POST /fiscal/emitir-nfe` (assíncrono, igual ao NFC-e).
+- Consulta: `GET /fiscal/status/:correlationId` — resposta inclui `modeloDocumento: "55"`.
+- **Destinatário completo é obrigatório** antes de enfileirar: CPF/CNPJ, razão social, endereço (CEP, município, UF, código IBGE), IE quando contribuinte PJ.
+- Se faltar dado, o agente retorna erro **400** com lista `camposFaltando` — não envia para a SEFAZ.
+
+### Homologação SEFAZ
+
+Antes do primeiro uso em produção, emitir ao menos **uma NF-e de teste** com `AMBIENTE_SEFAZ=homologacao` e confirmar autorização na SEFAZ. Testes automatizados (unitário/contrato) **não substituem** essa validação.
+
+### Checklist manual — validar NF-e em homologação (Item 6)
+
+Execute na ordem quando tiver ACBr + certificado configurados:
+
+1. **ACBr Monitor** — certificado A1 válido, ambiente **homologação**, TCP na porta **9200**.
+2. **Agente** — `.env` com `EMISSAO_FISCAL=true`, `ACBR_NFE_ENABLED=true`, `AMBIENTE_SEFAZ=homologacao`; subir com `npm start`.
+3. **Diagnóstico** — `GET http://localhost:9100/diagnostico/saude` → agente online; ACBr conectado.
+4. **Painel** — `/pdv/nfe` (ADMIN/OWNER):
+   - **Caminho A:** converter venda existente (cupom não fiscal) **ou**
+   - **Caminho B:** “Nova venda para NF-e” (produto de teste, ex. R$ 0,01).
+5. **Destinatário** — preencher CPF/CNPJ, nome, endereço completo (CEP → IBGE via ViaCEP).
+6. **Emitir** — confirmar emissão; acompanhar status até **CONCLUIDO** ou mensagem de erro.
+7. **Se rejeitado** — copiar `cStat` + `xMotivo` da SEFAZ (dashboard agente ou histórico); corrigir dado indicado.
+8. **Validar XML/DANFE** — abrir arquivo gerado; conferir destinatário, itens e totais iguais à venda.
+9. **Histórico de Vendas** — venda aparece com documento NF-e vinculado (`modelo 55`).
+
+**Não considerar pronto para produção** até este checklist concluir com sucesso em homologação.
+
+### Checklist — qualidade do artefato final (DANFE + cupom + retorno ao usuário)
+
+Execute **após** a primeira NF-e autorizada em homologação (complementa o checklist acima).
+
+#### Item 1 — DANFE NF-e (PDF via ACBr)
+
+| Critério | Como validar |
+|----------|----------------|
+| Mecanismo | PDF gerado pelo **ACBr Monitor** (`NFE.ImprimirDANFEPDF`); agente salva em `{PATHS.pdf}/{chave}-danfe.pdf` — **não** há conversão Node pós-ACBr |
+| Layout | Modelo **55**, `tpImp=1` (A4 retrato) — distinto do DANFC-e térmico (65) |
+| Chave + Code128 | 44 dígitos legíveis + código de barras |
+| Emitente/destinatário | Razão social, CNPJ/CPF, endereço completo |
+| Itens | Código, descrição, NCM, CFOP, unidade, qtd, unitário, total — sem truncamento/sobreposição |
+| Totais | Base ICMS, ICMS, total da nota coerentes com a venda |
+| Protocolo | Número e data/hora de autorização SEFAZ visíveis |
+| Encoding | Sem `?` no lugar de acentos (INI usa ASCII; PDF vem do ACBr/XML) |
+
+#### Item 2 — Cupom NFC-e (impressão térmica)
+
+| Critério | Como validar |
+|----------|----------------|
+| CNPJ/endereço | Impressão real — sem `?` (agente converte UTF-8 → CP860 via `thermalText.js`) |
+| Topo | Sem espaço em branco excessivo (nome da loja em bold, sem `size(1,1)`) |
+| Confirmação | **Somente** cupom físico impresso conta como resolvido |
+
+#### Item 3 — QR Code
+
+| Documento | Regra |
+|-----------|--------|
+| NFC-e (65) | QR obrigatório — escanear com celular → página de consulta SEFAZ com dados da venda |
+| NF-e (55) | **Sem** QR no DANFE clássico — validação por chave + protocolo; agente **não** gera QR no PDF NF-e |
+
+#### Item 4 — Retorno ao usuário (painel)
+
+| Tela | Comportamento esperado |
+|------|------------------------|
+| `/pdv/nfe` | Após CONCLUIDO: botões **Baixar DANFE**, **Visualizar**, **Enviar por e-mail** (se destinatário tiver e-mail) |
+| Histórico | Venda NF-e (chave modelo 55): botão **DANFE (PDF)**; NFC-e mantém **DANFC-e** (térmica) |
+| Erro SEFAZ | Mensagem com `cStat` + `xMotivo` — nunca só "Erro ao emitir" |
+
+#### Item 5 — E2E homologação (pendente até ACBr real)
+
+- [ ] PDF abre em **2 leitores** (navegador + Adobe/outro)
+- [ ] Tamanho > 128 bytes, header `%PDF`
+- [ ] E-mail (se usado): anexo não corrompido
+
+**Endpoints úteis:** `GET /fiscal/documento/pdf?chave=…&numeroVenda=…` (agente) · `GET /pdv/vendas/{numero}/nfce/pdf` (backend, fallback)
+
+---
+
+## 3.2 Configuração operacional do agente (Parte F)
+
+**Regra de ouro:** configuração do dia a dia → **painel** (`Configurações PDV` → seção *Configurações do Agente*).  
+O arquivo `.env` do agente serve só para:
+
+1. **Primeiro setup** da máquina (categoria B — infraestrutura local: porta, host ACBr, impressora, caminhos).
+2. **Emergência** sem acesso ao painel (fallback de boot).
+
+**O que NÃO vai para o painel (permanece no ACBr Monitor):** certificado A1, senha do certificado, CSC, URLs de webservice SEFAZ, `ACBrNFeServicos.ini`.
+
+### Fluxo de sincronização
+
+1. Admin edita config em `/configuracoes/pdv` (por **dispositivo/caixa** em multi-caixa).
+2. Backend persiste em `pdv_dispositivo` (`agente_config_json` + flags fiscais).
+3. Agente faz polling em `GET /pdv/agente/config` (intervalo `configPollIntervalMs`, padrão 45s).
+4. Agente aplica em runtime (`process.env` + `fiscalEnabled`) e confirma via `POST /pdv/agente/config/ack`.
+5. Se o backend ficar offline, o agente **mantém o último valor sincronizado** — não regride para o `.env` original.
+
+### Endpoints
+
+| Método | Rota | Quem |
+|--------|------|------|
+| GET | `/pdv/agente/config/catalog` | Admin (metadados categoria A) |
+| GET | `/pdv/dispositivos/{id}/config` | Admin |
+| PUT | `/pdv/dispositivos/{id}/config` | Admin |
+| GET | `/pdv/agente/config` | Agente (JWT do terminal) |
+| POST | `/pdv/agente/config/ack` | Agente |
+
+---
+
 ## 4. Troubleshooting
 
 ### ACBr offline
@@ -155,7 +301,7 @@ Limite: **10 requisições por minuto** neste endpoint.
 | Local | Conteúdo |
 |-------|----------|
 | `C:\ProgramData\MarginEngine\acbr\xml\` | XMLs autorizados |
-| `C:\ProgramData\MarginEngine\acbr\pdf\` | DANFC-e PDF |
+| `C:\ProgramData\MarginEngine\acbr\pdf\` | DANFC-e / DANFE PDF (`{chave}-danfce.pdf` ou `{chave}-danfe.pdf`) |
 | `C:\ProgramData\MarginEngine\acbr\backup\` | Backups fiscais |
 | `agente-local\data\` | Bancos SQLite e logs |
 
