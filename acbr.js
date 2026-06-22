@@ -15,9 +15,13 @@ const EMISSAO_FISCAL_ENV =
 /** Runtime override via configSync (Parte D); null = usar env */
 let runtimeEmissaoFiscal = null;
 
+function lerEmissaoFiscalEnv() {
+  return (process.env.EMISSAO_FISCAL || "false").toLowerCase() === "true";
+}
+
 function getEmissaoFiscalAtivo() {
   if (runtimeEmissaoFiscal !== null) return runtimeEmissaoFiscal;
-  return EMISSAO_FISCAL_ENV;
+  return lerEmissaoFiscalEnv();
 }
 
 function setRuntimeEmissaoFiscal(valor) {
@@ -45,6 +49,13 @@ const crypto = require("crypto");
 const fiscalNumeracao = require("./fiscalNumeracao");
 const { validarPayloadNfce } = require("./fiscalValidacao");
 const { validarPayloadNfe, normalizarDestinatario } = require("./fiscalValidacaoNfe");
+const {
+  coalescerRespostaAcbr,
+  resolverCStatFinal,
+  isCStatAutorizado,
+  CSTAT_LOTE_OK,
+  extrairProtocoloBruto,
+} = require("./acbrResposta");
 
 let acbrLock = Promise.resolve();
 let ultimoModeloSessao = null;
@@ -86,19 +97,15 @@ function extrairCnpjDaChave(chave) {
 }
 
 function resolverXmlChave(chave, xmlPath) {
-  if (xmlPath && fs.existsSync(xmlPath)) return xmlPath;
-  for (const dir of [PATHS.xml, PATHS.saida, PATHS.backup]) {
-    if (!fs.existsSync(dir)) continue;
-    const match = fs.readdirSync(dir).find(
-      (f) => f.includes(chave) && f.toLowerCase().endsWith(".xml"),
-    );
-    if (match) return path.join(dir, match);
-  }
-  return path.join(PATHS.xml, `${chave}-nfe.xml`);
+  const docs = require("./documentosFiscais");
+  const resolved = docs.resolverXmlParaImpressao(chave, xmlPath);
+  if (resolved) return resolved;
+  const k = String(chave || "").replace(/\D/g, "");
+  return path.join(PATHS.xml, `${k}-nfe.xml`);
 }
 
 function extrairPathPdfOk(resposta) {
-  const m = String(resposta || "").match(/Arquivo criado em:\s*(.+)/i);
+  const m = coalescerRespostaAcbr(resposta).match(/Arquivo criado em:\s*(.+)/i);
   return m ? m[1].trim() : null;
 }
 
@@ -347,7 +354,7 @@ async function enviarNfeComandos(comandos, timeoutMs = ACBR_TIMEOUT) {
 
 function parseResposta(resposta) {
   const docs = require("./documentosFiscais");
-  const bruto = String(resposta || "");
+  const bruto = coalescerRespostaAcbr(resposta);
   const linhas = bruto
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -373,15 +380,13 @@ function parseResposta(resposta) {
     return null;
   };
 
-  let cStat =
-    todosCStat.find((s) => s === "100" || s === "150") ||
-    get("cStat") ||
-    get("CStat") ||
-    todosCStat.find((s) => s.startsWith("2")) ||
-    todosCStat[todosCStat.length - 1] ||
-    null;
+  const xml = docs.extrairXmlDaResposta(resposta);
+  const prot = docs.extrairProtNFe(xml);
+
+  const cStat = resolverCStatFinal({ todosCStat, prot, get });
 
   const chave =
+    prot.chNFe ||
     get("ChaveNFe") ||
     get("Chave") ||
     get("chDFe") ||
@@ -390,7 +395,6 @@ function parseResposta(resposta) {
     bruto.match(/\b(\d{44})\b/)?.[1] ||
     null;
 
-  const xml = docs.extrairXmlDaResposta(resposta);
   let qrcode =
     get("QRCode") ||
     get("URLConsulta") ||
@@ -402,13 +406,14 @@ function parseResposta(resposta) {
     raw: resposta,
     cStat,
     todosCStat,
-    xMotivo: get("xMotivo") || get("XMotivo"),
+    xMotivo: prot.xMotivo || get("xMotivo") || get("XMotivo"),
     tpAmb: get("tpAmb") || get("TpAmb"),
     chave,
     numero: get("NumeroNFe") || get("Numero") || get("nNF"),
     serie: get("SerieNFe") || get("Serie"),
     qrcode,
-    protocolo: get("nProt") || get("Protocolo"),
+    protocolo: prot.nProt || get("nProt") || get("Protocolo") || extrairProtocoloBruto(bruto),
+    xml,
     pathPdf:
       get("PathPDF") ||
       get("ArquivoPDF") ||
@@ -419,7 +424,7 @@ function parseResposta(resposta) {
 
 function sefazOperacional(cStat, resposta) {
   if (cStat === "107" || cStat === "108") return true;
-  const t = String(resposta || "").toUpperCase();
+  const t = coalescerRespostaAcbr(resposta).toUpperCase();
   return (
     t.includes("SERVICO EM OPERACAO") ||
     t.includes("SERVIÇO EM OPERAÇÃO") ||
@@ -462,8 +467,13 @@ async function consultarChave(chave) {
   if (!chave || String(chave).length !== 44) {
     throw new Error("Chave NFC-e deve ter 44 dígitos.");
   }
-  const resposta = await enviarNfe(`NFE.ConsultarNFe(${qAcbr(chave)})`);
-  const p = parseResposta(resposta);
+  const modelo = parseInt(inferirModeloDaChave(chave), 10);
+  const resposta = await enviarNfeModelo(
+    `NFE.ConsultarNFe(${qAcbr(chave)})`,
+    modelo,
+  );
+  let p = parseResposta(resposta);
+  p = enrichParsePosEmissao(p, resposta);
   return {
     chave,
     cStat: p.cStat,
@@ -475,11 +485,22 @@ async function consultarChave(chave) {
 }
 
 function inferirSituacao(cStat, raw) {
-  const t = (raw || "").toUpperCase();
+  const t = coalescerRespostaAcbr(raw).toUpperCase();
+  const protocolo =
+    t.match(/NPROT[=:]\s*(\d+)/i)?.[1] ||
+    t.match(/<NPROT>(\d+)<\/NPROT>/i)?.[1] ||
+    null;
+  const chave =
+    t.match(/\b(\d{44})\b/)?.[1] ||
+    t.match(/CHNFE[=:]\s*(\d{44})/i)?.[1] ||
+    null;
   if (t.includes("CANCEL")) return "CANCELADA";
-  if (cStat === "100" || t.includes("AUTORIZ")) return "AUTORIZADA";
+  if (isCStatAutorizado(cStat, protocolo, chave) || t.includes("AUTORIZ")) {
+    return "AUTORIZADA";
+  }
   if (cStat === "101") return "CANCELADA";
   if (cStat === "110") return "DENEGADA";
+  if (cStat === "103") return "DESCONHECIDA";
   if (cStat && cStat.startsWith("2")) return "REJEITADA";
   return "DESCONHECIDA";
 }
@@ -629,6 +650,25 @@ function montarSecaoDestinatario(payload, tpAmb) {
   return `[Destinatario]\nCNPJCPF=${doc}\nxNome=${nome}\nindIEDest=9\n\n`;
 }
 
+function resolverIndIeDestNfe(dest, doc) {
+  if (dest.indIEDest != null && dest.indIEDest !== "") {
+    return Number(dest.indIEDest);
+  }
+  if (limparTexto(dest.inscricaoEstadual)) return 1;
+  if (doc.length === 14) return 1;
+  return 9;
+}
+
+function cfopItemNfe(itemCfop, cfopDefault, idDest) {
+  let cfop = String(itemCfop || cfopDefault || "5102")
+    .replace(/\D/g, "")
+    .slice(0, 4);
+  if (!cfop) cfop = cfopDefault;
+  if (idDest === "2" && cfop.startsWith("5")) return `6${cfop.slice(1)}`;
+  if (idDest === "1" && cfop.startsWith("6")) return `5${cfop.slice(1)}`;
+  return cfop;
+}
+
 function montarSecaoDestinatarioNfe(dest, tpAmb) {
   const doc = String(dest.cpfCnpj || "").replace(/\D/g, "");
   const end = dest.endereco || {};
@@ -636,7 +676,7 @@ function montarSecaoDestinatarioNfe(dest, tpAmb) {
   if (tpAmb === "2") {
     nome = "NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL";
   }
-  const indIE = dest.indIEDest ?? (limparTexto(dest.inscricaoEstadual) ? 1 : doc.length === 14 ? 1 : 9);
+  const indIE = resolverIndIeDestNfe(dest, doc);
   const logradouro = sanitizeAcbrText(end.logradouro, 60);
   const numero = sanitizeAcbrText(end.numero, 10) || "SN";
   const complemento = sanitizeAcbrText(end.complemento, 60);
@@ -644,13 +684,15 @@ function montarSecaoDestinatarioNfe(dest, tpAmb) {
   const cidade = sanitizeAcbrText(end.municipio, 60);
   const uf = sanitizeAcbrText(end.uf, 2).toUpperCase();
   const cep = String(end.cep || "").replace(/\D/g, "");
-  const codMun = normalizarIbge(end.codigoMunicipio);
+  const codMun = normalizarIbge(end.codigoMunicipio || end.codigoIbge);
 
   let ini = `[Destinatario]\n`;
   ini += `CNPJCPF=${doc}\n`;
   ini += `xNome=${nome}\n`;
   ini += `indIEDest=${indIE}\n`;
   if (indIE === 1 && dest.inscricaoEstadual) {
+    ini += `IE=${sanitizeAcbrText(dest.inscricaoEstadual, 20)}\n`;
+  } else if (indIE === 2 && dest.inscricaoEstadual) {
     ini += `IE=${sanitizeAcbrText(dest.inscricaoEstadual, 20)}\n`;
   }
   ini += `xLgr=${logradouro}\n`;
@@ -1017,7 +1059,10 @@ function montarIniNfe(payload, numeracao, destinatario) {
   let blocoItens = "";
 
   itens.forEach((item, i) => {
-    const itemComCfop = { ...item, cfop: item.cfop || cfopDefault };
+    const itemComCfop = {
+      ...item,
+      cfop: cfopItemNfe(item.cfop, cfopDefault, idDest),
+    };
     const itemTotal = Number(item.total ?? Number(item.quantidade) * Number(item.precoUnitario));
     const { bloco, total, desc, vTotTrib: vTribItem } = montarSecaoTributosItem(
       itemComCfop,
@@ -1140,17 +1185,108 @@ function ibgeUfParaCodigo(uf) {
   return map[String(uf || "").toUpperCase()] || "";
 }
 
+function enrichParsePosEmissao(p, resposta) {
+  const docs = require("./documentosFiscais");
+  const bruto = coalescerRespostaAcbr(resposta);
+  let xml = p.xml;
+  let prot = docs.extrairProtNFe(xml);
+  if (p.chave) {
+    const local = docs.localizarXmlPorChave(p.chave);
+    if (local?.xml) {
+      xml = local.xml;
+      if (local.prot?.cStat || local.prot?.nProt) prot = local.prot;
+    } else if (!xml) {
+      const xmlPath = resolverXmlChave(p.chave);
+      if (fs.existsSync(xmlPath)) {
+        try {
+          xml = fs.readFileSync(xmlPath, "utf8");
+          prot = docs.extrairProtNFe(xml);
+        } catch (_) {}
+      }
+    }
+  }
+  const protocolo = prot.nProt || p.protocolo || extrairProtocoloBruto(bruto);
+  const todosCStat = [...(p.todosCStat || [])];
+  if (prot.cStat && !todosCStat.includes(prot.cStat)) todosCStat.push(prot.cStat);
+
+  const get = (chave) => {
+    const re = new RegExp(`^${chave}\\s*[=:]\\s*(.+)$`, "im");
+    const m = bruto.match(re);
+    return m ? m[1].trim() : null;
+  };
+
+  const cStat = resolverCStatFinal({ todosCStat, prot, get });
+  return {
+    ...p,
+    xml: xml || p.xml,
+    protocolo,
+    cStat,
+    todosCStat,
+    xMotivo: prot.xMotivo || p.xMotivo,
+  };
+}
+
+async function enrichParsePosEmissaoAsync(p, resposta) {
+  let atual = enrichParsePosEmissao(p, resposta);
+  if (isCStatAutorizado(atual.cStat, atual.protocolo, atual.chave)) return atual;
+
+  if (CSTAT_LOTE_OK.has(String(atual.cStat)) && atual.chave) {
+    const esperaMs = parseInt(process.env.FISCAL_CONSULTA_POS_104_MS || "4000", 10);
+    if (esperaMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, esperaMs));
+    }
+    try {
+      const consulta = await consultarChave(atual.chave);
+      const cs = String(consulta.cStat || "");
+      if (
+        consulta.situacao === "AUTORIZADA" ||
+        cs === "100" ||
+        cs === "150"
+      ) {
+        return {
+          ...atual,
+          cStat: cs || "100",
+          protocolo: consulta.protocolo || atual.protocolo,
+          xMotivo: consulta.xMotivo || atual.xMotivo,
+          xml:
+            require("./documentosFiscais").extrairXmlDaResposta(consulta.raw) ||
+            atual.xml,
+        };
+      }
+      // 217/137 na consulta após lote 104 = chave ainda não indexada, não rejeição da nota
+    } catch (_) {
+      /* consulta indisponível — segue com parse enriquecido */
+    }
+  }
+  return atual;
+}
+
 function assertAutorizada(p, resposta, modeloDF = 65) {
   const cStat = String(p.cStat || "");
-  if (cStat === "100" || cStat === "150") return;
+  if (isCStatAutorizado(cStat, p.protocolo, p.chave)) return;
   const tipo = Number(modeloDF) === 55 ? "NF-e" : "NFC-e";
+  const motivo =
+    p.xMotivo ||
+    (CSTAT_LOTE_OK.has(cStat) ? "Lote processado" : coalescerRespostaAcbr(resposta).slice(0, 500));
   const err = new Error(
-    `${tipo} rejeitada (cStat ${cStat || "?"}): ${p.xMotivo || resposta}`,
+    CSTAT_LOTE_OK.has(cStat)
+      ? `${tipo} aguardando confirmação SEFAZ (cStat ${cStat}): ${motivo}`
+      : `${tipo} rejeitada (cStat ${cStat || "?"}): ${motivo}`,
   );
   err.cStat = cStat;
-  err.acbrRaw = String(resposta || "").slice(0, 4000);
+  err.acbrRaw = coalescerRespostaAcbr(resposta).slice(0, 4000);
   if (p.chave) err.chaveConsulta = p.chave;
-  if (cStat === "999") {
+  if (CSTAT_LOTE_OK.has(cStat)) {
+    err.incerto = true;
+    err.permanente = false;
+    err.mensagemAcao =
+      "Lote aceito pela SEFAZ (cStat 104) — consulta de protocolo em andamento; não reemitir.";
+  } else if (cStat === "217" && /nao consta|não consta/i.test(String(p.xMotivo || ""))) {
+    err.incerto = true;
+    err.permanente = false;
+    err.mensagemAcao =
+      "A chave ainda não aparece na consulta SEFAZ — pode ser atraso de indexação, não rejeição imediata.";
+  } else if (cStat === "999") {
     err.incerto = true;
     err.permanente = false;
     err.sefazIntermitente = true;
@@ -1165,18 +1301,20 @@ async function criarEnviarIni(iniPath) {
 }
 
 async function criarEnviarIniModelo(iniPath, modeloDF = 65) {
-  const resposta = await enviarNfeModelo(
+  const respostaBruta = await enviarNfeModelo(
     `NFE.CriarEnviarNFe(${qAcbr(iniPath)},1,0,0,0,0,0,0)`,
     modeloDF,
     ACBR_TIMEOUT_EMISSAO,
   );
-  const p = parseResposta(resposta);
+  const resposta = coalescerRespostaAcbr(respostaBruta);
+  let p = parseResposta(resposta);
   if (!p.chave) {
-    const err = new Error(`ACBr não retornou ChaveNFe. Resposta: ${resposta}`);
+    const err = new Error(`ACBr não retornou ChaveNFe. Resposta: ${resposta.slice(0, 500)}`);
     if (/539|duplic/i.test(resposta)) err.permanente = true;
     if (p.cStat === "539") err.permanente = true;
     throw err;
   }
+  p = await enrichParsePosEmissaoAsync(p, resposta);
   assertAutorizada(p, resposta, modeloDF);
   return { p, resposta };
 }
@@ -1410,17 +1548,11 @@ async function gerarPdfFiscal(chave, xmlPath, modeloDocumento = "65") {
   const modelo = String(modeloDocumento || "65");
   const destino = destinoPdfFiscal(chave, modelo);
   const xml = resolverXmlChave(chave, xmlPath);
-  // NFC-e 65: DANFC-e (cupom). NF-e 55: DANFE A4 retrato (tpImp=1 no XML) — sem QR no layout clássico.
+  // Somente ImprimirDANFEPDF — ImprimirDanfe envia à impressora física (reimpressão usa imprimirDanfce).
   const comandos =
     modelo === "55"
-      ? [
-          `NFE.ImprimirDANFEPDF(${qAcbr(xml)},,,"1","0")`,
-          `NFE.ImprimirDanfe(${qAcbr(xml)},,,,0,,1,0)`,
-        ]
-      : [
-          `NFE.ImprimirDANFEPDF(${qAcbr(xml)},,,"1","1")`,
-          `NFE.ImprimirDanfe(${qAcbr(xml)},,,,0,,1,1)`,
-        ];
+      ? [`NFE.ImprimirDANFEPDF(${qAcbr(xml)},,,"1","0")`]
+      : [`NFE.ImprimirDANFEPDF(${qAcbr(xml)},,,"1","1")`];
 
   for (const cmd of comandos) {
     try {

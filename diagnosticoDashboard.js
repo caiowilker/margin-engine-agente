@@ -157,4 +157,5 @@ module.exports = {
   calcularStatusGeral,
   montarAlertasPayload,
   renderDashboardHtml,
+  escapeHtml,
 };

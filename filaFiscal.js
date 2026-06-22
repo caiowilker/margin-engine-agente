@@ -97,6 +97,9 @@ function migrateSchema() {
   if (!docNames.includes("numero_nfe")) {
     db.exec(`ALTER TABLE documentos_fiscais ADD COLUMN numero_nfe TEXT`);
   }
+  if (!docNames.includes("modelo_documento")) {
+    db.exec(`ALTER TABLE documentos_fiscais ADD COLUMN modelo_documento TEXT`);
+  }
   db.prepare(
     `UPDATE fila_fiscal SET prioridade = CASE tipo
       WHEN 'EMISSAO' THEN 1 WHEN 'CANCELAMENTO' THEN 2
@@ -206,7 +209,7 @@ function vendaTemJobAtivo(numeroVenda) {
     .prepare(
       `SELECT id, correlation_id, status FROM fila_fiscal
        WHERE tipo = 'EMISSAO' AND numero_venda = ?
-         AND status IN ('PENDENTE','PROCESSANDO','INCERTO','FALHA_TEMPORARIA')
+         AND status IN ('PENDENTE','PROCESSANDO','INCERTO','FALHA_TEMPORARIA','RECUPERANDO')
        LIMIT 1`,
     )
     .get(String(numeroVenda));
@@ -310,7 +313,7 @@ function proximoJob(tiposPermitidos = null) {
   init();
   let sql = `
     SELECT * FROM fila_fiscal
-    WHERE status IN ('PENDENTE','INCERTO','FALHA_TEMPORARIA')
+    WHERE status IN ('PENDENTE','FALHA_TEMPORARIA')
       AND datetime(proxima_tentativa) <= datetime('now')`;
   if (tiposPermitidos?.length) {
     sql += ` AND tipo IN (${tiposPermitidos.map(() => "?").join(",")})`;
@@ -347,12 +350,27 @@ function agendarRetry(id, tentativas, err) {
   ).run(proxima, id);
 }
 
-function marcarIncerto(id, erro, correlationId, numeroVenda) {
+function marcarIncerto(id, erro, correlationId, numeroVenda, meta = {}) {
   init();
-  db.prepare(`UPDATE fila_fiscal SET status = 'INCERTO', erro = ? WHERE id = ?`).run(
-    erro,
-    id,
-  );
+  db.prepare(
+    `UPDATE fila_fiscal SET status = 'INCERTO', erro = ?, proximo_retry_at = datetime('now') WHERE id = ?`,
+  ).run(erro, id);
+  if (meta.chaveConsulta) {
+    let payloadAtual = {};
+    try {
+      const row = db.prepare(`SELECT payload FROM fila_fiscal WHERE id = ?`).get(id);
+      payloadAtual = JSON.parse(row?.payload || "{}");
+    } catch (_) {}
+    atualizarPayload(id, {
+      chaveConsulta: meta.chaveConsulta,
+      motivoIncerto: "104",
+      _fiscalMeta: {
+        ...(payloadAtual._fiscalMeta || {}),
+        chave: meta.chaveConsulta,
+        cStat: meta.cStat || "104",
+      },
+    });
+  }
   if (correlationId) {
     salvarResultadoEmissao(correlationId, numeroVenda, "INCERTO", null, erro);
   }
@@ -395,21 +413,29 @@ async function processarUm(opcoes = {}) {
     fiscalRetry.enriquecerErro(err);
     const msg = err.message || String(err);
     const tentativas = job.tentativas + 1;
-    log.warn(
-      { modulo: "fila_fiscal", tipo: job.tipo, tentativas, err: msg },
-      "Falha ao processar job fiscal",
-    );
     if (fiscalRetry.isIncerto(err)) {
+      log.info(
+        { modulo: "fila_fiscal", tipo: job.tipo, jobId: job.id, err: msg },
+        "Emissão incerta — recovery consultará SEFAZ (sem reemissão)",
+      );
       marcarIncerto(
         job.id,
         msg,
         payload.correlationId || job.correlation_id,
         payload.numeroVenda || job.numero_venda,
+        {
+          chaveConsulta: err.chaveConsulta || payload._fiscalMeta?.chave,
+          cStat: fiscalRetry.extrairCStat(err),
+        },
       );
     } else if (
       fiscalRetry.isPermanente(err) ||
       tentativas >= fiscalRetry.maxTentativas(err)
     ) {
+      log.warn(
+        { modulo: "fila_fiscal", tipo: job.tipo, tentativas, err: msg },
+        "Falha ao processar job fiscal",
+      );
       const msgFinal =
         fiscalRetry.extrairCStat(err) === "999" &&
         tentativas >= fiscalRetry.maxTentativas(err)
@@ -435,6 +461,10 @@ async function processarUm(opcoes = {}) {
         } catch (_) {}
       }
     } else {
+      log.warn(
+        { modulo: "fila_fiscal", tipo: job.tipo, tentativas, err: msg },
+        "Falha ao processar job fiscal",
+      );
       db.prepare(
         `UPDATE fila_fiscal SET erro = ?, tentativas = ? WHERE id = ?`,
       ).run(msg, tentativas, job.id);
@@ -460,19 +490,45 @@ function registrarHandler(tipo, fn) {
   handlers[tipo] = fn;
 }
 
+function liberarJobsTravados(minutos = null) {
+  init();
+  const min = minutos ?? parseInt(process.env.FISCAL_JOB_STALE_MIN || "8", 10);
+  const jobs = db
+    .prepare(
+      `SELECT id, correlation_id, numero_venda FROM fila_fiscal
+       WHERE tipo = 'EMISSAO' AND status = 'PROCESSANDO'
+         AND datetime(criado_em) < datetime('now', ?)`,
+    )
+    .all(`-${min} minutes`);
+  if (!jobs.length) return 0;
+  for (const job of jobs) {
+    const msg = `Job travado em PROCESSANDO há mais de ${min} min — aguardando recovery`;
+    db.prepare(`UPDATE fila_fiscal SET status = 'INCERTO', erro = ?, proximo_retry_at = datetime('now') WHERE id = ?`).run(
+      msg,
+      job.id,
+    );
+    if (job.correlation_id) {
+      salvarResultadoEmissao(job.correlation_id, job.numero_venda, "INCERTO", null, msg);
+    }
+  }
+  return jobs.length;
+}
+
 function iniciarWorker(intervalMs = WORKER_MS) {
   if (workerTimer) return;
   const tiposFiscal = ["EMISSAO", "CANCELAMENTO", "CALLBACK_BACKEND", "INUTILIZACAO", "EPEC"];
   workerTimer = setInterval(async () => {
+    try {
+      liberarJobsTravados();
+    } catch (_) {}
     let again = true;
     while (again && !filaPausada) {
       again = await processarUm({ apenasTipos: tiposFiscal, flag: "processandoFiscal" });
     }
   }, intervalMs);
 
-  const pdfWorkerEnabled =
-    (process.env.FISCAL_GERAR_PDF || "false").toLowerCase() === "true";
-  if (pdfWorkerEnabled && !pdfWorkerTimer) {
+  // Worker GERAR_PDF sempre ativo — handler ignora NFC-e 65 quando FISCAL_GERAR_PDF=false, mas processa NF-e 55.
+  if (!pdfWorkerTimer) {
     pdfWorkerTimer = setInterval(async () => {
       let again = true;
       while (again && !filaPausada) {
@@ -597,22 +653,31 @@ function contadoresAlertas() {
   };
 }
 
-function listar(limit = 50) {
+function listar(limit = 50, statusFilter = null) {
   init();
+  const lim = Math.min(Math.max(1, limit), 200);
+  if (statusFilter) {
+    return db
+      .prepare(
+        `SELECT id, tipo, correlation_id, numero_venda, status, tentativas, erro, criado_em, proxima_tentativa
+         FROM fila_fiscal WHERE status = ? ORDER BY id DESC LIMIT ?`,
+      )
+      .all(String(statusFilter), lim);
+  }
   return db
     .prepare(
-      `SELECT id, tipo, correlation_id, numero_venda, status, tentativas, erro, criado_em
+      `SELECT id, tipo, correlation_id, numero_venda, status, tentativas, erro, criado_em, proxima_tentativa
        FROM fila_fiscal ORDER BY id DESC LIMIT ?`,
     )
-    .all(limit);
+    .all(lim);
 }
 
 function salvarDocumento(doc) {
   init();
   db.prepare(
     `INSERT OR REPLACE INTO documentos_fiscais
-     (chave, numero_venda, correlation_id, serie_nfe, numero_nfe, c_stat, protocolo, xml_path, pdf_path, tipo)
-     VALUES (@chave, @numeroVenda, @correlationId, @serieNfe, @numeroNfe, @cStat, @protocolo, @xmlPath, @pdfPath, @tipo)`,
+     (chave, numero_venda, correlation_id, serie_nfe, numero_nfe, c_stat, protocolo, xml_path, pdf_path, tipo, modelo_documento)
+     VALUES (@chave, @numeroVenda, @correlationId, @serieNfe, @numeroNfe, @cStat, @protocolo, @xmlPath, @pdfPath, @tipo, @modeloDocumento)`,
   ).run({
     chave: doc.chave,
     numeroVenda: doc.numeroVenda || null,
@@ -624,6 +689,7 @@ function salvarDocumento(doc) {
     xmlPath: doc.xmlPath || null,
     pdfPath: doc.pdfPath || null,
     tipo: doc.tipo || "AUTORIZADA",
+    modeloDocumento: doc.modeloDocumento || null,
   });
 }
 
@@ -719,6 +785,20 @@ function consultarStatusEmissao(correlationId) {
     }
     return { correlationId, status: "NAO_ENCONTRADO" };
   }
+  const jobAtual = db
+    .prepare(
+      `SELECT status, erro FROM fila_fiscal
+       WHERE correlation_id = ? AND tipo = 'EMISSAO' ORDER BY id DESC LIMIT 1`,
+    )
+    .get(correlationId);
+  const statusFinal =
+    row.status === "PROCESSANDO" &&
+    jobAtual &&
+    ["INCERTO", "RECUPERANDO", "FALHA_PERMANENTE", "CONCLUIDO"].includes(jobAtual.status)
+      ? jobAtual.status
+      : row.status;
+  const erroFinal =
+    statusFinal !== row.status ? jobAtual?.erro || row.erro : row.erro;
   let resultado = null;
   if (row.resultado) {
     try {
@@ -730,9 +810,9 @@ function consultarStatusEmissao(correlationId) {
   return {
     correlationId: row.correlation_id,
     numeroVenda: row.numero_venda,
-    status: row.status,
+    status: statusFinal,
     resultado,
-    erro: row.erro || null,
+    erro: erroFinal || null,
     atualizadoEm: row.atualizado_em,
   };
 }
@@ -994,13 +1074,30 @@ function descartarJobsGerarPdfPendentes(
   motivo = "PDF DANFC-e desabilitado (FISCAL_GERAR_PDF=false)",
 ) {
   init();
-  const r = db
+  const acbr = require("./acbr");
+  const rows = db
     .prepare(
-      `UPDATE fila_fiscal SET status = 'CONCLUIDO', erro = ?
+      `SELECT id, payload FROM fila_fiscal
        WHERE tipo = 'GERAR_PDF' AND status NOT IN ('CONCLUIDO','FALHA_PERMANENTE')`,
     )
-    .run(motivo);
-  return r.changes;
+    .all();
+  let changes = 0;
+  for (const row of rows) {
+    let modelo = "65";
+    try {
+      const p = JSON.parse(row.payload);
+      modelo =
+        p.modeloDocumento ||
+        (p.chave ? acbr.inferirModeloDaChave(p.chave) : null) ||
+        "65";
+    } catch (_) {}
+    if (String(modelo) === "55") continue;
+    db.prepare(
+      `UPDATE fila_fiscal SET status = 'CONCLUIDO', erro = ? WHERE id = ?`,
+    ).run(motivo, row.id);
+    changes++;
+  }
+  return changes;
 }
 
 function cancelarEmissaoPendente(motivo = "Cancelado manualmente") {
@@ -1066,5 +1163,6 @@ module.exports = {
   contarIncertosComBackoff,
   resetProximoRetryRecovery,
   listarUltimasEmissoes,
+  liberarJobsTravados,
   close,
 };

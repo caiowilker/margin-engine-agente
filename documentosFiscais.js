@@ -5,6 +5,7 @@ const { PATHS } = require("./marginPaths");
 const fiscalStorage = require("./fiscalStorage");
 const auditLog = require("./auditLog");
 const log = require("./logger").child({ modulo: "documentos_fiscais" });
+const { coalescerRespostaAcbr } = require("./acbrResposta");
 
 function salvarComVerificacaoDisco(tipo, dir, salvarFn) {
   const minMap = {
@@ -33,7 +34,12 @@ function salvarComVerificacaoDisco(tipo, dir, salvarFn) {
 
 function salvarXmlAutorizado(chave, xmlContent) {
   return salvarComVerificacaoDisco("xml", PATHS.xml, () => {
-    const file = path.join(PATHS.xml, `${chave}-nfe.xml`);
+    const k = String(chave || "").replace(/\D/g, "");
+    const prot = extrairProtNFe(xmlContent);
+    const autorizado =
+      prot.cStat === "100" || prot.cStat === "150" || Boolean(prot.nProt);
+    const suffix = autorizado ? "-procNFe.xml" : "-nfe.xml";
+    const file = path.join(PATHS.xml, `${k}${suffix}`);
     fs.writeFileSync(file, xmlContent, "utf8");
     backup(file);
     return file;
@@ -126,16 +132,250 @@ function backup(sourceFile) {
 }
 
 function extrairXmlDaResposta(resposta) {
-  if (!resposta) return null;
-  const idx = resposta.indexOf("<?xml");
-  if (idx >= 0) return resposta.slice(idx).trim();
-  const xmlMatch = resposta.match(
+  const txt = coalescerRespostaAcbr(resposta);
+  if (!txt) return null;
+  const idx = txt.indexOf("<?xml");
+  if (idx >= 0) return txt.slice(idx).trim();
+  const xmlMatch = txt.match(
     /<(?:nfeProc|NFe|procEventoNFe)[\s\S]*<\/(?:nfeProc|NFe|procEventoNFe)>/i,
   );
   return xmlMatch ? xmlMatch[0] : null;
 }
 
-/** URL/payload do QR Code NFC-e (tag infNFeSupl/qrCode no XML autorizado). */
+function extrairCnpjDaChave(chave) {
+  const k = String(chave || "").replace(/\D/g, "");
+  if (k.length !== 44) return null;
+  return k.slice(6, 20);
+}
+
+function candidatosNomeXml(chave) {
+  const k = String(chave || "").replace(/\D/g, "");
+  return [`${k}-procNFe.xml`, `${k}-nfeProc.xml`, `${k}-nfe.xml`, `${k}.xml`];
+}
+
+function buscarArquivoXmlRecursivo(dir, chave, maxDepth = 5, depth = 0) {
+  if (!dir || !fs.existsSync(dir) || depth > maxDepth) return null;
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch (_) {
+    return null;
+  }
+  const k = String(chave || "").replace(/\D/g, "");
+  const proc = entries.find(
+    (e) =>
+      e.isFile() &&
+      e.name.toLowerCase().endsWith(".xml") &&
+      e.name.includes(k) &&
+      /proc/i.test(e.name),
+  );
+  if (proc) return path.join(dir, proc.name);
+  const qualquer = entries.find(
+    (e) => e.isFile() && e.name.toLowerCase().endsWith(".xml") && e.name.includes(k),
+  );
+  if (qualquer) return path.join(dir, qualquer.name);
+  for (const ent of entries) {
+    if (!ent.isDirectory()) continue;
+    const found = buscarArquivoXmlRecursivo(
+      path.join(dir, ent.name),
+      chave,
+      maxDepth,
+      depth + 1,
+    );
+    if (found) return found;
+  }
+  return null;
+}
+
+function carregarXmlComProt(filePath, chave) {
+  const k = String(chave || "").replace(/\D/g, "");
+  let xml;
+  try {
+    xml = fs.readFileSync(filePath, "utf8");
+  } catch (_) {
+    return null;
+  }
+  let prot = extrairProtNFe(xml);
+  if (prot.cStat === "100" || prot.cStat === "150" || prot.nProt) {
+    return { path: filePath, xml, prot };
+  }
+  const base = filePath.replace(/\.xml$/i, "");
+  const variantes = [
+    filePath.replace(/-nfe\.xml$/i, "-procNFe.xml"),
+    filePath.replace(/-nfe\.xml$/i, "-nfeProc.xml"),
+    `${base}-procNFe.xml`,
+    `${base}-nfeProc.xml`,
+  ];
+  for (const alt of variantes) {
+    if (!alt || alt === filePath || !fs.existsSync(alt)) continue;
+    try {
+      const xmlProc = fs.readFileSync(alt, "utf8");
+      const protAlt = extrairProtNFe(xmlProc);
+      if (protAlt.cStat || protAlt.nProt) {
+        return { path: alt, xml: xmlProc, prot: protAlt, pathNfe: filePath };
+      }
+    } catch (_) {}
+  }
+  return { path: filePath, xml, prot };
+}
+
+/** Localiza XML da chave (flat ou aninhado ACBr: xml/CNPJ/NFe/AAAAMM/NFe/). */
+function localizarXmlPorChave(chave) {
+  const k = String(chave || "").replace(/\D/g, "");
+  if (k.length !== 44) return null;
+
+  const dirs = [];
+  const cnpj = extrairCnpjDaChave(k);
+  const aamm = k.slice(2, 6);
+  if (cnpj) {
+    dirs.push(path.join(PATHS.xml, cnpj, "NFe", `20${aamm}`, "NFe"));
+    dirs.push(path.join(PATHS.xml, cnpj, "NFe", aamm, "NFe"));
+    dirs.push(path.join(PATHS.xml, cnpj, "NFe", `20${aamm}`));
+    dirs.push(path.join(PATHS.xml, cnpj));
+  }
+  dirs.push(PATHS.xml, PATHS.saida, PATHS.backup);
+
+  const seen = new Set();
+  for (const dir of dirs) {
+    if (!dir || seen.has(dir)) continue;
+    seen.add(dir);
+    if (!fs.existsSync(dir)) continue;
+    for (const nome of candidatosNomeXml(k)) {
+      const full = path.join(dir, nome);
+      if (fs.existsSync(full)) {
+        const loaded = carregarXmlComProt(full, k);
+        if (loaded) return loaded;
+      }
+    }
+  }
+
+  for (const raiz of [PATHS.xml, PATHS.saida, PATHS.backup]) {
+    const found = buscarArquivoXmlRecursivo(raiz, k);
+    if (found) {
+      const loaded = carregarXmlComProt(found, k);
+      if (loaded) return loaded;
+    }
+  }
+  return null;
+}
+
+/** Extrai chave de 44 dígitos do XML (infProt ou infNFe Id). */
+function extrairChaveDoXml(xml) {
+  if (!xml || typeof xml !== "string") return null;
+  const prot = extrairProtNFe(xml);
+  if (prot.chNFe) return prot.chNFe;
+  const id = xml.match(/<infNFe[^>]*\s+Id="NFe(\d{44})"/i)?.[1];
+  return id || null;
+}
+
+/** Localiza XML por série/número na pasta aninhada do ACBr Monitor. */
+function localizarXmlPorSerieNumero(serie, numeroNfe, cnpj) {
+  const n = String(numeroNfe ?? "").replace(/\D/g, "");
+  const s = String(serie ?? "1").replace(/\D/g, "");
+  if (!n) return null;
+
+  const dirs = [];
+  const cnpjLimpo = String(cnpj || "").replace(/\D/g, "");
+  if (cnpjLimpo.length === 14) {
+    const raiz = path.join(PATHS.xml, cnpjLimpo, "NFe");
+    if (fs.existsSync(raiz)) {
+      for (const ym of fs.readdirSync(raiz, { withFileTypes: true })) {
+        if (!ym.isDirectory()) continue;
+        const nest = path.join(raiz, ym.name, "NFe");
+        if (fs.existsSync(nest)) dirs.push(nest);
+        else dirs.push(path.join(raiz, ym.name));
+      }
+    }
+  }
+  dirs.push(PATHS.xml, PATHS.saida);
+
+  const seen = new Set();
+  for (const dir of dirs) {
+    if (!dir || seen.has(dir) || !fs.existsSync(dir)) continue;
+    seen.add(dir);
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (_) {
+      continue;
+    }
+    for (const ent of entries) {
+      if (!ent.isFile() || !ent.name.toLowerCase().endsWith(".xml")) continue;
+      const full = path.join(dir, ent.name);
+      try {
+        const xml = fs.readFileSync(full, "utf8");
+        const nNF = xml.match(/<nNF>(\d+)<\/nNF>/i)?.[1];
+        const serieXml = xml.match(/<serie>(\d+)<\/serie>/i)?.[1];
+        if (!nNF || String(parseInt(nNF, 10)) !== String(parseInt(n, 10))) continue;
+        if (s && serieXml && String(parseInt(serieXml, 10)) !== String(parseInt(s, 10))) {
+          continue;
+        }
+        const chave = extrairChaveDoXml(xml);
+        const loaded = carregarXmlComProt(full, chave);
+        if (loaded) return { ...loaded, chave: chave || undefined };
+      } catch (_) {
+        /* próximo arquivo */
+      }
+    }
+  }
+  return null;
+}
+
+/** Status da nota no XML autorizado (infProt) — prevalece sobre cStat 104 do lote. */
+function extrairProtNFe(xml) {
+  if (!xml || typeof xml !== "string") return {};
+  const bloc =
+    xml.match(/<infProt[^>]*>[\s\S]*?<\/infProt>/i)?.[0] ||
+    xml.match(/<protNFe[^>]*>[\s\S]*?<\/protNFe>/i)?.[0] ||
+    "";
+  if (!bloc) return {};
+  return {
+    cStat: bloc.match(/<cStat>(\d+)<\/cStat>/i)?.[1] || null,
+    xMotivo: bloc.match(/<xMotivo>([^<]*)<\/xMotivo>/i)?.[1]?.trim() || null,
+    nProt: bloc.match(/<nProt>(\d+)<\/nProt>/i)?.[1] || null,
+    chNFe: bloc.match(/<chNFe>(\d{44})<\/chNFe>/i)?.[1] || null,
+  };
+}
+
+/** XML com protocolo SEFAZ (infProt) — necessário para DANFE/DANFC-e válido. */
+function xmlEstaAutorizado(xml) {
+  if (!xml || typeof xml !== "string") return false;
+  const prot = extrairProtNFe(xml);
+  return prot.cStat === "100" || prot.cStat === "150" || Boolean(prot.nProt);
+}
+
+/**
+ * Resolve o melhor caminho de XML para impressão/PDF (prefere procNFe / nfeProc).
+ * Ignora xmlPathHint sem protocolo quando existir variante autorizada no disco.
+ */
+function resolverXmlParaImpressao(chave, xmlPathHint) {
+  const k = String(chave || "").replace(/\D/g, "");
+  if (k.length !== 44) {
+    return xmlPathHint && fs.existsSync(xmlPathHint) ? xmlPathHint : null;
+  }
+
+  const local = localizarXmlPorChave(k);
+  if (local?.path && xmlEstaAutorizado(local.xml)) {
+    return local.path;
+  }
+
+  if (xmlPathHint && fs.existsSync(xmlPathHint)) {
+    const loaded = carregarXmlComProt(xmlPathHint, k);
+    if (loaded?.path && xmlEstaAutorizado(loaded.xml)) {
+      return loaded.path;
+    }
+  }
+
+  if (local?.path) {
+    const loaded = carregarXmlComProt(local.path, k);
+    if (loaded?.path && xmlEstaAutorizado(loaded.xml)) {
+      return loaded.path;
+    }
+  }
+
+  return null;
+}
+
 function extrairQrCodeDoXml(xml) {
   if (!xml || typeof xml !== "string") return null;
   const cdata = xml.match(/<qrCode>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/qrCode>/i);
@@ -155,4 +395,11 @@ module.exports = {
   isPdfValid,
   extrairXmlDaResposta,
   extrairQrCodeDoXml,
+  extrairProtNFe,
+  extrairChaveDoXml,
+  localizarXmlPorChave,
+  localizarXmlPorSerieNumero,
+  extrairCnpjDaChave,
+  xmlEstaAutorizado,
+  resolverXmlParaImpressao,
 };

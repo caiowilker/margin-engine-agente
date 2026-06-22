@@ -3,9 +3,28 @@ function limpar(v) {
   return String(v ?? "").trim();
 }
 
+function ibgeDoEndereco(end) {
+  if (!end || typeof end !== "object") return "";
+  return String(end.codigoMunicipio || end.codigoIbge || "").replace(/\D/g, "");
+}
+
+function normalizarEndereco(end) {
+  if (!end || typeof end !== "object") return end;
+  const ibge = ibgeDoEndereco(end);
+  return {
+    ...end,
+    ...(ibge ? { codigoMunicipio: ibge, codigoIbge: ibge } : {}),
+  };
+}
+
 function normalizarDestinatario(payload) {
   if (payload?.destinatario && typeof payload.destinatario === "object") {
-    return payload.destinatario;
+    const dest = { ...payload.destinatario };
+    if (dest.endereco) dest.endereco = normalizarEndereco(dest.endereco);
+    if (dest.indIEDest == null && dest.indIeDest != null) {
+      dest.indIEDest = dest.indIeDest;
+    }
+    return dest;
   }
   const d = {};
   const cpf = String(payload?.cpfCliente || payload?.destinatarioCpf || "").replace(/\D/g, "");
@@ -48,11 +67,27 @@ function validarDestinatarioNfe(dest) {
   if (cep.length !== 8) faltando.push("CEP (8 dígitos)");
   if (!limpar(end.municipio)) faltando.push("Município");
   if (!limpar(end.uf) || String(end.uf).length !== 2) faltando.push("UF");
-  const ibge = String(end.codigoMunicipio || "").replace(/\D/g, "");
+  const ibge = ibgeDoEndereco(end);
   if (ibge.length !== 7) faltando.push("Código IBGE do município (7 dígitos)");
 
-  const indIE = dest?.indIEDest ?? (limpar(dest?.inscricaoEstadual) ? 1 : doc.length === 14 ? 1 : 9);
-  if (indIE === 1 && doc.length === 14 && !limpar(dest?.inscricaoEstadual)) {
+  const indIE =
+    dest?.indIEDest != null && dest?.indIEDest !== ""
+      ? Number(dest.indIEDest)
+      : limpar(dest?.inscricaoEstadual)
+        ? 1
+        : doc.length === 14
+          ? 1
+          : 9;
+
+  const destNormalizado = {
+    ...dest,
+    cpfCnpj: doc,
+    indIEDest: indIE,
+    endereco: { ...end, cep, codigoMunicipio: ibge, codigoIbge: ibge },
+  };
+  if (indIE === 9) {
+    delete destNormalizado.inscricaoEstadual;
+  } else if (indIE === 1 && doc.length === 14 && !limpar(dest?.inscricaoEstadual)) {
     faltando.push("Inscrição estadual (contribuinte ICMS)");
   }
 
@@ -65,7 +100,7 @@ function validarDestinatarioNfe(dest) {
     throw err;
   }
 
-  return { ...dest, cpfCnpj: doc, indIEDest: indIE, endereco: { ...end, cep, codigoMunicipio: ibge } };
+  return destNormalizado;
 }
 
 function validarPayloadNfe(payload) {

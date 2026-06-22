@@ -217,15 +217,15 @@ async function main() {
     log("GET /diagnostico/alertas (pós-venda)", "sem ultimaEmissaoSucesso", false);
   }
 
-  r = await request(AGENTE_URL, "GET", "/diagnostico/dashboard");
+  r = await request(AGENTE_URL, "GET", "/diagnostico/painel");
   if (
     r.status === 200 &&
     typeof r.raw === "string" &&
-    (r.raw.includes("1.0.0") || r.raw.includes("v1.0"))
+    r.raw.includes("Centro de Operações")
   ) {
-    log("GET /diagnostico/dashboard", "HTML com versão 1.0.0");
+    log("GET /diagnostico/painel", "HTML operacional OK");
   } else {
-    log("GET /diagnostico/dashboard", `HTTP ${r.status}`, false);
+    log("GET /diagnostico/painel", `HTTP ${r.status}`, false);
     process.exit(1);
   }
 

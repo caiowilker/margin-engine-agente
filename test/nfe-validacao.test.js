@@ -58,10 +58,43 @@ test("payload NF-e sem itens — rejeita", () => {
   );
 });
 
+test("destinatário com codigoIbge (alias front) — ok", () => {
+  const d = destinatarioCompleto();
+  d.endereco.codigoIbge = d.endereco.codigoMunicipio;
+  delete d.endereco.codigoMunicipio;
+  const out = validarDestinatarioNfe(d);
+  assert.strictEqual(out.endereco.codigoMunicipio, "3106200");
+});
+
+const docs = require("../documentosFiscais");
+
+test("extrairProtNFe — lê cStat 100 do XML", () => {
+  const xml =
+    '<?xml version="1.0"?><nfeProc><protNFe><infProt><cStat>100</cStat><xMotivo>Autorizado</xMotivo><nProt>123</nProt><chNFe>31260612343055000183650010000000091816823438</chNFe></infProt></protNFe></nfeProc>';
+  const prot = docs.extrairProtNFe(xml);
+  assert.strictEqual(prot.cStat, "100");
+  assert.strictEqual(prot.nProt, "123");
+});
+
+test("extrairXmlDaResposta — aceita resposta em array (sessão multi-comando ACBr)", () => {
+  const xml = '<?xml version="1.0"?><nfeProc><NFe></NFe></nfeProc>';
+  const out = docs.extrairXmlDaResposta(["OK", `ChaveNFe=123\n${xml}`]);
+  assert.ok(out && out.includes("nfeProc"));
+});
+
 test("payload NF-e válido — ok", () => {
   validarPayloadNfe({
     total: 10,
     destinatario: destinatarioCompleto(),
+    itens: [{ nome: "Pão", quantidade: 1, precoUnitario: 10, total: 10 }],
+  });
+});
+
+test("NFC-e — CNPJ consumidor 14 dígitos — ok", () => {
+  const { validarPayloadNfce } = require("../fiscalValidacao");
+  validarPayloadNfce({
+    total: 10,
+    cnpjCliente: "12345678000195",
     itens: [{ nome: "Pão", quantidade: 1, precoUnitario: 10, total: 10 }],
   });
 });

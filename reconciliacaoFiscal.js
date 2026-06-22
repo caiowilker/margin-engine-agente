@@ -59,6 +59,8 @@ async function recuperarDocumentoLocal(cfg, numeroVenda, correlationId) {
     {
       correlationId: correlationId || local.correlation_id,
       chaveNfe: local.chave,
+      numeroNfe: local.numero_nfe,
+      serieNfe: local.serie_nfe,
       protocolo: local.protocolo,
       cStat: local.c_stat || "100",
       statusFiscal: "AUTORIZADA",
@@ -66,6 +68,7 @@ async function recuperarDocumentoLocal(cfg, numeroVenda, correlationId) {
       xmlPath: local.xml_path,
       pdfPath: local.pdf_path,
       pdfContentBase64,
+      modeloDocumento: fiscalService.inferirModeloDocumento(local, local.chave),
     },
     correlationId || local.correlation_id,
   );
@@ -140,11 +143,6 @@ function iniciar(lerConfigFn) {
       log.warn({ err: err.message }, "Reconciliação fiscal: erro no ciclo"),
     );
   }, INTERVAL_MS);
-  setInterval(() => {
-    fiscalRecuperacao.processarFilaRecovery(lerConfigFn).catch((err) =>
-      log.warn({ err: err.message }, "Recovery consulta: erro no ciclo"),
-    );
-  }, RECOVERY_MS);
   setTimeout(() => executarCiclo(lerConfigFn).catch(() => {}), 15000);
 }
 

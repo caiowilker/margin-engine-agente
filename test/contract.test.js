@@ -271,15 +271,29 @@ async function run() {
 
   await test("configSync — aplica fiscalEnabled em runtime sem reiniciar", async () => {
     acbr.setRuntimeEmissaoFiscal(false);
-    configSync.aplicarConfigRemota({ fiscalEnabled: true });
+    configSync.aplicarConfigRemota({
+      fiscalEnabled: true,
+      configAtualizadaEm: "2026-01-01T00:00:00.000Z",
+    });
     assert.strictEqual(acbr.EMISSAO_FISCAL, true);
     const st = configSync.getStatus();
     assert.strictEqual(st.fonte, "backend");
     assert.ok(st.ultimaSincronizacaoOk);
   });
 
+  await test("configSync — .env prevalece quando painel nunca salvou config", async () => {
+    process.env.EMISSAO_FISCAL = "true";
+    acbr.setRuntimeEmissaoFiscal(false);
+    configSync.aplicarConfigRemota({ fiscalEnabled: false });
+    assert.strictEqual(acbr.EMISSAO_FISCAL, true);
+    assert.strictEqual(configSync.getStatus().fonte, "env");
+  });
+
   await test("configSync — mantém ultimo valor quando backend indisponível", async () => {
-    configSync.aplicarConfigRemota({ fiscalEnabled: true });
+    configSync.aplicarConfigRemota({
+      fiscalEnabled: true,
+      configAtualizadaEm: "2026-01-01T00:00:00.000Z",
+    });
     const antes = configSync.getStatus().fiscalEnabled;
     const st = await configSync.sincronizar(async () => ({
       backendUrl: "",
@@ -292,6 +306,7 @@ async function run() {
   await test("configSync — aplica operacional em runtime (Parte F)", async () => {
     configSync.aplicarConfigRemota({
       fiscalEnabled: false,
+      configAtualizadaEm: "2026-01-01T00:00:00.000Z",
       operacional: { maxTentativasConsulta: 20, diskMinMbXml: 80 },
     });
     const st = configSync.getStatus();
@@ -337,7 +352,8 @@ async function run() {
     assertType(r.emissoes.total, "number", "emissoes.total");
   });
 
-  await test("GET /diagnostico/dashboard — HTML com status operacional", async () => {
+  await test("GET /diagnostico/painel — HTML centro de operações", async () => {
+    const diagnosticoPainel = require("../diagnosticoPainel");
     const payload = diagnosticoDashboard.montarAlertasPayload({
       filaFiscal,
       fiscalStorage,
@@ -346,15 +362,10 @@ async function run() {
       manifestUpdater,
       versao: "1.0.0",
     });
-    const html = diagnosticoDashboard.renderDashboardHtml(payload);
+    const html = diagnosticoPainel.renderPainelHtml(payload);
     assert.ok(typeof html === "string" && html.includes("<!DOCTYPE html"), "HTML");
-    assert.ok(
-      html.includes("OPERACIONAL") ||
-        html.includes("DEGRADADO") ||
-        html.includes("CRÍTICO"),
-      "status no HTML",
-    );
-    assert.ok(html.includes("1.0.0") || html.includes("versao"), "versão no HTML");
+    assert.ok(html.includes("Centro de Operações"), "título painel");
+    assert.ok(html.includes("Fila fiscal"), "aba fila");
   });
 
   await test("GET /health — ok e versao (multi-caixa ping)", async () => {
@@ -401,6 +412,32 @@ async function run() {
     assert.strictEqual(res.numeroVenda, numeroVenda);
     const st = fiscalService.consultarStatusEmissao(correlationId);
     assert.strictEqual(st.modeloDocumento, "55");
+  });
+
+  await test("POST /fiscal/emitir-nfe — aceita codigoIbge no endereço (alias front/back)", async () => {
+    acbr.setRuntimeEmissaoFiscal(null);
+    const correlationId = `contract-nfe-ibge-${Date.now()}`;
+    const numeroVenda = `V-NFE-IBGE-${Date.now()}`;
+    const body = {
+      ...payloadEmitirFront(correlationId, numeroVenda),
+      destinatario: {
+        cpfCnpj: "12345678909",
+        razaoSocial: "CLIENTE TESTE NF-E",
+        indIEDest: 9,
+        endereco: {
+          logradouro: "Rua Exemplo",
+          numero: "100",
+          bairro: "Centro",
+          cep: "30130000",
+          codigoIbge: "3106200",
+          municipio: "Belo Horizonte",
+          uf: "MG",
+        },
+      },
+    };
+    const res = await fiscalService.enfileirarEmissaoNfe({}, body, { sync: false });
+    assert.strictEqual(res.fiscal, "pending");
+    assert.strictEqual(res.modeloDocumento, "55");
   });
 
   await test("POST /fiscal/emitir-nfe — destinatário incompleto rejeita antes da fila", async () => {

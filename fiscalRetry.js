@@ -17,6 +17,8 @@ const REJEICAO_PERMANENTE_CSTAT = new Set([
 
 /** cStat 999 = erro genérico SEFAZ — no máximo 2 retentativas (evita bloqueio MG regra 656) */
 const REJEICAO_TRANSIENTE_CSTAT = new Set(["999"]);
+/** Status de lote — não são rejeição da nota */
+const CSTAT_LOTE_OK = new Set(["103", "104"]);
 const MAX_TENTATIVAS_PADRAO = 10;
 const MAX_TENTATIVAS_999 = parseInt(process.env.FISCAL_MAX_RETRY_999 || "2", 10);
 
@@ -59,6 +61,7 @@ function isPermanente(err) {
     cStat &&
     cStat !== "100" &&
     cStat !== "150" &&
+    !CSTAT_LOTE_OK.has(cStat) &&
     !REJEICAO_TRANSIENTE_CSTAT.has(cStat)
   ) {
     return true;
@@ -67,7 +70,10 @@ function isPermanente(err) {
 }
 
 function isIncerto(err) {
-  return Boolean(err?.incerto);
+  if (err?.incerto) return true;
+  const cStat = extrairCStat(err);
+  if (cStat && CSTAT_LOTE_OK.has(cStat)) return true;
+  return false;
 }
 
 function isTransient(err) {

@@ -69,6 +69,7 @@ const manifestUpdater = require("./manifestUpdater");
 const fiscalAlertas = require("./fiscalAlertas");
 const fiscalRelatorio = require("./fiscalRelatorio");
 const diagnosticoDashboard = require("./diagnosticoDashboard");
+const diagnosticoPainel = require("./diagnosticoPainel");
 const fiscalRecuperacao = require("./fiscalRecuperacao");
 const diagnosticoRateLimit = require("./diagnosticoRateLimit");
 const log = require("./logger").child({ modulo: "agente" });
@@ -680,11 +681,12 @@ function iniciarServidor() {
 
   // ── Frontend estático ───────────────────────────────────────────────────────
   const FRONTEND_DIST = path.join(__dirname, "frontend-dist");
-  if (fs.existsSync(FRONTEND_DIST)) {
+  const FRONTEND_INDEX = path.join(FRONTEND_DIST, "index.html");
+  if (fs.existsSync(FRONTEND_INDEX)) {
     app.use(express.static(FRONTEND_DIST));
     app.get(
       /^(?!\/api|\/status|\/venda|\/fila|\/impressora|\/acbr|\/ativar|\/auth|\/config|\/contingencia|\/diagnostico|\/updater).*$/,
-      (req, res) => res.sendFile(path.join(FRONTEND_DIST, "index.html")),
+      (req, res) => res.sendFile(FRONTEND_INDEX),
     );
   } else if (fs.existsSync(path.join(__dirname, "status.html"))) {
     app.get(["/", "/status.html"], (req, res) => {
@@ -693,6 +695,27 @@ function iniciarServidor() {
   }
 
   // ── Diagnóstico ─────────────────────────────────────────────────────────────
+  // Painel HTML operacional (rede local) — gestão fila fiscal + preflight
+  app.get("/diagnostico/painel", privateNetworkHeaders, (req, res) => {
+    const payload = coletarDadosAlertas();
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(diagnosticoPainel.renderPainelHtml(payload));
+  });
+
+  app.get("/diagnostico/painel/fila", privateNetworkHeaders, (req, res) => {
+    res.redirect(302, "/diagnostico/painel#fila");
+  });
+
+  // Navegador → painel; API/clients → JSON (token)
+  app.get("/diagnostico", privateNetworkHeaders, (req, res, next) => {
+    const accept = String(req.headers.accept || "");
+    if (req.query.painel === "1" || (accept.includes("text/html") && !accept.includes("application/json"))) {
+      const hash = req.query.aba ? `#${req.query.aba}` : "";
+      return res.redirect(302, `/diagnostico/painel${hash}`);
+    }
+    next();
+  });
+
   // Expõe dados sensíveis (backendUrl, tenantId, dispositivoId, hostname,
   // caminho do banco etc.) — exige X-Agent-Token quando o PDV está ativado.
   // Consumido pela tela /pdv/diagnostico do painel web.
@@ -751,7 +774,7 @@ function iniciarServidor() {
           tenantId: config.tenantId || null,
           dispositivoId: config.dispositivoId || null,
           backendUrl: config.backendUrl || null,
-          temFrontend: fs.existsSync(FRONTEND_DIST),
+          temFrontend: fs.existsSync(FRONTEND_INDEX),
           porta: PORT,
         },
 
@@ -975,7 +998,7 @@ function iniciarServidor() {
         pdvNome: config.pdvNome || "PDV",
         tenantId: config.tenantId || null,
         dispositivoId: config.dispositivoId || null,
-        temFrontend: fs.existsSync(path.join(__dirname, "frontend-dist")),
+        temFrontend: fs.existsSync(path.join(__dirname, "frontend-dist", "index.html")),
         filaOffline: { pendentes, falhas },
         contingencia: { ativa: contingencia.ativa, epecPendentes },
       });
@@ -1021,6 +1044,7 @@ function iniciarServidor() {
         body: JSON.stringify({
           codigoAtivacao: codigoFinal,
           ...(pdvNome ? { pdvNome } : {}),
+          emissaoFiscal: acbr.EMISSAO_FISCAL,
         }),
       });
       if (!resp.ok) {
@@ -1050,6 +1074,7 @@ function iniciarServidor() {
       _configCache = novoConfig;
 
       fila.atualizarConfig(backendUrl, dados.token);
+      void configSync.sincronizar(lerConfig).catch(() => {});
       console.log(
         `[Agente PDV] Ativado — tenant=${dados.tenantId} pdv=${dados.pdvNome}`,
       );
@@ -1207,7 +1232,7 @@ function iniciarServidor() {
         const suffix = doc.modeloDocumento === "55" ? "danfe" : "danfce";
         const nome = `${doc.chave || numeroVenda || "documento"}-${suffix}.pdf`;
         res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", `inline; filename="${nome}"`);
+        res.setHeader("Content-Disposition", `attachment; filename="${nome}"`);
         res.send(doc.buffer);
       } catch (err) {
         res.status(404).json({ erro: err.message });
@@ -1319,22 +1344,66 @@ function iniciarServidor() {
     }
   });
 
-  app.get("/fila/fiscal", exigirAgentToken, (req, res) => {
-    res.json({ ...filaFiscal.status(), itens: filaFiscal.listar(30) });
+  app.get("/fila/fiscal", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    const accept = String(req.headers.accept || "");
+    if (accept.includes("text/html") && !accept.includes("application/json")) {
+      return res.redirect(302, "/diagnostico/painel#fila");
+    }
+    const limit = Math.min(parseInt(req.query.limit || "50", 10) || 50, 200);
+    const status = req.query.status ? String(req.query.status) : null;
+    res.json({
+      ...filaFiscal.status(),
+      itens: filaFiscal.listar(limit, status),
+      ultimasEmissoes: filaFiscal.listarUltimasEmissoes(15),
+    });
   });
 
-  app.post("/fila/fiscal/reprocessar", exigirAgentToken, async (req, res) => {
+  app.post("/fila/fiscal/reprocessar", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     filaFiscal.retomarFila();
-    res.json({ ok: true, ...filaFiscal.status() });
+    let recovery = null;
+    if (req.body?.recoveryIncertos) {
+      recovery = await fiscalRecuperacao.forcarRecoveryManual(lerConfig).catch((err) => ({
+        erro: err.message,
+      }));
+    }
+    res.json({ ok: true, ...filaFiscal.status(), recovery });
   });
 
-  app.post("/fila/fiscal/limpar", exigirAgentToken, (req, res) => {
+  app.post("/fila/fiscal/pausar", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    auditLog.registrar("FILA_FISCAL_PAUSAR", {}, req);
+    filaFiscal.pausarFila();
+    res.json({ ok: true, pausada: true, ...filaFiscal.status() });
+  });
+
+  app.post("/fila/fiscal/limpar", privateNetworkHeaders, exigirAgentToken, (req, res) => {
     auditLog.registrar("FILA_FISCAL_LIMPAR", { motivo: req.body?.motivo }, req);
     const n = filaFiscal.cancelarEmissaoPendente(
       req.body?.motivo || "Cancelado manualmente pelo operador",
     );
     res.json({ ok: true, cancelados: n, ...filaFiscal.status() });
   });
+
+  app.post(
+    "/fila/fiscal/purge",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    diagnosticoRateLimit.middleware(),
+    (req, res) => {
+      auditLog.registrar("FILA_FISCAL_PURGE", {}, req);
+      const r = fiscalPurge.executarPurge();
+      res.json({ ok: true, ...r, fila: filaFiscal.status() });
+    },
+  );
+
+  app.post(
+    "/diagnostico/preflight/refresh",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    (req, res) => {
+      fiscalPreflight.invalidarCache();
+      res.json({ ok: true, timestamp: new Date().toISOString() });
+    },
+  );
 
   app.get("/diagnostico/fiscal", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     let preflight = null;
@@ -1386,6 +1455,7 @@ function iniciarServidor() {
       espacoDisco: payload.espacoDisco,
       ultimaEmissao: alertas.ultimaEmissao,
       ultimaEmissaoSucesso: alertas.ultimaEmissaoSucesso,
+      ultimasEmissoes: filaFiscal.listarUltimasEmissoes(10),
       metricas: {
         emissoesHoje: fiscalMetrics.emissoesHoje(),
         taxaSucessoPercent: fiscalMetrics.taxaSucessoPercent(),
@@ -1399,6 +1469,10 @@ function iniciarServidor() {
   });
 
   app.get("/diagnostico/dashboard", privateNetworkHeaders, (req, res) => {
+    res.redirect(302, "/diagnostico/painel");
+  });
+
+  app.get("/diagnostico/dashboard/legado", privateNetworkHeaders, (req, res) => {
     const payload = coletarDadosAlertas();
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(diagnosticoDashboard.renderDashboardHtml(payload));

@@ -17,13 +17,144 @@ const { PATHS } = require("./marginPaths");
 
 function inferirModeloDocumento(doc, chave) {
   if (doc?.modelo_documento) return String(doc.modelo_documento);
+  if (doc?.modeloDocumento) return String(doc.modeloDocumento);
   return acbr.inferirModeloDaChave(chave || doc?.chave);
+}
+
+let _lerConfigFn = null;
+
+function lerConteudoXmlAutorizado(xmlPath) {
+  if (!xmlPath) return null;
+  const buf = docs.lerArquivo(xmlPath);
+  return buf ? buf.toString("utf8") : null;
+}
+
+async function resolverXmlParaCallback(chave, xmlPathHint) {
+  try {
+    const pathAuth = await garantirXmlAutorizado(chave, xmlPathHint);
+    return { xmlPath: pathAuth, xmlContent: lerConteudoXmlAutorizado(pathAuth) };
+  } catch (_) {
+    if (xmlPathHint) {
+      const xmlContent = lerConteudoXmlAutorizado(xmlPathHint);
+      if (xmlContent && docs.xmlEstaAutorizado(xmlContent)) {
+        return { xmlPath: xmlPathHint, xmlContent };
+      }
+    }
+    return { xmlPath: xmlPathHint || null, xmlContent: null };
+  }
+}
+
+function montarCallbackPayload(params) {
+  const {
+    correlationId,
+    chave,
+    numeroNfe,
+    serieNfe,
+    protocolo,
+    cStat,
+    xMotivo,
+    qrcode,
+    xmlContent,
+    xmlPath,
+    pdfPath,
+    pdfContentBase64,
+    modeloDocumento,
+    pdfPendente,
+    pdfErro,
+    recuperado,
+  } = params;
+  return {
+    correlationId,
+    chaveNfe: chave,
+    numeroNfe,
+    serieNfe,
+    qrcode: qrcode || null,
+    protocolo,
+    cStat: cStat || "100",
+    xMotivo: xMotivo || null,
+    statusFiscal: "AUTORIZADA",
+    xmlContent: xmlContent || null,
+    xmlPath: xmlPath || null,
+    pdfPath: pdfPath || null,
+    pdfContentBase64: pdfContentBase64 || null,
+    contentType: "application/xml",
+    modeloDocumento: modeloDocumento || inferirModeloDocumento(null, chave),
+    pdfPendente: !!pdfPendente,
+    pdfErro: pdfErro || null,
+    recuperado: !!recuperado,
+  };
+}
+
+async function enviarCallbackDocumentosFiscais(cfg, numeroVenda, correlationId, payload) {
+  if (!cfg?.backendUrl || !numeroVenda) return;
+  try {
+    await callbackBackend(cfg, numeroVenda, payload, correlationId);
+  } catch {
+    filaFiscal.enfileirar(
+      "CALLBACK_BACKEND",
+      { numeroVenda, callbackPayload: payload, correlationId },
+      correlationId,
+      numeroVenda,
+    );
+  }
+}
+
+async function garantirXmlAutorizado(chave, xmlPathHint) {
+  const k = String(chave || "").replace(/\D/g, "");
+  if (k.length !== 44) {
+    throw new Error("Chave inválida para gerar DANFE");
+  }
+
+  const candidato = docs.resolverXmlParaImpressao(k, xmlPathHint);
+  if (candidato) {
+    const buf = docs.lerArquivo(candidato);
+    if (buf && docs.xmlEstaAutorizado(buf.toString("utf8"))) {
+      return candidato;
+    }
+  }
+
+  const local = docs.localizarXmlPorChave(k);
+  if (local?.path && docs.xmlEstaAutorizado(local.xml)) {
+    return local.path;
+  }
+
+  try {
+    const consulta = await acbr.consultarChave(k);
+    const cs = String(consulta.cStat || "");
+    if (
+      consulta.situacao === "AUTORIZADA" ||
+      cs === "100" ||
+      cs === "150"
+    ) {
+      const aposConsulta = docs.localizarXmlPorChave(k);
+      if (aposConsulta?.path && docs.xmlEstaAutorizado(aposConsulta.xml)) {
+        return aposConsulta.path;
+      }
+      const xmlConsulta = docs.extrairXmlDaResposta(consulta.raw);
+      if (xmlConsulta && docs.xmlEstaAutorizado(xmlConsulta)) {
+        const salvo = docs.salvarXmlAutorizado(k, xmlConsulta);
+        if (salvo) return salvo;
+      }
+    }
+  } catch (_) {
+    /* consulta indisponível */
+  }
+
+  throw new Error(
+    "XML autorizado com protocolo SEFAZ não encontrado — aguarde a confirmação da nota ou tente novamente.",
+  );
 }
 
 async function gerarPdfParaModelo(chave, xmlPath, modeloDocumento) {
   const modelo = String(modeloDocumento || "65");
-  if (modelo === "55") return acbr.gerarPdfDanfe(chave, xmlPath);
-  return acbr.gerarPdfDanfce(chave, xmlPath);
+  const xmlAutorizado = await garantirXmlAutorizado(chave, xmlPath);
+  return gerarPdfComXml(chave, xmlAutorizado, modelo);
+}
+
+async function gerarPdfComXml(chave, xmlPathAutorizado, modeloDocumento) {
+  const modelo = String(modeloDocumento || "65");
+  if (modelo === "55") return acbr.gerarPdfDanfe(chave, xmlPathAutorizado);
+  return acbr.gerarPdfDanfce(chave, xmlPathAutorizado);
 }
 
 function deveGerarPdfSincrono(resultado) {
@@ -86,10 +217,13 @@ async function callbackBackend(cfg, numeroVenda, payload, correlationId) {
 
 async function persistirAposAutorizacao(cfg, numeroVenda, correlationId, resultado) {
   fiscalStorage.exigirEspacoParaEscrita();
+  const modelo = resultado.modeloDocumento || inferirModeloDocumento(null, resultado.chave);
   let xmlPath = null;
   if (resultado.xml) {
     xmlPath = docs.salvarXmlAutorizado(resultado.chave, resultado.xml);
   }
+  const xmlResolvido = await resolverXmlParaCallback(resultado.chave, xmlPath);
+  xmlPath = xmlResolvido.xmlPath || xmlPath;
 
   filaFiscal.salvarDocumento({
     chave: resultado.chave,
@@ -102,37 +236,26 @@ async function persistirAposAutorizacao(cfg, numeroVenda, correlationId, resulta
     xmlPath,
     pdfPath: null,
     tipo: "AUTORIZADA",
+    modeloDocumento: modelo,
   });
 
-  const callbackPayload = {
+  const callbackPayload = montarCallbackPayload({
     correlationId,
-    chaveNfe: resultado.chave,
+    chave: resultado.chave,
     numeroNfe: resultado.numero || resultado.numeroNfe,
     serieNfe: resultado.serie || resultado.serieNfe,
     qrcode: resultado.qrcode || resultado.qrcodeNfe,
     protocolo: resultado.protocolo,
     cStat: resultado.cStat,
     xMotivo: resultado.xMotivo,
-    statusFiscal: "AUTORIZADA",
-    xmlContent: resultado.xml || null,
+    xmlContent: xmlResolvido.xmlContent || resultado.xml || null,
     xmlPath,
-    pdfPath: null,
-    pdfContentBase64: null,
-    contentType: "application/xml",
+    modeloDocumento: modelo,
     pdfPendente: GERAR_PDF_HABILITADO && !GERAR_PDF_EMIT,
     recuperado: !!resultado.recuperado,
-  };
+  });
 
-  try {
-    await callbackBackend(cfg, numeroVenda, callbackPayload, correlationId);
-  } catch (err) {
-    filaFiscal.enfileirar(
-      "CALLBACK_BACKEND",
-      { numeroVenda, callbackPayload, correlationId },
-      correlationId,
-      numeroVenda,
-    );
-  }
+  await enviarCallbackDocumentosFiscais(cfg, numeroVenda, correlationId, callbackPayload);
 
   if (GERAR_PDF_HABILITADO && !GERAR_PDF_EMIT && resultado.modeloDocumento !== "55") {
     filaFiscal.enfileirar(
@@ -177,19 +300,18 @@ async function persistirAposAutorizacao(cfg, numeroVenda, correlationId, resulta
 async function persistirDocumentosFiscais(cfg, numeroVenda, correlationId, resultado) {
   if (deveGerarPdfSincrono(resultado)) {
     fiscalStorage.exigirEspacoParaEscrita();
+    const modelo = resultado.modeloDocumento || inferirModeloDocumento(null, resultado.chave);
     let xmlPath = null;
     let pdfPath = null;
     let pdfErro = null;
     if (resultado.xml) {
       xmlPath = docs.salvarXmlAutorizado(resultado.chave, resultado.xml);
     }
+    const xmlResolvido = await resolverXmlParaCallback(resultado.chave, xmlPath);
+    xmlPath = xmlResolvido.xmlPath || xmlPath;
     const tPdf = Date.now();
     try {
-      pdfPath = await gerarPdfParaModelo(
-        resultado.chave,
-        xmlPath,
-        resultado.modeloDocumento || "65",
-      );
+      pdfPath = await gerarPdfParaModelo(resultado.chave, xmlPath, modelo);
       fiscalMetrics.registrarEmissao(0, { pdfMs: Date.now() - tPdf, pdf: true });
     } catch (err) {
       pdfErro = err.message || String(err);
@@ -208,37 +330,27 @@ async function persistirDocumentosFiscais(cfg, numeroVenda, correlationId, resul
       xmlPath,
       pdfPath,
       tipo: "AUTORIZADA",
-      modeloDocumento: resultado.modeloDocumento || "65",
+      modeloDocumento: modelo,
     });
-    const callbackPayload = {
+    const callbackPayload = montarCallbackPayload({
       correlationId,
-      chaveNfe: resultado.chave,
+      chave: resultado.chave,
       numeroNfe: resultado.numero,
       serieNfe: resultado.serie,
       qrcode: resultado.qrcode,
       protocolo: resultado.protocolo,
       cStat: resultado.cStat,
       xMotivo: resultado.xMotivo,
-      statusFiscal: "AUTORIZADA",
-      xmlContent: resultado.xml || null,
+      xmlContent: xmlResolvido.xmlContent || resultado.xml || null,
       xmlPath,
       pdfPath,
       pdfContentBase64,
-      contentType: "application/xml",
-      modeloDocumento: resultado.modeloDocumento || "65",
+      modeloDocumento: modelo,
       pdfPendente: !pdfPath && !!pdfErro,
       pdfErro,
-    };
-    try {
-      await callbackBackend(cfg, numeroVenda, callbackPayload, correlationId);
-    } catch {
-      filaFiscal.enfileirar(
-        "CALLBACK_BACKEND",
-        { numeroVenda, callbackPayload, correlationId },
-        correlationId,
-        numeroVenda,
-      );
-    }
+      recuperado: !!resultado.recuperado,
+    });
+    await enviarCallbackDocumentosFiscais(cfg, numeroVenda, correlationId, callbackPayload);
     return {
       ...resultado,
       xmlPath,
@@ -362,6 +474,33 @@ async function emitirCompleto(cfg, body, job = null) {
     if (rec?.chave) {
       fiscalMetrics.registrarEmissao(Date.now() - inicio, { recuperada: true, ok: true });
       return finalizarEmissaoRecuperada(cfg, numeroVenda, correlationId, rec);
+    }
+    if (err.incerto && job) {
+      const patch = {};
+      if (err.chaveConsulta) {
+        patch.chaveConsulta = err.chaveConsulta;
+        patch._fiscalMeta = {
+          ...(payload._fiscalMeta || {}),
+          chave: err.chaveConsulta,
+          cStat: fiscalRetry.extrairCStat(err) || "104",
+        };
+        const localXml = docs.localizarXmlPorChave(err.chaveConsulta);
+        filaFiscal.salvarDocumento({
+          chave: err.chaveConsulta,
+          numeroVenda,
+          correlationId,
+          serieNfe: payload.serieNfe || payload._fiscalMeta?.serieNfe,
+          numeroNfe: payload.numeroNfe || payload._fiscalMeta?.numeroNfe,
+          cStat: fiscalRetry.extrairCStat(err) || "104",
+          protocolo: null,
+          xmlPath: localXml?.path || null,
+          tipo: "PENDENTE_AUTORIZACAO",
+          modeloDocumento: payload.modeloDocumento || "65",
+        });
+      }
+      if (Object.keys(patch).length) {
+        filaFiscal.atualizarPayload(job.id, patch);
+      }
     }
     if (err.incerto) throw err;
     fiscalRateLimit.registrarFalha(cnpj, fiscalRetry.extrairCStat(err), 1);
@@ -525,32 +664,62 @@ async function obterPdfDocumento(chave, numeroVenda) {
     throw new Error("Informe chave ou numeroVenda");
   }
   const modelo = inferirModeloDocumento(doc, chaveDoc);
-  let pdfPath = doc?.pdf_path;
-  if (!docs.isPdfValid(pdfPath)) {
+  let xmlAutorizado = null;
+  try {
+    xmlAutorizado = await garantirXmlAutorizado(chaveDoc, doc?.xml_path);
+  } catch (err) {
     if (!doc?.xml_path && !chaveDoc) {
       throw new Error("PDF não disponível — documento fiscal não encontrado");
     }
-    pdfPath = await gerarPdfParaModelo(
-      chaveDoc,
-      doc?.xml_path,
-      modelo,
-    );
-    if (doc) {
-      filaFiscal.salvarDocumento({
-        chave: chaveDoc,
-        numeroVenda: doc.numero_venda || numeroVenda,
-        correlationId: doc.correlation_id,
-        serieNfe: doc.serie_nfe,
-        numeroNfe: doc.numero_nfe,
-        cStat: doc.c_stat,
-        protocolo: doc.protocolo,
-        xmlPath: doc.xml_path,
-        pdfPath,
-        tipo: doc.tipo || "AUTORIZADA",
-        modeloDocumento: modelo,
-      });
-    }
+    throw err;
   }
+
+  let pdfPath = doc?.pdf_path;
+  const pdfDesatualizado =
+    docs.isPdfValid(pdfPath) &&
+    xmlAutorizado &&
+    doc?.xml_path &&
+    doc.xml_path !== xmlAutorizado;
+  if (!docs.isPdfValid(pdfPath) || pdfDesatualizado) {
+    pdfPath = await gerarPdfComXml(chaveDoc, xmlAutorizado, modelo);
+  }
+
+  const nv = doc?.numero_venda || numeroVenda;
+  const corr = doc?.correlation_id || null;
+  filaFiscal.salvarDocumento({
+    chave: chaveDoc,
+    numeroVenda: nv,
+    correlationId: corr,
+    serieNfe: doc?.serie_nfe,
+    numeroNfe: doc?.numero_nfe,
+    cStat: doc?.c_stat,
+    protocolo: doc?.protocolo,
+    xmlPath: xmlAutorizado,
+    pdfPath,
+    tipo: doc?.tipo || "AUTORIZADA",
+    modeloDocumento: modelo,
+  });
+
+  if (_lerConfigFn && nv) {
+    const cfg = await _lerConfigFn();
+    const xmlContent = lerConteudoXmlAutorizado(xmlAutorizado);
+    const pdfContentBase64 = docs.lerArquivoBase64(pdfPath);
+    const callbackPayload = montarCallbackPayload({
+      correlationId: corr,
+      chave: chaveDoc,
+      numeroNfe: doc?.numero_nfe,
+      serieNfe: doc?.serie_nfe,
+      protocolo: doc?.protocolo,
+      cStat: doc?.c_stat,
+      xmlContent,
+      xmlPath: xmlAutorizado,
+      pdfPath,
+      pdfContentBase64,
+      modeloDocumento: modelo,
+    });
+    await enviarCallbackDocumentosFiscais(cfg, nv, corr, callbackPayload);
+  }
+
   const buffer = docs.lerArquivo(pdfPath);
   if (!buffer || buffer.length < 128) {
     throw new Error("PDF inválido ou corrompido");
@@ -651,6 +820,7 @@ async function inutilizarCompleto(cfg, body) {
 }
 
 function registrarHandlersFila(lerConfigFn) {
+  _lerConfigFn = lerConfigFn;
   filaFiscal.registrarHandler("CALLBACK_BACKEND", async (payload) => {
     const cfg = await lerConfigFn();
     await callbackBackend(
@@ -692,7 +862,7 @@ function registrarHandlersFila(lerConfigFn) {
       }
       const cnpj =
         payload.empresa?.cnpj || payload.cnpj || cfg.empresa?.cnpj || cfg.cnpj;
-      if (!err.rateLimit) {
+      if (!err.rateLimit && !fiscalRetry.isIncerto(err)) {
         fiscalRateLimit.registrarFalha(
           cnpj,
           fiscalRetry.extrairCStat(err),
@@ -711,27 +881,62 @@ function registrarHandlersFila(lerConfigFn) {
     const modelo =
       modeloDocumento || inferirModeloDocumento(doc, chave);
     if (!GERAR_PDF_HABILITADO && modelo !== "55") return;
-    if (doc?.pdf_path && docs.isPdfValid(doc.pdf_path)) return;
-    const t0 = Date.now();
-    const pdfPath = await gerarPdfParaModelo(
-      chave,
-      xmlPath || doc?.xml_path,
-      modelo,
-    );
-    fiscalMetrics.registrarEmissao(0, { pdfMs: Date.now() - t0, pdf: true });
+
+    const nv = numeroVenda || doc?.numero_venda;
+    const corr = correlationId || doc?.correlation_id;
+    let xmlAutorizado = null;
+    try {
+      xmlAutorizado = await garantirXmlAutorizado(chave, xmlPath || doc?.xml_path);
+    } catch (_) {
+      xmlAutorizado = xmlPath || doc?.xml_path || null;
+    }
+
+    let pdfPath = doc?.pdf_path;
+    const pdfDesatualizado =
+      docs.isPdfValid(pdfPath) &&
+      xmlAutorizado &&
+      doc?.xml_path &&
+      doc.xml_path !== xmlAutorizado;
+
+    if (!docs.isPdfValid(pdfPath) || pdfDesatualizado) {
+      const t0 = Date.now();
+      pdfPath = await gerarPdfParaModelo(chave, xmlAutorizado, modelo);
+      fiscalMetrics.registrarEmissao(0, { pdfMs: Date.now() - t0, pdf: true });
+    }
+
     filaFiscal.salvarDocumento({
       chave,
-      numeroVenda: numeroVenda || doc?.numero_venda,
-      correlationId: correlationId || doc?.correlation_id,
+      numeroVenda: nv,
+      correlationId: corr,
       serieNfe: doc?.serie_nfe,
       numeroNfe: doc?.numero_nfe,
       cStat: doc?.c_stat,
       protocolo: doc?.protocolo,
-      xmlPath: xmlPath || doc?.xml_path,
+      xmlPath: xmlAutorizado,
       pdfPath,
       tipo: doc?.tipo || "AUTORIZADA",
       modeloDocumento: modelo,
     });
+
+    const cfg = await lerConfigFn();
+    if (cfg.backendUrl && nv) {
+      const xmlContent = lerConteudoXmlAutorizado(xmlAutorizado);
+      const pdfContentBase64 = docs.lerArquivoBase64(pdfPath);
+      const callbackPayload = montarCallbackPayload({
+        correlationId: corr,
+        chave,
+        numeroNfe: doc?.numero_nfe,
+        serieNfe: doc?.serie_nfe,
+        protocolo: doc?.protocolo,
+        cStat: doc?.c_stat,
+        xmlContent,
+        xmlPath: xmlAutorizado,
+        pdfPath,
+        pdfContentBase64,
+        modeloDocumento: modelo,
+      });
+      await enviarCallbackDocumentosFiscais(cfg, nv, corr, callbackPayload);
+    }
   });
 
   filaFiscal.registrarHandler("CANCELAMENTO", async (payload) => {

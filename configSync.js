@@ -56,16 +56,36 @@ function reagendarPoll() {
   log.info(`[ConfigSync] Intervalo de poll atualizado: ${pollIntervalMs}ms`);
 }
 
+function aplicarFiscalRuntime(valor) {
+  estado.fiscalEnabled = !!valor;
+  if (acbrRef && typeof acbrRef.setRuntimeEmissaoFiscal === "function") {
+    acbrRef.setRuntimeEmissaoFiscal(valor);
+  }
+  process.env.EMISSAO_FISCAL = valor ? "true" : "false";
+}
+
+function limparOverrideFiscalParaEnv() {
+  estado.fiscalEnabled = obterEnvFallbackFiscal();
+  if (acbrRef && typeof acbrRef.setRuntimeEmissaoFiscal === "function") {
+    acbrRef.setRuntimeEmissaoFiscal(null);
+  }
+  process.env.EMISSAO_FISCAL = estado.fiscalEnabled ? "true" : "false";
+}
+
+function painelConfigurouFiscal(cfg) {
+  return cfg.configAtualizadaEm != null && cfg.configAtualizadaEm !== "";
+}
+
 function aplicarConfigRemota(cfg) {
   if (!cfg || typeof cfg !== "object") return;
 
   const anteriorFiscal = estado.fiscalEnabled;
   if (typeof cfg.fiscalEnabled === "boolean") {
-    estado.fiscalEnabled = cfg.fiscalEnabled;
-    if (acbrRef && typeof acbrRef.setRuntimeEmissaoFiscal === "function") {
-      acbrRef.setRuntimeEmissaoFiscal(cfg.fiscalEnabled);
+    if (painelConfigurouFiscal(cfg)) {
+      aplicarFiscalRuntime(cfg.fiscalEnabled);
+    } else {
+      limparOverrideFiscalParaEnv();
     }
-    process.env.EMISSAO_FISCAL = cfg.fiscalEnabled ? "true" : "false";
   }
 
   if (typeof cfg.somErroProdutoNaoEncontrado === "boolean") {
@@ -92,15 +112,53 @@ function aplicarConfigRemota(cfg) {
 
   estado.configAtualizadaEm = cfg.configAtualizadaEm || null;
   estado.agenteSincronizadoEm = cfg.agenteSincronizadoEm || null;
-  estado.fonte = "backend";
+  estado.fonte = painelConfigurouFiscal(cfg) ? "backend" : "env";
   estado.ultimaSincronizacaoOk = new Date().toISOString();
   estado.ultimoErro = null;
 
-  if (
-    typeof cfg.fiscalEnabled === "boolean" &&
-    anteriorFiscal !== cfg.fiscalEnabled
-  ) {
-    log.info(`[ConfigSync] fiscalEnabled=${cfg.fiscalEnabled} (via backend)`);
+  if (typeof cfg.fiscalEnabled === "boolean") {
+    const fiscalAtivo = estado.fiscalEnabled;
+    if (painelConfigurouFiscal(cfg) && anteriorFiscal !== cfg.fiscalEnabled) {
+      log.info(`[ConfigSync] fiscalEnabled=${cfg.fiscalEnabled} (via painel)`);
+    } else if (
+      !painelConfigurouFiscal(cfg) &&
+      anteriorFiscal !== fiscalAtivo
+    ) {
+      log.info(
+        `[ConfigSync] fiscalEnabled=${fiscalAtivo} (via .env — painel ainda não configurou)`,
+      );
+    }
+  }
+}
+
+async function bootstrapFiscalNoBackend(backendUrl, backendToken, cfgRemoto) {
+  if (!backendUrl || !backendToken) return;
+  if (painelConfigurouFiscal(cfgRemoto)) return;
+
+  const envFiscal = obterEnvFallbackFiscal();
+  if (!envFiscal || cfgRemoto.fiscalEnabled === true) return;
+
+  const fetch = require("node-fetch");
+  try {
+    const resp = await fetch(`${backendUrl}/pdv/agente/config/bootstrap-fiscal`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${backendToken}`,
+      },
+      body: JSON.stringify({ fiscalEnabled: true }),
+    });
+    if (resp.ok) {
+      log.info("[ConfigSync] fiscalEnabled=true propagado ao backend (.env)");
+      const body = await resp.json().catch(() => ({}));
+      if (typeof body.fiscalEnabled === "boolean") {
+        cfgRemoto.fiscalEnabled = body.fiscalEnabled;
+      } else {
+        cfgRemoto.fiscalEnabled = true;
+      }
+    }
+  } catch (err) {
+    log.debug("[ConfigSync] bootstrap fiscal ignorado:", err.message);
   }
 }
 
@@ -148,6 +206,7 @@ async function sincronizar(lerConfigFn) {
       throw new Error(`HTTP ${resp.status}: ${txt.slice(0, 120)}`);
     }
     const remoto = await resp.json();
+    await bootstrapFiscalNoBackend(backendUrl, backendToken, remoto);
     aplicarConfigRemota(remoto);
     try {
       const ack = await enviarAck(backendUrl, backendToken);
@@ -164,7 +223,7 @@ async function sincronizar(lerConfigFn) {
       estado.fiscalEnabled !== null || estado.operacional
         ? "ultimo_conhecido"
         : "env";
-    log.warn("[ConfigSync] Falha ao sincronizar:", err.message);
+    log.warn({ err: err.message }, "[ConfigSync] Falha ao sincronizar");
   }
   return getStatus();
 }

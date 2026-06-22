@@ -1,6 +1,7 @@
 // Re-emissão segura — consulta SEFAZ/chave/nNF antes de reenviar
 const acbr = require("./acbr");
 const docs = require("./documentosFiscais");
+const { coalescerRespostaAcbr } = require("./acbrResposta");
 const filaFiscal = require("./filaFiscal");
 const auditLog = require("./auditLog");
 const log = require("./logger").child({ modulo: "fiscal_recuperacao" });
@@ -11,15 +12,27 @@ const MAX_TENTATIVAS_CONSULTA = parseInt(
 );
 const BACKOFF_BASE_MS = 120000;
 const BACKOFF_CAP_MS = 1800000;
+const BACKOFF_104_MS = parseInt(process.env.FISCAL_RECOVERY_104_MS || "45000", 10);
 
-function calcularDelayMs(tentativasAposFalha) {
+function calcularDelayMs(tentativasAposFalha, opts = {}) {
+  if (opts.lote104) {
+    return Math.min(BACKOFF_104_MS * Math.max(1, tentativasAposFalha), BACKOFF_CAP_MS);
+  }
   const n = Math.max(1, tentativasAposFalha);
   return Math.min(BACKOFF_BASE_MS * 2 ** (n - 1), BACKOFF_CAP_MS);
 }
 
-function calcularProximoRetryIso(tentativasConsulta) {
-  const delay = calcularDelayMs(tentativasConsulta);
+function calcularProximoRetryIso(tentativasConsulta, opts = {}) {
+  const delay = calcularDelayMs(tentativasConsulta, opts);
   return new Date(Date.now() + delay).toISOString();
+}
+
+function jobIncertoPorLote104(job, payload = {}) {
+  const err = String(job?.erro || "");
+  if (/cStat\s*104|lote processado|aguardando confirma/i.test(err)) return true;
+  return /104|lote processado/i.test(
+    String(payload.motivoIncerto || payload._fiscalMeta?.cStat || ""),
+  );
 }
 
 function acbrDisponivelMemoria() {
@@ -28,38 +41,81 @@ function acbrDisponivelMemoria() {
 }
 
 async function consultarDocumentoAutorizado(meta = {}) {
-  const { chave, serie, numeroNfe, numeroVenda } = meta;
+  let { chave, serie, numeroNfe, numeroVenda, cnpj } = meta;
+
+  if (!chave && numeroVenda) {
+    const doc = filaFiscal.buscarDocumentoPorVenda(numeroVenda);
+    if (doc?.chave) chave = doc.chave;
+  }
+  if (!chave && serie && numeroNfe) {
+    const doc = filaFiscal.buscarDocumentoPorSerieNumero(serie, numeroNfe);
+    if (doc?.chave) chave = doc.chave;
+  }
+  if (!chave && (serie && numeroNfe || numeroVenda)) {
+    const localSerie = docs.localizarXmlPorSerieNumero(
+      serie,
+      numeroNfe,
+      cnpj || (chave ? docs.extrairCnpjDaChave(chave) : null),
+    );
+    if (localSerie?.chave) chave = localSerie.chave;
+    else if (localSerie?.xml) chave = docs.extrairChaveDoXml(localSerie.xml);
+  }
 
   if (numeroVenda) {
     const local = filaFiscal.buscarDocumentoPorVenda(numeroVenda);
     if (local?.chave && local.c_stat && ["100", "150"].includes(String(local.c_stat))) {
       return montarDeDocumentoLocal(local);
     }
-    const resultado = filaFiscal.obterResultadoPorVenda(numeroVenda);
-    if (
-      resultado &&
-      ["CONCLUIDO", "CONCLUIDO_RECUPERADO"].includes(resultado.status) &&
-      resultado.resultado
-    ) {
-      try {
-        return { ...JSON.parse(resultado.resultado), recuperado: true };
-      } catch (_) {}
+  }
+
+  if (chave) {
+    const localXml = docs.localizarXmlPorChave(chave);
+    if (localXml?.xml) {
+      const prot = localXml.prot || docs.extrairProtNFe(localXml.xml);
+      if (prot.cStat === "100" || prot.cStat === "150" || prot.nProt) {
+        return {
+          fiscal: true,
+          chave,
+          numero: meta.numeroNfe,
+          serie: meta.serieNfe || "001",
+          protocolo: prot.nProt,
+          cStat: prot.cStat || "100",
+          xMotivo: prot.xMotivo,
+          xml: localXml.xml,
+          xmlPath: localXml.path,
+          modeloDocumento: acbr.inferirModeloDaChave(chave) || "65",
+          recuperado: true,
+        };
+      }
     }
   }
 
   if (chave && acbrDisponivelMemoria()) {
     try {
       const consulta = await acbr.consultarChave(chave);
-      if (consulta.situacao === "AUTORIZADA") {
+      const cs = String(consulta.cStat || "");
+      if (
+        consulta.situacao === "AUTORIZADA" ||
+        cs === "100" ||
+        cs === "150"
+      ) {
+        const rawTxt = coalescerRespostaAcbr(consulta.raw);
+        const localXml = docs.localizarXmlPorChave(chave);
+        const xmlAutorizado =
+          localXml?.xml && docs.xmlEstaAutorizado(localXml.xml)
+            ? localXml.xml
+            : null;
         return {
           fiscal: true,
           chave,
-          numero: consulta.raw?.match(/Numero=(\d+)/)?.[1] || meta.numeroNfe,
-          serie: consulta.raw?.match(/Serie=(\d+)/)?.[1] || meta.serieNfe || "001",
+          numero: rawTxt.match(/Numero=(\d+)/)?.[1] || meta.numeroNfe,
+          serie: rawTxt.match(/Serie=(\d+)/)?.[1] || meta.serieNfe || "001",
           protocolo: consulta.protocolo,
           cStat: consulta.cStat || "100",
           xMotivo: consulta.xMotivo,
-          xml: docs.extrairXmlDaResposta(consulta.raw),
+          xml: xmlAutorizado,
+          xmlPath: localXml?.path || null,
+          modeloDocumento: acbr.inferirModeloDaChave(chave) || "65",
           recuperado: true,
         };
       }
@@ -89,30 +145,43 @@ function montarDeDocumentoLocal(doc) {
     const buf = docs.lerArquivo(doc.xml_path);
     xml = buf ? buf.toString("utf8") : null;
   }
+  const chave = doc.chave;
   return {
     fiscal: true,
-    chave: doc.chave,
+    chave,
     numero: doc.numero_nfe || null,
     serie: doc.serie_nfe || "001",
     protocolo: doc.protocolo,
     cStat: doc.c_stat || "100",
     xml,
+    xmlPath: doc.xml_path || null,
+    modeloDocumento:
+      doc.modelo_documento || acbr.inferirModeloDaChave(chave) || "65",
     recuperado: true,
   };
 }
 
 async function verificarAntesDeEmitir(payload) {
   const meta = {
-    chave: payload.chave || payload.chaveConsulta || payload._fiscalMeta?.chave,
+    chave:
+      payload.chave ||
+      payload.chaveConsulta ||
+      payload._fiscalMeta?.chave ||
+      null,
     serie: payload.serieNfe || payload._fiscalMeta?.serieNfe,
     numeroNfe: payload.numeroNfe || payload._fiscalMeta?.numeroNfe,
     numeroVenda: payload.numeroVenda,
+    cnpj:
+      payload.empresa?.cnpj ||
+      payload.cnpj ||
+      payload.emitente?.cnpj ||
+      null,
   };
   return consultarDocumentoAutorizado(meta);
 }
 
-function agendarBackoff(job, tentativasConsulta, motivo) {
-  const proximo = calcularProximoRetryIso(tentativasConsulta);
+function agendarBackoff(job, tentativasConsulta, motivo, opts = {}) {
+  const proximo = calcularProximoRetryIso(tentativasConsulta, opts);
   filaFiscal.agendarRetryConsulta(job.id, tentativasConsulta, proximo);
   let payload = {};
   try {
@@ -192,6 +261,14 @@ async function recuperarJob(job, lerConfigFn, opts = {}) {
     return { acao: "NAO_ENCONTRADO" };
   }
 
+  if (opts.permitirReemissao !== true) {
+    return agendarBackoff(
+      job,
+      job.tentativas_consulta || 1,
+      "Consulta sem autorização — reemissão bloqueada (use forcarEmissao no painel)",
+    );
+  }
+
   filaFiscal.marcarJob(job.id, "PENDENTE");
   filaFiscal.salvarResultadoEmissao(
     correlationId,
@@ -263,7 +340,16 @@ async function tentarRecuperacaoConsulta(job, lerConfigFn) {
   }
 
   if (r.acao === "NAO_ENCONTRADO") {
-    return recuperarJob(job, lerConfigFn, { somenteConsulta: false });
+    const chave =
+      payload.chaveConsulta ||
+      payload.chave ||
+      payload._fiscalMeta?.chave ||
+      null;
+    const msg = chave
+      ? `Lote processado (104) — aguardando protocolo SEFAZ (chave ${String(chave).slice(0, 12)}…)`
+      : "Nota ainda não localizada na consulta — aguardando indexação SEFAZ";
+    const backoffOpts = jobIncertoPorLote104(job, payload) ? { lote104: true } : {};
+    return agendarBackoff(job, tentativas, msg, backoffOpts);
   }
 
   return r;

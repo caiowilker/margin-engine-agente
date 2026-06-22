@@ -1,5 +1,6 @@
 // Rate limit global anti-tempestade SEFAZ (janela deslizante + backoff por CNPJ)
 const log = require("./logger").child({ modulo: "fiscal_rate_limit" });
+const { CSTAT_LOTE_OK } = require("./acbrResposta");
 
 const POR_MINUTO = parseInt(process.env.FISCAL_RATE_LIMIT_MIN || "12", 10);
 const POR_HORA = parseInt(process.env.FISCAL_RATE_LIMIT_HORA || "200", 10);
@@ -69,6 +70,8 @@ function registrarTentativa(cnpj) {
 function registrarFalha(cnpj, cStat, tentativasJob = 1) {
   const key = normalizarCnpj(cnpj);
   const cs = String(cStat || "");
+  if (!cs || cs === "undefined" || cs === "null") return;
+  if (CSTAT_LOTE_OK.has(cs)) return;
   let mult = 1;
   if (cs === "999") mult = Math.min(tentativasJob, 5);
   else if (cs.startsWith("5") || cs === "108") mult = 2;

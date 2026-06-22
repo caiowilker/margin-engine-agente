@@ -68,8 +68,19 @@ function validarPayloadNfce(payload) {
   }
 
   const cpf = String(payload.cpfCliente || "").replace(/\D/g, "");
+  const cnpj = String(payload.cnpjCliente || "").replace(/\D/g, "");
   if (cpf && cpf.length !== 11) {
     const err = new Error("CPF do consumidor deve ter 11 dígitos.");
+    err.permanente = true;
+    throw err;
+  }
+  if (cnpj && cnpj.length !== 14) {
+    const err = new Error("CNPJ do consumidor deve ter 14 dígitos.");
+    err.permanente = true;
+    throw err;
+  }
+  if (cpf && cnpj) {
+    const err = new Error("Informe apenas CPF ou CNPJ do consumidor, não ambos.");
     err.permanente = true;
     throw err;
   }

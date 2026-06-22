@@ -118,13 +118,13 @@ if (fs.existsSync(envPath)) {
 }
 
 // ── Verifica frontend-dist ────────────────────────────────────────────────────
-const frontendDist = path.join(__dirname, "frontend-dist");
-if (!fs.existsSync(frontendDist)) {
-  console.log("\n⚠  frontend-dist não encontrado.");
+const frontendIndex = path.join(__dirname, "frontend-dist", "index.html");
+if (!fs.existsSync(frontendIndex)) {
+  console.log("\n⚠  frontend-dist/index.html não encontrado.");
   console.log("   PDV precisará de internet para carregar o app.");
   console.log("   Para instalar offline:");
   console.log("     1. No projeto frontend: npm run build");
-  console.log("     2. Copie a pasta dist/ para aqui como frontend-dist/\n");
+  console.log("     2. Copie o conteúdo de dist/ para frontend-dist/ (com index.html)\n");
 } else {
   console.log("✓ frontend-dist encontrado — PDV funciona offline no navegador");
 }

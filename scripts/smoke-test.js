@@ -189,15 +189,15 @@ async function main() {
     log("ultimaEmissaoSucesso", "sem registro (pode estar OK se métricas vazias)");
   }
 
-  r = await request("GET", "/diagnostico/dashboard");
+  r = await request("GET", "/diagnostico/painel");
   if (
     r.status === 200 &&
     typeof r.raw === "string" &&
-    (r.raw.includes("OPERACIONAL") || r.raw.includes("DEGRADADO"))
+    r.raw.includes("Centro de Operações")
   ) {
-    log("GET /diagnostico/dashboard", "HTML OK");
+    log("GET /diagnostico/painel", "HTML OK");
   } else {
-    log("GET /diagnostico/dashboard", `HTTP ${r.status}`, false);
+    log("GET /diagnostico/painel", `HTTP ${r.status}`, false);
     process.exit(1);
   }
 
