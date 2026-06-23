@@ -36,8 +36,7 @@ function salvarXmlAutorizado(chave, xmlContent) {
   return salvarComVerificacaoDisco("xml", PATHS.xml, () => {
     const k = String(chave || "").replace(/\D/g, "");
     const prot = extrairProtNFe(xmlContent);
-    const autorizado =
-      prot.cStat === "100" || prot.cStat === "150" || Boolean(prot.nProt);
+    const autorizado = prot.cStat === "100" || prot.cStat === "150";
     const suffix = autorizado ? "-procNFe.xml" : "-nfe.xml";
     const file = path.join(PATHS.xml, `${k}${suffix}`);
     fs.writeFileSync(file, xmlContent, "utf8");
@@ -196,7 +195,7 @@ function carregarXmlComProt(filePath, chave) {
     return null;
   }
   let prot = extrairProtNFe(xml);
-  if (prot.cStat === "100" || prot.cStat === "150" || prot.nProt) {
+  if (prot.cStat === "100" || prot.cStat === "150") {
     return { path: filePath, xml, prot };
   }
   const base = filePath.replace(/\.xml$/i, "");
@@ -211,7 +210,7 @@ function carregarXmlComProt(filePath, chave) {
     try {
       const xmlProc = fs.readFileSync(alt, "utf8");
       const protAlt = extrairProtNFe(xmlProc);
-      if (protAlt.cStat || protAlt.nProt) {
+      if (protAlt.cStat === "100" || protAlt.cStat === "150") {
         return { path: alt, xml: xmlProc, prot: protAlt, pathNfe: filePath };
       }
     } catch (_) {}
@@ -341,7 +340,7 @@ function extrairProtNFe(xml) {
 function xmlEstaAutorizado(xml) {
   if (!xml || typeof xml !== "string") return false;
   const prot = extrairProtNFe(xml);
-  return prot.cStat === "100" || prot.cStat === "150" || Boolean(prot.nProt);
+  return prot.cStat === "100" || prot.cStat === "150";
 }
 
 /**

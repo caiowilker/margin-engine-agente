@@ -916,25 +916,40 @@ async function recuperarBoot(lerConfigFn) {
   const stats = { recuperados: 0, reagendados: 0, autorizados: 0, agendados: 0 };
   for (const job of jobs) {
     if (job.tipo === "EMISSAO") {
-      db.prepare(
-        `UPDATE fila_fiscal SET proximo_retry_at = datetime('now') WHERE id = ?`,
-      ).run(job.id);
-      marcarJob(job.id, "RECUPERANDO");
       try {
-        const payload = JSON.parse(job.payload);
-        salvarResultadoEmissao(
-          payload.correlationId || job.correlation_id,
-          payload.numeroVenda || job.numero_venda,
-          "RECUPERANDO",
-          null,
-          "Consulta de recuperação no boot",
+        db.prepare(
+          `UPDATE fila_fiscal SET proximo_retry_at = datetime('now') WHERE id = ?`,
+        ).run(job.id);
+        marcarJob(job.id, "RECUPERANDO");
+        try {
+          const payload = JSON.parse(job.payload);
+          salvarResultadoEmissao(
+            payload.correlationId || job.correlation_id,
+            payload.numeroVenda || job.numero_venda,
+            "RECUPERANDO",
+            null,
+            "Consulta de recuperação no boot",
+          );
+        } catch (_) {}
+        const r = await fiscalRecuperacao.tentarRecuperacaoConsulta(
+          job,
+          lerConfigFn,
         );
-      } catch (_) {}
-      const r = await fiscalRecuperacao.tentarRecuperacaoConsulta(job, lerConfigFn);
-      if (r.acao === "RECUPERADO") stats.autorizados++;
-      else if (r.acao === "AGENDADO") stats.agendados++;
-      else stats.reagendados++;
-      stats.recuperados++;
+        if (r.acao === "RECUPERADO") stats.autorizados++;
+        else if (r.acao === "AGENDADO") stats.agendados++;
+        else stats.reagendados++;
+        stats.recuperados++;
+      } catch (err) {
+        log.warn(
+          { jobId: job.id, err: err.message },
+          "Recovery no boot falhou para job — reagendado",
+        );
+        const tentativas = (job.tentativas_consulta || 0) + 1;
+        const proximo = new Date(Date.now() + 45000).toISOString();
+        agendarRetryConsulta(job.id, tentativas, proximo);
+        stats.reagendados++;
+        stats.recuperados++;
+      }
     } else {
       db.prepare(
         `UPDATE fila_fiscal SET status = 'PENDENTE', proxima_tentativa = datetime('now') WHERE id = ?`,

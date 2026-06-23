@@ -224,24 +224,12 @@ async function boot() {
     );
   }
   filaFiscal.init();
-  const bootCancel =
-    (process.env.FISCAL_BOOT_CANCEL || "false").toLowerCase() === "true";
-  if (bootCancel) {
-    const cancelados = filaFiscal.cancelarEmissaoPendente(
-      "Cancelado no boot — refaça a emissão após atualizar dados fiscais/ACBr",
-    );
-    if (cancelados > 0) {
-      console.log(
-        `[Fila fiscal] ${cancelados} job(s) de emissão pendente(s) cancelado(s) no boot`,
-      );
-    }
-  } else {
-    const rec = await filaFiscal.recuperarBoot(lerConfig);
-    console.log(
-      `[Fila fiscal] Boot recovery: ${rec.recuperados} job(s), ${rec.autorizados} recuperado(s)`,
-    );
-  }
   fiscalService.registrarHandlersFila(lerConfig);
+
+  // HTTP na porta 9100 antes de recovery fiscal — evita agente "offline" durante
+  // consultas SEFAZ/ACBr (ex.: cStat 104) e impede loop de crash no boot.
+  iniciarServidor();
+
   filaFiscal.iniciarWorker();
   watchdog.iniciar(reiniciarAcbrMonitor);
   fiscalPurge.iniciar();
@@ -261,7 +249,38 @@ async function boot() {
     });
   }
 
-  iniciarServidor();
+  const bootCancel =
+    (process.env.FISCAL_BOOT_CANCEL || "false").toLowerCase() === "true";
+  if (bootCancel) {
+    const cancelados = filaFiscal.cancelarEmissaoPendente(
+      "Cancelado no boot — refaça a emissão após atualizar dados fiscais/ACBr",
+    );
+    if (cancelados > 0) {
+      console.log(
+        `[Fila fiscal] ${cancelados} job(s) de emissão pendente(s) cancelado(s) no boot`,
+      );
+    }
+  } else {
+    setImmediate(() => {
+      filaFiscal
+        .recuperarBoot(lerConfig)
+        .then((rec) => {
+          console.log(
+            `[Fila fiscal] Boot recovery: ${rec.recuperados} job(s), ${rec.autorizados} autorizado(s)`,
+          );
+        })
+        .catch((err) => {
+          console.error(
+            "[Fila fiscal] Boot recovery falhou (agente continua online):",
+            err.message,
+          );
+          log.warn(
+            { err: err.message },
+            "Boot recovery falhou — reconciliação tentará novamente",
+          );
+        });
+    });
+  }
 }
 
 async function reiniciarAcbrMonitor() {

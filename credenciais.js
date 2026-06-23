@@ -34,15 +34,22 @@ const FALLBACK_PATH = path.join(__dirname, "data", ".vault");
 // API: Entry.setPassword / Entry.getPassword / Entry.deletePassword
 // (compativel com keytar, mas com instanciacao diferente)
 let KeyringEntry = null;
+let keyringLogEmitido = false;
 try {
   const keyring = require("@napi-rs/keyring");
   // @napi-rs/keyring exporta uma classe Entry
   KeyringEntry = keyring.Entry;
-  log.info("Cofre: usando @napi-rs/keyring (Windows Credential Manager)");
+  if (!keyringLogEmitido) {
+    log.info("Cofre: usando @napi-rs/keyring (Windows Credential Manager)");
+    keyringLogEmitido = true;
+  }
 } catch (_) {
-  log.warn(
-    "@napi-rs/keyring indisponivel - usando fallback criptografado em arquivo",
-  );
+  if (!keyringLogEmitido) {
+    log.warn(
+      "@napi-rs/keyring indisponivel - usando fallback criptografado em arquivo",
+    );
+    keyringLogEmitido = true;
+  }
 }
 
 // Cria uma entrada do keyring para o servico/conta

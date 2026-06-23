@@ -29,9 +29,10 @@ test("coalescerRespostaAcbr — junta array de sessão multi-comando", () => {
   assert.ok(out.includes("cStat=104"));
 });
 
-test("isCStatAutorizado — 104 com chave e protocolo", () => {
-  assert.strictEqual(isCStatAutorizado("104", "123", "31260612343055000183650010000000091816823438"), true);
-  assert.strictEqual(isCStatAutorizado("104", null, "31260612343055000183650010000000091816823438"), false);
+test("isCStatAutorizado — somente 100 e 150", () => {
+  assert.strictEqual(isCStatAutorizado("100"), true);
+  assert.strictEqual(isCStatAutorizado("150"), true);
+  assert.strictEqual(isCStatAutorizado("104"), false);
 });
 
 test("resolverCStatFinal — prefere cStat 100 do infProt sobre 104 do lote", () => {
@@ -62,7 +63,7 @@ test("parseResposta — protocolo no texto (sem XML) com cStat 104", () => {
     `cStat=104\nxMotivo=Lote processado\nChaveNFe=${chave}\nnProt=23123456789012`,
   );
   assert.strictEqual(p.protocolo, "23123456789012");
-  assert.strictEqual(isCStatAutorizado(p.cStat, p.protocolo, p.chave), true);
+  assert.strictEqual(isCStatAutorizado(p.cStat), false);
 });
 
 test("consulta 217 após lote 104 — não tratar como rejeição da emissão", () => {

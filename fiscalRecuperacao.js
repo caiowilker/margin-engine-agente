@@ -72,7 +72,7 @@ async function consultarDocumentoAutorizado(meta = {}) {
     const localXml = docs.localizarXmlPorChave(chave);
     if (localXml?.xml) {
       const prot = localXml.prot || docs.extrairProtNFe(localXml.xml);
-      if (prot.cStat === "100" || prot.cStat === "150" || prot.nProt) {
+      if (prot.cStat === "100" || prot.cStat === "150") {
         return {
           fiscal: true,
           chave,
@@ -281,6 +281,29 @@ async function recuperarJob(job, lerConfigFn, opts = {}) {
 }
 
 async function tentarRecuperacaoConsulta(job, lerConfigFn) {
+  try {
+    return await tentarRecuperacaoConsultaInterno(job, lerConfigFn);
+  } catch (err) {
+    log.warn({ jobId: job.id, err: err.message }, "Recovery consulta — erro inesperado");
+    const tentativas = (job.tentativas_consulta || 0) + 1;
+    if (tentativas > MAX_TENTATIVAS_CONSULTA) {
+      return { acao: "TIMEOUT", motivo: err.message };
+    }
+    let payload = {};
+    try {
+      payload = JSON.parse(job.payload);
+    } catch (_) {}
+    const backoffOpts = jobIncertoPorLote104(job, payload) ? { lote104: true } : {};
+    return agendarBackoff(
+      job,
+      tentativas,
+      `Erro na consulta: ${err.message}`,
+      backoffOpts,
+    );
+  }
+}
+
+async function tentarRecuperacaoConsultaInterno(job, lerConfigFn) {
   let payload;
   try {
     payload = JSON.parse(job.payload);

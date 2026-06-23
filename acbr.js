@@ -1,6 +1,7 @@
 // PDV Margin Engine — Módulo ACBr Monitor (mutex global + consultas fiscais)
 require("dotenv").config();
 const net = require("net");
+const { unidadeFiscalDoItem } = require("./unidadeFiscal");
 
 const ACBR_HOST = process.env.ACBR_HOST || "127.0.0.1";
 const ACBR_PORT = parseInt(process.env.ACBR_PORT || "9200");
@@ -10,6 +11,14 @@ const ACBR_IDLE_MS = parseInt(process.env.ACBR_IDLE_MS || "180", 10);
 const ACBR_TIMEOUT_EMISSAO = parseInt(
   process.env.ACBR_TIMEOUT_EMISSAO_MS || "120000",
 );
+/** MOC 5.2.3 — mínimo 15s entre envio assíncrono e consulta do recibo. */
+const FISCAL_CONSULTA_POS_104_MS = parseInt(
+  process.env.FISCAL_CONSULTA_POS_104_MS || "15000",
+  10,
+);
+/** MOC AP03a — indSinc=1: uma NF-e por lote, resposta com protNFe (evita cStat 104). */
+const FISCAL_ACBR_SINCRONO =
+  (process.env.FISCAL_ACBR_SINCRONO || "true").toLowerCase() !== "false";
 const EMISSAO_FISCAL_ENV =
   (process.env.EMISSAO_FISCAL || "false").toLowerCase() === "true";
 /** Runtime override via configSync (Parte D); null = usar env */
@@ -495,7 +504,7 @@ function inferirSituacao(cStat, raw) {
     t.match(/CHNFE[=:]\s*(\d{44})/i)?.[1] ||
     null;
   if (t.includes("CANCEL")) return "CANCELADA";
-  if (isCStatAutorizado(cStat, protocolo, chave) || t.includes("AUTORIZ")) {
+  if (isCStatAutorizado(cStat) || t.includes("AUTORIZ")) {
     return "AUTORIZADA";
   }
   if (cStat === "101") return "CANCELADA";
@@ -563,6 +572,41 @@ function resolverGtin(item) {
   return "";
 }
 
+/** Distribui vTotTrib (IBPT) proporcionalmente entre itens — último item absorve centavos. */
+function distribuirIbptItens(itens, totalVenda, ibptTotal) {
+  const cupom = Number.isFinite(ibptTotal) && ibptTotal > 0 ? ibptTotal : 0;
+  if (cupom <= 0 || !Array.isArray(itens) || itens.length === 0) {
+    return itens.map(() => 0);
+  }
+  const total = Number(totalVenda) > 0 ? Number(totalVenda) : 0;
+  let acum = 0;
+  return itens.map((item, i) => {
+    const itemTotal = Number(
+      item.total ?? Number(item.quantidade) * Number(item.precoUnitario),
+    );
+    if (i === itens.length - 1) {
+      return Math.round((cupom - acum) * 100) / 100;
+    }
+    const parte =
+      total > 0
+        ? Math.round(((cupom * itemTotal) / total) * 100) / 100
+        : 0;
+    acum += parte;
+    return parte;
+  });
+}
+
+function resolverNatOpNfe(payload) {
+  if (payload.natOp) return sanitizeAcbrText(payload.natOp, 60);
+  if (payload.tipoEmissaoNfe === "POS_NFCE") {
+    return "5929/ VENDA JA REGIST. NO NFC-E D/UF";
+  }
+  if (payload.tipoEmissaoNfe === "SUBSTITUICAO_TRIBUTARIA") {
+    return "VENDA MERC. SUBSTITUICAO TRIBUTARIA";
+  }
+  return "VENDA DE MERCADORIA";
+}
+
 function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
   const usaSimples = crtUsaSimples(crt);
   const nn = String(n).padStart(3, "0");
@@ -570,7 +614,8 @@ function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
   const pu = Number(item.precoUnitario);
   const total = Number(item.total ?? qtd * pu);
   const desc = Number(item.desconto || 0);
-  const un = item.porPeso ? "KG" : "UN";
+  const brutoLinha = desc > 0 ? total + desc : total;
+  const un = unidadeFiscalDoItem(item);
   const gtin = resolverGtin(item);
   const ncm = String(item.ncm || "00000000")
     .replace(/\D/g, "")
@@ -588,10 +633,14 @@ function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
   bloco += `cEANTrib=${gtin || "SEM GTIN"}\n`;
   bloco += `xProd=${nome}\n`;
   bloco += `NCM=${ncm}\n`;
+  const cest = String(item.cest || "")
+    .replace(/\D/g, "")
+    .slice(0, 7);
+  if (cest.length === 7) bloco += `CEST=${cest}\n`;
   bloco += `uCom=${un}\n`;
   bloco += `qCom=${fmtQty(qtd)}\n`;
   bloco += `vUnCom=${fmtQty(pu)}\n`;
-  bloco += `vProd=${fmtMoney(total)}\n`;
+  bloco += `vProd=${fmtMoney(brutoLinha)}\n`;
   bloco += `uTrib=${un}\n`;
   bloco += `qTrib=${fmtQty(qtd)}\n`;
   bloco += `vUnTrib=${fmtQty(pu)}\n`;
@@ -635,7 +684,7 @@ function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
     bloco += `CST=01\nvBC=0.00\npCOFINS=3.00\nvCOFINS=0.00\n\n`;
   }
 
-  return { bloco, total, desc, vTotTrib: Number(vTotTribItem) || 0 };
+  return { bloco, total: brutoLinha, desc, vTotTrib: Number(vTotTribItem) || 0 };
 }
 
 function montarSecaoDestinatario(payload, tpAmb) {
@@ -1053,22 +1102,32 @@ function montarIniNfe(payload, numeracao, destinatario) {
   const destUf = sanitizeAcbrText(destinatario.endereco?.uf, 2).toUpperCase();
   const idDest = ufEmit && destUf && ufEmit !== destUf ? "2" : "1";
   const cfopDefault = cfopPadraoNfe(payload, ufEmit, destUf);
+  const ibptTotal = Number(payload.ibpt?.total);
+  const ibptCupom =
+    Number.isFinite(ibptTotal) && ibptTotal > 0 ? ibptTotal : 0;
 
   let vProd = 0;
   let vTotTrib = 0;
   let blocoItens = "";
+  const ibptPorItem = distribuirIbptItens(itens, totalVenda, ibptCupom);
 
   itens.forEach((item, i) => {
+    let cfopItem = cfopItemNfe(item.cfop, cfopDefault, idDest);
+    if (payload.tipoEmissaoNfe === "POS_NFCE") {
+      cfopItem = "5929";
+    }
     const itemComCfop = {
       ...item,
-      cfop: cfopItemNfe(item.cfop, cfopDefault, idDest),
+      cfop: cfopItem,
+      csosn: item.csosn || item.CSOSN,
+      cest: item.cest || item.CEST,
     };
     const itemTotal = Number(item.total ?? Number(item.quantidade) * Number(item.precoUnitario));
     const { bloco, total, desc, vTotTrib: vTribItem } = montarSecaoTributosItem(
       itemComCfop,
       i + 1,
       crt,
-      0,
+      ibptPorItem[i] || 0,
     );
     blocoItens += bloco;
     vProd += total - desc;
@@ -1076,18 +1135,22 @@ function montarIniNfe(payload, numeracao, destinatario) {
   });
   vTotTrib = Math.round(vTotTrib * 100) / 100;
 
+  const dhEmi = formatarDhEmi();
+  const natOp = resolverNatOpNfe(payload);
+
   let ini = `[infNFe]\nversao=4.00\n\n`;
   ini += `[Identificacao]\n`;
   ini += `cNF=${cNF}\n`;
-  ini += `natOp=${sanitizeAcbrText(payload.natOp || "VENDA DE MERCADORIA", 60)}\n`;
+  ini += `natOp=${natOp}\n`;
   ini += `mod=55\n`;
   ini += `serie=${serie}\n`;
   ini += `nNF=${nNF}\n`;
-  ini += `dhEmi=${formatarDhEmi()}\n`;
+  ini += `dhEmi=${dhEmi}\n`;
+  ini += `dhSaiEnt=${dhEmi}\n`;
   ini += `tpNF=1\n`;
   ini += `idDest=${idDest}\n`;
-  ini += `indFinal=0\n`;
-  ini += `indPres=0\n`;
+  ini += `indFinal=${payload.indFinal != null ? payload.indFinal : 0}\n`;
+  ini += `indPres=${payload.indPres != null ? payload.indPres : 1}\n`;
   ini += `tpImp=1\n`;
   ini += `tpAmb=${tpAmb}\n`;
   ini += `finNFe=1\n`;
@@ -1095,6 +1158,11 @@ function montarIniNfe(payload, numeracao, destinatario) {
   ini += `procEmi=0\n`;
   ini += `verProc=MarginEnginePDV/5.3\n`;
   if (codMun) ini += `cMunFG=${codMun}\n`;
+  const nfRef = String(payload.nfRefChave || payload.chaveNfceReferencia || "")
+    .replace(/\D/g, "");
+  if (nfRef.length === 44) {
+    ini += `\n[NFRef001]\nrefNFe=${nfRef}\n`;
+  }
   ini += `\n`;
 
   ini += `[Emitente]\n`;
@@ -1167,9 +1235,26 @@ function montarIniNfe(payload, numeracao, destinatario) {
 
   ini += montarSecaoInfRespTec();
 
+  const infCplParts = [];
   if (payload.numeroVenda) {
+    infCplParts.push(`NF-E VENDA ${sanitizeAcbrText(String(payload.numeroVenda), 40)}`);
+  }
+  if (payload.infCpl) {
+    infCplParts.push(sanitizeAcbrText(String(payload.infCpl), 200));
+  }
+  if (ibptCupom > 0) {
+    const pct =
+      totalVenda > 0 ? ((ibptCupom / totalVenda) * 100).toFixed(2) : "0.00";
+    infCplParts.push(
+      `Trib. aprox.: R$ ${fmtMoney(ibptCupom)} (${pct}%) Fonte: IBPT`,
+    );
+  }
+  if (nfRef.length === 44) {
+    infCplParts.push(`Nota fiscal referente a NFC-e chave ${nfRef.slice(0, 10)}…`);
+  }
+  if (infCplParts.length > 0) {
     ini += `[DadosAdicionais]\n`;
-    ini += `infCpl=NF-E VENDA ${sanitizeAcbrText(String(payload.numeroVenda), 40)}\n\n`;
+    ini += `infCpl=${infCplParts.join(" | ")}\n\n`;
   }
 
   return ini;
@@ -1228,10 +1313,10 @@ function enrichParsePosEmissao(p, resposta) {
 
 async function enrichParsePosEmissaoAsync(p, resposta) {
   let atual = enrichParsePosEmissao(p, resposta);
-  if (isCStatAutorizado(atual.cStat, atual.protocolo, atual.chave)) return atual;
+  if (isCStatAutorizado(atual.cStat)) return atual;
 
   if (CSTAT_LOTE_OK.has(String(atual.cStat)) && atual.chave) {
-    const esperaMs = parseInt(process.env.FISCAL_CONSULTA_POS_104_MS || "4000", 10);
+    const esperaMs = FISCAL_CONSULTA_POS_104_MS;
     if (esperaMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, esperaMs));
     }
@@ -1263,7 +1348,7 @@ async function enrichParsePosEmissaoAsync(p, resposta) {
 
 function assertAutorizada(p, resposta, modeloDF = 65) {
   const cStat = String(p.cStat || "");
-  if (isCStatAutorizado(cStat, p.protocolo, p.chave)) return;
+  if (isCStatAutorizado(cStat)) return;
   const tipo = Number(modeloDF) === 55 ? "NF-e" : "NFC-e";
   const motivo =
     p.xMotivo ||
@@ -1300,9 +1385,11 @@ async function criarEnviarIni(iniPath) {
   return criarEnviarIniModelo(iniPath, 65);
 }
 
-async function criarEnviarIniModelo(iniPath, modeloDF = 65) {
+async function criarEnviarIniModelo(iniPath, modeloDF = 65, opts = {}) {
+  const sincrono = opts.sincrono !== undefined ? !!opts.sincrono : FISCAL_ACBR_SINCRONO;
+  const flagSinc = sincrono ? 1 : 0;
   const respostaBruta = await enviarNfeModelo(
-    `NFE.CriarEnviarNFe(${qAcbr(iniPath)},1,0,0,0,0,0,0)`,
+    `NFE.CriarEnviarNFe(${qAcbr(iniPath)},1,0,${flagSinc},0,0,0,0)`,
     modeloDF,
     ACBR_TIMEOUT_EMISSAO,
   );

@@ -55,11 +55,10 @@ function resolverCStatFinal({ todosCStat, prot, get }) {
   );
 }
 
-function isCStatAutorizado(cStat, protocolo, chave) {
+/** Somente cStat 100/150 (infProt) significam nota autorizada na SEFAZ. */
+function isCStatAutorizado(cStat) {
   const cs = String(cStat || "");
-  if (cs === "100" || cs === "150") return true;
-  if (cs === "104" && protocolo && chave) return true;
-  return false;
+  return cs === "100" || cs === "150";
 }
 
 module.exports = {

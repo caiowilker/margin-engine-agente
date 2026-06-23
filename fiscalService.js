@@ -44,6 +44,15 @@ async function resolverXmlParaCallback(chave, xmlPathHint) {
   }
 }
 
+const { isCStatAutorizado } = require("./acbrResposta");
+
+function derivarStatusFiscal(cStat) {
+  const cs = String(cStat || "");
+  if (cs === "100" || cs === "150") return "AUTORIZADA";
+  if (cs === "103" || cs === "104") return "PENDENTE_SEFAZ";
+  return "REJEITADA";
+}
+
 function montarCallbackPayload(params) {
   const {
     correlationId,
@@ -70,9 +79,9 @@ function montarCallbackPayload(params) {
     serieNfe,
     qrcode: qrcode || null,
     protocolo,
-    cStat: cStat || "100",
+    cStat: cStat || null,
     xMotivo: xMotivo || null,
-    statusFiscal: "AUTORIZADA",
+    statusFiscal: derivarStatusFiscal(cStat),
     xmlContent: xmlContent || null,
     xmlPath: xmlPath || null,
     pdfPath: pdfPath || null,
@@ -216,6 +225,16 @@ async function callbackBackend(cfg, numeroVenda, payload, correlationId) {
 }
 
 async function persistirAposAutorizacao(cfg, numeroVenda, correlationId, resultado) {
+  if (!isCStatAutorizado(resultado.cStat)) {
+    const err = new Error(
+      `NF-e aguardando confirmação SEFAZ (cStat ${resultado.cStat || "?"}): ${resultado.xMotivo || "lote em processamento"}`,
+    );
+    err.cStat = String(resultado.cStat || "104");
+    err.incerto = true;
+    err.permanente = false;
+    err.chaveConsulta = resultado.chave;
+    throw err;
+  }
   fiscalStorage.exigirEspacoParaEscrita();
   const modelo = resultado.modeloDocumento || inferirModeloDocumento(null, resultado.chave);
   let xmlPath = null;
@@ -298,6 +317,16 @@ async function persistirAposAutorizacao(cfg, numeroVenda, correlationId, resulta
 }
 
 async function persistirDocumentosFiscais(cfg, numeroVenda, correlationId, resultado) {
+  if (!isCStatAutorizado(resultado.cStat)) {
+    const err = new Error(
+      `NF-e aguardando confirmação SEFAZ (cStat ${resultado.cStat || "?"}): ${resultado.xMotivo || "lote em processamento"}`,
+    );
+    err.cStat = String(resultado.cStat || "104");
+    err.incerto = true;
+    err.permanente = false;
+    err.chaveConsulta = resultado.chave;
+    throw err;
+  }
   if (deveGerarPdfSincrono(resultado)) {
     fiscalStorage.exigirEspacoParaEscrita();
     const modelo = resultado.modeloDocumento || inferirModeloDocumento(null, resultado.chave);
