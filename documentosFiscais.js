@@ -383,6 +383,124 @@ function extrairQrCodeDoXml(xml) {
   return simples?.[1]?.trim() || null;
 }
 
+function buscarArquivoPdfRecursivo(dir, chave, maxDepth = 6, depth = 0) {
+  if (!dir || !fs.existsSync(dir) || depth > maxDepth) return null;
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch (_) {
+    return null;
+  }
+  const k = String(chave || "").replace(/\D/g, "");
+  const direto = entries.find(
+    (e) =>
+      e.isFile() &&
+      e.name.toLowerCase().endsWith(".pdf") &&
+      e.name.includes(k),
+  );
+  if (direto) return path.join(dir, direto.name);
+  for (const ent of entries) {
+    if (!ent.isDirectory()) continue;
+    const found = buscarArquivoPdfRecursivo(
+      path.join(dir, ent.name),
+      chave,
+      maxDepth,
+      depth + 1,
+    );
+    if (found) return found;
+  }
+  return null;
+}
+
+function suffixPdfModelo(modeloDocumento = "65") {
+  return String(modeloDocumento) === "55" ? "danfe" : "danfce";
+}
+
+function pastaModeloAcbr(modeloDocumento = "65") {
+  return String(modeloDocumento) === "55" ? "NFe" : "NFCe";
+}
+
+/** Localiza PDF da chave (flat ou aninhado ACBr: pdf/CNPJ/NFe|NFCe/AAAAMM/...). */
+function localizarPdfPorChave(chave, modeloDocumento = "65") {
+  const k = String(chave || "").replace(/\D/g, "");
+  if (k.length !== 44) return null;
+  const modelo = String(modeloDocumento || inferirModeloDaChave(k) || "65");
+  const suffix = suffixPdfModelo(modelo);
+
+  const flat = path.join(PATHS.pdf, `${k}-${suffix}.pdf`);
+  if (isPdfValid(flat)) return flat;
+
+  const cnpj = extrairCnpjDaChave(k);
+  const aamm = k.slice(2, 6);
+  const pastaMod = pastaModeloAcbr(modelo);
+  const dirs = [];
+  if (cnpj) {
+    dirs.push(path.join(PATHS.pdf, cnpj, pastaMod, `20${aamm}`, pastaMod));
+    dirs.push(path.join(PATHS.pdf, cnpj, pastaMod, aamm, pastaMod));
+    dirs.push(path.join(PATHS.pdf, cnpj, pastaMod, `20${aamm}`));
+    dirs.push(path.join(PATHS.pdf, cnpj, pastaMod));
+    dirs.push(path.join(PATHS.pdf, cnpj));
+  }
+  dirs.push(PATHS.pdf, PATHS.saida);
+
+  const seen = new Set();
+  for (const dir of dirs) {
+    if (!dir || seen.has(dir)) continue;
+    seen.add(dir);
+    if (!fs.existsSync(dir)) continue;
+    const candidatos = [
+      `${k}-${suffix}.pdf`,
+      `${k}.pdf`,
+      `${k}-danfe.pdf`,
+      `${k}-danfce.pdf`,
+    ];
+    for (const nome of candidatos) {
+      const full = path.join(dir, nome);
+      if (isPdfValid(full)) return full;
+    }
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      const match = entries.find(
+        (e) =>
+          e.isFile() &&
+          e.name.toLowerCase().endsWith(".pdf") &&
+          e.name.includes(k),
+      );
+      if (match && isPdfValid(path.join(dir, match.name))) {
+        return path.join(dir, match.name);
+      }
+    } catch (_) {
+      /* próximo dir */
+    }
+  }
+
+  for (const raiz of [PATHS.pdf, PATHS.saida]) {
+    const found = buscarArquivoPdfRecursivo(raiz, k);
+    if (found && isPdfValid(found)) return found;
+  }
+  return null;
+}
+
+function inferirModeloDaChave(chave) {
+  const k = String(chave || "").replace(/\D/g, "");
+  if (k.length >= 22) {
+    const mod = k.substring(20, 22);
+    if (mod === "55" || mod === "65") return mod;
+  }
+  return "65";
+}
+
+/** Copia PDF encontrado para path canônico do agente. */
+function copiarPdfParaCanonico(chave, srcPath, modeloDocumento = "65") {
+  const k = String(chave || "").replace(/\D/g, "");
+  const dest = path.join(PATHS.pdf, `${k}-${suffixPdfModelo(modeloDocumento)}.pdf`);
+  if (!srcPath || !isPdfValid(srcPath)) return null;
+  if (path.resolve(srcPath) !== path.resolve(dest)) {
+    fs.copyFileSync(srcPath, dest);
+  }
+  return dest;
+}
+
 module.exports = {
   salvarXmlAutorizado,
   salvarXmlCancelamento,
@@ -398,6 +516,8 @@ module.exports = {
   extrairChaveDoXml,
   localizarXmlPorChave,
   localizarXmlPorSerieNumero,
+  localizarPdfPorChave,
+  copiarPdfParaCanonico,
   extrairCnpjDaChave,
   xmlEstaAutorizado,
   resolverXmlParaImpressao,

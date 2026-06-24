@@ -1136,6 +1136,10 @@ function close() {
   }
 }
 
+function estaProcessando() {
+  return processandoFiscal || processandoPdf;
+}
+
 module.exports = {
   TIPOS,
   STATUS,
@@ -1180,4 +1184,5 @@ module.exports = {
   listarUltimasEmissoes,
   liberarJobsTravados,
   close,
+  estaProcessando,
 };

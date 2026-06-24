@@ -346,6 +346,13 @@ async function persistirDocumentosFiscais(cfg, numeroVenda, correlationId, resul
       pdfErro = err.message || String(err);
       fiscalMetrics.registrarEmissao(0, { pdfMs: Date.now() - tPdf, pdf: false });
     }
+    if (!pdfPath && resultado.chave) {
+      const encontrado = docs.localizarPdfPorChave(resultado.chave, modelo);
+      if (encontrado) {
+        pdfPath = docs.copiarPdfParaCanonico(resultado.chave, encontrado, modelo);
+        pdfErro = null;
+      }
+    }
     const pdfContentBase64 =
       pdfPath && docs.isPdfValid(pdfPath) ? docs.lerArquivoBase64(pdfPath) : null;
     filaFiscal.salvarDocumento({
@@ -380,6 +387,23 @@ async function persistirDocumentosFiscais(cfg, numeroVenda, correlationId, resul
       recuperado: !!resultado.recuperado,
     });
     await enviarCallbackDocumentosFiscais(cfg, numeroVenda, correlationId, callbackPayload);
+
+    if (!pdfPath && resultado.chave && xmlPath) {
+      filaFiscal.enfileirar(
+        "GERAR_PDF",
+        {
+          chave: resultado.chave,
+          xmlPath,
+          numeroVenda,
+          correlationId,
+          modeloDocumento: modelo,
+        },
+        correlationId,
+        numeroVenda,
+      );
+      filaFiscal.dispararProcessamento();
+    }
+
     return {
       ...resultado,
       xmlPath,
@@ -704,6 +728,12 @@ async function obterPdfDocumento(chave, numeroVenda) {
   }
 
   let pdfPath = doc?.pdf_path;
+  if (!docs.isPdfValid(pdfPath) && chaveDoc) {
+    const encontrado = docs.localizarPdfPorChave(chaveDoc, modelo);
+    if (encontrado) {
+      pdfPath = docs.copiarPdfParaCanonico(chaveDoc, encontrado, modelo);
+    }
+  }
   const pdfDesatualizado =
     docs.isPdfValid(pdfPath) &&
     xmlAutorizado &&

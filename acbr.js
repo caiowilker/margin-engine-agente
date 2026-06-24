@@ -67,6 +67,8 @@ const {
 } = require("./acbrResposta");
 
 let acbrLock = Promise.resolve();
+/** Profundidade do mutex — >0 enquanto emissão/PDF/consulta ACBr está em andamento. */
+let acbrBusyDepth = 0;
 let ultimoModeloSessao = null;
 let ultimoStatusMemoria = { estado: "offline", atualizadoEm: null };
 
@@ -119,9 +121,20 @@ function extrairPathPdfOk(resposta) {
 }
 
 function withAcbrLock(fn, label = "acbr") {
-  const run = acbrLock.then(() => fn());
+  const run = acbrLock.then(async () => {
+    acbrBusyDepth++;
+    try {
+      return await fn();
+    } finally {
+      acbrBusyDepth--;
+    }
+  });
   acbrLock = run.catch(() => {});
   return run;
+}
+
+function isAcbrBusy() {
+  return acbrBusyDepth > 0;
 }
 
 function resolverTpAmbAcbr() {
@@ -1634,6 +1647,14 @@ function inferirModeloDaChave(chave) {
 async function gerarPdfFiscal(chave, xmlPath, modeloDocumento = "65") {
   const modelo = String(modeloDocumento || "65");
   const destino = destinoPdfFiscal(chave, modelo);
+  const docs = require("./documentosFiscais");
+  const existente = docs.localizarPdfPorChave(chave, modelo);
+  if (existente && docs.isPdfValid(existente)) {
+    if (path.resolve(existente) !== path.resolve(destino)) {
+      fs.copyFileSync(existente, destino);
+    }
+    return destino;
+  }
   const xml = resolverXmlChave(chave, xmlPath);
   // Somente ImprimirDANFEPDF — ImprimirDanfe envia à impressora física (reimpressão usa imprimirDanfce).
   const comandos =
@@ -1655,6 +1676,14 @@ async function gerarPdfFiscal(chave, xmlPath, modeloDocumento = "65") {
     } catch (_) {
       /* tenta próximo comando */
     }
+  }
+
+  const achadoAninhado = docs.localizarPdfPorChave(chave, modelo);
+  if (achadoAninhado && docs.isPdfValid(achadoAninhado)) {
+    if (path.resolve(achadoAninhado) !== path.resolve(destino)) {
+      fs.copyFileSync(achadoAninhado, destino);
+    }
+    return destino;
   }
 
   for (const dir of [PATHS.saida, PATHS.pdf, PATHS.xml]) {
@@ -1713,6 +1742,7 @@ module.exports = {
   enviarNfe,
   enviarNfeComandos,
   withAcbrLock,
+  isAcbrBusy,
   setRuntimeEmissaoFiscal,
   getRuntimeEmissaoFiscal: getEmissaoFiscalAtivo,
   get EMISSAO_FISCAL() {

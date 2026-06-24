@@ -30,6 +30,12 @@ fs.writeFileSync(
   nfeProc,
 );
 
+const pdfRoot = path.join(testDir, "acbr", "pdf");
+const pdfNested = path.join(pdfRoot, cnpj, "NFe", "202606", "NFe");
+fs.mkdirSync(pdfNested, { recursive: true });
+const pdfFake = Buffer.from("%PDF-1.4\n" + "x".repeat(200));
+fs.writeFileSync(path.join(pdfNested, `${chave}-danfe.pdf`), pdfFake);
+
 process.env.MARGIN_ENGINE_ROOT = testDir;
 
 const docs = require("../documentosFiscais");
@@ -71,6 +77,19 @@ test("resolverXmlParaImpressao — ignora hint sem protocolo se proc existir", (
 test("xmlEstaAutorizado — detecta infProt", () => {
   assert.strictEqual(docs.xmlEstaAutorizado(nfeProc), true);
   assert.strictEqual(docs.xmlEstaAutorizado(nfeOnly), false);
+});
+
+test("localizarPdfPorChave — encontra PDF aninhado ACBr", () => {
+  const p = docs.localizarPdfPorChave(chave, "55");
+  assert.ok(p, "deveria encontrar PDF");
+  assert.ok(p.includes(chave), "path contém chave");
+});
+
+test("copiarPdfParaCanonico — normaliza para path flat", () => {
+  const src = docs.localizarPdfPorChave(chave, "55");
+  const canon = docs.copiarPdfParaCanonico(chave, src, "55");
+  assert.ok(canon.endsWith(`${chave}-danfe.pdf`));
+  assert.ok(docs.isPdfValid(canon));
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
