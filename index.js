@@ -905,6 +905,30 @@ function iniciarServidor() {
     res.json({ ok: true, versao: VERSAO_ATUAL, uptime: process.uptime() });
   });
 
+  /** Probe fiscal leve — não bloqueia no mutex ACBr durante emissão/PDF. */
+  async function probeStatusFiscal() {
+    const acbrOcupado = acbr.isAcbrBusy() || filaFiscal.estaProcessando();
+    const wd = watchdog.statusWatchdog();
+    if (acbrOcupado) {
+      const mem = acbr.obterStatusMemoria(wd.degraded);
+      return {
+        acbrOk: mem === "online" || mem === "degradado" || acbr.EMISSAO_FISCAL,
+        acbrOcupado: true,
+        fiscalProcessando: filaFiscal.estaProcessando(),
+        acbrEstadoMemoria: mem,
+      };
+    }
+    const acbrOk = acbr.EMISSAO_FISCAL
+      ? await acbr.testar().catch(() => false)
+      : false;
+    return {
+      acbrOk,
+      acbrOcupado: false,
+      fiscalProcessando: filaFiscal.estaProcessando(),
+      acbrEstadoMemoria: acbr.obterStatusMemoria(wd.degraded),
+    };
+  }
+
   // Status reduzido e PÚBLICO — alimenta a página "/" (status.html).
   // Mostra apenas informações não sensíveis (sem backendUrl, tenantId,
   // dispositivoId, hostname ou caminhos de arquivo). Pensado para o instalador
@@ -912,12 +936,10 @@ function iniciarServidor() {
   app.get("/status-basico", privateNetworkHeaders, async (req, res) => {
     config = await lerConfig();
 
-    const [impressoraOk, impressoraInfo, acbrOk] = await Promise.all([
+    const [impressoraOk, impressoraInfo, fiscalProbe] = await Promise.all([
       impressora.testar().catch(() => false),
       impressora.getInfo().catch(() => null),
-      acbr.EMISSAO_FISCAL
-        ? acbr.testar().catch(() => false)
-        : Promise.resolve(false),
+      probeStatusFiscal(),
     ]);
 
     const { pendentes, falhas } = await fila.contadores();
@@ -955,7 +977,9 @@ function iniciarServidor() {
 
       fiscal: {
         emissaoFiscal: acbr.EMISSAO_FISCAL,
-        ok: acbr.EMISSAO_FISCAL ? acbrOk : null,
+        ok: acbr.EMISSAO_FISCAL ? fiscalProbe.acbrOk : null,
+        ocupado: fiscalProbe.acbrOcupado,
+        processando: fiscalProbe.fiscalProcessando,
       },
 
       banco: { ok: dbOk },
@@ -989,10 +1013,10 @@ function iniciarServidor() {
     exigirAgentToken,
     async (req, res) => {
       config = await lerConfig();
-      const impressoraOk = await impressora.testar().catch(() => false);
-      const acbrOk = acbr.EMISSAO_FISCAL
-        ? await acbr.testar().catch(() => false)
-        : false;
+      const [impressoraOk, fiscalProbe] = await Promise.all([
+        impressora.testar().catch(() => false),
+        probeStatusFiscal(),
+      ]);
       const { pendentes, falhas } = await fila.contadores();
       const contingencia = lerContingencia();
 
@@ -1009,7 +1033,9 @@ function iniciarServidor() {
       res.json({
         online: true,
         impressoraConectada: impressoraOk,
-        acbrConectado: acbrOk,
+        acbrConectado: acbr.EMISSAO_FISCAL ? fiscalProbe.acbrOk : false,
+        acbrOcupado: fiscalProbe.acbrOcupado,
+        fiscalProcessando: fiscalProbe.fiscalProcessando,
         emissaoFiscal: acbr.EMISSAO_FISCAL,
         versao: VERSAO_ATUAL,
         timestamp: new Date().toISOString(),

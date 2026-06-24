@@ -13,6 +13,10 @@ function statusWatchdog() {
 }
 
 async function tick(restartAcbrFn) {
+  const filaFiscal = require("./filaFiscal");
+  if (acbr.isAcbrBusy?.() || filaFiscal.estaProcessando?.()) {
+    return;
+  }
   try {
     const ok = await acbr.testar();
     if (ok) {
