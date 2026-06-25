@@ -21,6 +21,10 @@ data/backup-pre-update/
 
 # Logs do npm
 npm-debug.log*
+npm-test-*.txt
+
+# Saída de testes fiscais locais
+test/data-test-xml/acbr/pdf/
 
 # Editores
 .vscode/

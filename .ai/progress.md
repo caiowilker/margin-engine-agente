@@ -1,40 +1,52 @@
-# PROGRESS — Agente Local (Fiscal NFC-e)
+# PROGRESS — Agente Local
 
-**Última atualização:** 2026-06-17  
-**Status:** Fases 01–08 + Bloqueadores B01–B05 implementados
-
----
-
-## Concluído
-
-* Mutex global ACBr (`acbr.js`)
-* Consulta SEFAZ e por chave
-* Fila fiscal SQLite (EMISSAO, CALLBACK_BACKEND, CANCELAMENTO, INUTILIZACAO, EPEC)
-* Persistência XML/PDF real em `MarginEngine/acbr/*` (validação `%PDF`)
-* `fiscalService.js` — emissão via fila, cancelamento, inutilização, callback backend com `pdfContentBase64`
-* `fiscalPreflight.js` — validação A1/CSC/ambiente antes de emitir (`GET /acbr/fiscal/preflight`)
-* `reconciliacaoFiscal.js` — ciclo automático de reconciliação (5 min padrão)
-* `fiscalRetry.js` — classificação cStat/erros transientes vs permanentes
-* `watchdog.js` — pausa fila quando ACBr offline
-* Rotas: `/fiscal/emitir` (fila), `/fiscal/cancelar`, `/diagnostico/fiscal`, `/fila/fiscal`, `/acbr/nfce/reimprimir`
-* Logger Pino integrado na fila fiscal
+**Última atualização:** 2026-06-25  
+**Status:** Fiscal NFC-e + impressão térmica QR + hardening rede
 
 ---
 
-## Bloqueadores corrigidos (2026-06-17)
+## Concluído — Fiscal
 
-| ID | Arquivo principal | Resumo |
-|----|-------------------|--------|
-| B01 | `acbr.js`, `documentosFiscais.js`, `fiscalService.js` | PDF real ACBr + Base64 no callback |
-| B03 | `filaFiscal.js`, `fiscalService.js` | Emissão enfileirada com idempotência |
-| B04 | `fiscalPreflight.js` | Preflight certificado/CSC/ambiente |
-| B05 | `reconciliacaoFiscal.js` | Reconciliação automática periódica |
+* Fila fiscal SQLite, mutex ACBr, callback backend com PDF Base64 e `qrcode`
+* Preflight A1/CSC, reconciliação automática, retry classificado
+* NF-e 55 + NFC-e 65, DANFC-e/DANFE PDF, inutilização, cancelamento
+* Rotas `/fiscal/*`, `/acbr/*`, diagnóstico fiscal
+
+---
+
+## Concluído — Impressão e cupom (2026-06)
+
+| Item | Arquivo |
+|------|---------|
+| QR ESC/POS nível M + fallback PNG | `impressora.js` |
+| Bloqueio NFC-e 65 sem URL QR | `imprimirCupom` |
+| Portal consulta dinâmico (host da UF) | `documentosFiscais.js` |
+| NF-e 55 vs NFC-e 65 no layout fiscal | `renderCupomConteudo` |
+| Endereço sem duplicar bairro | `formatarLinhaEnderecoEmpresa` |
+| CORS/PNA rotas `/impressora/*` | `index.js` |
+| Teste QR | `test/qr-cupom.test.js` |
+| Config sync catálogo com backend | `configSync.js`, `agentConfigCatalog.js` |
 
 ---
 
 ## Deploy
 
-* Executar `npm install` se novas deps
-* Configurar `EMISSAO_FISCAL=true`, ACBr em `127.0.0.1:9200`
-* Certificado A1 + CSC no ACBrMonitorPLUS (CSC não armazenado no agente)
-* Variáveis opcionais: `ACBR_TIMEOUT_EMISSAO_MS`, `FISCAL_EMISSAO_TIMEOUT_MS`, `FISCAL_RECONCILIACAO_MS`
+* `EMISSAO_FISCAL=true`, ACBr `127.0.0.1:9200`
+* Certificado A1 + CSC no ACBrMonitorPLUS
+* `IMPRIMIR_QR_NFCE=true` (padrão), `IMPRIMIR_QR_NFCE_SIZE=6`
+* Ver `.ai/DEPLOY_PRODUCTION.md`
+
+---
+
+## Pendente operacional
+
+* Validar impressão QR em impressoras Epson/Bematech/Elgin do cliente piloto
+* Homologação SEFAZ ponta a ponta
+
+---
+
+## Referências
+
+* `.ai/project-brain.md`
+* `docs/OPERACAO.md`, `docs/CONTRATOS_API.md`
+* `../margin-engine/.ai/progress.md`
