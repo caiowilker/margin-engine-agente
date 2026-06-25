@@ -55,7 +55,7 @@ const IMPRIMIR_QR_NFCE_SIZE = Math.min(
   Math.max(3, parseInt(process.env.IMPRIMIR_QR_NFCE_SIZE || "6", 10) || 6),
 );
 
-const { extrairQrCodeDoXml } = require("./documentosFiscais");
+const { extrairQrCodeDoXml, portalConsultaDocumento, isNfceModelo65, isNfeModelo55 } = require("./documentosFiscais");
 
 let cacheDescoberta = null;
 let cacheDescobertaEm = 0;
@@ -564,6 +564,21 @@ function tx(value) {
   return toThermalText(value);
 }
 
+/** Monta linha de endereço sem duplicar bairro/número (endereco legado já vem completo). */
+function formatarLinhaEnderecoEmpresa(empresa) {
+  const e = empresa || {};
+  const logradouro = (e.logradouro || "").trim();
+  if (logradouro) {
+    return [logradouro, e.numero, e.bairro]
+      .filter((p) => p != null && String(p).trim())
+      .map(tx)
+      .join(", ");
+  }
+  const enderecoLegado = (e.endereco || "").trim();
+  if (enderecoLegado) return tx(enderecoLegado);
+  return "";
+}
+
 // ── Helpers de layout ─────────────────────────────────────────────────────────
 function helpers() {
   const largura = 48;
@@ -781,13 +796,8 @@ async function renderCupomConteudo(printer, payload) {
   if (empresa.razaoSocial && empresa.razaoSocial !== empresa.nomeFantasia)
     printer.text(tx(empresa.razaoSocial));
   if (empresa.cnpj) printer.text("CNPJ: " + toThermalDoc(empresa.cnpj));
-  if (empresa.endereco) {
-    const end = [empresa.endereco, empresa.numero, empresa.bairro]
-      .filter(Boolean)
-      .map(tx)
-      .join(", ");
-    printer.text(end.slice(0, COLS));
-  }
+  const linhaEndereco = formatarLinhaEnderecoEmpresa(empresa);
+  if (linhaEndereco) printer.text(linhaEndereco.slice(0, COLS));
   if (empresa.cidade)
     printer.text(
       tx(`${empresa.cidade}${empresa.uf ? " - " + empresa.uf : ""}`).slice(
@@ -938,10 +948,13 @@ async function renderCupomConteudo(printer, payload) {
   // ── 6. NFC-e ─────────────────────────────────────────────────────────────────
   if (isFiscal) {
     printer.text(sepDash());
+    const tituloFiscal = isNfeModelo55(payload.chaveNfe)
+      ? "DOCUMENTO FISCAL NF-e"
+      : "DOCUMENTO FISCAL NFC-e";
     printer
       .align("ct")
       .style("b")
-      .text("DOCUMENTO FISCAL NFC-e")
+      .text(tituloFiscal)
       .style("normal")
       .text(
         `NF-e: ${payload.numeroNfe || ""}  Serie: ${payload.serieNfe || "001"}`,
@@ -954,15 +967,17 @@ async function renderCupomConteudo(printer, payload) {
       printer.align("lt").text("Chave de acesso:");
       gruposChave.forEach((g) => printer.text(g));
     }
-    printer.align("ct").text("Consulte em nfce.fazenda.gov.br");
-
     const qrConteudo = resolverQrCodeNfce(payload);
-    if (qrConteudo && IMPRIMIR_QR_NFCE) {
+    printer
+      .align("ct")
+      .text(`Consulte em ${portalConsultaDocumento(payload.chaveNfe, qrConteudo)}`);
+
+    if (qrConteudo && IMPRIMIR_QR_NFCE && isNfceModelo65(payload.chaveNfe)) {
       printer.text("Consulta via QR Code");
       await imprimirQrNfce(printer, qrConteudo);
-    } else if (IMPRIMIR_QR_NFCE && payload.chaveNfe) {
-      console.warn(
-        "[Impressora] NFC-e autorizada sem URL de QR Code — cupom impresso sem QR",
+    } else if (IMPRIMIR_QR_NFCE && isNfceModelo65(payload.chaveNfe)) {
+      throw new Error(
+        "NFC-e autorizada sem URL de QR Code — aguarde sincronização do XML ou reimprima via DANFC-e",
       );
     }
   }
@@ -1009,7 +1024,8 @@ function renderFechamento(printer, payload) {
 
   if (payload.empresa?.cnpj)
     printer.text("CNPJ: " + toThermalDoc(payload.empresa.cnpj));
-  if (payload.empresa?.endereco) printer.text(tx(payload.empresa.endereco));
+  const linhaEndereco = formatarLinhaEnderecoEmpresa(payload.empresa);
+  if (linhaEndereco) printer.text(linhaEndereco.slice(0, COLS));
 
   printer
     .text(linha())
@@ -1228,6 +1244,16 @@ function listar() {
 
 function imprimirCupom(payload) {
   const qrcodeNfe = resolverQrCodeNfce(payload);
+  if (
+    payload?.chaveNfe &&
+    isNfceModelo65(payload.chaveNfe) &&
+    IMPRIMIR_QR_NFCE &&
+    !qrcodeNfe
+  ) {
+    throw new Error(
+      "NFC-e autorizada sem URL de QR Code — aguarde sincronização do XML ou reimprima via DANFC-e",
+    );
+  }
   const normalizado = qrcodeNfe
     ? { ...payload, qrcodeNfe, qrcode: qrcodeNfe }
     : payload;

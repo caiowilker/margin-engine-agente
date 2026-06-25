@@ -74,6 +74,11 @@ async function main() {
     throw new Error("extrairQrCodeDoXml falhou");
   }
 
+  const { portalConsultaNfce } = require("../documentosFiscais");
+  if (portalConsultaNfce(QR_URL) !== "portalsped.fazenda.mg.gov.br") {
+    throw new Error("portalConsultaNfce falhou");
+  }
+
   console.log("OK qr-cupom.test.js", {
     sync: bufSync.length,
     broken: bufBroken.length,

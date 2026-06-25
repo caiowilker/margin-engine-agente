@@ -383,6 +383,36 @@ function extrairQrCodeDoXml(xml) {
   return simples?.[1]?.trim() || null;
 }
 
+const PORTAL_CONSULTA_NFCE_PADRAO = "nfce.fazenda.gov.br";
+const PORTAL_CONSULTA_NFE_PADRAO = "www.nfe.fazenda.gov.br";
+
+/** Host do portal de consulta a partir da URL do QR (fallback nacional). */
+function portalConsultaNfce(qrUrl) {
+  const raw = typeof qrUrl === "string" ? qrUrl.trim() : "";
+  if (!raw) return PORTAL_CONSULTA_NFCE_PADRAO;
+  try {
+    return new URL(raw).hostname || PORTAL_CONSULTA_NFCE_PADRAO;
+  } catch {
+    return PORTAL_CONSULTA_NFCE_PADRAO;
+  }
+}
+
+function isNfceModelo65(chave) {
+  const k = String(chave || "").replace(/\D/g, "");
+  return k.length >= 22 && k.substring(20, 22) === "65";
+}
+
+function isNfeModelo55(chave) {
+  const k = String(chave || "").replace(/\D/g, "");
+  return k.length >= 22 && k.substring(20, 22) === "55";
+}
+
+function portalConsultaDocumento(chave, qrUrl) {
+  if (qrUrl && String(qrUrl).trim()) return portalConsultaNfce(qrUrl);
+  if (isNfeModelo55(chave)) return PORTAL_CONSULTA_NFE_PADRAO;
+  return PORTAL_CONSULTA_NFCE_PADRAO;
+}
+
 function buscarArquivoPdfRecursivo(dir, chave, maxDepth = 6, depth = 0) {
   if (!dir || !fs.existsSync(dir) || depth > maxDepth) return null;
   let entries;
@@ -512,6 +542,10 @@ module.exports = {
   isPdfValid,
   extrairXmlDaResposta,
   extrairQrCodeDoXml,
+  portalConsultaNfce,
+  portalConsultaDocumento,
+  isNfceModelo65,
+  isNfeModelo55,
   extrairProtNFe,
   extrairChaveDoXml,
   localizarXmlPorChave,
