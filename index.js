@@ -1286,6 +1286,29 @@ function iniciarServidor() {
   );
 
   app.get(
+    "/fiscal/documento/xml",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    async (req, res) => {
+      const { chave, numeroVenda } = req.query || {};
+      try {
+        const doc = await fiscalService.obterXmlDocumento(
+          chave ? String(chave) : null,
+          numeroVenda ? String(numeroVenda) : null,
+        );
+        res.json({
+          xmlContent: doc.xmlContent,
+          chave: doc.chave,
+          qrcode: doc.qrcode || null,
+          modeloDocumento: doc.modeloDocumento,
+        });
+      } catch (err) {
+        res.status(404).json({ erro: err.message });
+      }
+    },
+  );
+
+  app.get(
     "/fiscal/emissao/:correlationId",
     privateNetworkHeaders,
     exigirAgentToken,
@@ -1733,15 +1756,13 @@ function iniciarServidor() {
     if (!payload?.numeroVendaCliente)
       return res.status(400).json({ erro: "numeroVendaCliente obrigatório." });
     try {
-      const resultado = await fila.tentarBackend(payload);
-      if (resultado.ok)
-        return res.json({ ok: true, origem: "online", dados: resultado.dados });
-      fila.enfileirar(payload);
-      res.json({
-        ok: true,
-        origem: "offline",
-        mensagem: "Venda salva na fila.",
-      });
+      const cloudFirst =
+        req.query.modo === "cloud-first" ||
+        req.headers["x-venda-modo"] === "cloud-first";
+      const resposta = cloudFirst
+        ? await fila.registrarCloudFirst(payload)
+        : await fila.registrarLocalFirst(payload);
+      res.json(resposta);
     } catch (err) {
       res.status(500).json({ erro: err.message });
     }

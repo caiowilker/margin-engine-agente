@@ -300,7 +300,53 @@ Body: CupomFiscal + { numeroVenda, correlationId }
 
 ### POST /venda
 
-**Consumidor:** `agenteService.registrarVenda()` (fallback offline)
+**Consumidor:** `agenteService.registrarVenda()` / `registrarVendaCheckout` (front)
+
+**Comportamento (padrão — local-first):**
+
+1. Enfileira venda no SQLite (`fila_vendas`) com `INSERT OR IGNORE` (idempotente por `numero_venda`).
+2. Responde **imediatamente** com `origem: "local"` e `syncPendente: true`.
+3. Dispara sync com `POST {BACKEND_URL}/pdv/vendas` em background (sem bloquear o checkout).
+4. Em sucesso do backend, marca fila como `SINCRONIZADO`.
+
+**Query `?modo=cloud-first`:** tenta nuvem primeiro; se falhar, enfileira e responde como local-first (legado).
+
+**Response (local-first):**
+
+```json
+{
+  "numeroVenda": "PDV-…",
+  "emitidoEm": "…",
+  "total": 0,
+  "lucro": 0,
+  "margem": 0,
+  "precisaEmitirFiscal": true,
+  "statusFiscal": "PENDENTE",
+  "origem": "local",
+  "syncPendente": true
+}
+```
+
+**Status:** ✓
+
+---
+
+### GET /fiscal/documento/xml
+
+**Query:** `numeroVenda` (obrigatório se sem `chave`), `chave` (opcional)
+
+**Consumidor:** `agenteService.baixarXmlDocumento()` → `baixarXmlFiscalVenda` (front)
+
+**Response 200:**
+
+```json
+{
+  "xmlContent": "<nfeProc>…</nfeProc>",
+  "chave": "…",
+  "qrcode": "…",
+  "modeloDocumento": "65"
+}
+```
 
 **Status:** ✓
 

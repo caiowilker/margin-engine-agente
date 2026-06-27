@@ -786,6 +786,40 @@ async function obterPdfDocumento(chave, numeroVenda) {
   return { pdfPath, buffer, modeloDocumento: modelo, chave: chaveDoc };
 }
 
+/** XML autorizado para cupom / QR — disco local ou índice SQLite (sem nuvem). */
+async function obterXmlDocumento(chave, numeroVenda) {
+  const doc =
+    (chave && filaFiscal.buscarDocumentoPorChave(chave)) ||
+    (numeroVenda && filaFiscal.buscarDocumentoPorVenda(numeroVenda));
+  const chaveDoc = doc?.chave || chave;
+  if (!chaveDoc && !numeroVenda) {
+    throw new Error("Informe chave ou numeroVenda");
+  }
+  let xmlPath = doc?.xml_path || null;
+  try {
+    xmlPath = await garantirXmlAutorizado(chaveDoc, xmlPath);
+  } catch (err) {
+    if (!xmlPath) {
+      throw new Error("XML não disponível — documento fiscal não encontrado");
+    }
+    throw err;
+  }
+  const xmlContent = lerConteudoXmlAutorizado(xmlPath);
+  if (!xmlContent) {
+    throw new Error("XML fiscal vazio ou ilegível");
+  }
+  if (!docs.xmlEstaAutorizado(xmlContent)) {
+    throw new Error("XML fiscal ainda não autorizado");
+  }
+  return {
+    xmlContent,
+    xmlPath,
+    chave: chaveDoc,
+    modeloDocumento: inferirModeloDocumento(doc, chaveDoc),
+    qrcode: docs.extrairQrCodeDoXml(xmlContent),
+  };
+}
+
 async function cancelarCompleto(cfg, body) {
   const { chave, motivo, numeroVenda, correlationId } = body;
   const res = await acbr.cancelarNfce(chave, motivo);
@@ -1064,6 +1098,7 @@ module.exports = {
   finalizarEmissaoRecuperada,
   reimprimirDanfceCompleto,
   obterPdfDocumento,
+  obterXmlDocumento,
   inferirModeloDocumento,
   gerarPdfParaModelo,
   cancelarCompleto,

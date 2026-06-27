@@ -770,6 +770,7 @@ async function renderCupomConteudo(printer, payload) {
   const itens = payload.itens || [];
   const isFiscal = !!(payload.chaveNfe && payload.chaveNfe.trim());
   const isOffline = payload.origem === "offline";
+  const isLocalSync = payload.origem === "local";
 
   const LABEL_PGTO = {
     dinheiro: "DINHEIRO",
@@ -982,7 +983,7 @@ async function renderCupomConteudo(printer, payload) {
     }
   }
 
-  // ── 7. Offline ───────────────────────────────────────────────────────────────
+  // ── 7. Offline / sync local ─────────────────────────────────────────────────
   if (isOffline) {
     printer.text(sepDash());
     printer
@@ -991,6 +992,11 @@ async function renderCupomConteudo(printer, payload) {
       .text("** VENDA OFFLINE **")
       .style("normal")
       .text("Sera sincronizada com a internet em breve.");
+  } else if (isLocalSync && !isFiscal) {
+    printer.text(sepDash());
+    printer
+      .align("ct")
+      .text("Aguardando confirmacao do servidor.");
   }
 
   // ── 8. Rodapé — tudo centralizado, emocional ─────────────────────────────────

@@ -171,6 +171,88 @@ function enfileirar(payload) {
   stmt.run(String(numero), JSON.stringify(payload));
 }
 
+function calcularLucroMargem(payload) {
+  const itens = Array.isArray(payload?.itens) ? payload.itens : [];
+  let lucro = 0;
+  for (const i of itens) {
+    const qtd = Number(i.quantidade) || 0;
+    const preco = Number(i.precoUnitario) || 0;
+    const custo = Number(i.custoUnitario) || 0;
+    lucro += (preco - custo) * qtd;
+  }
+  const total = Number(payload?.total) || 0;
+  const margem = total > 0 ? (lucro / total) * 100 : 0;
+  return { lucro, margem };
+}
+
+/** Resposta alinhada ao contrato RespostaVenda do backend (checkout PDV). */
+function montarRespostaVenda(payload, opts = {}) {
+  const numero = extrairNumeroVenda(payload);
+  const { lucro, margem } = calcularLucroMargem(payload);
+  const emitirNfce = payload?.emitirNfce === true;
+  return {
+    numeroVenda: String(numero),
+    emitidoEm: opts.emitidoEm || new Date().toISOString(),
+    margem,
+    lucro,
+    total: Number(payload?.total) || 0,
+    status: "CONCLUIDA",
+    statusFiscal: emitirNfce ? "PENDENTE" : null,
+    precisaEmitirFiscal: emitirNfce,
+    origem: opts.origem || "local",
+    syncPendente: opts.syncPendente === true,
+  };
+}
+
+function marcarSincronizado(numeroVenda) {
+  if (!db) return;
+  db.prepare(
+    `UPDATE fila_vendas
+     SET status = 'SINCRONIZADO',
+         sincronizado_em = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+     WHERE numero_venda = ?`,
+  ).run(String(numeroVenda));
+}
+
+function sincronizarVendaEmBackground(payload) {
+  const numero = extrairNumeroVenda(payload);
+  tentarBackend(payload)
+    .then((r) => {
+      if (r.ok) {
+        marcarSincronizado(numero);
+        return;
+      }
+      sincronizar().catch(() => {});
+    })
+    .catch(() => {
+      sincronizar().catch(() => {});
+    });
+}
+
+/**
+ * Local-first: persiste na fila SQLite e responde na hora; sync com nuvem em background.
+ */
+async function registrarLocalFirst(payload) {
+  enfileirar(payload);
+  sincronizarVendaEmBackground(payload);
+  return montarRespostaVenda(payload, { origem: "local", syncPendente: true });
+}
+
+/** Legado: tenta nuvem antes de enfileirar (usado com ?modo=cloud-first). */
+async function registrarCloudFirst(payload) {
+  const resultado = await tentarBackend(payload);
+  if (resultado.ok && resultado.dados) {
+    return {
+      ...resultado.dados,
+      origem: "online",
+      syncPendente: false,
+    };
+  }
+  enfileirar(payload);
+  sincronizarVendaEmBackground(payload);
+  return montarRespostaVenda(payload, { origem: "local", syncPendente: true });
+}
+
 async function tentarBackend(payload) {
   const url = BACKEND_URL || process.env.BACKEND_URL || "";
   const token = BACKEND_TOKEN || process.env.BACKEND_TOKEN || "";
@@ -544,6 +626,9 @@ module.exports = {
   atualizarConfig,
   enfileirar,
   tentarBackend,
+  registrarLocalFirst,
+  registrarCloudFirst,
+  montarRespostaVenda,
   sincronizar,
   contadores,
   listar,
