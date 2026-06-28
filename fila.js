@@ -231,8 +231,26 @@ function sincronizarVendaEmBackground(payload) {
 
 /**
  * Local-first: persiste na fila SQLite e responde na hora; sync com nuvem em background.
+ * Idempotente por numeroVendaCliente — retries do PDV retornam sucesso sem re-enfileirar.
  */
 async function registrarLocalFirst(payload) {
+  const numero = extrairNumeroVenda(payload);
+  if (!numero) {
+    throw new Error("numeroVendaCliente obrigatorio para enfileirar.");
+  }
+
+  const existente = db
+    ?.prepare(`SELECT status FROM fila_vendas WHERE numero_venda = ?`)
+    .get(String(numero));
+
+  if (existente) {
+    const syncPendente = existente.status === "PENDENTE";
+    if (syncPendente) {
+      sincronizarVendaEmBackground(payload);
+    }
+    return montarRespostaVenda(payload, { origem: "local", syncPendente });
+  }
+
   enfileirar(payload);
   sincronizarVendaEmBackground(payload);
   return montarRespostaVenda(payload, { origem: "local", syncPendente: true });
