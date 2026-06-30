@@ -36,8 +36,16 @@ acbrlib/.env
 acbrlib/data/config/acbrlib.ini
 acbrlib/data/config/acbrlib.runtime.ini
 homolog-acbrlib/.env
+homolog-acbrlib/.last-numero
 homolog-data/
 RESULTADO-HOMOLOG-PRODUCAO.md
+
+# Artefato SQLite de testes (regenerável)
+test/**/*.db-shm
+test/**/*.db-wal
+
+# Pasta acidental de path Windows no WSL
+C:\\ProgramData/
 
 # Metadados Windows (WSL) — arquivos baixados da internet
 *:Zone.Identifier

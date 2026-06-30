@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
+    "build": "node scripts/generate-manifest.js",
     "install-service": "node install-service.js",
     "uninstall-service": "node install-service.js --uninstall",
     "test:fiscal": "node test/fiscal-hardening.test.js",
