@@ -103,7 +103,7 @@ Source: "dist\posprinter\*"; DestDir: "{app}\app\posprinter"; \
 Name: "{app}\app\data"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{app}\app\data\logs"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{app}\app\acbrlib\data\config"; Permissions: users-modify; Flags: uninsneveruninstall
-Name: "{app}\app\acbrlib\data\Schemas"; Permissions: users-readonly
+; Schemas (XSD): somente leitura — instalados via [Files]; sem Permissions (users-readonly não existe no Inno Setup)
 Name: "{app}\app\posprinter\data\config"; Permissions: users-modify; Flags: uninsneveruninstall
 
 Name: "{#MarginDataRoot}"; Permissions: users-modify; Flags: uninsneveruninstall
