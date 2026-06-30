@@ -377,6 +377,22 @@ async function enviarNfeComandos(comandos, timeoutMs = ACBR_TIMEOUT) {
 function parseResposta(resposta) {
   const docs = require("./documentosFiscais");
   const bruto = coalescerRespostaAcbr(resposta);
+
+  let jsonEnvio = null;
+  try {
+    const j = JSON.parse(bruto);
+    jsonEnvio =
+      j?.Envio ||
+      j?.envio ||
+      j?.Status ||
+      j?.status ||
+      j?.Consulta ||
+      j?.consulta ||
+      null;
+  } catch (_) {
+    jsonEnvio = null;
+  }
+
   const linhas = bruto
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -405,9 +421,12 @@ function parseResposta(resposta) {
   const xml = docs.extrairXmlDaResposta(resposta);
   const prot = docs.extrairProtNFe(xml);
 
-  const cStat = resolverCStatFinal({ todosCStat, prot, get });
+  const cStat = jsonEnvio
+    ? String(jsonEnvio.CStat ?? jsonEnvio.cStat ?? "")
+    : resolverCStatFinal({ todosCStat, prot, get });
 
   const chave =
+    jsonEnvio?.chNFe ||
     prot.chNFe ||
     get("ChaveNFe") ||
     get("Chave") ||
@@ -428,13 +447,25 @@ function parseResposta(resposta) {
     raw: resposta,
     cStat,
     todosCStat,
-    xMotivo: prot.xMotivo || get("xMotivo") || get("XMotivo"),
+    xMotivo:
+      jsonEnvio?.XMotivo ||
+      jsonEnvio?.Msg ||
+      jsonEnvio?.xMotivo ||
+      prot.xMotivo ||
+      get("xMotivo") ||
+      get("XMotivo"),
     tpAmb: get("tpAmb") || get("TpAmb"),
     chave,
     numero: get("NumeroNFe") || get("Numero") || get("nNF"),
     serie: get("SerieNFe") || get("Serie"),
     qrcode,
-    protocolo: prot.nProt || get("nProt") || get("Protocolo") || extrairProtocoloBruto(bruto),
+    protocolo:
+      jsonEnvio?.NProt ||
+      jsonEnvio?.nProt ||
+      prot.nProt ||
+      get("nProt") ||
+      get("Protocolo") ||
+      extrairProtocoloBruto(bruto),
     xml,
     pathPdf:
       get("PathPDF") ||
@@ -556,6 +587,32 @@ function resolverTpAmb() {
   const amb = String(process.env.AMBIENTE_SEFAZ || "homologacao").toLowerCase();
   if (amb === "producao" || amb === "1") return "1";
   return "2";
+}
+
+/** Aplica série/número reservados pelo agente em INI montado no backend (Onda B.4). */
+function patchNumeracaoIni(ini, numeracao) {
+  if (!ini || !numeracao) return ini;
+  const serie = numeracao.serie ?? fiscalNumeracao.SERIE_PADRAO;
+  const numero = numeracao.numero;
+  const cNf = gerarCodigoNumerico();
+  const lines = String(ini).split(/\r?\n/);
+  let inIdent = false;
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    const line = raw.trim();
+    if (line === "[Identificacao]") {
+      inIdent = true;
+      continue;
+    }
+    if (inIdent && line.startsWith("[")) {
+      break;
+    }
+    if (!inIdent) continue;
+    if (line.startsWith("serie=")) lines[i] = `serie=${serie}`;
+    else if (line.startsWith("nNF=")) lines[i] = `nNF=${numero}`;
+    else if (line.startsWith("cNF=")) lines[i] = `cNF=${cNf}`;
+  }
+  return lines.join("\n");
 }
 
 function crtUsaSimples(crt) {
@@ -1313,7 +1370,8 @@ function enrichParsePosEmissao(p, resposta) {
     return m ? m[1].trim() : null;
   };
 
-  const cStat = resolverCStatFinal({ todosCStat, prot, get });
+  const resolved = resolverCStatFinal({ todosCStat, prot, get });
+  const cStat = resolved ?? p.cStat ?? null;
   return {
     ...p,
     xml: xml || p.xml,
@@ -1415,8 +1473,53 @@ async function criarEnviarIniModelo(iniPath, modeloDF = 65, opts = {}) {
     throw err;
   }
   p = await enrichParsePosEmissaoAsync(p, resposta);
-  assertAutorizada(p, resposta, modeloDF);
+  if (!opts.eventoFiscal) {
+    assertAutorizada(p, resposta, modeloDF);
+  }
   return { p, resposta };
+}
+
+/** cStat de evento fiscal registrado na SEFAZ (CCe, manifestação, etc.). */
+function isCStatEventoOk(cStat) {
+  const cs = String(cStat || "");
+  return cs === "135" || cs === "128" || cs === "136";
+}
+
+async function enviarEventoFiscal(payload) {
+  if (!getEmissaoFiscalAtivo()) {
+    throw new Error("Emissão fiscal desabilitada (EMISSAO_FISCAL)");
+  }
+  const documentIni = payload?.documentIni;
+  if (!documentIni || !String(documentIni).trim()) {
+    throw new Error("documentIni obrigatório para evento fiscal");
+  }
+  const chave = payload?.chave || payload?.chaveNfe || null;
+  const modeloRaw =
+    payload?.modeloDocumento || (chave ? inferirModeloDaChave(chave) : null) || "65";
+  const modelo = parseInt(String(modeloRaw).replace(/\D/g, ""), 10) || 65;
+  const iniPath = path.join(
+    PATHS.ini,
+    `evento-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.ini`,
+  );
+  fs.writeFileSync(iniPath, String(documentIni), "utf8");
+  const { p, resposta } = await criarEnviarIniModelo(iniPath, modelo, {
+    sincrono: true,
+    eventoFiscal: true,
+  });
+  const cStat = String(p.cStat || "");
+  if (!isCStatAutorizado(cStat) && !isCStatEventoOk(cStat) && !CSTAT_LOTE_OK.has(cStat)) {
+    assertAutorizada(p, resposta, modelo);
+  }
+  return {
+    ok: isCStatAutorizado(cStat) || isCStatEventoOk(cStat),
+    cStat: p.cStat,
+    protocolo: p.protocolo,
+    chave: p.chave || chave,
+    xMotivo: p.xMotivo,
+    raw: resposta,
+    tipoEvento: payload?.tipoEvento || payload?.tipo || null,
+    modeloDocumento: String(modelo),
+  };
 }
 
 async function emitirNfce(payload) {
@@ -1460,7 +1563,15 @@ async function emitirNfce(payload) {
   let resultado;
 
   for (let tentativa = 0; tentativa < 2; tentativa++) {
-    const ini = montarIniNfce({ ...payload, empresa }, numeracao);
+    const fiscalIniPolicy = require("./fiscal/fiscalIniPolicy");
+    let iniBase;
+    if (payload.documentIni && String(payload.documentIni).trim()) {
+      iniBase = patchNumeracaoIni(payload.documentIni, numeracao);
+    } else {
+      fiscalIniPolicy.requireDocumentIniOrAllowLocal(payload, "NFC-e");
+      iniBase = montarIniNfce({ ...payload, empresa }, numeracao);
+    }
+    const ini = iniBase;
     iniPath = path.join(
       PATHS.ini,
       `nfce-${payload.numeroVenda || Date.now()}-${numeracao.numero}.ini`,
@@ -1730,6 +1841,8 @@ module.exports = {
   isNfeModelo55Habilitado,
   montarIniNfe,
   criarEnviarIniModelo,
+  enviarEventoFiscal,
+  isCStatEventoOk,
   enviarNfeModelo,
   cancelarNfce,
   inutilizarNfce,
@@ -1755,4 +1868,8 @@ module.exports = {
   obterStatusMemoria,
   obterStatusDetalhe,
   atualizarStatusMemoria,
+  patchNumeracaoIni,
+  normalizarResultado,
+  enrichParsePosEmissaoAsync,
+  assertAutorizada,
 };

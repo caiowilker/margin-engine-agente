@@ -15,6 +15,7 @@ frontend-dist/
 
 # Fallback criptografado do cofre de credenciais
 .vault
+.fiscal-vault
 
 # Backup pre-atualizacao (gerado pelo updater automatico)
 data/backup-pre-update/
@@ -25,6 +26,21 @@ npm-test-*.txt
 
 # Saída de testes fiscais locais
 test/data-test-xml/acbr/pdf/
+
+# ACBrLib produção — binários e segredos locais
+acbrlib/lib/*.dll
+acbrlib/lib/*.so
+acbrlib/data/cert/
+acbrlib/data/cert/**
+acbrlib/.env
+acbrlib/data/config/acbrlib.ini
+acbrlib/data/config/acbrlib.runtime.ini
+homolog-acbrlib/.env
+homolog-data/
+RESULTADO-HOMOLOG-PRODUCAO.md
+
+# Metadados Windows (WSL) — arquivos baixados da internet
+*:Zone.Identifier
 
 # Editores
 .vscode/

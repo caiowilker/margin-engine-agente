@@ -8,6 +8,7 @@ const ROOT =
 
 const PATHS = {
   root: ROOT,
+  data: path.join(ROOT, "data"),
   acbr: path.join(ROOT, "acbr"),
   entrada: path.join(ROOT, "acbr", "entrada"),
   saida: path.join(ROOT, "acbr", "saida"),

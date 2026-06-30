@@ -3,7 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
-const acbr = require("./acbr");
+const fiscalDriver = require("./fiscalDriver");
 const log = require("./logger");
 
 const NFE_UF = (process.env.NFE_UF || "MG").toUpperCase();
@@ -116,7 +116,7 @@ async function aplicarCscNoAcbr() {
   }
 
   const idLimpo = String(CSC_ID).replace(/\D/g, "").padStart(6, "0");
-  await acbr.enviarNfeComandos([
+  await fiscalDriver.enviarNfeComandos([
     `NFE.ConfigGravarValor(${qAcbr("NFCe")},${qAcbr("IdCSC")},${qAcbr(idLimpo)})`,
     `NFE.ConfigGravarValor(${qAcbr("NFCe")},${qAcbr("CSC")},${qAcbr(CSC_TOKEN)})`,
     "NFE.ConfigGravar()",
@@ -177,10 +177,10 @@ async function validarAsync() {
 }
 
 async function inicializar() {
-  if (!acbr.EMISSAO_FISCAL) return { ok: true, fiscal: false };
+  if (!fiscalDriver.EMISSAO_FISCAL) return { ok: true, fiscal: false };
   const r = await validarAsync();
   log.info(
-    { modulo: "acbr_setup", servicosIni: r.servicosIni, secao: r.secao },
+    { modulo: "fiscalDriver_setup", servicosIni: r.servicosIni, secao: r.secao },
     "ACBr NFC-e — diagnóstico INI (somente leitura)",
   );
   return r;

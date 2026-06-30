@@ -7,6 +7,7 @@ const {
   deveIgnorarCStatConsultaPosEmissao,
 } = require("../acbrResposta");
 const { parseResposta } = require("../acbr");
+const { parseRespostaLib } = require("../acbrLibResposta");
 
 let passed = 0;
 let failed = 0;
@@ -70,6 +71,56 @@ test("consulta 217 após lote 104 — não tratar como rejeição da emissão", 
   assert.strictEqual(deveIgnorarCStatConsultaPosEmissao("104", "217"), true);
   assert.strictEqual(deveIgnorarCStatConsultaPosEmissao("100", "217"), false);
   assert.strictEqual(deveIgnorarCStatConsultaPosEmissao("104", "598"), false);
+});
+
+test("parseRespostaLib — alinha cStat/chave com Monitor", () => {
+  const raw =
+    "cStat=100\nxMotivo=Autorizado o uso da NF-e\nChaveNFe=31260612343055000183650010000000091816823438\nnProt=131260000583869";
+  const pMon = parseResposta(raw);
+  const pLib = parseRespostaLib(raw);
+  assert.strictEqual(pLib.cStat, pMon.cStat);
+  assert.strictEqual(pLib.chave, pMon.chave);
+  assert.strictEqual(pLib.protocolo, pMon.protocolo);
+  assert.strictEqual(pLib.native, true);
+});
+
+test("parseRespostaLib — evento cStat 135", () => {
+  const p = parseRespostaLib("cStat=135\nxMotivo=Evento registrado e vinculado a NF-e\nnProt=131260000999999");
+  assert.strictEqual(p.cStat, "135");
+  assert.match(p.xMotivo || "", /Evento registrado/);
+});
+
+test("parseRespostaLib — JSON Envio cStat 100 (ACBrLib TipoResposta=2)", () => {
+  const raw = JSON.stringify({
+    Envio: {
+      CStat: 100,
+      Msg: "Autorizado o uso da NF-e",
+      NProt: "131260000589089",
+      NFe62: {
+        cStat: 100,
+        chDFe: "31260612343055000183650010000000621739664439",
+        nProt: "131260000589089",
+        xMotivo: "Autorizado o uso da NF-e",
+      },
+    },
+  });
+  const p = parseRespostaLib(raw);
+  assert.strictEqual(p.cStat, "100");
+  assert.strictEqual(p.chave, "31260612343055000183650010000000621739664439");
+  assert.strictEqual(p.protocolo, "131260000589089");
+});
+
+test("parseRespostaLib — JSON Status cStat 107", () => {
+  const raw = JSON.stringify({
+    Status: {
+      CStat: 107,
+      XMotivo: "Serviço em Operação",
+      tpAmb: "2",
+    },
+  });
+  const p = parseRespostaLib(raw);
+  assert.strictEqual(p.cStat, "107");
+  assert.match(p.xMotivo || "", /Operação/i);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

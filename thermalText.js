@@ -30,6 +30,7 @@ function toThermalText(value) {
 /** CNPJ/CPF/telefone — apenas caracteres ASCII de formatação. */
 function toThermalDoc(value) {
   return String(value ?? "")
+    .replace(/\uFF0E/g, ".")
     .replace(/[^\d./\-()+\s]/g, "")
     .trim();
 }

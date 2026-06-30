@@ -1,0 +1,36 @@
+; Template ACBrLib — provider fiscal OFICIAL (Margin Platform 1.0)
+; Copie para acbrlib/data/config/acbrlib.ini (ou data/acbrlib.ini via instalador)
+; Ambiente=2 homolog (testes) · Ambiente=1 produção (somente após piloto validado)
+
+[Principal]
+TipoResposta=2
+LogNivel=4
+
+[NFe]
+ArquivoServicos=ACBrNFeServicos.ini
+Ambiente=2
+ModeloDF=65
+VersaoDF=4.00
+PathSalvar=.\MarginEngine\acbr\xml\
+PathSchemas=.\schemas\
+PathNFe=.\MarginEngine\acbr\xml\
+PathPDF=.\MarginEngine\acbr\pdf\
+SalvarGer=1
+SalvarWS=1
+ExibirErroSchema=1
+
+[Certificado]
+Arquivo=
+Senha=
+NumeroSerie=
+
+[DFe]
+UF=MG
+
+[DANFE]
+PathPDF=.\MarginEngine\acbr\pdf\
+TipoDANFE=1
+
+[NFCe]
+IdCSC=
+CSC=

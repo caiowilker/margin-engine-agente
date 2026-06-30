@@ -1,0 +1,42 @@
+name: Agente Fiscal CI
+
+on:
+  push:
+    branches: [main, develop, 'release/**']
+  pull_request:
+
+jobs:
+  agent-fiscal:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts 2>/dev/null || npm install --ignore-scripts
+
+      - name: Fiscal contract + parity + config
+        env:
+          ACBR_DRIVER: lib
+          ACBR_LIB_ALLOW_PARITY: "true"
+          FISCAL_ALLOW_LOCAL_INI: "true"
+        run: |
+          node test/fiscal-driver.test.js
+          node test/fiscal-ini-policy.test.js
+          node test/boot-guards.test.js
+          node test/acbr-provider-parity.test.js
+          node test/fiscal-local-config.test.js
+          node test/fiscal-setup.test.js
+          node test/fiscal-evento.test.js
+          node test/acbr-resposta.test.js
+          node test/contract.test.js
+
+      - name: Full agent test suite
+        env:
+          FISCAL_ALLOW_LOCAL_INI: "true"
+          ACBR_LIB_ALLOW_PARITY: "true"
+        run: npm test

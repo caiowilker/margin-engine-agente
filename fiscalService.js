@@ -2,7 +2,8 @@
 const crypto = require("crypto");
 const http = require("http");
 const https = require("https");
-const acbr = require("./acbr");
+const fiscalDriver = require("./fiscalDriver");
+const factory = require("./fiscal/factory");
 const docs = require("./documentosFiscais");
 const filaFiscal = require("./filaFiscal");
 const fiscalPreflight = require("./fiscalPreflight");
@@ -18,7 +19,7 @@ const { PATHS } = require("./marginPaths");
 function inferirModeloDocumento(doc, chave) {
   if (doc?.modelo_documento) return String(doc.modelo_documento);
   if (doc?.modeloDocumento) return String(doc.modeloDocumento);
-  return acbr.inferirModeloDaChave(chave || doc?.chave);
+  return fiscalDriver.inferirModeloDaChave(chave || doc?.chave);
 }
 
 let _lerConfigFn = null;
@@ -44,7 +45,7 @@ async function resolverXmlParaCallback(chave, xmlPathHint) {
   }
 }
 
-const { isCStatAutorizado } = require("./acbrResposta");
+const { isCStatAutorizado } = require("./fiscalDriverResposta");
 
 function derivarStatusFiscal(cStat) {
   const cs = String(cStat || "");
@@ -128,7 +129,7 @@ async function garantirXmlAutorizado(chave, xmlPathHint) {
   }
 
   try {
-    const consulta = await acbr.consultarChave(k);
+    const consulta = await fiscalDriver.consultarChave(k);
     const cs = String(consulta.cStat || "");
     if (
       consulta.situacao === "AUTORIZADA" ||
@@ -162,12 +163,15 @@ async function gerarPdfParaModelo(chave, xmlPath, modeloDocumento) {
 
 async function gerarPdfComXml(chave, xmlPathAutorizado, modeloDocumento) {
   const modelo = String(modeloDocumento || "65");
-  if (modelo === "55") return acbr.gerarPdfDanfe(chave, xmlPathAutorizado);
-  return acbr.gerarPdfDanfce(chave, xmlPathAutorizado);
+  if (modelo === "55") return fiscalDriver.gerarPdfDanfe(chave, xmlPathAutorizado);
+  return fiscalDriver.gerarPdfDanfce(chave, xmlPathAutorizado);
 }
 
 function deveGerarPdfSincrono(resultado) {
-  return GERAR_PDF_EMIT || resultado?.modeloDocumento === "55";
+  if (GERAR_PDF_EMIT) return true;
+  const modelo =
+    resultado?.modeloDocumento || inferirModeloDocumento(null, resultado?.chave);
+  return modelo === "55";
 }
 
 /** PDF DANFC-e via ACBr — desligado por padrão (cupom térmico ESC/POS pelo agente). */
@@ -459,7 +463,21 @@ function isPayloadNfe55(payload) {
   );
 }
 
+function resolverDriverFiscal(body) {
+  const hint = body?.acbrDriver || body?._fiscalMeta?.acbrDriver;
+  if (hint === "lib") {
+    return factory.createDriver("lib");
+  }
+  return fiscalDriver;
+}
+
+/** @deprecated use resolverDriverFiscal */
+function resolverDriverEmissao(body) {
+  return resolverDriverFiscal(body);
+}
+
 async function emitirCompleto(cfg, body, job = null) {
+  const activeDriver = resolverDriverEmissao(body);
   const { numeroVenda, correlationId, ...payload } = body;
   if (!numeroVenda) throw new Error("numeroVenda obrigatório");
 
@@ -497,13 +515,13 @@ async function emitirCompleto(cfg, body, job = null) {
   try {
     const tAcbr = Date.now();
     resultado = nfe55
-      ? await acbr.emitirNfe(payload)
-      : await acbr.emitirNfce(payload);
-    const acbrMs = Date.now() - tAcbr;
+      ? await activeDriver.emitirNfe(payload)
+      : await activeDriver.emitirNfce(payload);
+    const fiscalDriverMs = Date.now() - tAcbr;
     fiscalMetrics.registrarEmissao(Date.now() - inicio, {
       ok: true,
-      acbrMs,
-      sefazMs: acbrMs,
+      fiscalDriverMs,
+      sefazMs: fiscalDriverMs,
     });
     if (job && resultado?.chave) {
       filaFiscal.atualizarPayload(job.id, {
@@ -637,7 +655,7 @@ async function enfileirarEmissao(cfg, body, opts = {}) {
 }
 
 async function enfileirarEmissaoNfe(cfg, body, opts = {}) {
-  if (!acbr.isNfeModelo55Habilitado()) {
+  if (!fiscalDriver.isNfeModelo55Habilitado()) {
     const err = new Error(
       "NF-e modelo 55 desabilitada (ACBR_NFE_ENABLED ou EMISSAO_FISCAL)",
     );
@@ -697,7 +715,22 @@ async function reimprimirDanfceCompleto(chave, numeroVenda) {
     });
   }
   if (modelo === "65") {
-    await acbr.imprimirDanfce(chaveDoc);
+    const printerService = require("./printerService");
+    const { montarPayloadSegundaVia } = require("./print/segundaVia");
+    const payload = montarPayloadSegundaVia({
+      chave: chaveDoc,
+      numeroVenda: doc.numero_venda || numeroVenda,
+    });
+    await printerService.imprimirSegundaVia(payload);
+  } else if (modelo === "55") {
+    const printerService = require("./printerService");
+    const { montarPayloadSegundaVia } = require("./print/segundaVia");
+    let payload = montarPayloadSegundaVia({
+      chave: chaveDoc,
+      numeroVenda: doc.numero_venda || numeroVenda,
+    });
+    payload = { ...payload, danfeTermico: true, layout: "danfe-termico" };
+    await printerService.imprimirSegundaVia(payload);
   }
   return {
     ok: true,
@@ -822,7 +855,8 @@ async function obterXmlDocumento(chave, numeroVenda) {
 
 async function cancelarCompleto(cfg, body) {
   const { chave, motivo, numeroVenda, correlationId } = body;
-  const res = await acbr.cancelarNfce(chave, motivo);
+  const driver = resolverDriverFiscal(body);
+  const res = await driver.cancelarNfce(chave, motivo);
   if (res.xml) docs.salvarXmlCancelamento(chave, res.xml);
   if (numeroVenda && cfg.backendUrl) {
     try {
@@ -855,6 +889,54 @@ async function cancelarCompleto(cfg, body) {
   return res;
 }
 
+async function enviarEventoCompleto(cfg, body) {
+  const { documentIni, chave, chaveNfe, tipo, tipoEvento, modeloDocumento, correlationId } = body;
+  if (!documentIni || !String(documentIni).trim()) {
+    throw new Error("documentIni obrigatório para evento fiscal");
+  }
+  const res = await resolverDriverFiscal(body).enviarEventoFiscal({
+    documentIni,
+    chave: chave || chaveNfe,
+    chaveNfe: chaveNfe || chave,
+    tipo: tipo || tipoEvento,
+    tipoEvento: tipoEvento || tipo,
+    modeloDocumento,
+  });
+  if (res.raw && (chave || chaveNfe)) {
+    const xml = require("./documentosFiscais").extrairXmlDaResposta(res.raw);
+    if (xml) docs.salvarXmlEvento(chave || chaveNfe, xml, tipoEvento || tipo);
+  }
+  if (cfg?.backendUrl && body.numeroVenda) {
+    try {
+      await httpRequest(
+        `${cfg.backendUrl.replace(/\/$/, "")}/pdv/vendas/${encodeURIComponent(body.numeroVenda)}/fiscal/evento`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${cfg.backendToken}`,
+            "X-Correlation-Id": correlationId || "",
+          },
+        },
+        JSON.stringify({
+          protocolo: res.protocolo,
+          cStat: res.cStat,
+          xMotivo: res.xMotivo,
+          tipoEvento: res.tipoEvento || tipoEvento || tipo,
+        }),
+      );
+    } catch {
+      filaFiscal.enfileirar(
+        "EVENTO_FISCAL",
+        { ...body, ...res },
+        correlationId,
+        body.numeroVenda,
+      );
+    }
+  }
+  return res;
+}
+
 async function inutilizarCompleto(cfg, body) {
   let inutilizacaoId = body.inutilizacaoId || null;
   if (cfg.backendUrl && !inutilizacaoId) {
@@ -877,7 +959,7 @@ async function inutilizarCompleto(cfg, body) {
     );
     inutilizacaoId = created.id;
   }
-  const res = await acbr.inutilizarNfce(body);
+  const res = await resolverDriverFiscal(body).inutilizarNfce(body);
   let xmlPath = null;
   if (res.xml) {
     xmlPath = docs.salvarXmlInutilizacao(
@@ -1102,6 +1184,7 @@ module.exports = {
   inferirModeloDocumento,
   gerarPdfParaModelo,
   cancelarCompleto,
+  enviarEventoCompleto,
   inutilizarCompleto,
   callbackBackend,
   persistirDocumentosFiscais,

@@ -1,9 +1,9 @@
 # Plano de migração ACBr Monitor → ACBrLib
 
-**Status:** Estudo / backlog — **não iniciar agora**  
-**Data:** 2026-06-26  
-**Decisão atual:** Manter ACBr Monitor (TCP `:9200`) em produção  
-**Revisar quando:** Instalador simplificado, config 100% pelo painel, ou agente servidor na LAN
+**Status:** Execução 1.0 — Lib = provider padrão (ver Missão)
+
+> **Execução canônica:** [`../../margin-engine/.ai/EXECUCAO_1.0_PARTE_01_FISCAL.md`](../../margin-engine/.ai/EXECUCAO_1.0_PARTE_01_FISCAL.md)  
+> **Decisão atual (1.0):** ACBrLib Pro padrão · Monitor fallback · paridade 100% gate
 
 ---
 
@@ -188,7 +188,9 @@ Permite rollback instantâneo em loja e homologação paralela (mesmo INI, compa
 
 ### Fase 1 — POC (3–5 dias)
 
-- [ ] Criar `acbrLibDriver.js` com: `inicializar`, `statusServico`, `emitirNfce`
+- [x] Criar `acbrLibDriver.js` com: `inicializar`, `statusServico`, `emitirNfce`
+- [x] Runtime WSL/Windows (`acbrLibRuntime.js`)
+- [x] Homolog nativo produção (`acbrlib/` + `homolog-acbrlib/`)
 - [ ] Homologação SEFAZ apenas
 - [ ] Usar mesmo INI que `montarIniNfce` já gera
 - [ ] Comparar vs Monitor: chave, protocolo, `cStat`, XML autorizado
@@ -197,7 +199,8 @@ Permite rollback instantâneo em loja e homologação paralela (mesmo INI, compa
 ### Fase 2 — Paridade (1–2 semanas)
 
 - [ ] Cancelar, inutilizar, consulta, PDF
-- [ ] EPEC + contingência (`index.js` scheduler)
+- [x] EPEC nativo Lib (`carregarXML` + `enviar` em `emitirEpecLib`)
+- [ ] EPEC + contingência — retestar scheduler em homologação Windows
 - [ ] Template `acbrlib.ini` por UF (default MG)
 - [ ] Migrar `acbrNfceSetup` de leitura Monitor → configuração Lib
 - [ ] `fiscalDriver.js` factory (`ACBR_DRIVER`)
@@ -261,7 +264,7 @@ Migrar passa a compensar quando **pelo menos um** destes for prioridade de negó
 | Factory | `agente-local/fiscalDriver.js` |
 | Template ini | `agente-local/templates/acbrlib.ini.template` |
 | Testes paridade | `agente-local/test/acbrlib-parity.test.js` |
-| Instalador | `pdv-agente-installer.iss` — seção DLL |
+| Instalador | `pdv-agente-installer.iss` — wizard certificado/CSC + seção `dist\lib\` ACBrLib |
 
 **Pacotes npm:**
 

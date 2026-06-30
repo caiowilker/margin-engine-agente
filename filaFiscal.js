@@ -1089,7 +1089,7 @@ function descartarJobsGerarPdfPendentes(
   motivo = "PDF DANFC-e desabilitado (FISCAL_GERAR_PDF=false)",
 ) {
   init();
-  const acbr = require("./acbr");
+  const fiscalDriver = require("./fiscalDriver");
   const rows = db
     .prepare(
       `SELECT id, payload FROM fila_fiscal
@@ -1103,7 +1103,7 @@ function descartarJobsGerarPdfPendentes(
       const p = JSON.parse(row.payload);
       modelo =
         p.modeloDocumento ||
-        (p.chave ? acbr.inferirModeloDaChave(p.chave) : null) ||
+        (p.chave ? fiscalDriver.inferirModeloDaChave(p.chave) : null) ||
         "65";
     } catch (_) {}
     if (String(modelo) === "55") continue;

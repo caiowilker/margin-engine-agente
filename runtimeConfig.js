@@ -33,6 +33,13 @@ function aplicarRemoto(cfg) {
   operacional = merged;
   fonte = "backend";
   catalog.aplicarNoProcessEnv(merged);
+  if (merged.ambienteSefaz) {
+    try {
+      require("./fiscalLocalConfig").aplicarAmbiente(String(merged.ambienteSefaz));
+    } catch (err) {
+      log.warn({ err: err.message }, "[RuntimeConfig] Falha ao sincronizar ambiente no acbrlib.ini");
+    }
+  }
   log.debug("[RuntimeConfig] Config operacional aplicada via backend");
   return merged;
 }

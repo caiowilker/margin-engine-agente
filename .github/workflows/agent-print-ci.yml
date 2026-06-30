@@ -1,0 +1,27 @@
+name: Agente Print CI
+
+on:
+  push:
+    branches: [main, develop, 'release/**']
+  pull_request:
+
+jobs:
+  agent-print:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts 2>/dev/null || npm install --ignore-scripts
+
+      - name: Print provider + tags + thermal
+        env:
+          PRINTER_PROVIDER: acbr-posprinter
+          PRINTER_ALLOW_PARITY: "true"
+          PRINTER_FALLBACK: native
+        run: npm run test:agent-print

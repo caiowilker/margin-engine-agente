@@ -90,6 +90,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     <button type="button" class="tab active" data-tab="visao">Visão geral</button>
     <button type="button" class="tab" data-tab="fila">Fila fiscal</button>
     <button type="button" class="tab" data-tab="fiscal">Preflight NF-e/NFC-e</button>
+    <button type="button" class="tab" data-tab="config">Configuração fiscal</button>
     <button type="button" class="tab" data-tab="apis">APIs JSON</button>
   </nav>
 
@@ -140,6 +141,54 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
       <div id="msgFiscal" class="msg"></div>
     </div>
     <div class="card" id="numeracaoCard" style="margin-top:12px"><h3>Numeração NFC-e</h3><div id="numeracaoBody"></div></div>
+  </section>
+
+  <section id="panel-config" class="panel">
+    <div class="card">
+      <h3 style="margin:0 0 8px">Configuração fiscal</h3>
+      <p class="sub" style="margin:0 0 14px">Ambiente SEFAZ, certificado A1, CSC e UF — salvos automaticamente neste agente.</p>
+      <div id="configStatus" style="margin-bottom:12px;font-size:.82rem;color:var(--muted)">Carregando...</div>
+      <form id="formFiscalConfig" style="display:grid;gap:12px;max-width:640px">
+        <label style="display:grid;gap:4px;font-size:.82rem">
+          <span>Ambiente SEFAZ</span>
+          <select id="cfgAmbiente" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text)">
+            <option value="homologacao">Homologação (testes)</option>
+            <option value="producao">Produção (notas reais)</option>
+          </select>
+        </label>
+        <label style="display:grid;gap:4px;font-size:.82rem">
+          <span>UF emitente</span>
+          <input id="cfgUf" maxlength="2" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);width:80px"/>
+        </label>
+        <label style="display:grid;gap:4px;font-size:.82rem">
+          <span>Caminho certificado A1 (.pfx)</span>
+          <input id="cfgCertPath" placeholder="C:\\MarginEngine\\cert\\cert.pfx ou ..\\cert\\cert.pfx" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text)"/>
+        </label>
+        <label style="display:grid;gap:4px;font-size:.82rem">
+          <span>Senha do certificado</span>
+          <input id="cfgCertSenha" type="password" placeholder="Deixe em branco para manter a atual" autocomplete="new-password" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text)"/>
+        </label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <label style="display:grid;gap:4px;font-size:.82rem">
+            <span>Id CSC NFC-e</span>
+            <input id="cfgIdCsc" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text)"/>
+          </label>
+          <label style="display:grid;gap:4px;font-size:.82rem">
+            <span>Token CSC</span>
+            <input id="cfgCsc" type="password" placeholder="Deixe em branco para manter" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text)"/>
+          </label>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:.82rem">
+          <input id="cfgEmissao" type="checkbox"/>
+          <span>Emissão fiscal ativa (EMISSAO_FISCAL)</span>
+        </label>
+        <div class="actions">
+          <button type="submit" class="btn btn-primary">Salvar configuração</button>
+          <button type="button" class="btn btn-secondary" id="btnReloadConfig">Recarregar</button>
+        </div>
+      </form>
+      <div id="msgConfig" class="msg"></div>
+    </div>
   </section>
 
   <section id="panel-apis" class="panel">
@@ -286,6 +335,77 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
       "<div class='preflight-item'><span>Último número</span><strong>"+(num.ultimoNumero ?? "-")+"</strong></div>";
   }
 
+  async function loadFiscalConfig(){
+    return fetchJson("/config/fiscal");
+  }
+
+  function renderFiscalConfig(cfg){
+    document.getElementById("cfgAmbiente").value = cfg.ambienteSefaz || "homologacao";
+    document.getElementById("cfgUf").value = cfg.uf || "MG";
+    document.getElementById("cfgCertPath").value = cfg.certificado && cfg.certificado.arquivo || "";
+    document.getElementById("cfgCertSenha").value = "";
+    document.getElementById("cfgIdCsc").value = (cfg.nfce && cfg.nfce.idCsc) || "000001";
+    document.getElementById("cfgCsc").value = "";
+    document.getElementById("cfgEmissao").checked = !!cfg.emissaoFiscal;
+    var st = [];
+    var driverLabel = (cfg.driver === "lib" || cfg.driver === "acbr-lib") ? "emissor integrado" : (cfg.driver || "?");
+    var ambLabel = cfg.ambienteSefaz === "producao" ? "Produção" : "Homologação";
+    st.push("Modo: <strong>"+driverLabel+"</strong>");
+    st.push("Ambiente: <strong>"+ambLabel+"</strong>");
+    if (cfg.paths){
+      st.push("Motor: "+(cfg.paths.libExiste?"✓":"✗"));
+      st.push("Config: "+(cfg.paths.iniExiste?"✓":"✗"));
+    }
+    if (cfg.certificado){
+      st.push("Cert: "+(cfg.certificado.arquivoExiste?"✓ encontrado":"✗ não encontrado")+(cfg.certificado.senhaConfigurada?" · senha OK":""));
+    }
+    document.getElementById("configStatus").innerHTML = st.join(" · ");
+  }
+
+  async function refreshConfigPanel(){
+    try {
+      var cfg = await loadFiscalConfig();
+      renderFiscalConfig(cfg);
+    } catch(e){
+      document.getElementById("configStatus").textContent = "Erro: "+e.message;
+    }
+  }
+
+  document.getElementById("btnReloadConfig").onclick = refreshConfigPanel;
+  document.getElementById("formFiscalConfig").onsubmit = async function(ev){
+    ev.preventDefault();
+    if (!token()){
+      showMsg("msgConfig", "Informe o X-Agent-Token para salvar.", "err");
+      return;
+    }
+    var body = {
+      ambienteSefaz: document.getElementById("cfgAmbiente").value,
+      uf: document.getElementById("cfgUf").value,
+      certificadoArquivo: document.getElementById("cfgCertPath").value,
+      nfceIdCsc: document.getElementById("cfgIdCsc").value,
+      emissaoFiscal: document.getElementById("cfgEmissao").checked
+    };
+    var senha = document.getElementById("cfgCertSenha").value;
+    var csc = document.getElementById("cfgCsc").value;
+    if (senha) body.certificadoSenha = senha;
+    if (csc) body.nfceCsc = csc;
+    if (body.ambienteSefaz === "producao" && !confirm("ATENÇÃO: ambiente PRODUÇÃO emite notas fiscais REAIS na SEFAZ. Confirmar?")) return;
+    try {
+      var r = await fetch("/config/fiscal", { method:"PUT", headers: headers(true), body: JSON.stringify(body) });
+      var j = await r.json().catch(function(){ return {}; });
+      if (!r.ok) throw new Error(j.erro || ("HTTP "+r.status));
+      renderFiscalConfig(j.config || j);
+      showMsg("msgConfig", "Configuração fiscal salva.", "ok");
+      fiscalPreflightInvalidate();
+    } catch(e){
+      showMsg("msgConfig", e.message, "err");
+    }
+  };
+
+  async function fiscalPreflightInvalidate(){
+    try { await postAction("/diagnostico/preflight/refresh"); } catch(_){}
+  }
+
   async function refreshAll(){
     try {
       var alertas = await loadAlertas();
@@ -302,7 +422,10 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     } catch(e){ document.getElementById("preflightBody").textContent = "Preflight: "+e.message; }
   }
 
-  document.getElementById("btnRefreshAll").onclick = refreshAll;
+  document.getElementById("btnRefreshAll").onclick = function(){
+    void refreshAll();
+    void refreshConfigPanel();
+  };
 
   async function postAction(path, body){
     return fetchJson(path, { method:"POST", headers: headers(true), body: JSON.stringify(body || {}) });
@@ -348,6 +471,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
   });
 
   refreshAll();
+  refreshConfigPanel();
   setInterval(refreshAll, 12000);
 })();
 </script>

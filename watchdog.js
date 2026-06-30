@@ -1,5 +1,5 @@
 // Watchdog ACBr — health check e pausa de fila fiscal
-const acbr = require("./acbr");
+const fiscalDriver = require("./fiscalDriver");
 const filaFiscal = require("./filaFiscal");
 
 let timer = null;
@@ -14,11 +14,11 @@ function statusWatchdog() {
 
 async function tick(restartAcbrFn) {
   const filaFiscal = require("./filaFiscal");
-  if (acbr.isAcbrBusy?.() || filaFiscal.estaProcessando?.()) {
+  if (fiscalDriver.isAcbrBusy?.() || filaFiscal.estaProcessando?.()) {
     return;
   }
   try {
-    const ok = await acbr.testar();
+    const ok = await fiscalDriver.testar();
     if (ok) {
       if (degraded) {
         console.log("[Watchdog ACBr] Serviço restaurado — retomando fila fiscal");

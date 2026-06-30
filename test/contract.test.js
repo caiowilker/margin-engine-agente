@@ -23,6 +23,8 @@ process.env.FISCAL_INTEGRITY_STRICT = "false";
 process.env.EMISSAO_FISCAL = "true";
 process.env.ACBR_NFE_ENABLED = "true";
 process.env.AGENT_TOKEN_REQUIRED = "false";
+process.env.AGENTE_URL = "";
+process.env.CONTRACT_AGENTE_URL = "";
 
 const filaFiscal = require("../filaFiscal");
 const fiscalService = require("../fiscalService");
@@ -401,7 +403,8 @@ async function run() {
   });
 
   await test("POST /fiscal/emitir-nfe — correlationId, fiscal pending e modeloDocumento 55", async () => {
-    acbr.setRuntimeEmissaoFiscal(null);
+    process.env.EMISSAO_FISCAL = "true";
+    acbr.setRuntimeEmissaoFiscal(true);
     const correlationId = `contract-nfe-${Date.now()}`;
     const numeroVenda = `V-NFE-${Date.now()}`;
     const body = payloadEmitirNfe(correlationId, numeroVenda);
@@ -415,7 +418,8 @@ async function run() {
   });
 
   await test("POST /fiscal/emitir-nfe — aceita codigoIbge no endereço (alias front/back)", async () => {
-    acbr.setRuntimeEmissaoFiscal(null);
+    process.env.EMISSAO_FISCAL = "true";
+    acbr.setRuntimeEmissaoFiscal(true);
     const correlationId = `contract-nfe-ibge-${Date.now()}`;
     const numeroVenda = `V-NFE-IBGE-${Date.now()}`;
     const body = {
@@ -441,7 +445,8 @@ async function run() {
   });
 
   await test("POST /fiscal/emitir-nfe — destinatário incompleto rejeita antes da fila", async () => {
-    acbr.setRuntimeEmissaoFiscal(null);
+    process.env.EMISSAO_FISCAL = "true";
+    acbr.setRuntimeEmissaoFiscal(true);
     const correlationId = `contract-nfe-bad-${Date.now()}`;
     const body = payloadEmitirFront(correlationId, `V-NFE-BAD-${Date.now()}`);
     await assert.rejects(

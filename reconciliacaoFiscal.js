@@ -1,7 +1,7 @@
 // Reconciliação fiscal automática — agente local
 const log = require("./logger");
 const filaFiscal = require("./filaFiscal");
-const acbr = require("./acbr");
+const fiscalDriver = require("./fiscalDriver");
 const docs = require("./documentosFiscais");
 const fiscalService = require("./fiscalService");
 
@@ -77,8 +77,8 @@ async function recuperarDocumentoLocal(cfg, numeroVenda, correlationId) {
 
 async function executarCiclo(lerConfigFn) {
   const cfg = await lerConfigFn();
-  if (!cfg.backendUrl || !cfg.backendToken || !acbr.EMISSAO_FISCAL) {
-    if (acbr.EMISSAO_FISCAL) {
+  if (!cfg.backendUrl || !cfg.backendToken || !fiscalDriver.EMISSAO_FISCAL) {
+    if (fiscalDriver.EMISSAO_FISCAL) {
       await fiscalRecuperacao.processarFilaRecovery(lerConfigFn).catch((err) =>
         log.warn({ err: err.message }, "Recovery: falha fila consulta"),
       );

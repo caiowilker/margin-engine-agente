@@ -131,14 +131,29 @@ Paths ACBr: `C:\ProgramData\MarginEngine\acbr\` (XML, PDF, logs)
 
 * Fluxo: Front → Agente → ACBr → SEFAZ
 * Callback backend com `chaveNfe`, `qrcode`, XML/PDF após autorização
-* Fila fiscal persistente antes de produção
-* Idempotência sync vendas offline
+* Fila fiscal persistente
+* Idempotência sync vendas offline e checkout (`numeroVendaCliente`)
+
+---
+
+## Maturidade (2026-06-27)
+
+| Dimensão | Indicador |
+|----------|-----------|
+| ACBr Monitor | 🟢 Produção |
+| Fila fiscal + impressão | 🟢 Estável |
+| Idempotência venda | 🟢 Mergeado |
+| ACBrLib driver | 🟡 Preparação (código local) |
+| Piloto Lib em loja | 🔵 Pendente |
 
 ---
 
 ## Referências
 
-* Progresso: `.ai/progress.md`
-* Deploy: `.ai/DEPLOY_PRODUCTION.md`
-* Docs operação: `docs/OPERACAO.md`, `docs/GUIA_COMPLETO.md`
-* Contratos API: `docs/CONTRATOS_API.md`
+| Documento | Conteúdo |
+|-----------|----------|
+| `.ai/progress.md` | Progresso agente |
+| `../margin-engine/.ai/progress.md` | Progresso Platform |
+| `.ai/DEPLOY_PRODUCTION.md` | Deploy |
+| `.ai/planning/migracao-acbrlib.md` | ACBrLib |
+| `docs/OPERACAO.md` | Operação |

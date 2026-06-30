@@ -1,7 +1,9 @@
 // Validação operacional A1/CSC/ambiente via ACBr — cache para não bloquear cada venda
 const fs = require("fs");
-const acbr = require("./acbr");
-const acbrNfceSetup = require("./acbrNfceSetup");
+const fiscalDriver = require("./fiscalDriver");
+const fiscalDriverNfceSetup = require("./fiscalDriverNfceSetup");
+const fiscalLocalConfig = require("./fiscalLocalConfig");
+const factory = require("./fiscal/factory");
 
 const PREFLIGHT_TTL_MS = parseInt(
   process.env.FISCAL_PREFLIGHT_TTL_MS || "90000",
@@ -36,20 +38,50 @@ function cacheValido(entry) {
   return entry && Date.now() - entry.em < PREFLIGHT_TTL_MS;
 }
 
+function ambienteConfigurado() {
+  try {
+    return fiscalLocalConfig.ler().ambienteSefaz || "homologacao";
+  } catch {
+    return (process.env.AMBIENTE_SEFAZ || "homologacao").toLowerCase().trim();
+  }
+}
+
+function isLibDriver() {
+  const name = String(process.env.ACBR_DRIVER || factory.resolveDriverName() || "monitor")
+    .toLowerCase()
+    .replace("acbr-lib", "lib");
+  return name === "lib";
+}
+
+function validarAmbienteConfigurado(ambienteEsperado) {
+  const cfgAmb = ambienteConfigurado();
+  if (cfgAmb !== ambienteEsperado) {
+    throw new Error(
+      `AMBIENTE_SEFAZ=${ambienteEsperado} mas configuração fiscal local está em ${cfgAmb}`,
+    );
+  }
+  return cfgAmb;
+}
+
 async function validarSefazOperacional() {
-  const resposta = await acbr.enviarNfe("NFE.StatusServico");
-  const p = acbr.parseResposta(resposta);
-  if (!p.cStat) {
+  const resposta = await fiscalDriver.statusServico();
+  const p = fiscalDriver.parseResposta(
+    typeof resposta === "object" && resposta.raw != null ? resposta.raw : resposta,
+  );
+  const cStat = p.cStat || resposta?.cStat;
+  const xMotivo = p.xMotivo || resposta?.xMotivo;
+  if (!cStat) {
     throw new Error(
-      `ACBr não retornou status do serviço NFC-e. Resposta: ${resposta}`,
+      `Emissor fiscal não retornou status do serviço NFC-e. Resposta: ${JSON.stringify(resposta)}`,
     );
   }
-  if (p.cStat !== "107" && p.cStat !== "108") {
-    throw new Error(
-      `SEFAZ indisponível (cStat ${p.cStat}): ${p.xMotivo || resposta}`,
-    );
+  if (cStat !== "107" && cStat !== "108") {
+    throw new Error(`SEFAZ indisponível (cStat ${cStat}): ${xMotivo || resposta}`);
   }
-  return { resposta, p };
+  return {
+    resposta: typeof resposta === "object" ? resposta.raw || JSON.stringify(resposta) : resposta,
+    p: { ...p, cStat, xMotivo },
+  };
 }
 
 function validarAmbiente(ambienteEsperado, resposta, p) {
@@ -61,16 +93,16 @@ function validarAmbiente(ambienteEsperado, resposta, p) {
     "";
   if (!ambAcbr) return ambAcbr;
 
-  const acbrHomolog = ambienteAcbrHomologacao(ambAcbr);
-  const acbrProd = ambienteAcbrProducao(ambAcbr);
-  if (ambienteEsperado === "homologacao" && acbrProd && !acbrHomolog) {
+  const fiscalDriverHomolog = ambienteAcbrHomologacao(ambAcbr);
+  const fiscalDriverProd = ambienteAcbrProducao(ambAcbr);
+  if (ambienteEsperado === "homologacao" && fiscalDriverProd && !fiscalDriverHomolog) {
     throw new Error(
-      "AMBIENTE_SEFAZ=homologacao mas ACBr Monitor está em produção",
+      `AMBIENTE_SEFAZ=homologacao mas emissor fiscal está em produção (tpAmb=${ambAcbr})`,
     );
   }
-  if (ambienteEsperado === "producao" && acbrHomolog && !acbrProd) {
+  if (ambienteEsperado === "producao" && fiscalDriverHomolog && !fiscalDriverProd) {
     throw new Error(
-      "AMBIENTE_SEFAZ=producao mas ACBr Monitor está em homologação",
+      `AMBIENTE_SEFAZ=producao mas emissor fiscal está em homologação (tpAmb=${ambAcbr})`,
     );
   }
   return ambAcbr;
@@ -78,14 +110,13 @@ function validarAmbiente(ambienteEsperado, resposta, p) {
 
 /** Caminho quente: 1 round-trip TCP (StatusServico). Usado antes de cada emissão. */
 async function validarEmissaoRapida() {
-  if (!acbr.EMISSAO_FISCAL) {
+  if (!fiscalDriver.EMISSAO_FISCAL) {
     return { ok: true, fiscal: false, motivo: "EMISSAO_FISCAL desabilitado" };
   }
   if (cacheValido(cacheRapido)) return cacheRapido.resultado;
 
-  const ambienteEsperado = (process.env.AMBIENTE_SEFAZ || "homologacao")
-    .toLowerCase()
-    .trim();
+  const ambienteEsperado = ambienteConfigurado();
+  validarAmbienteConfigurado(ambienteEsperado);
 
   let resposta;
   let p;
@@ -93,7 +124,7 @@ async function validarEmissaoRapida() {
     ({ resposta, p } = await validarSefazOperacional());
   } catch (err) {
     cacheRapido = null;
-    throw new Error(`ACBr indisponível: ${err.message}`);
+    throw new Error(`Emissor fiscal indisponível: ${err.message}`);
   }
 
   const ambAcbr = validarAmbiente(ambienteEsperado, resposta, p);
@@ -114,46 +145,54 @@ async function validarEmissaoRapida() {
 
 /** Diagnóstico completo: certificado, INI, checklist CSC/URLs. */
 async function validarEmissaoCompleta() {
-  if (!acbr.EMISSAO_FISCAL) {
+  if (!fiscalDriver.EMISSAO_FISCAL) {
     return { ok: true, fiscal: false, motivo: "EMISSAO_FISCAL desabilitado" };
   }
   if (cacheValido(cacheCompleto)) return cacheCompleto.resultado;
 
-  const ambienteEsperado = (process.env.AMBIENTE_SEFAZ || "homologacao")
-    .toLowerCase()
-    .trim();
+  const ambienteEsperado = ambienteConfigurado();
+  validarAmbienteConfigurado(ambienteEsperado);
 
   const { resposta, p } = await validarSefazOperacional();
   const ambAcbr = validarAmbiente(ambienteEsperado, resposta, p);
 
-  try {
-    const certResp = await acbr.enviarNfe("NFE.CertificadoDataVencimento");
-    const validade =
-      extrairValor(certResp, "DataVencimento") ||
-      extrairValor(certResp, "Validade") ||
-      certResp.trim();
-    const match = validade.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-    if (match) {
-      const dt = new Date(`${match[3]}-${match[2]}-${match[1]}`);
-      if (!Number.isNaN(dt.getTime()) && dt < new Date()) {
-        throw new Error(`Certificado A1 vencido em ${validade}`);
+  if (!isLibDriver()) {
+    try {
+      const certResp = await fiscalDriver.enviarNfe("NFE.CertificadoDataVencimento");
+      const validade =
+        extrairValor(certResp, "DataVencimento") ||
+        extrairValor(certResp, "Validade") ||
+        certResp.trim();
+      const match = validade.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      if (match) {
+        const dt = new Date(`${match[3]}-${match[2]}-${match[1]}`);
+        if (!Number.isNaN(dt.getTime()) && dt < new Date()) {
+          throw new Error(`Certificado A1 vencido em ${validade}`);
+        }
+      }
+    } catch (err) {
+      if (
+        err.message.includes("vencido") ||
+        err.message.includes("Certificado")
+      ) {
+        throw err;
       }
     }
-  } catch (err) {
-    if (
-      err.message.includes("vencido") ||
-      err.message.includes("Certificado")
-    ) {
-      throw err;
-    }
   }
 
-  const certPath = process.env.CERT_A1_PATH;
+  const cfg = fiscalLocalConfig.ler();
+  const certPath =
+    cfg.certificado?.arquivoAbsoluto ||
+    process.env.CERT_A1_PATH ||
+    cfg.certificado?.arquivo;
   if (certPath && !fs.existsSync(certPath)) {
-    throw new Error(`CERT_A1_PATH não encontrado: ${certPath}`);
+    throw new Error(`Certificado A1 não encontrado: ${certPath}`);
+  }
+  if (isLibDriver() && !cfg.certificado?.senhaConfigurada) {
+    throw new Error("Senha do certificado A1 não configurada (Configuração fiscal).");
   }
 
-  const nfceSetup = await acbrNfceSetup.validarAsync();
+  const nfceSetup = await fiscalDriverNfceSetup.validarAsync();
 
   const resultado = {
     ok: true,

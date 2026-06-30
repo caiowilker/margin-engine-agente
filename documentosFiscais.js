@@ -63,6 +63,20 @@ function salvarXmlInutilizacao(serie, ini, fim, xmlContent) {
   });
 }
 
+function salvarXmlEvento(chave, xmlContent, tipoEvento) {
+  return salvarComVerificacaoDisco("xml", PATHS.xml, () => {
+    const k = String(chave || "").replace(/\D/g, "");
+    const tag = String(tipoEvento || "evento")
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, "")
+      .slice(0, 24);
+    const file = path.join(PATHS.xml, `${k}-${tag}.xml`);
+    fs.writeFileSync(file, xmlContent, "utf8");
+    backup(file);
+    return file;
+  });
+}
+
 function salvarPdfDanfce(chave, pdfBuffer) {
   return salvarComVerificacaoDisco("pdf", PATHS.pdf, () => {
     const file = path.join(PATHS.pdf, `${chave}-danfce.pdf`);
@@ -101,8 +115,48 @@ function isPdfValid(filePath) {
   return buf.length > 128 && buf.slice(0, 4).toString() === "%PDF";
 }
 
+function backupQueuePath() {
+  return path.join(PATHS.data || path.join(__dirname, "data"), "backup-pending.jsonl");
+}
+
+function enqueueBackupRetry(sourceFile) {
+  try {
+    const q = backupQueuePath();
+    fs.mkdirSync(path.dirname(q), { recursive: true });
+    fs.appendFileSync(q, `${JSON.stringify({ file: sourceFile, at: Date.now() })}\n`, "utf8");
+  } catch (err) {
+    log.warn({ err: err.message }, "Falha ao enfileirar backup pendente");
+  }
+}
+
+function processPendingBackups() {
+  const q = backupQueuePath();
+  if (!fs.existsSync(q)) return;
+  const check = fiscalStorage.checkDiskSpace(PATHS.backup, fiscalStorage.MIN_MB_BACKUP);
+  if (!check.ok) return;
+  const lines = fs.readFileSync(q, "utf8").split(/\r?\n/).filter(Boolean);
+  const remaining = [];
+  for (const line of lines) {
+    try {
+      const { file } = JSON.parse(line);
+      if (!file || !fs.existsSync(file)) continue;
+      const base = path.basename(file);
+      const dest = path.join(PATHS.backup, `${Date.now()}-${base}`);
+      fs.copyFileSync(file, dest);
+    } catch (_) {
+      remaining.push(line);
+    }
+  }
+  if (remaining.length === 0) {
+    fs.unlinkSync(q);
+  } else {
+    fs.writeFileSync(q, `${remaining.join("\n")}\n`, "utf8");
+  }
+}
+
 function backup(sourceFile) {
   try {
+    processPendingBackups();
     const check = fiscalStorage.checkDiskSpace(
       PATHS.backup,
       fiscalStorage.MIN_MB_BACKUP,
@@ -116,8 +170,9 @@ function backup(sourceFile) {
       });
       log.warn(
         { livresMB: check.livresMB },
-        "Backup local ignorado — disco insuficiente",
+        "Backup enfileirado — disco insuficiente (retry automático)",
       );
+      enqueueBackupRetry(sourceFile);
       fiscalStorage.setModoDegradado(true);
       return null;
     }
@@ -535,6 +590,7 @@ module.exports = {
   salvarXmlAutorizado,
   salvarXmlCancelamento,
   salvarXmlInutilizacao,
+  salvarXmlEvento,
   salvarPdfDanfce,
   salvarPdfPlaceholder,
   lerArquivo,

@@ -1,5 +1,7 @@
 # PHASE 01
 
+> **Placeholder histórico.** Plano fiscal consolidado: `../../margin-engine/.ai/planning/phase-index.md` · Status: `../../margin-engine/.ai/progress.md`
+
 ## Objective
 
 Describe the phase objective.

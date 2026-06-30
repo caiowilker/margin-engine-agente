@@ -1,7 +1,7 @@
 // Re-emissão segura — consulta SEFAZ/chave/nNF antes de reenviar
-const acbr = require("./acbr");
+const fiscalDriver = require("./fiscalDriver");
 const docs = require("./documentosFiscais");
-const { coalescerRespostaAcbr } = require("./acbrResposta");
+const { coalescerRespostaAcbr } = require("./fiscalDriverResposta");
 const filaFiscal = require("./filaFiscal");
 const auditLog = require("./auditLog");
 const log = require("./logger").child({ modulo: "fiscal_recuperacao" });
@@ -35,9 +35,9 @@ function jobIncertoPorLote104(job, payload = {}) {
   );
 }
 
-function acbrDisponivelMemoria() {
-  if (!acbr.EMISSAO_FISCAL) return false;
-  return acbr.obterStatusMemoria(false) !== "offline";
+function fiscalDriverDisponivelMemoria() {
+  if (!fiscalDriver.EMISSAO_FISCAL) return false;
+  return fiscalDriver.obterStatusMemoria(false) !== "offline";
 }
 
 async function consultarDocumentoAutorizado(meta = {}) {
@@ -83,16 +83,16 @@ async function consultarDocumentoAutorizado(meta = {}) {
           xMotivo: prot.xMotivo,
           xml: localXml.xml,
           xmlPath: localXml.path,
-          modeloDocumento: acbr.inferirModeloDaChave(chave) || "65",
+          modeloDocumento: fiscalDriver.inferirModeloDaChave(chave) || "65",
           recuperado: true,
         };
       }
     }
   }
 
-  if (chave && acbrDisponivelMemoria()) {
+  if (chave && fiscalDriverDisponivelMemoria()) {
     try {
-      const consulta = await acbr.consultarChave(chave);
+      const consulta = await fiscalDriver.consultarChave(chave);
       const cs = String(consulta.cStat || "");
       if (
         consulta.situacao === "AUTORIZADA" ||
@@ -115,15 +115,15 @@ async function consultarDocumentoAutorizado(meta = {}) {
           xMotivo: consulta.xMotivo,
           xml: xmlAutorizado,
           xmlPath: localXml?.path || null,
-          modeloDocumento: acbr.inferirModeloDaChave(chave) || "65",
+          modeloDocumento: fiscalDriver.inferirModeloDaChave(chave) || "65",
           recuperado: true,
         };
       }
     } catch (err) {
       log.warn({ chave, err: err.message }, "Consulta chave falhou");
-      if (!acbrDisponivelMemoria()) {
+      if (!fiscalDriverDisponivelMemoria()) {
         const e = new Error("ACBr offline");
-        e.acbrOffline = true;
+        e.fiscalDriverOffline = true;
         throw e;
       }
     }
@@ -156,7 +156,7 @@ function montarDeDocumentoLocal(doc) {
     xml,
     xmlPath: doc.xml_path || null,
     modeloDocumento:
-      doc.modelo_documento || acbr.inferirModeloDaChave(chave) || "65",
+      doc.modelo_documento || fiscalDriver.inferirModeloDaChave(chave) || "65",
     recuperado: true,
   };
 }
@@ -227,7 +227,7 @@ async function recuperarJob(job, lerConfigFn, opts = {}) {
   try {
     existente = await verificarAntesDeEmitir(payload);
   } catch (err) {
-    if (err.acbrOffline || !acbrDisponivelMemoria()) {
+    if (err.fiscalDriverOffline || !fiscalDriverDisponivelMemoria()) {
       return { acao: "ACBR_OFFLINE" };
     }
     throw err;
@@ -253,7 +253,7 @@ async function recuperarJob(job, lerConfigFn, opts = {}) {
     return { acao: "RECUPERADO", chave: existente.chave };
   }
 
-  if (!acbrDisponivelMemoria()) {
+  if (!fiscalDriverDisponivelMemoria()) {
     return { acao: "ACBR_OFFLINE" };
   }
 
@@ -347,7 +347,7 @@ async function tentarRecuperacaoConsultaInterno(job, lerConfigFn) {
     return { acao: "TIMEOUT", motivo: "ACBr_OFFLINE_TIMEOUT" };
   }
 
-  if (!acbrDisponivelMemoria()) {
+  if (!fiscalDriverDisponivelMemoria()) {
     return agendarBackoff(job, tentativas, "ACBr offline — consulta adiada");
   }
 

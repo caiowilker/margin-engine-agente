@@ -2,7 +2,7 @@
 // Credenciais ACBr e infra local (categoria B/C) não entram aqui.
 
 /** @typedef {"boolean"|"number"|"string"} ConfigTipo */
-/** @typedef {"fiscal"|"disco"|"alertas"|"recovery"|"operacao"} ConfigGrupo */
+/** @typedef {"fiscal"|"disco"|"alertas"|"recovery"|"operacao"|"impressora"} ConfigGrupo */
 
 /**
  * @type {Record<string, {
@@ -67,7 +67,7 @@ const CATALOGO = {
     default: "homologacao",
     enum: ["homologacao", "producao"],
     grupo: "fiscal",
-    label: "Ambiente SEFAZ (referência agente)",
+    label: "Ambiente SEFAZ (homologação ou produção)",
   },
   fiscalPreflightRapido: {
     env: "FISCAL_PREFLIGHT_RAPIDO",
@@ -417,6 +417,84 @@ const CATALOGO = {
     default: false,
     grupo: "operacao",
     label: "Auto-update do agente",
+  },
+  printerProvider: {
+    env: "PRINTER_PROVIDER",
+    tipo: "string",
+    default: "acbr-posprinter",
+    enum: ["acbr-posprinter", "native", "mock"],
+    grupo: "impressora",
+    label: "Provider de impressão (ACBr PosPrinter / ESC/POS)",
+  },
+  printerFallback: {
+    env: "PRINTER_FALLBACK",
+    tipo: "string",
+    default: "native",
+    enum: ["native", "mock"],
+    grupo: "impressora",
+    label: "Fallback quando ACBr indisponível",
+  },
+  printerType: {
+    env: "PRINTER_TYPE",
+    tipo: "string",
+    default: "auto",
+    enum: ["auto", "usb", "network", "windows"],
+    grupo: "impressora",
+    label: "Transporte ESC/POS (fallback native)",
+  },
+  printerEncoding: {
+    env: "PRINTER_ENCODING",
+    tipo: "string",
+    default: "UTF8",
+    enum: ["UTF8", "CP860"],
+    grupo: "impressora",
+    label: "Codificação térmica",
+  },
+  printerCut: {
+    env: "PRINTER_CUT",
+    tipo: "string",
+    default: "partial",
+    enum: ["partial", "total"],
+    grupo: "impressora",
+    label: "Tipo de corte de papel",
+  },
+  printerDrawer: {
+    env: "PRINTER_DRAWER",
+    tipo: "boolean",
+    default: true,
+    grupo: "impressora",
+    label: "Abrir gaveta no teste de impressão",
+  },
+  printerModel: {
+    env: "PRINTER_MODEL",
+    tipo: "string",
+    default: "auto",
+    grupo: "impressora",
+    label: "Modelo ACBr PosPrinter (0=genérica)",
+  },
+  printerPorta: {
+    env: "PRINTER_PORTA",
+    tipo: "string",
+    default: "USB",
+    grupo: "impressora",
+    label: "Porta impressora (USB/COM/rede)",
+  },
+  printerQrErrorLevel: {
+    env: "PRINTER_QR_ERROR_LEVEL",
+    tipo: "string",
+    default: "L",
+    enum: ["L", "M", "Q", "H"],
+    grupo: "impressora",
+    label: "QR Code — nível de correção",
+  },
+  printerBarcodeAltura: {
+    env: "PRINTER_BARCODE_ALTURA",
+    tipo: "number",
+    default: 50,
+    min: 10,
+    max: 255,
+    grupo: "impressora",
+    label: "Código de barras — altura",
   },
 };
 

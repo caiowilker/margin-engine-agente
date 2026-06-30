@@ -48,7 +48,7 @@ const http = require("http");
 const os = require("os");
 const crypto = require("crypto");
 const impressora = require("./impressora");
-const acbr = require("./acbr");
+const fiscalDriver = require("./fiscalDriver");
 const fila = require("./fila");
 const configSync = require("./configSync");
 const credenciais = require("./credenciais");
@@ -236,7 +236,7 @@ async function boot() {
   reconciliacaoFiscal.iniciar(lerConfig);
   fiscalAlertas.iniciarRelatorioAutomatico(fiscalRelatorio.gerarRelatorio);
 
-  if (acbr.EMISSAO_FISCAL) {
+  if (fiscalDriver.EMISSAO_FISCAL) {
     acbrNfceSetup.inicializar().then((r) => {
       if (r.pronto || r.ok) {
         console.log("[ACBr NFC-e] Configuração validada");
@@ -413,6 +413,18 @@ function privateNetworkHeaders(req, res, next) {
   next();
 }
 
+function isLocalhost(req) {
+  const ip = String(req.socket?.remoteAddress || "").replace(/^::ffff:/, "");
+  return ip === "127.0.0.1" || ip === "::1";
+}
+
+function exigirLocalhost(req, res, next) {
+  if (isLocalhost(req)) return next();
+  return res.status(403).json({
+    erro: "Acesso permitido apenas via localhost (127.0.0.1).",
+  });
+}
+
 function securityHeaders(req, res, next) {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
@@ -543,7 +555,7 @@ async function aplicarAtualizacao(urlDownload, novaVersao, shaEsperado) {
     if (fs.existsSync(manifestNoPacote)) {
       await manifestUpdater.aplicarPacote(tmpDir, shaEsperado, novaVersao);
     } else {
-      const jsFiles = ["index.js", "impressora.js", "acbr.js", "fila.js", "credenciais.js"];
+      const jsFiles = ["index.js", "impressora.js", "fiscalDriver.js", "fila.js", "credenciais.js"];
       manifestUpdater.backupArquivos(jsFiles);
       for (const f of jsFiles) {
         const src = path.join(tmpDir, f);
@@ -571,7 +583,7 @@ async function aplicarAtualizacao(urlDownload, novaVersao, shaEsperado) {
       const jsFiles = [
         "index.js",
         "impressora.js",
-        "acbr.js",
+        "fiscalDriver.js",
         "fila.js",
         "credenciais.js",
       ];
@@ -660,7 +672,7 @@ function coletarDadosAlertas() {
   const payload = diagnosticoDashboard.montarAlertasPayload({
     filaFiscal,
     fiscalStorage,
-    acbr,
+    acbr: fiscalDriver,
     watchdog,
     manifestUpdater,
     versao: VERSAO_ATUAL,
@@ -748,8 +760,8 @@ function iniciarServidor() {
       const [impressoraOk, impressoraInfo, acbrOk] = await Promise.all([
         impressora.testar().catch(() => false),
         impressora.getInfo().catch(() => null),
-        acbr.EMISSAO_FISCAL
-          ? acbr.testar().catch(() => false)
+        fiscalDriver.EMISSAO_FISCAL
+          ? fiscalDriver.testar().catch(() => false)
           : Promise.resolve(false),
       ]);
 
@@ -802,6 +814,18 @@ function iniciarServidor() {
           tipo: process.env.PRINTER_TYPE || "auto",
           host: process.env.PRINTER_HOST || null,
           porta: process.env.PRINTER_PORT || null,
+          provider:
+            typeof impressora.getProviderName === "function"
+              ? impressora.getProviderName()
+              : null,
+          requestedProvider:
+            typeof impressora.getRequestedProviderName === "function"
+              ? impressora.getRequestedProviderName()
+              : null,
+          driver:
+            typeof impressora.getDriverInfo === "function"
+              ? impressora.getDriverInfo()
+              : null,
           detectada: impressoraInfo?.impressora || null,
           candidatos: impressoraInfo?.candidatos?.length || 0,
           ultimaUsada: impressoraInfo?.ultimaUsada || null,
@@ -809,9 +833,21 @@ function iniciarServidor() {
 
         acbr: {
           ok: acbrOk,
-          emissaoFiscal: acbr.EMISSAO_FISCAL,
+          emissaoFiscal: fiscalDriver.EMISSAO_FISCAL,
           host: process.env.ACBR_HOST || "127.0.0.1",
           porta: process.env.ACBR_PORT || "9200",
+          driver:
+            typeof fiscalDriver.getDriverInfo === "function"
+              ? fiscalDriver.getDriverInfo().provider
+              : "monitor",
+          mode:
+            typeof fiscalDriver.getDriverInfo === "function"
+              ? fiscalDriver.getDriverInfo().mode
+              : "monitor",
+          native:
+            typeof fiscalDriver.getDriverInfo === "function"
+              ? fiscalDriver.getDriverInfo().native === true
+              : false,
         },
 
         banco: {
@@ -907,25 +943,25 @@ function iniciarServidor() {
 
   /** Probe fiscal leve — não bloqueia no mutex ACBr durante emissão/PDF. */
   async function probeStatusFiscal() {
-    const acbrOcupado = acbr.isAcbrBusy() || filaFiscal.estaProcessando();
+    const acbrOcupado = fiscalDriver.isAcbrBusy() || filaFiscal.estaProcessando();
     const wd = watchdog.statusWatchdog();
     if (acbrOcupado) {
-      const mem = acbr.obterStatusMemoria(wd.degraded);
+      const mem = fiscalDriver.obterStatusMemoria(wd.degraded);
       return {
-        acbrOk: mem === "online" || mem === "degradado" || acbr.EMISSAO_FISCAL,
+        acbrOk: mem === "online" || mem === "degradado" || fiscalDriver.EMISSAO_FISCAL,
         acbrOcupado: true,
         fiscalProcessando: filaFiscal.estaProcessando(),
         acbrEstadoMemoria: mem,
       };
     }
-    const acbrOk = acbr.EMISSAO_FISCAL
-      ? await acbr.testar().catch(() => false)
+    const acbrOk = fiscalDriver.EMISSAO_FISCAL
+      ? await fiscalDriver.testar().catch(() => false)
       : false;
     return {
       acbrOk,
       acbrOcupado: false,
       fiscalProcessando: filaFiscal.estaProcessando(),
-      acbrEstadoMemoria: acbr.obterStatusMemoria(wd.degraded),
+      acbrEstadoMemoria: fiscalDriver.obterStatusMemoria(wd.degraded),
     };
   }
 
@@ -976,8 +1012,8 @@ function iniciarServidor() {
       },
 
       fiscal: {
-        emissaoFiscal: acbr.EMISSAO_FISCAL,
-        ok: acbr.EMISSAO_FISCAL ? fiscalProbe.acbrOk : null,
+        emissaoFiscal: fiscalDriver.EMISSAO_FISCAL,
+        ok: fiscalDriver.EMISSAO_FISCAL ? fiscalProbe.acbrOk : null,
         ocupado: fiscalProbe.acbrOcupado,
         processando: fiscalProbe.fiscalProcessando,
       },
@@ -1033,10 +1069,10 @@ function iniciarServidor() {
       res.json({
         online: true,
         impressoraConectada: impressoraOk,
-        acbrConectado: acbr.EMISSAO_FISCAL ? fiscalProbe.acbrOk : false,
+        acbrConectado: fiscalDriver.EMISSAO_FISCAL ? fiscalProbe.acbrOk : false,
         acbrOcupado: fiscalProbe.acbrOcupado,
         fiscalProcessando: fiscalProbe.fiscalProcessando,
-        emissaoFiscal: acbr.EMISSAO_FISCAL,
+        emissaoFiscal: fiscalDriver.EMISSAO_FISCAL,
         versao: VERSAO_ATUAL,
         timestamp: new Date().toISOString(),
         ativado: config.ativado === true,
@@ -1058,18 +1094,78 @@ function iniciarServidor() {
       backendUrl: config.backendUrl || "",
       tenantId: config.tenantId || "",
       dispositivoId: config.dispositivoId || null,
-      emissaoFiscal: acbr.EMISSAO_FISCAL,
+      emissaoFiscal: fiscalDriver.EMISSAO_FISCAL,
     });
   });
 
-  // Sincroniza X-Agent-Token no browser após reativação/reinstalação do agente
-  // (localhost apenas — mesma restrição de rede privada das demais rotas públicas).
-  app.get("/auth/local-token", privateNetworkHeaders, async (req, res) => {
+  /** Config fiscal local (ACBrLib) — leitura protegida; segredos não expostos */
+  app.get("/config/fiscal", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    try {
+      const fiscalLocalConfig = require("./fiscalLocalConfig");
+      res.json(fiscalLocalConfig.ler());
+    } catch (e) {
+      res.status(500).json({ erro: e.message || "Erro ao ler config fiscal" });
+    }
+  });
+
+  /** Grava config fiscal local (certificado, ambiente, CSC) — persiste acbrlib.ini + .env */
+  app.put("/config/fiscal", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    try {
+      const fiscalLocalConfig = require("./fiscalLocalConfig");
+      const saved = fiscalLocalConfig.salvar(req.body || {});
+      fiscalPreflight.invalidarCache();
+      res.json({ ok: true, config: saved });
+    } catch (e) {
+      res.status(400).json({ erro: e.message || "Erro ao salvar config fiscal" });
+    }
+  });
+
+  /** Config impressora local (ACBr PosPrinter + env) — leitura */
+  app.get("/config/impressora", privateNetworkHeaders, (req, res) => {
+    try {
+      const printerLocalConfig = require("./print/printerLocalConfig");
+      res.json(printerLocalConfig.ler());
+    } catch (e) {
+      res.status(500).json({ erro: e.message || "Erro ao ler config impressora" });
+    }
+  });
+
+  /** Grava config impressora local — persiste posprinter.ini + .env */
+  app.put("/config/impressora", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    try {
+      const printerLocalConfig = require("./print/printerLocalConfig");
+      const saved = printerLocalConfig.salvar(req.body || {});
+      impressora.resetPrintProvider?.();
+      res.json({ ok: true, config: saved });
+    } catch (e) {
+      res.status(400).json({ erro: e.message || "Erro ao salvar config impressora" });
+    }
+  });
+
+  // Sincroniza X-Agent-Token no browser (localhost ou código efêmero pós-ativação).
+  app.get("/auth/local-token", privateNetworkHeaders, exigirLocalhost, async (req, res) => {
+    const authSync = require("./authSync");
+    const syncCode = req.query.syncCode || req.headers["x-sync-code"];
+    if (syncCode) {
+      const token = authSync.consumeSyncCode(String(syncCode));
+      if (token) return res.json({ agentToken: token });
+      return res.status(401).json({ erro: "Código de sincronização inválido ou expirado." });
+    }
     const cfg = await lerConfig();
     if (!cfg.ativado || !cfg.agentToken) {
       return res.status(404).json({ erro: "Agente não ativado ou sem token." });
     }
     res.json({ agentToken: cfg.agentToken });
+  });
+
+  app.post("/auth/exchange-sync", privateNetworkHeaders, (req, res) => {
+    const authSync = require("./authSync");
+    const code = req.body?.syncCode || req.headers["x-sync-code"];
+    const token = authSync.consumeSyncCode(code ? String(code) : "");
+    if (!token) {
+      return res.status(401).json({ erro: "Código de sincronização inválido ou expirado." });
+    }
+    res.json({ agentToken: token });
   });
 
   // ── Ativação ─────────────────────────────────────────────────────────────────
@@ -1089,7 +1185,7 @@ function iniciarServidor() {
         body: JSON.stringify({
           codigoAtivacao: codigoFinal,
           ...(pdvNome ? { pdvNome } : {}),
-          emissaoFiscal: acbr.EMISSAO_FISCAL,
+          emissaoFiscal: fiscalDriver.EMISSAO_FISCAL,
         }),
       });
       if (!resp.ok) {
@@ -1120,6 +1216,8 @@ function iniciarServidor() {
 
       fila.atualizarConfig(backendUrl, dados.token);
       void configSync.sincronizar(lerConfig).catch(() => {});
+      const authSync = require("./authSync");
+      const syncCode = authSync.issueSyncCode(agentToken);
       console.log(
         `[Agente PDV] Ativado — tenant=${dados.tenantId} pdv=${dados.pdvNome}`,
       );
@@ -1128,6 +1226,7 @@ function iniciarServidor() {
         pdvNome: dados.pdvNome,
         tenantId: dados.tenantId,
         agentToken,
+        syncCode,
       });
     } catch (err) {
       res.status(500).json({ erro: err.message });
@@ -1145,7 +1244,7 @@ function iniciarServidor() {
       },
       req,
     );
-    if (!acbr.EMISSAO_FISCAL) return res.json({ fiscal: false });
+    if (!fiscalDriver.EMISSAO_FISCAL) return res.json({ fiscal: false });
     const numeroVenda = req.body?.numeroVenda;
     if (!numeroVenda) {
       auditLog.registrar(
@@ -1187,7 +1286,7 @@ function iniciarServidor() {
 
   app.post("/fiscal/emitir", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     const forcarEmissao = req.body?.forcarEmissao === true;
-    if (!acbr.EMISSAO_FISCAL && !forcarEmissao) return res.json({ fiscal: false });
+    if (!fiscalDriver.EMISSAO_FISCAL && !forcarEmissao) return res.json({ fiscal: false });
     try {
       const cfg = await lerConfig();
       const correlationId =
@@ -1223,7 +1322,7 @@ function iniciarServidor() {
   });
 
   app.post("/fiscal/emitir-nfe", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
-    if (!acbr.isNfeModelo55Habilitado()) {
+    if (!fiscalDriver.isNfeModelo55Habilitado()) {
       return res.status(503).json({
         erro: "NF-e modelo 55 desabilitada (ACBR_NFE_ENABLED ou EMISSAO_FISCAL)",
       });
@@ -1260,6 +1359,83 @@ function iniciarServidor() {
         body.acbrRaw = err.acbrRaw;
       }
       res.status(status).json(body);
+    }
+  });
+
+  app.post("/fiscal/lib/emitir", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    req.body = { ...(req.body || {}), acbrDriver: "lib" };
+    const forcarEmissao = req.body?.forcarEmissao === true;
+    if (!fiscalDriver.EMISSAO_FISCAL && !forcarEmissao) return res.json({ fiscal: false });
+    try {
+      const cfg = await lerConfig();
+      const correlationId = req.headers["x-correlation-id"] || req.body.correlationId;
+      const sync =
+        req.query.sync === "1" ||
+        req.query.sync === "true" ||
+        req.headers["x-fiscal-sync"] === "1";
+      const resultado = await fiscalService.enfileirarEmissao(
+        cfg,
+        { ...req.body, correlationId },
+        { sync },
+      );
+      res.json(resultado);
+    } catch (err) {
+      const body = { erro: err.message };
+      const cStat = err.cStat || String(err.message || "").match(/cStat\s*(\d{3})/i)?.[1];
+      if (cStat) body.cStat = cStat;
+      res.status(500).json(body);
+    }
+  });
+
+  app.post("/fiscal/lib/emitir-nfe", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    if (!fiscalDriver.isNfeModelo55Habilitado()) {
+      return res.status(503).json({ erro: "NF-e modelo 55 desabilitada" });
+    }
+    try {
+      const cfg = await lerConfig();
+      const correlationId = req.headers["x-correlation-id"] || req.body.correlationId;
+      const sync =
+        req.query.sync === "1" ||
+        req.query.sync === "true" ||
+        req.headers["x-fiscal-sync"] === "1";
+      const resultado = await fiscalService.enfileirarEmissaoNfe(
+        cfg,
+        { ...req.body, correlationId, acbrDriver: "lib" },
+        { sync },
+      );
+      res.json(resultado);
+    } catch (err) {
+      res.status(err.permanente ? 400 : 500).json({ erro: err.message });
+    }
+  });
+
+  app.post("/fiscal/lib/cancelar", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    try {
+      const cfg = await lerConfig();
+      const resultado = await fiscalService.cancelarCompleto(cfg, { ...req.body, acbrDriver: "lib" });
+      res.json(resultado);
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
+  });
+
+  app.post("/fiscal/lib/inutilizar", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    try {
+      const cfg = await lerConfig();
+      const resultado = await fiscalService.inutilizarCompleto(cfg, { ...req.body, acbrDriver: "lib" });
+      res.json(resultado);
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
+  });
+
+  app.get("/fiscal/lib/consultar/:chave", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    try {
+      const factory = require("./fiscal/factory");
+      const lib = factory.createDriver("lib");
+      res.json(await lib.consultarChave(req.params.chave));
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
     }
   });
 
@@ -1346,6 +1522,17 @@ function iniciarServidor() {
     }
   });
 
+  app.post("/fiscal/evento", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    try {
+      const cfg = await lerConfig();
+      const resultado = await fiscalService.enviarEventoCompleto(cfg, req.body);
+      res.json(resultado);
+    } catch (err) {
+      const status = err.permanente ? 400 : 500;
+      res.status(status).json({ erro: err.message, cStat: err.cStat });
+    }
+  });
+
   app.post("/acbr/nfce/cancelar", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     const chave = req.body?.chave || req.body?.chaveNfe;
     if (!chave) return res.status(400).json({ erro: "chave é obrigatória." });
@@ -1360,7 +1547,7 @@ function iniciarServidor() {
         });
         return res.json(resultado);
       }
-      res.json(await acbr.cancelarNfce(chave, req.body?.motivo));
+      res.json(await fiscalDriver.cancelarNfce(chave, req.body?.motivo));
     } catch (err) {
       res.status(500).json({ erro: err.message });
     }
@@ -1368,7 +1555,7 @@ function iniciarServidor() {
 
   app.get("/acbr/sefaz/status", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
-      res.json(await acbr.statusServico());
+      res.json(await fiscalDriver.statusServico());
     } catch (err) {
       res.status(500).json({ erro: err.message });
     }
@@ -1376,7 +1563,7 @@ function iniciarServidor() {
 
   app.get("/acbr/nfce/consultar/:chave", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
-      res.json(await acbr.consultarChave(req.params.chave));
+      res.json(await fiscalDriver.consultarChave(req.params.chave));
     } catch (err) {
       res.status(500).json({ erro: err.message });
     }
@@ -1484,7 +1671,7 @@ function iniciarServidor() {
       filaFiscal: filaFiscal.status(),
       watchdog: watchdog.statusWatchdog(),
       paths: marginPaths.PATHS,
-      emissaoFiscal: acbr.EMISSAO_FISCAL,
+      emissaoFiscal: fiscalDriver.EMISSAO_FISCAL,
       numeracao: {
         serie: fiscalNumeracao.SERIE_PADRAO,
         ultimoNumero: fiscalNumeracao.consultarUltimo(),
@@ -1575,6 +1762,66 @@ function iniciarServidor() {
     (req, res) => {
       const data = req.query.data || new Date().toISOString().slice(0, 10);
       res.json(fiscalRelatorio.gerarRelatorio(String(data)));
+    },
+  );
+
+  app.get(
+    "/diagnostico/pacote",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    diagnosticoRateLimit.middleware(),
+    async (req, res) => {
+      try {
+        config = await lerConfig();
+        const driverInfo =
+          typeof fiscalDriver.getDriverInfo === "function"
+            ? fiscalDriver.getDriverInfo()
+            : { provider: "monitor" };
+        const alertasPayload = coletarDadosAlertas();
+        const pacote = {
+          tipo: "margin-diagnostico-pacote",
+          versao: VERSAO_ATUAL,
+          geradoEm: new Date().toISOString(),
+          agente: {
+            versao: VERSAO_ATUAL,
+            uptime: process.uptime(),
+            platform: os.platform(),
+            arch: os.arch(),
+            hostname: os.hostname(),
+            node: process.version,
+            memoriaMb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+          },
+          fiscal: {
+            driver: driverInfo,
+            fila: filaFiscal.status(),
+            alertas: alertasPayload,
+            metricas: {
+              emissoesHoje: fiscalMetrics.emissoesHoje(),
+              taxaSucessoPercent: fiscalMetrics.taxaSucessoPercent(),
+            },
+            ultimasEmissoes: filaFiscal.listarUltimasEmissoes(10),
+          },
+          filaComercial: await fila.contadores(),
+          config: {
+            ativado: config.ativado === true,
+            pdvNome: config.pdvNome || null,
+            tenantId: config.tenantId || null,
+            dispositivoId: config.dispositivoId || null,
+            backendUrl: config.backendUrl || null,
+            emissaoFiscal: fiscalDriver.EMISSAO_FISCAL,
+          },
+          watchdog: watchdog.statusWatchdog(),
+          storage: fiscalStorage.verificarEspacoDisco(),
+          updater: { ...updaterState, versaoAtual: VERSAO_ATUAL },
+          manifestOk: manifestUpdater.isManifestOk(),
+        };
+        const nome = `margin-diagnostico-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.json`;
+        res.setHeader("Content-Disposition", `attachment; filename="${nome}"`);
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.json(pacote);
+      } catch (err) {
+        res.status(500).json({ erro: err.message });
+      }
     },
   );
 
@@ -1733,9 +1980,63 @@ function iniciarServidor() {
     res.json({
       conectada: ok,
       tipo: process.env.PRINTER_TYPE || "auto",
+      provider: typeof impressora.getProviderName === "function" ? impressora.getProviderName() : null,
+      requestedProvider:
+        typeof impressora.getRequestedProviderName === "function"
+          ? impressora.getRequestedProviderName()
+          : null,
+      driver:
+        typeof impressora.getDriverInfo === "function" ? impressora.getDriverInfo() : null,
       detectada: info?.impressora || null,
       ultimaUsada: info?.ultimaUsada || null,
     });
+  });
+
+  app.post("/impressora/teste", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    try {
+      const resultado = await impressora.imprimirTeste();
+      res.json({ ok: true, ...resultado });
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
+  });
+
+  app.post("/impressora/segunda-via", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    try {
+      const body = req.body || {};
+      const resultado = await impressora.imprimirSegundaVia(body);
+      res.json({ ok: true, segundaVia: true, ...resultado });
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
+  });
+
+  app.get("/impressora/logo", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    try {
+      const printerLogo = require("./print/printerLogo");
+      res.json(printerLogo.ler());
+    } catch (e) {
+      res.status(500).json({ erro: e.message });
+    }
+  });
+
+  app.put("/impressora/logo", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    try {
+      const printerLogo = require("./print/printerLogo");
+      const saved = printerLogo.salvar(req.body || {});
+      res.json({ ok: true, logo: saved });
+    } catch (e) {
+      res.status(400).json({ erro: e.message });
+    }
+  });
+
+  app.delete("/impressora/logo", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    try {
+      const printerLogo = require("./print/printerLogo");
+      res.json({ ok: true, logo: printerLogo.remover() });
+    } catch (e) {
+      res.status(500).json({ erro: e.message });
+    }
   });
 
   app.get("/impressora/listar", exigirAgentToken, (req, res) => {
@@ -1808,7 +2109,7 @@ function iniciarServidor() {
   // ── Inicialização ─────────────────────────────────────────────────────────────
   fila.inicializar();
   inicializarDb();
-  configSync.iniciar(lerConfig, acbr);
+  configSync.iniciar(lerConfig, fiscalDriver);
 
   const SYNC_INTERVAL = parseInt(process.env.SYNC_INTERVAL_MS || "30000", 10);
   setInterval(() => {
@@ -1889,10 +2190,19 @@ function iniciarServidor() {
   });
 
   httpServer = app.listen(PORT, () => {
+    try {
+      require("./bootGuards").assertProductionGuards();
+    } catch (e) {
+      console.error("[Agente] Boot guard:", e.message);
+      process.exit(1);
+    }
     console.log(`\n╔══════════════════════════════════════════╗`);
     console.log(`║  PDV Margin Engine — Agente Local v1.0  ║`);
     console.log(`║  ${AGENT_PUBLIC_BASE.padEnd(40)}║`);
     console.log(`╚══════════════════════════════════════════╝\n`);
+    try {
+      require("./print/factory").warnIfSelectedAtBoot();
+    } catch (_) {}
     if (!config.ativado)
       console.log(
         "⚠️  Agente não ativado. Acesse " +
@@ -2009,7 +2319,7 @@ async function tentarSincronizarEpecs() {
   console.log(`[EPEC] Tentando retransmitir ${pendentes.length} XML(s)...`);
   for (const row of pendentes) {
     try {
-      const resultado = await acbr.emitirNfce({
+      const resultado = await fiscalDriver.emitirNfce({
         xml: row.xml_epec,
         modoEpec: true,
         numeroVenda: row.numero_venda,
