@@ -4,10 +4,10 @@
 ; Sincronize MyAppVersion com dist\app\package.json (agente-local = 1.0.0).
 ; Saída: output\PDV-Agente-Setup-<versão>.exe
 ;
-; Margin Platform 1.0:
-;   - Fiscal: ACBrLib Pro (padrão) · ACBr Monitor (fallback)
-;   - Impressão: ACBrPosPrinter (padrão) · ESC/POS native (fallback)
-;   - Sem ACBR_LIB_ALLOW_PARITY / PRINTER_ALLOW_PARITY em produção
+; Margin Platform 1.0 (wizard enxuto):
+;   - Fiscal: ACBrLib Pro embutido (DLL em app\acbrlib\lib\) — sem pergunta de caminho
+;   - Impressão: ACBrPosPrinter embutido — porta USB/COM na última tela
+;   - ACBr Monitor / ESC/POS: só via .env pós-instalação (suporte avançado)
 ;
 ; Pré-requisito de build (Windows):
 ;   1. Copiar agente-local → dist\app\ (sem node_modules, .env, data\, test\, homolog-acbrlib\)
@@ -187,16 +187,13 @@ Type: filesandordirs; Name: "{app}\app\node_modules"
 Type: filesandordirs; Name: "{app}\app\daemon"
 
 [Messages]
-brazilianportuguese.WelcomeLabel2=Este instalador configura o Agente Local PDV Margin Engine v1.0.%n%nVocê poderá configurar emissão fiscal (ACBrLib Pro), impressora térmica (ACBrPosPrinter) e certificado A1.%n%nDados em ProgramData\MarginEngine não são removidos na desinstalação.
+brazilianportuguese.WelcomeLabel2=Este instalador configura o Agente Local do PDV Margin Engine no caixa.%n%nO agente conecta impressora e emissão fiscal ao navegador do PDV. As bibliotecas ACBr (NFC-e e impressora) já vêm incluídas — não é necessário instalar ACBr Monitor nem copiar DLLs manualmente.%n%nNa sequência você pode informar certificado A1 e CSC (se emitir NFC-e) e a porta da impressora térmica.%n%nDados em ProgramData\MarginEngine não são removidos na desinstalação.
 
 [Code]
 var
   FiscalEnablePage: TInputOptionWizardPage;
-  FiscalDriverPage: TInputOptionWizardPage;
   CertFilePage: TInputFileWizardPage;
   FiscalParamsPage: TInputQueryWizardPage;
-  LibDllPage: TInputFileWizardPage;
-  PrintProviderPage: TInputOptionWizardPage;
   PrintParamsPage: TInputQueryWizardPage;
 
 function JsonEscape(const S: String): String;
@@ -224,46 +221,25 @@ begin
   Result := (FiscalEnablePage.SelectedValueIndex = 0);
 end;
 
-function FiscalDriverLib: Boolean;
-begin
-  Result := FiscalEmissaoAtiva and (FiscalDriverPage.SelectedValueIndex = 0);
-end;
-
-function PrintProviderAcbr: Boolean;
-begin
-  Result := (PrintProviderPage.SelectedValueIndex = 0);
-end;
-
 procedure InitializeWizard;
 begin
   FiscalEnablePage := CreateInputOptionPage(
     wpSelectTasks,
     'Emissão fiscal',
-    'Habilitar NFC-e / NF-e via SEFAZ?',
-    'Com emissão desligada o PDV opera cupom não fiscal. ' +
-    'Com emissão ligada, informe certificado A1 e CSC nas próximas telas.',
+    'Este caixa vai emitir NFC-e / NF-e na SEFAZ?',
+    'O Agente Margin Engine usa bibliotecas fiscais já incluídas no instalador. ' +
+    'Com emissão desligada o PDV opera cupom não fiscal (sem certificado).',
     True, False);
-  FiscalEnablePage.Add('Sim — emitir NFC-e/NF-e (requer certificado A1)');
-  FiscalEnablePage.Add('Não — cupom não fiscal (padrão)');
+  FiscalEnablePage.Add('Sim — emitir NFC-e/NF-e (informar certificado A1 e CSC)');
+  FiscalEnablePage.Add('Não — cupom não fiscal (padrão para teste)');
   FiscalEnablePage.Values[1] := True;
 
-  FiscalDriverPage := CreateInputOptionPage(
-    FiscalEnablePage.ID,
-    'Motor fiscal',
-    'Provider fiscal do agente',
-    'Padrão Margin 1.0: ACBrLib Pro (DLL nativa). ' +
-    'ACBr Monitor permanece disponível como fallback de rollback.',
-    True, False);
-  FiscalDriverPage.Add('ACBrLib Pro (ACBrNFe64.dll) — padrão 1.0');
-  FiscalDriverPage.Add('ACBr Monitor Pro (TCP :9200) — fallback');
-  FiscalDriverPage.Values[0] := True;
-
   CertFilePage := CreateInputFilePage(
-    FiscalDriverPage.ID,
+    FiscalEnablePage.ID,
     'Certificado digital A1',
-    'Selecione o arquivo .pfx do emitente',
-    'O certificado assina NFC-e e NF-e. Uma cópia será guardada em ProgramData\MarginEngine\cert.',
-    'Certificados A1 (*.pfx)|*.pfx|Todos os arquivos (*.*)|*.*');
+    'Arquivo .pfx do emitente',
+    'O certificado assina NFC-e e NF-e. Uma cópia segura será guardada em ' +
+    'ProgramData\MarginEngine\cert.');
 
   CertFilePage.Add(
     'Arquivo do certificado (.pfx):',
@@ -276,44 +252,23 @@ begin
     'Ambiente, UF e CSC (Token) da NFC-e',
     'CSC: cadastre na SEFAZ da UF (homologação e produção têm tokens distintos).');
 
-  FiscalParamsPage.Add('Senha do certificado A1:', False);
+  FiscalParamsPage.Add('Senha do certificado A1:', True);
   FiscalParamsPage.Add('UF do emitente (ex: MG):', False);
   FiscalParamsPage.Add('Ambiente (homologacao ou producao):', False);
   FiscalParamsPage.Add('Id CSC NFC-e (ex: 000001):', False);
-  FiscalParamsPage.Add('Token CSC NFC-e:', False);
+  FiscalParamsPage.Add('Token CSC NFC-e:', True);
 
   FiscalParamsPage.Values[1] := 'MG';
   FiscalParamsPage.Values[2] := 'homologacao';
   FiscalParamsPage.Values[3] := '000001';
 
-  LibDllPage := CreateInputFilePage(
-    FiscalParamsPage.ID,
-    'Biblioteca ACBrLib NFe',
-    'Localização da ACBrNFe64.dll',
-    'Padrão: {app}\app\acbrlib\lib\ACBrNFe64.dll. ' +
-    'Inclua libxml2, OpenSSL e demais DLLs na mesma pasta.',
-    'Biblioteca ACBr (*.dll)|*.dll|Todos (*.*)|*.*');
-
-  LibDllPage.Add(
-    'ACBrNFe64.dll:',
-    'ACBrNFe64.dll|ACBrNFe64.dll|Bibliotecas (*.dll)|*.dll|Todos (*.*)|*.*',
-    '.dll');
-
-  PrintProviderPage := CreateInputOptionPage(
-    LibDllPage.ID,
-    'Impressora térmica',
-    'Provider de impressão',
-    'Padrão 1.0: ACBrPosPrinter (DLL nativa). Fallback: ESC/POS nativo (USB/rede/spooler).',
-    True, False);
-  PrintProviderPage.Add('ACBrPosPrinter (ACBrPosPrinter64.dll) — padrão 1.0');
-  PrintProviderPage.Add('ESC/POS nativo (USB / rede / spooler Windows)');
-  PrintProviderPage.Values[0] := True;
-
   PrintParamsPage := CreateInputQueryPage(
-    PrintProviderPage.ID,
-    'Parâmetros da impressora',
+    FiscalParamsPage.ID,
+    'Impressora térmica',
     'Porta e nome no Windows',
-    'Porta USB para térmica USB. Para rede use PRINTER_HOST no painel após instalação.');
+    'O Agente Margin Engine já inclui o driver de impressão. ' +
+    'Informe a porta (USB para térmica USB, COM1 para serial, RAW:Nome para spooler). ' +
+    'Impressora de rede: configure depois em http://localhost:9100.');
 
   PrintParamsPage.Add('Porta ACBr (USB, COM1, RAW, etc.):', False);
   PrintParamsPage.Add('Nome da impressora no Windows (opcional):', False);
@@ -321,28 +276,12 @@ begin
   PrintParamsPage.Values[0] := 'USB';
 end;
 
-procedure CurPageChanged(CurPageID: Integer);
-begin
-  if CurPageID = FiscalParamsPage.ID then
-    FiscalParamsPage.Edits[0].PasswordChar := '*';
-
-  if CurPageID = LibDllPage.ID then
-  begin
-    if Trim(LibDllPage.Values[0]) = '' then
-      LibDllPage.Values[0] := ExpandConstant('{app}\app\acbrlib\lib\ACBrNFe64.dll');
-  end;
-end;
-
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   Result := False;
 
-  if (PageID = FiscalDriverPage.ID) or (PageID = CertFilePage.ID) or
-     (PageID = FiscalParamsPage.ID) then
+  if (PageID = CertFilePage.ID) or (PageID = FiscalParamsPage.ID) then
     Result := not FiscalEmissaoAtiva;
-
-  if PageID = LibDllPage.ID then
-    Result := (not FiscalEmissaoAtiva) or (not FiscalDriverLib);
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -388,23 +327,6 @@ begin
       Result := False;
     end;
   end;
-
-  if CurPageID = LibDllPage.ID then
-  begin
-    if Trim(LibDllPage.Values[0]) = '' then
-    begin
-      MsgBox('Informe o caminho da ACBrNFe64.dll para o modo ACBrLib.', mbError, MB_OK);
-      Result := False;
-      Exit;
-    end;
-    if not FileExists(LibDllPage.Values[0]) then
-    begin
-      if MsgBox(
-        'DLL não encontrada no caminho informado. Continuar mesmo assim?',
-        mbConfirmation, MB_YESNO) = IDNO then
-        Result := False;
-    end;
-  end;
 end;
 
 procedure SaveFiscalInstallConfig;
@@ -420,10 +342,9 @@ begin
   else
     Emissao := 'false';
 
-  if FiscalDriverLib then
-    Driver := 'lib'
-  else
-    Driver := 'monitor';
+  Driver := 'lib';
+  LibDll := JsonEscape(ExpandConstant('{app}\app\acbrlib\lib\ACBrNFe64.dll'));
+  LibIni := JsonEscape(ExpandConstant('{app}\app\acbrlib\data\config\acbrlib.ini'));
 
   Cert := JsonEscape(CertFilePage.Values[0]);
   Senha := JsonEscape(FiscalParamsPage.Values[0]);
@@ -431,8 +352,6 @@ begin
   Amb := JsonEscape(LowerCase(Trim(FiscalParamsPage.Values[2])));
   CscId := JsonEscape(Trim(FiscalParamsPage.Values[3]));
   CscTok := JsonEscape(Trim(FiscalParamsPage.Values[4]));
-  LibDll := JsonEscape(LibDllPage.Values[0]);
-  LibIni := JsonEscape(ExpandConstant('{app}\app\acbrlib\data\config\acbrlib.ini'));
 
   SetArrayLength(Lines, 1);
   Lines[0] :=
@@ -460,10 +379,7 @@ var
 begin
   JsonPath := ExpandConstant('{tmp}\print-install.json');
 
-  if PrintProviderAcbr then
-    Provider := 'acbr-posprinter'
-  else
-    Provider := 'native';
+  Provider := 'acbr-posprinter';
 
   Porta := JsonEscape(Trim(PrintParamsPage.Values[0]));
   Nome := JsonEscape(Trim(PrintParamsPage.Values[1]));

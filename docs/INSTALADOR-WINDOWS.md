@@ -1,78 +1,88 @@
 # Instalador Windows — PDV Agente v1.0
 
-Documentação do empacotamento via Inno Setup (`pdv-agente-installer.iss` na raiz do monorepo ou em `agente-local/`).
+Documentação do empacotamento via Inno Setup (`pdv-agente-installer.iss`).
 
-## O que o wizard configura
+## Filosofia do wizard (PC limpo)
 
-| Tela | Campos |
-|------|--------|
-| Emissão fiscal | Sim (NFC-e/NF-e) ou Não (cupom interno — padrão) |
-| Motor | **ACBrLib Pro** (padrão 1.0) ou **ACBr Monitor** (fallback TCP :9200) |
-| Certificado | Caminho do `.pfx` A1 |
-| Parâmetros SEFAZ | Senha do certificado, UF, ambiente (`homologacao` / `producao`), Id CSC, Token CSC |
-| ACBrLib (só modo Lib) | Caminho da `ACBrNFe64.dll` (padrão: `{app}\app\acbrlib\lib\`) |
-| Impressora | **ACBrPosPrinter** (padrão) ou ESC/POS nativo |
-| Parâmetros impressora | Porta (`USB`, `COM1`, …), nome no spooler Windows (opcional) |
+O instalador é pensado para **caixa novo**, sem ACBr Monitor nem DLLs soltas no disco.
 
-Com **ACBrLib**, o instalador grava `acbrlib/data/config/acbrlib.ini` e `data/acbrlib.ini`, atualiza `.env` e guarda senha/CSC no **cofre** (`fiscalSecrets`) com `__VAULT__` no INI.
+| O que o usuário vê | O que o instalador faz por baixo |
+|--------------------|----------------------------------|
+| Emitir NFC-e? Sim/Não | `EMISSAO_FISCAL` + certificado/CSC se Sim |
+| Certificado `.pfx` + SEFAZ | Cofre + `acbrlib.ini` |
+| Porta da impressora | `posprinter.ini` + `.env` |
 
-Com **ACBrPosPrinter**, grava `.env` e `data/posprinter.ini` via `installer-apply-print-config.js`.
+**Não pergunta:**
+
+- Caminho da `ACBrNFe64.dll` — usa `{app}\app\acbrlib\lib\` (empacotada no `.exe`)
+- ACBrLib vs ACBr Monitor — padrão **sempre ACBrLib embutido**
+- ACBrPosPrinter vs ESC/POS — padrão **sempre ACBrPosPrinter embutido**
+
+Modos legados (Monitor TCP :9200, impressora ESC/POS nativa) ficam para **pós-instalação** via `.env` ou painel `http://localhost:9100` — cenário de suporte, não de primeira instalação.
+
+## Telas do wizard
+
+| Ordem | Tela | Quando aparece |
+|-------|------|----------------|
+| 1 | Emissão fiscal (Sim/Não) | Sempre |
+| 2 | Certificado A1 (`.pfx`) | Só se emitir NFC-e |
+| 3 | Parâmetros SEFAZ (senha, UF, ambiente, CSC) | Só se emitir NFC-e |
+| 4 | Impressora (porta USB/COM/RAW, nome opcional) | Sempre |
 
 ## Estrutura de build (`dist/`)
 
 ```
 dist/
 ├── node/                      ← Node.js portátil x64
-├── app/                       ← cópia de agente-local (sem node_modules, .env, data/)
-│   ├── acbrlib/lib/           ← ACBrNFe64.dll + deps
+├── app/                       ← cópia de agente-local
+│   ├── acbrlib/lib/           ← ACBrNFe64.dll + deps (OBRIGATÓRIO no .exe)
 │   ├── acbrlib/data/          ← Schemas, ACBrNFeServicos.ini
-│   └── posprinter/lib/        ← ACBrPosPrinter64.dll + deps
-├── acbrlib/                   ← overlay opcional (mesma árvore)
-├── posprinter/                ← overlay opcional
-└── lib/                       ← legado: copiado para app\acbrlib\lib\
+│   ├── posprinter/lib/        ← ACBrPosPrinter64.dll + deps (OBRIGATÓRIO)
+│   └── frontend-dist/         ← PDV offline (build com VITE_API_URL produção)
+├── acbrlib/                   ← overlay opcional
+└── posprinter/                ← overlay opcional
 ```
+
+**Checklist antes de compilar:** confirmar que `dist/app/acbrlib/lib/ACBrNFe64.dll` e `dist/app/posprinter/lib/ACBrPosPrinter64.dll` existem.
 
 ## Passos para gerar o `.exe`
 
-1. Sincronizar versão e copiar agente:
-   ```bash
-   # Exemplo — ajuste conforme seu script de release
-   rsync -a --exclude node_modules --exclude data --exclude .env \
-     agente-local/ dist/app/
-   ```
+1. Sincronizar agente → `dist/app/` (`npm run sync:windows-build` ou script equivalente).
+2. Copiar Node portátil → `dist/node/`.
+3. Build do front para o instalador:
 
-2. Copiar Node portátil para `dist/node/`.
+```bash
+cd agente-local
+./scripts/build-frontend-dist.sh production   # API: app.marginengine.com.br
+# homolog (faixa roxa “API homologação” no PDV):
+./scripts/build-frontend-dist.sh homolog
+```
 
-3. Garantir DLLs em `dist/app/acbrlib/lib/` e `dist/app/posprinter/lib/` (ou overlays em `dist/acbrlib`, `dist/posprinter`).
-
-4. Copiar `pdv-agente-installer.iss` para a pasta de build e compilar no **Inno Setup 6**.
-
+4. Compilar `pdv-agente-installer.iss` no **Inno Setup 6**.
 5. Saída: `output/PDV-Agente-Setup-1.0.0.exe`
 
-## Pós-install
+No PDV, o ambiente **SEFAZ** (homologação vs produção fiscal) aparece em faixa amarela no topo quando o agente está em homologação; badge “Produção” no header quando em produção.
 
-Ordem de execução:
+## Pós-install
 
 1. `installer-apply-fiscal-config.js` — `.env`, cofre, `acbrlib.ini`, ProgramData
 2. `installer-apply-print-config.js` — `.env`, `posprinter.ini`
 3. `npm ci`, `rebuild better-sqlite3`, `manifest`, `predeploy`
 4. `install-service.js` (se marcado)
+5. Abrir `http://localhost:9100` → ativar terminal com código do painel → login operador
 
-Dados em `ProgramData\MarginEngine` **não** são removidos na desinstalação.
+## Modos avançados (suporte)
 
-## Modo Lib vs Monitor (1.0)
-
-| | ACBrLib (padrão) | Monitor (fallback) |
-|---|------------------|-------------------|
-| Pré-requisito | `acbrlib/lib/ACBrNFe64.dll` + deps | ACBr Monitor Pro :9200 |
-| `.env` | `ACBR_DRIVER=lib` | `ACBR_DRIVER=monitor` |
-| Config | `acbrlib/data/config/acbrlib.ini` | `acbr.ini` do Monitor |
-| Segredos | Cofre + `__VAULT__` no INI | Cofre + `.env` paths |
+| Cenário | Ajuste manual no `.env` após instalar |
+|---------|----------------------------------------|
+| Cliente já usa ACBr Monitor Pro | `ACBR_DRIVER=monitor`, `ACBR_HOST=127.0.0.1`, `ACBR_PORT=9200` |
+| Impressora só ESC/POS (sem DLL) | `PRINTER_PROVIDER=native` |
+| Impressora de rede | `PRINTER_HOST=IP`, `PRINTER_PORT=9101` (evitar conflito com agente :9100) |
 
 **Não** use `ACBR_LIB_ALLOW_PARITY` nem `PRINTER_ALLOW_PARITY` em produção.
 
 ## Referências
 
 - `docs/ACBRLIB-INTEGRACAO.md`
-- `acbrlib/` + `homolog-acbrlib/` — homologação nativa ACBrLib
-- `margin-fiscal/certification/etapa-b5-acbrlib-nativo-verificacao.md`
+- `docs/ACBRLIB-POSPRINTER.md`
+- `docs/OPERACAO.md`

@@ -7,6 +7,7 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "build": "node scripts/generate-manifest.js",
+    "sync:windows-build": "bash scripts/sync-windows-build.sh",
     "install-service": "node install-service.js",
     "uninstall-service": "node install-service.js --uninstall",
     "test:fiscal": "node test/fiscal-hardening.test.js",

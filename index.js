@@ -1016,6 +1016,18 @@ function iniciarServidor() {
         ok: fiscalDriver.EMISSAO_FISCAL ? fiscalProbe.acbrOk : null,
         ocupado: fiscalProbe.acbrOcupado,
         processando: fiscalProbe.fiscalProcessando,
+        ambienteSefaz: (() => {
+          if (!fiscalDriver.EMISSAO_FISCAL) return null;
+          try {
+            const flc = require("./fiscalLocalConfig");
+            return flc.ler().ambienteSefaz || null;
+          } catch {
+            const amb = String(process.env.ACBR_AMBIENTE || "").toLowerCase();
+            if (amb === "producao" || amb === "1") return "producao";
+            if (amb === "homologacao" || amb === "2") return "homologacao";
+            return null;
+          }
+        })(),
       },
 
       banco: { ok: dbOk },
