@@ -138,19 +138,52 @@ if (fs.existsSync(acbrServicosBundled)) {
 }
 
 function copiarSchemas(origem, destino) {
-  if (!fs.existsSync(origem)) return;
+  if (!fs.existsSync(origem)) return 0;
   fs.mkdirSync(destino, { recursive: true });
-  for (const f of fs.readdirSync(origem)) {
-    const src = path.join(origem, f);
-    const dst = path.join(destino, f);
-    if (fs.statSync(src).isFile() && !fs.existsSync(dst)) {
+  let copiados = 0;
+  for (const entry of fs.readdirSync(origem, { withFileTypes: true })) {
+    const src = path.join(origem, entry.name);
+    const dst = path.join(destino, entry.name);
+    if (entry.isDirectory()) {
+      copiarSchemas(src, dst);
+    } else if (entry.isFile() && entry.name.endsWith(".xsd") && !fs.existsSync(dst)) {
       fs.copyFileSync(src, dst);
+      copiados += 1;
     }
   }
+  return copiados;
 }
 
-copiarSchemas(acbrSchemasBundled, schemasDir);
-copiarSchemas(acbrSchemasRoot, schemasDir);
+function contarXsd(dir) {
+  if (!fs.existsSync(dir)) return 0;
+  let n = 0;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, entry.name);
+    if (entry.isDirectory()) n += contarXsd(p);
+    else if (entry.isFile() && entry.name.endsWith(".xsd")) n += 1;
+  }
+  return n;
+}
+
+const copiadosBundled = copiarSchemas(acbrSchemasBundled, schemasDir);
+const copiadosRoot = copiarSchemas(acbrSchemasRoot, schemasDir);
+const totalXsd = contarXsd(schemasDir);
+if (totalXsd < 10) {
+  console.error(
+    "[installer] ERRO: schemas XSD insuficientes após cópia (" +
+      totalXsd +
+      "). Esperado em " +
+      acbrSchemasRoot +
+      " — reinstale com build que inclua acbrlib/data/Schemas.",
+  );
+  process.exit(1);
+}
+console.log(
+  "[installer] schemas copiados:",
+  totalXsd,
+  "XSD(s); novos:",
+  copiadosBundled + copiadosRoot,
+);
 
 const tpAmb = tpAmbFromAmbiente(cfg.ambiente);
 const senhaIni = cfg.certSenha ? "__VAULT__" : "";

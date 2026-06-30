@@ -87,9 +87,37 @@ function lerDiagnosticoLib() {
   };
 }
 
+function validarSchemasAcbr(cfg) {
+  const acbrLibRuntime = require("./fiscal/drivers/acbrLibRuntime");
+  const iniPath = cfg.paths?.iniPath;
+  if (!iniPath) {
+    return {
+      ok: false,
+      path: null,
+      motivo: "INI do ACBrLib não configurado.",
+    };
+  }
+  const iniDir = path.dirname(iniPath);
+  const raw = fs.existsSync(iniPath) ? fs.readFileSync(iniPath, "utf8") : "";
+  const rel =
+    raw.match(/^PathSchemas=(.+)$/m)?.[1]?.trim() ||
+    raw.match(/^\[NFe\][\s\S]*?^PathSchemas=(.+)$/m)?.[1]?.trim() ||
+    "";
+  const resolved = acbrLibRuntime.resolveSchemasDir(iniDir, rel);
+  const ok = resolved && fs.existsSync(resolved);
+  return {
+    ok,
+    path: resolved,
+    motivo: ok
+      ? null
+      : `Schemas XSD não encontrados (erro ACBr -10). Esperado em ${resolved || "acbrlib/data/Schemas"}.`,
+  };
+}
+
 function validarLib() {
   const cfg = fiscalLocalConfig.ler();
   const diag = lerDiagnosticoLib();
+  const schemas = validarSchemasAcbr(cfg);
   const checklist = {
     uf: cfg.uf,
     ambiente: cfg.ambienteSefaz,
@@ -100,6 +128,8 @@ function validarLib() {
     urlQrCode: diag.urlQrCode,
     urlQrCode200: diag.urlQrCode200,
     urlConsultaNfce: diag.urlConsultaNfce,
+    schemasPath: schemas.path,
+    schemasOk: schemas.ok,
     certificadoArquivo: cfg.certificado?.arquivo || null,
     certificadoExiste: cfg.certificado?.arquivoExiste === true,
     senhaConfigurada: cfg.certificado?.senhaConfigurada === true,
@@ -123,12 +153,16 @@ function validarLib() {
   if (!diag.ok && diag.motivo) {
     checklist.acoes.push(diag.motivo);
   }
+  if (!schemas.ok && schemas.motivo) {
+    checklist.acoes.push(schemas.motivo);
+  }
 
   checklist.pronto =
     checklist.certificadoExiste &&
     checklist.senhaConfigurada &&
     checklist.cscConfigurado &&
-    diag.ok;
+    diag.ok &&
+    schemas.ok;
   checklist.ok = checklist.acoes.length === 0 || checklist.pronto;
   return checklist;
 }

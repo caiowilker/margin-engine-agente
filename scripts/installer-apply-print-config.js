@@ -22,60 +22,45 @@ if (!fs.existsSync(envPath) && fs.existsSync(envExample)) {
   fs.copyFileSync(envExample, envPath);
 }
 
-function patchEnv(lines, key, value) {
-  const re = new RegExp(`^${key}=.*$`, "m");
-  const line = `${key}=${value ?? ""}`;
-  if (re.test(lines)) return lines.replace(re, line);
-  return `${lines.replace(/\s*$/, "")}\n${line}\n`;
-}
-
-let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
-
-envContent = patchEnv(envContent, "PRINTER_PROVIDER", cfg.provider || "acbr-posprinter");
-envContent = patchEnv(envContent, "PRINTER_FALLBACK", cfg.fallback || "native");
-if (cfg.porta) envContent = patchEnv(envContent, "PRINTER_PORTA", cfg.porta);
-if (cfg.modelo != null) envContent = patchEnv(envContent, "PRINTER_MODEL", String(cfg.modelo));
-if (cfg.encoding) envContent = patchEnv(envContent, "PRINTER_ENCODING", cfg.encoding);
-if (cfg.cut) envContent = patchEnv(envContent, "PRINTER_CUT", cfg.cut);
-if (cfg.nomeImpressora) envContent = patchEnv(envContent, "PRINTER_NAME", cfg.nomeImpressora);
-if (cfg.libPath) {
-  envContent = patchEnv(envContent, "ACBR_POSPRINTER_LIB_PATH", cfg.libPath.replace(/\\/g, "\\\\"));
-}
-if (cfg.iniPath) {
-  envContent = patchEnv(envContent, "ACBR_POSPRINTER_INI", cfg.iniPath.replace(/\\/g, "\\\\"));
-}
-envContent = envContent.replace(/^PRINTER_ALLOW_PARITY=.*\n?/m, "");
-
-fs.writeFileSync(envPath, envContent, "utf8");
-
 process.chdir(appDir);
-const printerLocalConfig = require(path.join(appDir, "print", "printerLocalConfig"));
-printerLocalConfig.salvar({
-  provider: cfg.provider || "acbr-posprinter",
-  porta: cfg.porta,
-  modelo: cfg.modelo,
-  encoding: cfg.encoding || "UTF8",
-  cut: cfg.cut || "partial",
-  nomeImpressora: cfg.nomeImpressora,
-  serial: cfg.serial,
-});
+require("dotenv").config();
 
-if (cfg.logoBase64) {
-  try {
-    const printerLogo = require(path.join(appDir, "print", "printerLogo"));
-    printerLogo.salvar({
-      base64: cfg.logoBase64,
-      kc1: cfg.logoKc1,
-      kc2: cfg.logoKc2,
-      ativo: true,
+const printerBootstrap = require(path.join(appDir, "print", "printerBootstrap"));
+const saved = printerBootstrap.aplicarConfigInstalador(cfg);
+console.log("[installer-print] Provider:", saved.provider, "| modo:", saved.mode);
+
+if (cfg.autoDetect !== false) {
+  printerBootstrap
+    .autoDetectarESincronizar({ force: true })
+    .then((r) => {
+      if (r.ok && r.config) {
+        console.log(
+          "[installer-print] Auto-detect:",
+          r.config.porta || "(porta pendente — conecte a impressora e reinicie o agente)",
+        );
+      } else {
+        console.log(
+          "[installer-print] Auto-detect: nenhuma impressora agora (normal se USB/rede ainda não conectada)",
+        );
+      }
+      finalizarTeste();
+    })
+    .catch((err) => {
+      console.warn("[installer-print] Auto-detect falhou:", err.message);
+      finalizarTeste();
     });
-  } catch (e) {
-    console.warn("[installer-print] Logo ignorado:", e.message);
-  }
+} else {
+  finalizarTeste();
 }
 
-const port = Number(process.env.PORT || process.env.AGENT_PORT || 9100);
-if (cfg.testarImpressao) {
+function finalizarTeste() {
+  if (!cfg.testarImpressao) {
+    console.log("[installer-print] Configuração de impressora aplicada");
+    process.exit(0);
+    return;
+  }
+
+  const port = Number(process.env.PORT || process.env.AGENT_PORT || 9100);
   const body = JSON.stringify({});
   const req = http.request(
     {
@@ -100,11 +85,12 @@ if (cfg.testarImpressao) {
     },
   );
   req.on("error", (err) => {
-    console.warn("[installer-print] Agente offline — config salva, teste manual necessário:", err.message);
+    console.warn(
+      "[installer-print] Agente offline — config salva, teste após iniciar o serviço:",
+      err.message,
+    );
     process.exit(0);
   });
   req.write(body);
   req.end();
-} else {
-  console.log("[installer-print] Configuração de impressora aplicada");
 }

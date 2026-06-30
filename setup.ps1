@@ -136,25 +136,8 @@ function Ensure-EnvFile {
 }
 
 function Fix-PrinterPortConflict {
-    $envFile = Join-Path $Root ".env"
-    if (-not (Test-Path $envFile)) { return }
-
-    $content = Get-Content $envFile -Raw
-    $portMatch = [regex]::Match($content, '(?m)^PORT\s*=\s*(\d+)')
-    $printerPortMatch = [regex]::Match($content, '(?m)^PRINTER_PORT\s*=\s*(\d+)')
-    $printerTypeMatch = [regex]::Match($content, '(?m)^PRINTER_TYPE\s*=\s*(\w+)')
-
-    $agentPort = if ($portMatch.Success) { [int]$portMatch.Groups[1].Value } else { 9100 }
-    $printerPort = if ($printerPortMatch.Success) { [int]$printerPortMatch.Groups[1].Value } else { 9100 }
-    $printerType = if ($printerTypeMatch.Success) { $printerTypeMatch.Groups[1].Value.ToLower() } else { "auto" }
-
-    if (($printerType -eq "network" -or $printerType -eq "auto") -and $agentPort -eq $printerPort) {
-        Write-Warn "Conflito: PORT e PRINTER_PORT ambos em $agentPort"
-        Write-Step "Corrigindo PRINTER_PORT para 9101 no .env..."
-        $content = [regex]::Replace($content, '(?m)^PRINTER_PORT\s*=\s*\d+', 'PRINTER_PORT=9101')
-        Set-Content $envFile $content -Encoding UTF8
-        Write-Ok "PRINTER_PORT ajustado para 9101"
-    }
+    # PORT (agente HTTP) e PRINTER_PORT (socket da impressora na LAN) sao independentes.
+    # Nao alterar PRINTER_PORT automaticamente; use auto-detect via printerBootstrap.
 }
 
 function Ensure-DataDir {

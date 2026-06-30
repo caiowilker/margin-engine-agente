@@ -18,6 +18,10 @@ case "$ENV" in
   homolog)
     BUILD_CMD="build:pdv-homolog"
     ;;
+  local|dev|development)
+    BUILD_CMD="build:pdv-local"
+    ENV="development"
+    ;;
   production|prod)
     BUILD_CMD="build:pdv-prod"
     ENV="production"
@@ -35,5 +39,22 @@ echo "==> Copiando dist → $TARGET"
 mkdir -p "$TARGET"
 rsync -a --delete "$FRONT_ROOT/dist/" "$TARGET/"
 
+API_URL=""
+case "$ENV" in
+  homolog)
+    API_URL="https://homolog.marginengine.com.br"
+    ;;
+  development|local|dev)
+    API_URL="http://localhost:8080"
+    ;;
+  *)
+    API_URL="https://app.marginengine.com.br"
+    ;;
+esac
+
+cat > "$TARGET/api-backend.json" <<EOF
+{"apiUrl":"$API_URL","environment":"$ENV","generatedAt":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
+EOF
+
 echo "OK — frontend-dist ($ENV)"
-echo "  API: $(grep -o 'https://[^\"]*' "$TARGET/assets/index-"*.js 2>/dev/null | head -1 || echo 'verifique VITE_API_URL no bundle')"
+echo "  API: $API_URL"

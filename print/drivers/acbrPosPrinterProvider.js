@@ -107,9 +107,31 @@ module.exports = {
   getDriverInfo,
   testar: async (force) => {
     try {
+      const det = await native.detectar(force);
+      if (det?.impressora) {
+        require("../printerLocalConfig").sincronizarDeDeteccao(det);
+        try {
+          require("../factory").resetPrintProvider();
+        } catch (_) {}
+      }
       if (getIntegrationMode() === "native") {
-        await imprimirTags("</zera><ce>OK</ce></corte_parcial>\n");
-        return true;
+        try {
+          await imprimirTags("</zera><ce>OK</ce></corte_parcial>\n");
+          return true;
+        } catch (err) {
+          log.warn({ err: err.message }, "[ACBrPosPrinter] Teste ACBr falhou — tentando spooler");
+          const local = require("../printerLocalConfig").ler();
+          const porta = String(local?.porta || process.env.PRINTER_PORTA || "");
+          if (/^RAW:/i.test(porta) || det?.impressora?.metodo === "windows") {
+            const okNative = await native.testar(force);
+            if (okNative) return true;
+          }
+          try {
+            const status = await runtime.lerStatusFormatadoNative(2);
+            if (status?.ok) return true;
+          } catch (_) {}
+          return false;
+        }
       }
       return native.testar(force);
     } catch (_) {
@@ -118,6 +140,11 @@ module.exports = {
   },
   getInfo: async (force) => {
     const mode = getIntegrationMode();
+    const det = await native.getInfo(force).catch(() => null);
+    let local = null;
+    try {
+      local = require("../printerLocalConfig").ler();
+    } catch (_) {}
     if (mode === "native") {
       try {
         const [versao, status] = await Promise.all([
@@ -131,28 +158,30 @@ module.exports = {
           mode,
           lib: versao,
           statusImpressora: status,
+          impressora: det?.impressora || null,
+          acbrPorta: local?.porta || process.env.PRINTER_PORTA || null,
+          candidatos: det?.candidatos || [],
           ...getDriverInfo(),
         };
       } catch (err) {
         log.warn({ err: err.message }, "[ACBrPosPrinter] getInfo nativo falhou — fallback ESC/POS");
       }
     }
-    const base = await native.getInfo(force);
+    const base = det || (await native.getInfo(force));
     return {
       ...base,
-      ok: mode !== "unconfigured" ? base.ok : false,
-      conectada: mode !== "unconfigured" ? base.conectada ?? base.ok : false,
+      ok: mode !== "unconfigured" ? base?.ok : false,
+      conectada: mode !== "unconfigured" ? base?.conectada ?? base?.ok : false,
       provider: "acbr-posprinter",
       mode,
+      acbrPorta: local?.porta || process.env.PRINTER_PORTA || null,
     };
   },
   listar: () => ({ ...native.listar(), provider: "acbr-posprinter", ...getDriverInfo() }),
   detectar: async () => {
-    const info = await native.detectar();
-    try {
-      require("../printerLocalConfig").sincronizarDeDeteccao(info);
-    } catch (_) {}
-    return info;
+    const bootstrap = require("../printerBootstrap");
+    const result = await bootstrap.autoDetectarESincronizar({ force: true });
+    return result.info || { ok: false };
   },
   imprimirCupom,
   imprimirSegundaVia,

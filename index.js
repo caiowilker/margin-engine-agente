@@ -710,23 +710,10 @@ function iniciarServidor() {
   app.use(corsMiddleware);
   app.use(express.json({ limit: "2mb" }));
 
-  // ── Frontend estático ───────────────────────────────────────────────────────
-  const FRONTEND_DIST = path.join(__dirname, "frontend-dist");
-  const FRONTEND_INDEX = path.join(FRONTEND_DIST, "index.html");
-  if (fs.existsSync(FRONTEND_INDEX)) {
-    app.use(express.static(FRONTEND_DIST));
-    app.get(
-      /^(?!\/api|\/status|\/venda|\/fila|\/impressora|\/acbr|\/ativar|\/auth|\/config|\/contingencia|\/diagnostico|\/updater).*$/,
-      (req, res) => res.sendFile(FRONTEND_INDEX),
-    );
-  } else if (fs.existsSync(path.join(__dirname, "status.html"))) {
-    app.get(["/", "/status.html"], (req, res) => {
-      res.sendFile(path.join(__dirname, "status.html"));
-    });
-  }
+  const { criarApiProxy } = require("./apiProxy");
+  app.use("/api-proxy", privateNetworkHeaders, criarApiProxy({ lerConfigSync }));
 
-  // ── Diagnóstico ─────────────────────────────────────────────────────────────
-  // Painel HTML operacional (rede local) — gestão fila fiscal + preflight
+  // ── Diagnóstico HTML (antes do SPA — evita 404 do frontend-dist) ───────────
   app.get("/diagnostico/painel", privateNetworkHeaders, (req, res) => {
     const payload = coletarDadosAlertas();
     res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -737,7 +724,6 @@ function iniciarServidor() {
     res.redirect(302, "/diagnostico/painel#fila");
   });
 
-  // Navegador → painel; API/clients → JSON (token)
   app.get("/diagnostico", privateNetworkHeaders, (req, res, next) => {
     const accept = String(req.headers.accept || "");
     if (req.query.painel === "1" || (accept.includes("text/html") && !accept.includes("application/json"))) {
@@ -747,6 +733,22 @@ function iniciarServidor() {
     next();
   });
 
+  // ── Frontend estático ───────────────────────────────────────────────────────
+  const FRONTEND_DIST = path.join(__dirname, "frontend-dist");
+  const FRONTEND_INDEX = path.join(FRONTEND_DIST, "index.html");
+  if (fs.existsSync(FRONTEND_INDEX)) {
+    app.use(express.static(FRONTEND_DIST));
+    app.get(
+      /^(?!\/api|\/api-proxy|\/status|\/venda|\/fila|\/impressora|\/acbr|\/ativar|\/auth|\/config|\/contingencia|\/diagnostico|\/updater).*$/,
+      (req, res) => res.sendFile(FRONTEND_INDEX),
+    );
+  } else if (fs.existsSync(path.join(__dirname, "status.html"))) {
+    app.get(["/", "/status.html"], (req, res) => {
+      res.sendFile(path.join(__dirname, "status.html"));
+    });
+  }
+
+  // ── Diagnóstico (API JSON) ─────────────────────────────────────────────────
   // Expõe dados sensíveis (backendUrl, tenantId, dispositivoId, hostname,
   // caminho do banco etc.) — exige X-Agent-Token quando o PDV está ativado.
   // Consumido pela tela /pdv/diagnostico do painel web.
@@ -809,27 +811,34 @@ function iniciarServidor() {
           porta: PORT,
         },
 
-        impressora: {
-          ok: impressoraOk,
-          tipo: process.env.PRINTER_TYPE || "auto",
-          host: process.env.PRINTER_HOST || null,
-          porta: process.env.PRINTER_PORT || null,
-          provider:
-            typeof impressora.getProviderName === "function"
-              ? impressora.getProviderName()
-              : null,
-          requestedProvider:
-            typeof impressora.getRequestedProviderName === "function"
-              ? impressora.getRequestedProviderName()
-              : null,
-          driver:
-            typeof impressora.getDriverInfo === "function"
-              ? impressora.getDriverInfo()
-              : null,
-          detectada: impressoraInfo?.impressora || null,
-          candidatos: impressoraInfo?.candidatos?.length || 0,
-          ultimaUsada: impressoraInfo?.ultimaUsada || null,
-        },
+        impressora: (() => {
+          const printerBootstrap = require("./print/printerBootstrap");
+          const impSt = printerBootstrap.resolverStatusExibicao(impressoraInfo);
+          return {
+            ok: impressoraOk,
+            tipo: impSt.metodo || process.env.PRINTER_TYPE || "auto",
+            host: impSt.host,
+            porta: impSt.porta,
+            nome: impSt.nome,
+            metodo: impSt.metodo,
+            acbrPorta: impSt.acbrPorta,
+            provider:
+              typeof impressora.getProviderName === "function"
+                ? impressora.getProviderName()
+                : null,
+            requestedProvider:
+              typeof impressora.getRequestedProviderName === "function"
+                ? impressora.getRequestedProviderName()
+                : null,
+            driver:
+              typeof impressora.getDriverInfo === "function"
+                ? impressora.getDriverInfo()
+                : null,
+            detectada: impressoraInfo?.impressora || impSt.detectada || null,
+            candidatos: impressoraInfo?.candidatos?.length || 0,
+            ultimaUsada: impressoraInfo?.ultimaUsada || null,
+          };
+        })(),
 
         acbr: {
           ok: acbrOk,
@@ -1005,11 +1014,20 @@ function iniciarServidor() {
       ativado: config.ativado === true,
       pdvNome: config.pdvNome || "PDV",
 
-      impressora: {
-        ok: impressoraOk,
-        tipo: process.env.PRINTER_TYPE || "auto",
-        detectada: impressoraInfo?.impressora || null,
-      },
+      impressora: (() => {
+        const printerBootstrap = require("./print/printerBootstrap");
+        const impSt = printerBootstrap.resolverStatusExibicao(impressoraInfo);
+        return {
+          ok: impressoraOk,
+          tipo: impSt.metodo || process.env.PRINTER_TYPE || "auto",
+          detectada: impressoraInfo?.impressora || impSt.detectada || null,
+          host: impSt.host,
+          porta: impSt.porta,
+          nome: impSt.nome,
+          metodo: impSt.metodo,
+          acbrPorta: impSt.acbrPorta,
+        };
+      })(),
 
       fiscal: {
         emissaoFiscal: fiscalDriver.EMISSAO_FISCAL,
@@ -1985,6 +2003,15 @@ function iniciarServidor() {
   });
 
   app.get("/impressora/status", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    const forceDetect =
+      req.query.detect === "1" ||
+      req.query.detect === "true" ||
+      req.query.auto === "1";
+    if (forceDetect) {
+      try {
+        await impressora.detectar(true);
+      } catch (_) {}
+    }
     const [ok, info] = await Promise.all([
       impressora.testar().catch(() => false),
       impressora.getInfo().catch(() => null),
@@ -1999,7 +2026,13 @@ function iniciarServidor() {
           : null,
       driver:
         typeof impressora.getDriverInfo === "function" ? impressora.getDriverInfo() : null,
-      detectada: info?.impressora || null,
+      detectada:
+        info?.impressora?.nome ||
+        (info?.impressora?.host
+          ? `${info.impressora.host}:${info.impressora.porta || info.impressora.port || process.env.PRINTER_PORT || "9100"}`
+          : null) ||
+        info?.impressora ||
+        null,
       ultimaUsada: info?.ultimaUsada || null,
     });
   });
@@ -2057,7 +2090,16 @@ function iniciarServidor() {
 
   app.post("/impressora/detectar", exigirAgentToken, async (req, res) => {
     try {
-      res.json(await impressora.detectar());
+      const bootstrap = require("./print/printerBootstrap");
+      const result = await bootstrap.autoDetectarESincronizar({ force: true });
+      if (!result.ok) {
+        return res.status(404).json({
+          ok: false,
+          erro: "Nenhuma impressora encontrada",
+          ...result.info,
+        });
+      }
+      res.json({ ok: true, ...result.info, config: result.config });
     } catch (err) {
       res.status(500).json({ erro: err.message });
     }
@@ -2214,6 +2256,9 @@ function iniciarServidor() {
     console.log(`╚══════════════════════════════════════════╝\n`);
     try {
       require("./print/factory").warnIfSelectedAtBoot();
+      require("./print/printerBootstrap")
+        .noBoot()
+        .catch(() => {});
     } catch (_) {}
     if (!config.ativado)
       console.log(

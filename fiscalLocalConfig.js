@@ -7,6 +7,7 @@ const path = require("path");
 const log = require("./logger").child({ modulo: "fiscal_local_config" });
 const { PATHS } = require("./marginPaths");
 const fiscalSecrets = require("./fiscalSecrets");
+const { desescaparValorEnv } = require("./envFileUtils");
 
 const AGENT_ROOT = path.resolve(__dirname);
 
@@ -197,7 +198,7 @@ function ler() {
         : tpAmbToAmbiente(tpAmbIni || "2");
 
   const certRel = getIniValue(sections, [["Certificado", "Arquivo"]]);
-  const certEnv = env.CERT_A1_PATH || process.env.CERT_A1_PATH || "";
+  const certEnv = desescaparValorEnv(env.CERT_A1_PATH || process.env.CERT_A1_PATH || "");
   const certArquivo = certRel || certEnv;
   const iniDir = iniPath ? path.dirname(iniPath) : AGENT_ROOT;
   const certAbs = resolverCaminhoAbsoluto(certArquivo, iniDir);

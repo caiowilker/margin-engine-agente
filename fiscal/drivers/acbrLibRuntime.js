@@ -47,7 +47,8 @@ function readIniValues(iniPath) {
       process.env.NFE_CSC_TOKEN ||
       "",
     uf: getSec("DFe", "UF") || get("UF") || "MG",
-    pathSchemas: resolveRel(
+    pathSchemas: resolveSchemasDir(
+      iniDir,
       get("PathSchemas") || getSec("ACBrNFe", "PathSchemas") || getSec("NFe", "PathSchemas"),
     ),
     certFile: resolveRel(getSec("Certificado", "Arquivo") || get("Arquivo")),
@@ -74,6 +75,40 @@ function resolveIniRelative(iniDir, relativePath) {
   if (!p) return null;
   if (path.isAbsolute(p)) return p;
   return path.normalize(path.join(iniDir, p));
+}
+
+const AGENT_ROOT = path.join(__dirname, "..", "..");
+
+function dirTemSchemasXsd(dir) {
+  if (!dir || !fs.existsSync(dir)) return false;
+  try {
+    if (fs.readdirSync(dir).some((f) => f.endsWith(".xsd"))) return true;
+    const nfe = path.join(dir, "NFe");
+    return fs.existsSync(nfe) && fs.readdirSync(nfe).some((f) => f.endsWith(".xsd"));
+  } catch {
+    return false;
+  }
+}
+
+/** Localiza pasta de schemas XSD (bundled ou configurada no INI). */
+function resolveSchemasDir(iniDir, configuredRel) {
+  const configured = configuredRel ? resolveIniRelative(iniDir, configuredRel) : null;
+  const candidates = [
+    configured,
+    configured ? path.join(configured, "NFe") : null,
+    path.join(iniDir, "..", "Schemas"),
+    path.join(iniDir, "..", "Schemas", "NFe"),
+    path.join(AGENT_ROOT, "acbrlib", "data", "Schemas"),
+    path.join(AGENT_ROOT, "schemas", "NFe"),
+  ].filter(Boolean);
+
+  for (const dir of candidates) {
+    if (!dirTemSchemasXsd(dir)) continue;
+    const nfe = path.join(dir, "NFe");
+    if (dirTemSchemasXsd(nfe)) return nfe;
+    return dir;
+  }
+  return configured || path.join(AGENT_ROOT, "acbrlib", "data", "Schemas");
 }
 
 function copyFileEnsureDir(src, dest) {
@@ -133,13 +168,15 @@ function prepareNativeRuntime({ libPath, iniConfigPath, assets, stagingRoot, for
     const pdfDir = assets.pdf || path.join(path.dirname(iniConfigPath), "..", "pdf");
     const certAbs = certFile && fs.existsSync(certFile) ? certFile : null;
     const certRel = certAbs ? path.basename(certAbs) : null;
+    const schemasResolved = resolveSchemasDir(path.dirname(iniConfigPath), schemasDir);
     return {
       root,
       libPath,
       iniConfig: iniConfigPath,
       notas: notasDir || path.dirname(libPath),
       pdf: pdfDir,
-      schemas: schemasDir,
+      schemas: schemasResolved,
+      servicos: servicosFile,
       cert: certAbs,
       certRel,
       config: path.dirname(iniConfigPath),
@@ -354,6 +391,16 @@ function resolveNativeDocumentIniPath(documentPath, runtime) {
 /**
  * Reaplica paths/CSC via configGravarValor — NÃO toca certificado (evita -10 após CarregarINI).
  */
+function schemasPathForNativeLib(runtime) {
+  if (runtime.staged) {
+    return path.join("Schemas", "NFe");
+  }
+  if (runtime.schemas && fs.existsSync(runtime.schemas)) {
+    return runtime.schemas;
+  }
+  return path.join("Schemas", "NFe");
+}
+
 function applyNativeRuntimeConfig(inst, runtime) {
   const servicosName = path.basename(runtime.servicos || "ACBrNFeServicos.ini");
   const servicosRel = path.join("config", servicosName);
@@ -361,7 +408,7 @@ function applyNativeRuntimeConfig(inst, runtime) {
   const sets = [
     ["NFe", "Ambiente", ambLib],
     ["ACBrNFe", "Ambiente", ambLib],
-    ["NFe", "PathSchemas", path.join("Schemas", "NFe")],
+    ["NFe", "PathSchemas", schemasPathForNativeLib(runtime)],
     ["NFe", "IniServicos", servicosRel],
     ["NFe", "PathSalvar", path.join("notas")],
     ["NFe", "PathNFe", path.join("notas")],
@@ -448,6 +495,7 @@ module.exports = {
   isUncPath,
   readIniValues,
   resolveIniRelative,
+  resolveSchemasDir,
   tpAmbToAmbienteLib,
   prepareNativeRuntime,
   ensureNativeDocumentPath,

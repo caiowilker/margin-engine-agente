@@ -59,6 +59,21 @@ async function run() {
     assert.strictEqual(typeof mock.imprimirSegundaVia, "function");
   });
 
+  test("normalizarPortaAcbr — TCP para rede", () => {
+    const { normalizarPortaAcbr, parsePortaTcp } = require("../print/printerModelMap");
+    assert.strictEqual(normalizarPortaAcbr("192.168.0.10:9100"), "TCP:192.168.0.10:9100");
+    assert.strictEqual(normalizarPortaAcbr("TCP:10.0.0.5:9100"), "TCP:10.0.0.5:9100");
+    assert.deepStrictEqual(parsePortaTcp("TCP:10.0.0.5:9100"), { host: "10.0.0.5", port: 9100 });
+  });
+
+  test("printerBootstrap — porta vazia precisa detecção", () => {
+    const { portaEfetivaPrecisaDeteccao } = require("../print/printerBootstrap");
+    assert.strictEqual(portaEfetivaPrecisaDeteccao(""), true);
+    assert.strictEqual(portaEfetivaPrecisaDeteccao("USB"), true);
+    assert.strictEqual(portaEfetivaPrecisaDeteccao("TCP:10.0.0.1:9100"), false);
+    assert.strictEqual(portaEfetivaPrecisaDeteccao("RAW:Elgin i9"), false);
+  });
+
   test("renderCupomTags — contém tags ACBr e QR", () => {
     const tags = renderCupomTags({
       emitidoEm: new Date().toISOString(),

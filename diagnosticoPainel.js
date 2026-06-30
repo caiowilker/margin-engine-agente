@@ -91,6 +91,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     <button type="button" class="tab" data-tab="fila">Fila fiscal</button>
     <button type="button" class="tab" data-tab="fiscal">Preflight NF-e/NFC-e</button>
     <button type="button" class="tab" data-tab="config">Configuração fiscal</button>
+    <button type="button" class="tab" data-tab="impressora">Impressora</button>
     <button type="button" class="tab" data-tab="apis">APIs JSON</button>
   </nav>
 
@@ -188,6 +189,20 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
         </div>
       </form>
       <div id="msgConfig" class="msg"></div>
+    </div>
+  </section>
+
+  <section id="panel-impressora" class="panel">
+    <div class="card">
+      <h3 style="margin:0 0 8px">ACBr PosPrinter — detecção automática</h3>
+      <p class="sub" style="margin:0 0 14px">USB, spooler Windows (RAW) ou rede TCP (porta 9100). O agente detecta ao iniciar; use os botões abaixo para forçar agora.</p>
+      <div id="printerStatus" style="margin-bottom:12px;font-size:.82rem;color:var(--muted)">Carregando...</div>
+      <div class="actions">
+        <button type="button" class="btn btn-primary" id="btnPrinterDetect">Detectar impressora</button>
+        <button type="button" class="btn btn-secondary" id="btnPrinterTest">Imprimir teste</button>
+        <button type="button" class="btn btn-secondary" id="btnPrinterReload">Atualizar status</button>
+      </div>
+      <div id="msgPrinter" class="msg"></div>
     </div>
   </section>
 
@@ -371,6 +386,51 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     }
   }
 
+  async function loadPrinterStatus(){
+    return fetchJson("/impressora/status?detect=1", { headers: headers(false) });
+  }
+
+  function renderPrinterStatus(st){
+    var lines = [];
+    lines.push("Conectada: <strong>"+(st.conectada ? "Sim" : "Não")+"</strong>");
+    if (st.provider) lines.push("Provider: <strong>"+st.provider+"</strong>");
+    if (st.tipo) lines.push("Tipo: <strong>"+st.tipo+"</strong>");
+    if (st.detectada) {
+      var d = st.detectada;
+      var detLabel = typeof d === "string" ? d : (d.nome || (d.host ? d.host+":"+(d.porta||d.port||"9100") : "") || "—");
+      lines.push("Detectada: <strong>"+detLabel+"</strong>");
+    }
+    if (st.driver && st.driver.mode) lines.push("Modo ACBr: <strong>"+st.driver.mode+"</strong>");
+    document.getElementById("printerStatus").innerHTML = lines.join(" · ");
+  }
+
+  async function refreshPrinterPanel(){
+    try {
+      var st = await loadPrinterStatus();
+      renderPrinterStatus(st);
+    } catch(e){
+      document.getElementById("printerStatus").textContent = "Erro: "+e.message;
+    }
+  }
+
+  document.getElementById("btnPrinterReload").onclick = function(){ void refreshPrinterPanel(); };
+  document.getElementById("btnPrinterDetect").onclick = async function(){
+    if (!token()){ showMsg("msgPrinter", "Informe o X-Agent-Token.", "err"); return; }
+    try {
+      var r = await postAction("/impressora/detectar");
+      showMsg("msgPrinter", "Detectada: "+((r.impressora && r.impressora.nome) || r.config && r.config.porta || "OK"), "ok");
+      await refreshPrinterPanel();
+    } catch(e){ showMsg("msgPrinter", e.message, "err"); }
+  };
+  document.getElementById("btnPrinterTest").onclick = async function(){
+    if (!token()){ showMsg("msgPrinter", "Informe o X-Agent-Token.", "err"); return; }
+    try {
+      await postAction("/impressora/teste");
+      showMsg("msgPrinter", "Teste enviado à impressora.", "ok");
+      await refreshPrinterPanel();
+    } catch(e){ showMsg("msgPrinter", e.message, "err"); }
+  };
+
   document.getElementById("btnReloadConfig").onclick = refreshConfigPanel;
   document.getElementById("formFiscalConfig").onsubmit = async function(ev){
     ev.preventDefault();
@@ -423,8 +483,10 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
   }
 
   document.getElementById("btnRefreshAll").onclick = function(){
-    void refreshAll();
-    void refreshConfigPanel();
+  void refreshAll();
+  void refreshConfigPanel();
+  void refreshPrinterPanel();
+    void refreshPrinterPanel();
   };
 
   async function postAction(path, body){

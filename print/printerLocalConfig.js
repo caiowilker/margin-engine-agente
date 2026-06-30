@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const log = require("../logger").child({ modulo: "printer_local_config" });
 const runtime = require("./acbrPosPrinterRuntime");
-const { inferirModeloAcbr, inferirPortaAcbr } = require("./printerModelMap");
+const { inferirModeloAcbr, inferirPortaAcbr, normalizarPortaAcbr, parsePortaTcp } = require("./printerModelMap");
 
 const AGENT_ROOT = path.resolve(__dirname, "..");
 
@@ -27,7 +27,7 @@ function resolveEnvPath() {
 function lerIniValores(iniPath) {
   const defaults = {
     modelo: "0",
-    porta: "USB",
+    porta: "",
     colunas: "48",
     pageCode: "2",
     cut: "partial",
@@ -96,7 +96,7 @@ LogPath=${logPath}
 
 [PosPrinter]
 Modelo=${vals.modelo || "0"}
-Porta=${vals.porta || "USB"}
+Porta=${vals.porta || ""}
 PaginaDeCodigo=${vals.pageCode || "2"}
 ColunasFonteNormal=${vals.colunas || "48"}
 CortaPapel=${vals.cut === "total" ? "0" : "1"}
@@ -123,6 +123,10 @@ function patchEnv(map) {
   for (const [key, val] of Object.entries(map)) {
     process.env[key] = String(val ?? "");
   }
+}
+
+function patchEnvPublic(map) {
+  return patchEnv(map);
 }
 
 function ler() {
@@ -172,9 +176,21 @@ function salvar(updates) {
   let vals = lerIniValores(iniPath);
 
   if (updates.provider) envPatch.PRINTER_PROVIDER = String(updates.provider);
-  if (updates.porta != null) {
-    vals.porta = String(updates.porta);
+  if (updates.porta != null && String(updates.porta).trim() !== "") {
+    vals.porta = normalizarPortaAcbr(String(updates.porta), {
+      host: updates.host,
+      port: updates.portaNum,
+      nomeWindows: updates.nomeImpressora,
+    });
     envPatch.PRINTER_PORTA = vals.porta;
+    const tcp = parsePortaTcp(vals.porta);
+    if (tcp) {
+      envPatch.PRINTER_HOST = tcp.host;
+      envPatch.PRINTER_PORT = String(tcp.port);
+    } else if (/^RAW:/i.test(vals.porta)) {
+      envPatch.PRINTER_HOST = "";
+      envPatch.PRINTER_TYPE = updates.tipo || "windows";
+    }
   }
   if (updates.modelo != null) {
     vals.modelo = String(updates.modelo);
@@ -209,7 +225,19 @@ function salvar(updates) {
   }
 
   if (!vals.porta || vals.porta === "USB") {
-    vals.porta = inferirPortaAcbr({ nomeWindows: updates.nomeImpressora });
+    const inferida = inferirPortaAcbr({
+      nomeWindows: updates.nomeImpressora,
+      portaWindows: updates.portaWindows,
+    });
+    if (inferida && inferida !== "USB") {
+      vals.porta = inferida;
+      envPatch.PRINTER_PORTA = vals.porta;
+      const tcp = parsePortaTcp(vals.porta);
+      if (tcp) {
+        envPatch.PRINTER_HOST = tcp.host;
+        envPatch.PRINTER_PORT = String(tcp.port);
+      }
+    }
   }
 
   fs.writeFileSync(iniPath, gerarIniContent(vals), "utf8");
@@ -223,21 +251,64 @@ function salvar(updates) {
   return ler();
 }
 
+function salvarSemPorta(updates) {
+  if (!updates || typeof updates !== "object") throw new Error("Payload inválido");
+
+  const envPatch = {
+    PRINTER_PROVIDER: String(updates.provider || "acbr-posprinter"),
+    PRINTER_TYPE: "auto",
+    PRINTER_ENCODING: updates.encoding || "UTF8",
+    PRINTER_CUT: updates.cut || "partial",
+  };
+  if (updates.modelo != null) envPatch.PRINTER_MODEL = String(updates.modelo);
+
+  const iniPath = resolveIniPath();
+  fs.mkdirSync(path.dirname(iniPath), { recursive: true });
+  const vals = {
+    ...lerIniValores(iniPath),
+    modelo: updates.modelo != null ? String(updates.modelo) : "0",
+    porta: "",
+    cut: updates.cut || "partial",
+    pageCode: updates.encoding === "UTF8" ? "65001" : "2",
+  };
+  fs.writeFileSync(iniPath, gerarIniContent(vals), "utf8");
+  patchEnv(envPatch);
+
+  try {
+    require("./factory").resetPrintProvider();
+  } catch (_) {}
+
+  log.info("[PrinterLocalConfig] Instalador — aguardando auto-detecção de porta");
+  return ler();
+}
+
 function sincronizarDeDeteccao(info) {
   if (!info?.impressora) return ler();
   const imp = info.impressora;
-  return salvar({
+  const payload = {
     nomeImpressora: imp.nome || imp.name,
-    porta: imp.porta || imp.port || inferirPortaAcbr(imp),
     modelo: inferirModeloAcbr(imp.nome || imp.name, imp.driver || imp.driverName),
     modeloAuto: true,
-  });
+    portaWindows: imp.porta || imp.port,
+  };
+  if (imp.metodo === "network" && imp.host) {
+    payload.porta = `TCP:${imp.host}:${imp.porta || imp.port || process.env.PRINTER_PORT || "9100"}`;
+    payload.tipo = "network";
+  } else if (imp.metodo === "windows" && (imp.nome || imp.name)) {
+    payload.porta = `RAW:${imp.nome || imp.name}`;
+    payload.tipo = "windows";
+  } else if (imp.porta) {
+    payload.porta = imp.porta;
+  }
+  return salvar(payload);
 }
 
 module.exports = {
   ler,
   salvar,
+  salvarSemPorta,
   sincronizarDeDeteccao,
   gerarIniContent,
   resolveIniPath,
+  patchEnvPublic,
 };

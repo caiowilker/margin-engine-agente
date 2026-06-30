@@ -10,7 +10,8 @@
 ;   - ACBr Monitor / ESC/POS: só via .env pós-instalação (suporte avançado)
 ;
 ; Pré-requisito de build (Windows):
-;   1. Copiar agente-local → dist\app\ (sem node_modules, .env, data\, test\, homolog-acbrlib\)
+;   1. Copiar agente-local → dist\app\ (sem node_modules, .env, data\ do agente, test\, homolog-acbrlib\)
+;      IMPORTANTE: manter acbrlib\data\Schemas\ (XSDs NFC-e/NFe) — não confundir com app\data\ runtime
 ;   2. Copiar Node.js portátil x64 → dist\node\
 ;   3. (Opcional) DLLs extras → dist\acbrlib\lib\ e dist\posprinter\lib\
 ;   4. Compilar este .iss no Inno Setup 6+
@@ -65,7 +66,15 @@ Source: "dist\node\*"; DestDir: "{app}\node"; Flags: recursesubdirs createallsub
 ; ── Agente (cópia completa de agente-local) ──
 Source: "dist\app\*"; DestDir: "{app}\app"; \
     Flags: ignoreversion recursesubdirs createallsubdirs; \
-    Excludes: "node_modules\*,data\*,daemon\*,frontend-dist\*,.env,homolog-acbrlib\*,test\*,.git\*,RESULTADO-*.md,*.log"
+    Excludes: "node_modules\*,\data\*,daemon\*,frontend-dist\*,.env,homolog-acbrlib\*,test\*,.git\*,RESULTADO-*.md,*.log"
+
+; XSDs ACBr (obrigatório — erro -10 sem eles). Cópia explícita: não depender só do recursesubdirs.
+Source: "dist\app\acbrlib\data\Schemas\*"; DestDir: "{app}\app\acbrlib\data\Schemas"; \
+    Flags: recursesubdirs createallsubdirs ignoreversion
+
+Source: "dist\app\acbrlib\data\config\ACBrNFeServicos.ini"; \
+    DestDir: "{app}\app\acbrlib\data\config"; \
+    Flags: ignoreversion skipifsourcedoesntexist
 
 Source: "dist\app\.env.example"; DestDir: "{app}\app"; DestName: ".env.example"; Flags: ignoreversion
 
@@ -94,6 +103,7 @@ Source: "dist\posprinter\*"; DestDir: "{app}\app\posprinter"; \
 Name: "{app}\app\data"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{app}\app\data\logs"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{app}\app\acbrlib\data\config"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{app}\app\acbrlib\data\Schemas"; Permissions: users-readonly
 Name: "{app}\app\posprinter\data\config"; Permissions: users-modify; Flags: uninsneveruninstall
 
 Name: "{#MarginDataRoot}"; Permissions: users-modify; Flags: uninsneveruninstall
@@ -193,6 +203,7 @@ brazilianportuguese.WelcomeLabel2=Este instalador configura o Agente Local do PD
 var
   FiscalEnablePage: TInputOptionWizardPage;
   CertFilePage: TInputFileWizardPage;
+  FiscalAmbientePage: TInputOptionWizardPage;
   FiscalParamsPage: TInputQueryWizardPage;
   PrintParamsPage: TInputQueryWizardPage;
 
@@ -221,6 +232,14 @@ begin
   Result := (FiscalEnablePage.SelectedValueIndex = 0);
 end;
 
+function AmbienteSefazValor: String;
+begin
+  if FiscalAmbientePage.SelectedValueIndex = 1 then
+    Result := 'producao'
+  else
+    Result := 'homologacao';
+end;
+
 procedure InitializeWizard;
 begin
   FiscalEnablePage := CreateInputOptionPage(
@@ -246,47 +265,57 @@ begin
     'Certificados A1 (*.pfx)|*.pfx|Todos os arquivos (*.*)|*.*',
     '.pfx');
 
-  FiscalParamsPage := CreateInputQueryPage(
+  FiscalAmbientePage := CreateInputOptionPage(
     CertFilePage.ID,
+    'Ambiente SEFAZ',
+    'As NFC-e deste caixa serão emitidas em qual ambiente?',
+    'Homologação gera notas de teste (sem valor fiscal). ' +
+    'Produção envia documentos reais à SEFAZ — use CSC e certificado de produção.',
+    True, False);
+  FiscalAmbientePage.Add('Homologação — testes e validação (recomendado para começar)');
+  FiscalAmbientePage.Add('Produção — NFC-e com valor fiscal real');
+  FiscalAmbientePage.Values[0] := True;
+
+  FiscalParamsPage := CreateInputQueryPage(
+    FiscalAmbientePage.ID,
     'Parâmetros SEFAZ e NFC-e',
-    'Ambiente, UF e CSC (Token) da NFC-e',
-    'CSC: cadastre na SEFAZ da UF (homologação e produção têm tokens distintos).');
+    'Senha do certificado, UF e CSC (Token)',
+    'Use o CSC cadastrado na SEFAZ da UF para o ambiente escolhido na tela anterior.');
 
   FiscalParamsPage.Add('Senha do certificado A1:', True);
   FiscalParamsPage.Add('UF do emitente (ex: MG):', False);
-  FiscalParamsPage.Add('Ambiente (homologacao ou producao):', False);
   FiscalParamsPage.Add('Id CSC NFC-e (ex: 000001):', False);
   FiscalParamsPage.Add('Token CSC NFC-e:', True);
 
   FiscalParamsPage.Values[1] := 'MG';
-  FiscalParamsPage.Values[2] := 'homologacao';
-  FiscalParamsPage.Values[3] := '000001';
+  FiscalParamsPage.Values[2] := '000001';
 
   PrintParamsPage := CreateInputQueryPage(
     FiscalParamsPage.ID,
     'Impressora térmica',
-    'Porta e nome no Windows',
-    'O Agente Margin Engine já inclui o driver de impressão. ' +
-    'Informe a porta (USB para térmica USB, COM1 para serial, RAW:Nome para spooler). ' +
-    'Impressora de rede: configure depois em http://localhost:9100.');
+    'Detecção automática (ACBr PosPrinter)',
+    'O driver de impressão já está incluído. Deixe a porta em branco para o agente ' +
+    'detectar sozinho USB, spooler Windows ou rede TCP (porta 9100). ' +
+    'Opcional: USB, COM1, RAW:Nome da impressora ou TCP:192.168.0.10:9100.');
 
-  PrintParamsPage.Add('Porta ACBr (USB, COM1, RAW, etc.):', False);
+  PrintParamsPage.Add('Porta ACBr (opcional — vazio = auto):', False);
   PrintParamsPage.Add('Nome da impressora no Windows (opcional):', False);
 
-  PrintParamsPage.Values[0] := 'USB';
+  PrintParamsPage.Values[0] := '';
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   Result := False;
 
-  if (PageID = CertFilePage.ID) or (PageID = FiscalParamsPage.ID) then
+  if (PageID = CertFilePage.ID) or (PageID = FiscalAmbientePage.ID) or
+     (PageID = FiscalParamsPage.ID) then
     Result := not FiscalEmissaoAtiva;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
 var
-  Uf, Amb: String;
+  Uf: String;
 begin
   Result := True;
 
@@ -305,6 +334,18 @@ begin
     end;
   end;
 
+  if CurPageID = FiscalAmbientePage.ID then
+  begin
+    if FiscalAmbientePage.SelectedValueIndex = 1 then
+    begin
+      if MsgBox(
+        'Ambiente PRODUÇÃO emite NFC-e com valor fiscal real na SEFAZ.' + #13#10 +
+        'Confirma que o certificado A1 e o CSC são de produção?',
+        mbConfirmation, MB_YESNO) = IDNO then
+        Result := False;
+    end;
+  end;
+
   if CurPageID = FiscalParamsPage.ID then
   begin
     if Trim(FiscalParamsPage.Values[0]) = '' then
@@ -317,13 +358,6 @@ begin
     if Length(Uf) <> 2 then
     begin
       MsgBox('UF deve ter 2 letras (ex: MG, SP).', mbError, MB_OK);
-      Result := False;
-      Exit;
-    end;
-    Amb := LowerCase(Trim(FiscalParamsPage.Values[2]));
-    if (Amb <> 'homologacao') and (Amb <> 'producao') then
-    begin
-      MsgBox('Ambiente deve ser "homologacao" ou "producao".', mbError, MB_OK);
       Result := False;
     end;
   end;
@@ -349,9 +383,9 @@ begin
   Cert := JsonEscape(CertFilePage.Values[0]);
   Senha := JsonEscape(FiscalParamsPage.Values[0]);
   Uf := JsonEscape(UpperCase(Trim(FiscalParamsPage.Values[1])));
-  Amb := JsonEscape(LowerCase(Trim(FiscalParamsPage.Values[2])));
-  CscId := JsonEscape(Trim(FiscalParamsPage.Values[3]));
-  CscTok := JsonEscape(Trim(FiscalParamsPage.Values[4]));
+  Amb := JsonEscape(AmbienteSefazValor);
+  CscId := JsonEscape(Trim(FiscalParamsPage.Values[2]));
+  CscTok := JsonEscape(Trim(FiscalParamsPage.Values[3]));
 
   SetArrayLength(Lines, 1);
   Lines[0] :=
@@ -391,6 +425,7 @@ begin
     '{' +
     '"provider":"' + Provider + '",' +
     '"fallback":"native",' +
+    '"autoDetect":true,' +
     '"porta":"' + Porta + '",' +
     '"modelo":"0",' +
     '"encoding":"UTF8",' +

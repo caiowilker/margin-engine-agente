@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Sincroniza agente-local → C:\build\pdv-agente (WSL ou Git Bash)
+# Uso: npm run sync:windows-build
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -8,22 +9,18 @@ BUILD_ROOT="${BUILD_ROOT:-/mnt/c/build/pdv-agente}"
 FRONT_ROOT="${FRONT_ROOT:-$(dirname "$AGENT_ROOT")/margin-engine-front}"
 SYNC_FRONT="${SYNC_FRONT:-1}"
 FRONT_BUILD_ENV="${FRONT_BUILD_ENV:-production}"
+WIN_BUILD_SCRIPTS="$AGENT_ROOT/build/windows"
 
-if [[ ! -d "$BUILD_ROOT" ]]; then
-  echo "ERRO: pasta de build não encontrada: $BUILD_ROOT"
-  echo "Crie C:\\build\\pdv-agente no Windows ou defina BUILD_ROOT."
-  exit 1
-fi
+mkdir -p "$BUILD_ROOT/dist/app" "$BUILD_ROOT/output"
 
-APP_DEST="$BUILD_ROOT/dist/app"
-mkdir -p "$APP_DEST"
+echo "==> Build root: $BUILD_ROOT"
 
 echo "==> Gerando manifest.json (SHA-256)..."
 (cd "$AGENT_ROOT" && npm run manifest)
 
 RSYNC_EXCLUDES=(
   --exclude node_modules
-  --exclude data
+  --exclude '/data'
   --exclude daemon
   --exclude .env
   --exclude test
@@ -37,12 +34,17 @@ RSYNC_EXCLUDES=(
   --exclude 'RESULTADO-*.md'
 )
 
-echo "==> Sincronizando agente → $APP_DEST"
-rsync -a --delete "${RSYNC_EXCLUDES[@]}" "$AGENT_ROOT/" "$APP_DEST/"
+echo "==> Sincronizando agente → $BUILD_ROOT/dist/app"
+rsync -a --delete "${RSYNC_EXCLUDES[@]}" "$AGENT_ROOT/" "$BUILD_ROOT/dist/app/"
 
-echo "==> Copiando pdv-agente-installer.iss"
+echo "==> Copiando scripts de build Windows"
 cp "$AGENT_ROOT/pdv-agente-installer.iss" "$BUILD_ROOT/pdv-agente-installer.iss"
-cp "$AGENT_ROOT/pdv-agente-installer.iss" "$APP_DEST/pdv-agente-installer.iss"
+for f in prepare-build.ps1 compile-installer.ps1 validate-build.ps1 deploy-to-installed.ps1 LEIA-ME.md; do
+  if [[ -f "$WIN_BUILD_SCRIPTS/$f" ]]; then
+    cp "$WIN_BUILD_SCRIPTS/$f" "$BUILD_ROOT/$f"
+  fi
+done
+cp "$AGENT_ROOT/docs/INSTALADOR-WINDOWS.md" "$BUILD_ROOT/LEIA-ME-INSTALADOR.md"
 
 if [[ "$SYNC_FRONT" == "1" ]]; then
   if [[ "${FRONT_REBUILD:-1}" == "1" && -f "$AGENT_ROOT/scripts/build-frontend-dist.sh" ]]; then
@@ -51,31 +53,66 @@ if [[ "$SYNC_FRONT" == "1" ]]; then
       bash "$AGENT_ROOT/scripts/build-frontend-dist.sh" "$FRONT_BUILD_ENV"
   fi
   if [[ -f "$AGENT_ROOT/frontend-dist/index.html" ]]; then
-    echo "==> Sincronizando frontend-dist → $APP_DEST/frontend-dist"
-    mkdir -p "$APP_DEST/frontend-dist"
-    rsync -a --delete "$AGENT_ROOT/frontend-dist/" "$APP_DEST/frontend-dist/"
+    echo "==> Copiando frontend-dist → dist/app/frontend-dist"
+    mkdir -p "$BUILD_ROOT/dist/app/frontend-dist"
+    rsync -a --delete "$AGENT_ROOT/frontend-dist/" "$BUILD_ROOT/dist/app/frontend-dist/"
   elif [[ -f "$FRONT_ROOT/dist/index.html" ]]; then
-    echo "==> Sincronizando frontend-dist ← $FRONT_ROOT/dist (sem rebuild)"
-    mkdir -p "$APP_DEST/frontend-dist"
-    rsync -a --delete "$FRONT_ROOT/dist/" "$APP_DEST/frontend-dist/"
+    echo "==> Copiando frontend-dist ← $FRONT_ROOT/dist"
+    mkdir -p "$BUILD_ROOT/dist/app/frontend-dist"
+    rsync -a --delete "$FRONT_ROOT/dist/" "$BUILD_ROOT/dist/app/frontend-dist/"
   else
-    echo "AVISO: frontend-dist não atualizado (rode scripts/build-frontend-dist.sh)."
+    echo "AVISO: frontend-dist não atualizado"
   fi
 else
-  echo "AVISO: SYNC_FRONT=0 — frontend-dist não sincronizado."
+  echo "AVISO: SYNC_FRONT=0"
 fi
 
-if [[ ! -x "$BUILD_ROOT/dist/node/node.exe" && ! -f "$BUILD_ROOT/dist/node/node.exe" ]]; then
-  echo "AVISO: dist/node/node.exe não encontrado — copie Node.js portátil x64 para dist/node/"
+# ── Validações obrigatórias ───────────────────────────────────────────────────
+FAIL=0
+check() {
+  if [[ ! -e "$1" ]]; then
+    echo "ERRO: ausente — $2"
+    echo "       $1"
+    FAIL=1
+  else
+    echo "OK — $2"
+  fi
+}
+
+check "$BUILD_ROOT/dist/app/acbrlib/lib/ACBrNFe64.dll" "ACBrNFe64.dll"
+check "$BUILD_ROOT/dist/app/posprinter/lib/ACBrPosPrinter64.dll" "ACBrPosPrinter64.dll"
+check "$BUILD_ROOT/dist/app/print/printerBootstrap.js" "printerBootstrap (auto-detect)"
+
+SCHEMA_COUNT="$(find "$BUILD_ROOT/dist/app/acbrlib/data/Schemas" -maxdepth 2 -name '*.xsd' 2>/dev/null | wc -l | tr -d ' ')"
+if [[ "${SCHEMA_COUNT:-0}" -lt 10 ]]; then
+  echo "ERRO: acbrlib/data/Schemas incompleto ($SCHEMA_COUNT .xsd)"
+  FAIL=1
+else
+  echo "OK — schemas XSD: $SCHEMA_COUNT"
 fi
 
-if [[ ! -f "$APP_DEST/acbrlib/lib/ACBrNFe64.dll" ]]; then
-  echo "AVISO: ACBrNFe64.dll ausente em dist/app/acbrlib/lib/"
+if [[ -f "$BUILD_ROOT/dist/app/frontend-dist/index.html" ]]; then
+  echo "OK — frontend-dist"
+else
+  echo "AVISO: frontend-dist/index.html ausente"
 fi
 
-VERSION="$(node -p "require('$APP_DEST/package.json').version")"
+if [[ -f "$BUILD_ROOT/dist/node/node.exe" ]]; then
+  echo "OK — Node portátil"
+else
+  echo "AVISO: dist/node/node.exe ausente — extraia Node x64 em dist/node/"
+fi
+
+if [[ "$FAIL" -ne 0 ]]; then
+  exit 1
+fi
+
+VERSION="$(node -p "require('$BUILD_ROOT/dist/app/package.json').version")"
 echo ""
-echo "OK — build sincronizado (v$VERSION)"
-echo "Próximo passo no Windows (PowerShell como Admin em C:\\build\\pdv-agente):"
-echo "  .\\prepare-build.ps1"
-echo "Ou compile pdv-agente-installer.iss no Inno Setup 6."
+echo "======================================================"
+echo "  Sync concluído — v$VERSION"
+echo "======================================================"
+echo "Próximo passo (PowerShell em C:\\build\\pdv-agente):"
+echo "  .\\validate-build.ps1"
+echo "  .\\prepare-build.ps1 -Compile"
+echo "======================================================"

@@ -427,14 +427,27 @@ async function detectarImpressora(force = false) {
   if (PRINTER_TYPE === "windows" && win) escolhida = win;
   else if (PRINTER_TYPE === "usb" && usb) escolhida = usb;
   else if (PRINTER_TYPE === "network" && rede) escolhida = rede;
-  else if (PRINTER_TYPE === "network" && PRINTER_HOST)
-    escolhida = {
-      metodo: "network",
-      host: PRINTER_HOST,
-      porta: PRINTER_PORT,
-      nome: `${PRINTER_HOST}:${PRINTER_PORT}`,
-    };
-  else if (IS_WIN && win) escolhida = win;
+  else if (PRINTER_TYPE === "network" && PRINTER_HOST) {
+    const port = Number(PRINTER_PORT) || 9100;
+    if (await testarRede(PRINTER_HOST, port, 1500)) {
+      escolhida = {
+        metodo: "network",
+        host: PRINTER_HOST,
+        porta: port,
+        nome: `${PRINTER_HOST}:${port}`,
+      };
+    }
+  } else if (PRINTER_TYPE === "auto") {
+    const portaAcbr = String(process.env.PRINTER_PORTA || "").trim();
+    const prefereWindows =
+      !!PRINTER_NAME ||
+      /^RAW:/i.test(portaAcbr) ||
+      (process.env.PRINTER_PROVIDER || "").toLowerCase().includes("acbr");
+    if (prefereWindows && win) escolhida = win;
+    else if (rede) escolhida = rede;
+    else if (win) escolhida = win;
+    else if (usb) escolhida = usb;
+  } else if (IS_WIN && win) escolhida = win;
   else if (rede) escolhida = rede;
   else if (usb) escolhida = usb;
   else if (win) escolhida = win;
@@ -481,12 +494,12 @@ async function enviarBuffer(buffer) {
           ? cacheImpressoraEscolhida.resultado.impressora
           : null;
       if (!rede && PRINTER_HOST) {
-        rede = { host: PRINTER_HOST, porta: PRINTER_PORT };
+        const port = Number(PRINTER_PORT) || 9100;
+        if (await testarRede(PRINTER_HOST, port, 1500)) {
+          rede = { host: PRINTER_HOST, porta: port };
+        }
       }
-      if (!rede && PRINTER_TYPE === "network") {
-        rede = await detectarRede();
-      }
-      if (!rede && PRINTER_TYPE === "auto" && !IS_WIN) {
+      if (!rede && (PRINTER_TYPE === "network" || PRINTER_TYPE === "auto")) {
         rede = await detectarRede();
       }
       if (!rede) throw new Error("Impressora de rede inacessivel.");
@@ -1201,6 +1214,11 @@ function renderMovimentoCaixa(printer, payload) {
 async function testar(force = false) {
   try {
     const info = await detectarImpressora(force);
+    if (info?.impressora) {
+      try {
+        require("../printerLocalConfig").sincronizarDeDeteccao(info);
+      } catch (_) {}
+    }
     return info.ok;
   } catch (_) {
     return false;

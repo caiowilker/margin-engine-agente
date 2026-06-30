@@ -2,9 +2,6 @@
 // PDV Margin Engine — Instalador de Serviço Windows v4.0
 //
 // NOVIDADES v4.0:
-//   ✓ Detecta conflito de porta 9100 entre agente e impressora
-//   ✓ Corrige PRINTER_PORT automaticamente se conflitar com PORT
-//   ✓ Solicita elevação UAC se não for admin (Windows)
 //   ✓ Verifica se serviço já existe antes de instalar
 //   ✓ Timeout de 30s no install para evitar travamento
 //
@@ -88,34 +85,10 @@ if (!fs.existsSync(envPath) && fs.existsSync(envExample)) {
   console.log("✓ .env criado a partir do .env.example");
 }
 
-// ── Detecta conflito de porta: agente (PORT) vs impressora (PRINTER_PORT) ────
-// Ambos defaultam para 9100 — isso causa falha silenciosa na impressora de rede.
-if (fs.existsSync(envPath)) {
-  let envContent = fs.readFileSync(envPath, "utf8");
-
-  const portMatch = envContent.match(/^PORT\s*=\s*(\d+)/m);
-  const printerPortMatch = envContent.match(/^PRINTER_PORT\s*=\s*(\d+)/m);
-  const printerTypeMatch = envContent.match(/^PRINTER_TYPE\s*=\s*(\w+)/m);
-
-  const agentPort = portMatch ? parseInt(portMatch[1]) : 9100;
-  const printerPort = printerPortMatch ? parseInt(printerPortMatch[1]) : 9100;
-  const printerType = printerTypeMatch ? printerTypeMatch[1] : "auto";
-
-  if (printerType === "network" || printerType === "auto") {
-    if (agentPort === printerPort) {
-      console.warn(
-        `\n⚠  CONFLITO DETECTADO: PORT e PRINTER_PORT ambos em ${agentPort}`,
-      );
-      console.warn("   Corrigindo PRINTER_PORT para 9101 no .env...");
-      envContent = envContent.replace(
-        /^PRINTER_PORT\s*=\s*\d+/m,
-        "PRINTER_PORT=9101",
-      );
-      fs.writeFileSync(envPath, envContent, "utf8");
-      console.log("✓ PRINTER_PORT corrigido para 9101\n");
-    }
-  }
-}
+// ── Porta da impressora de rede ───────────────────────────────────────────────
+// PORT (agente HTTP local) e PRINTER_PORT (socket da impressora na LAN) são
+// independentes — impressoras ESC/POS na rede usam 9100 na maioria dos modelos.
+// Não alterar PRINTER_PORT só porque o agente também usa 9100 em localhost.
 
 // ── Verifica frontend-dist ────────────────────────────────────────────────────
 const frontendIndex = path.join(__dirname, "frontend-dist", "index.html");

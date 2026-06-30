@@ -231,8 +231,12 @@ function buildRuntimeValues() {
     process.env.PRINTER_PORTA ||
     process.env.PRINTER_PATH ||
     "";
-  if (!porta && process.env.PRINTER_HOST) {
-    porta = `TCP:${process.env.PRINTER_HOST}:${process.env.PRINTER_PORT || "9100"}`;
+  const hostRede = (process.env.PRINTER_HOST || "").trim();
+  if (hostRede && (!porta || /^USB$/i.test(porta))) {
+    porta = `TCP:${hostRede}:${process.env.PRINTER_PORT || "9100"}`;
+  }
+  if (!porta && hostRede) {
+    porta = `TCP:${hostRede}:${process.env.PRINTER_PORT || "9100"}`;
   }
   if (!porta && process.env.PRINTER_NAME) {
     porta = `RAW:${process.env.PRINTER_NAME}`;

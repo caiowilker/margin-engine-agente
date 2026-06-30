@@ -1,59 +1,100 @@
 # Sincroniza agente-local → C:\build\pdv-agente (Windows nativo)
 # Uso: .\scripts\sync-windows-build.ps1
 #Requires -Version 5.1
+param(
+    [string]$BuildRoot = $(if ($env:BUILD_ROOT) { $env:BUILD_ROOT } else { "C:\build\pdv-agente" }),
+    [string]$FrontRoot = $(if ($env:FRONT_ROOT) { $env:FRONT_ROOT } else { "" }),
+    [switch]$SkipFrontBuild
+)
+
 $ErrorActionPreference = "Stop"
-
 $AgentRoot = Split-Path -Parent $PSScriptRoot
-$BuildRoot = if ($env:BUILD_ROOT) { $env:BUILD_ROOT } else { "C:\build\pdv-agente" }
-$FrontRoot = if ($env:FRONT_ROOT) { $env:FRONT_ROOT } else { Join-Path (Split-Path -Parent $AgentRoot) "margin-engine-front" }
-$AppDest = Join-Path $BuildRoot "dist\app"
-
-if (-not (Test-Path $BuildRoot)) {
-    Write-Error "Pasta de build não encontrada: $BuildRoot"
+if (-not $FrontRoot) {
+    $FrontRoot = Join-Path (Split-Path -Parent $AgentRoot) "margin-engine-front"
 }
+$AppDest = Join-Path $BuildRoot "dist\app"
+$WinScripts = Join-Path $AgentRoot "build\windows"
 
-New-Item -ItemType Directory -Force -Path $AppDest | Out-Null
+New-Item -ItemType Directory -Force -Path $BuildRoot, $AppDest, (Join-Path $BuildRoot "output") | Out-Null
 
+Write-Host "==> Build root: $BuildRoot"
 Write-Host "==> Gerando manifest.json..."
 Push-Location $AgentRoot
 & npm run manifest
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Pop-Location
 
-$ExcludeDirs = @(
-    "node_modules", "data", "daemon", ".git", ".ai", ".github",
-    "test", "homolog-acbrlib", "frontend-dist", "C:\ProgramData"
-)
-$ExcludeFiles = @(".env", "*.log", "RESULTADO-*.md")
-
-function Sync-Tree([string]$Source, [string]$Dest) {
+function Sync-Tree([string]$Source, [string]$Dest, [string[]]$ExcludeDirNames, [string[]]$ExcludeFileGlobs) {
     if (-not (Test-Path $Dest)) { New-Item -ItemType Directory -Force -Path $Dest | Out-Null }
-    $robocopyArgs = @(
-        $Source, $Dest,
-        "/MIR", "/NFL", "/NDL", "/NJH", "/NJS", "/NC", "/NS", "/NP"
-    )
-    foreach ($d in $ExcludeDirs) { $robocopyArgs += "/XD"; $robocopyArgs += $d }
-    foreach ($f in $ExcludeFiles) { $robocopyArgs += "/XF"; $robocopyArgs += $f }
-    & robocopy @robocopyArgs | Out-Null
+    $args = @($Source, $Dest, "/MIR", "/NFL", "/NDL", "/NJH", "/NJS", "/NC", "/NS", "/NP")
+    foreach ($d in $ExcludeDirNames) { $args += "/XD"; $args += $d }
+    foreach ($f in $ExcludeFileGlobs) { $args += "/XF"; $args += $f }
+    & robocopy @args | Out-Null
     if ($LASTEXITCODE -ge 8) { throw "robocopy falhou com código $LASTEXITCODE" }
 }
 
+# /XD data — relativo à raiz do Source — NÃO remove acbrlib\data
+$ExcludeDirs = @(
+    "node_modules", "data", "daemon", ".git", ".ai", ".github",
+    "test", "homolog-acbrlib", "frontend-dist"
+)
+$ExcludeFiles = @(".env", "*.log", "RESULTADO-*.md")
+
 Write-Host "==> Sincronizando agente → $AppDest"
-Sync-Tree -Source $AgentRoot -Dest $AppDest
+Sync-Tree -Source $AgentRoot -Dest $AppDest -ExcludeDirNames $ExcludeDirs -ExcludeFileGlobs $ExcludeFiles
 
+Write-Host "==> Copiando scripts de build"
 Copy-Item -Force (Join-Path $AgentRoot "pdv-agente-installer.iss") (Join-Path $BuildRoot "pdv-agente-installer.iss")
-Copy-Item -Force (Join-Path $AgentRoot "pdv-agente-installer.iss") (Join-Path $AppDest "pdv-agente-installer.iss")
-
-$frontIndex = Join-Path $FrontRoot "dist\index.html"
-if (Test-Path $frontIndex) {
-    Write-Host "==> Sincronizando frontend-dist"
-    $fd = Join-Path $AppDest "frontend-dist"
-    Sync-Tree -Source (Join-Path $FrontRoot "dist") -Dest $fd
-} else {
-    Write-Warning "frontend-dist não atualizado — rode npm run build no margin-engine-front."
+foreach ($f in @("prepare-build.ps1", "compile-installer.ps1", "validate-build.ps1", "deploy-to-installed.ps1", "LEIA-ME.md")) {
+    $src = Join-Path $WinScripts $f
+    if (Test-Path $src) { Copy-Item -Force $src (Join-Path $BuildRoot $f) }
 }
+Copy-Item -Force (Join-Path $AgentRoot "docs\INSTALADOR-WINDOWS.md") (Join-Path $BuildRoot "LEIA-ME-INSTALADOR.md")
+
+if (-not $SkipFrontBuild) {
+    $buildScript = Join-Path $AgentRoot "scripts\build-frontend-dist.sh"
+    if (Test-Path $buildScript) {
+        Write-Host "==> Build frontend-dist (bash/WSL)"
+        $env:FRONT_ROOT = $FrontRoot
+        $env:TARGET = Join-Path $AgentRoot "frontend-dist"
+        bash $buildScript production
+    }
+    $fdSrc = Join-Path $AgentRoot "frontend-dist"
+    if (Test-Path (Join-Path $fdSrc "index.html")) {
+        Write-Host "==> Copiando frontend-dist"
+        Sync-Tree -Source $fdSrc -Dest (Join-Path $AppDest "frontend-dist") -ExcludeDirNames @() -ExcludeFileGlobs @()
+    } else {
+        Write-Warning "frontend-dist ausente"
+    }
+}
+
+$fail = 0
+function Require([string]$Path, [string]$Label) {
+    if (Test-Path $Path) { Write-Host "OK — $Label" }
+    else { Write-Host "ERRO — $Label : $Path"; $script:fail++ }
+}
+
+Require (Join-Path $AppDest "acbrlib\lib\ACBrNFe64.dll") "ACBrNFe64.dll"
+Require (Join-Path $AppDest "posprinter\lib\ACBrPosPrinter64.dll") "ACBrPosPrinter64.dll"
+Require (Join-Path $AppDest "print\printerBootstrap.js") "printerBootstrap"
+
+$xsd = @(Get-ChildItem (Join-Path $AppDest "acbrlib\data\Schemas") -Filter "*.xsd" -Recurse -File -ErrorAction SilentlyContinue).Count
+if ($xsd -ge 10) { Write-Host "OK — schemas XSD: $xsd" }
+else { Write-Host "ERRO — schemas XSD: $xsd"; $fail++ }
+
+if (Test-Path (Join-Path $AppDest "frontend-dist\index.html")) { Write-Host "OK — frontend-dist" }
+else { Write-Warning "frontend-dist ausente" }
+
+if (Test-Path (Join-Path $BuildRoot "dist\node\node.exe")) { Write-Host "OK — Node portátil" }
+else { Write-Warning "dist\node\node.exe ausente" }
+
+if ($fail -gt 0) { exit 1 }
 
 $pkg = Get-Content (Join-Path $AppDest "package.json") -Raw | ConvertFrom-Json
 Write-Host ""
-Write-Host "OK — build sincronizado (v$($pkg.version))"
-Write-Host "Próximo: cd C:\build\pdv-agente && .\prepare-build.ps1"
+Write-Host "======================================================"
+Write-Host "  Sync concluído — v$($pkg.version)"
+Write-Host "  cd $BuildRoot"
+Write-Host "  .\validate-build.ps1"
+Write-Host "  .\prepare-build.ps1 -Compile"
+Write-Host "======================================================"

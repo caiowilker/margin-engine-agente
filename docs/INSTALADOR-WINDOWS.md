@@ -26,8 +26,9 @@ Modos legados (Monitor TCP :9200, impressora ESC/POS nativa) ficam para **pós-i
 |-------|------|----------------|
 | 1 | Emissão fiscal (Sim/Não) | Sempre |
 | 2 | Certificado A1 (`.pfx`) | Só se emitir NFC-e |
-| 3 | Parâmetros SEFAZ (senha, UF, ambiente, CSC) | Só se emitir NFC-e |
-| 4 | Impressora (porta USB/COM/RAW, nome opcional) | Sempre |
+| 3 | **Ambiente SEFAZ** (Homologação / Produção — marcar opção) | Só se emitir NFC-e |
+| 4 | Parâmetros (senha, UF, CSC) | Só se emitir NFC-e |
+| 5 | Impressora (porta opcional) | Sempre — vazio = **auto-detect** ACBr PosPrinter |
 
 ## Estrutura de build (`dist/`)
 
@@ -43,23 +44,30 @@ dist/
 └── posprinter/                ← overlay opcional
 ```
 
-**Checklist antes de compilar:** confirmar que `dist/app/acbrlib/lib/ACBrNFe64.dll` e `dist/app/posprinter/lib/ACBrPosPrinter64.dll` existem.
+**Checklist antes de compilar:**
+
+- `dist/app/acbrlib/lib/ACBrNFe64.dll` e `dist/app/posprinter/lib/ACBrPosPrinter64.dll` existem
+- `dist/app/acbrlib/data/Schemas/` com centenas de `.xsd` (o `sync-windows-build.sh` falha se faltar)
+
+> **Armadilha:** o rsync não pode usar `--exclude data` genérico — isso remove `acbrlib/data/Schemas` do pacote. Use `--exclude '/data'` (só a pasta `data/` na raiz do agente).
 
 ## Passos para gerar o `.exe`
 
-1. Sincronizar agente → `dist/app/` (`npm run sync:windows-build` ou script equivalente).
-2. Copiar Node portátil → `dist/node/`.
-3. Build do front para o instalador:
+1. Sincronizar: `npm run sync:windows-build` (WSL) ou `.\scripts\sync-windows-build.ps1` (Windows).
+2. Node portátil em `C:\build\pdv-agente\dist\node\` (só na 1ª vez).
+3. Validar: `.\validate-build.ps1`
+4. Preparar + compilar: `.\prepare-build.ps1 -Compile`
+
+Scripts canônicos no repo: `agente-local/build/windows/`
+
+Build do front (automático no sync):
 
 ```bash
 cd agente-local
 ./scripts/build-frontend-dist.sh production   # API: app.marginengine.com.br
-# homolog (faixa roxa “API homologação” no PDV):
-./scripts/build-frontend-dist.sh homolog
 ```
 
-4. Compilar `pdv-agente-installer.iss` no **Inno Setup 6**.
-5. Saída: `output/PDV-Agente-Setup-1.0.0.exe`
+Saída: `C:\build\pdv-agente\output\PDV-Agente-Setup-1.0.0.exe`
 
 No PDV, o ambiente **SEFAZ** (homologação vs produção fiscal) aparece em faixa amarela no topo quando o agente está em homologação; badge “Produção” no header quando em produção.
 
@@ -77,7 +85,7 @@ No PDV, o ambiente **SEFAZ** (homologação vs produção fiscal) aparece em fai
 |---------|----------------------------------------|
 | Cliente já usa ACBr Monitor Pro | `ACBR_DRIVER=monitor`, `ACBR_HOST=127.0.0.1`, `ACBR_PORT=9200` |
 | Impressora só ESC/POS (sem DLL) | `PRINTER_PROVIDER=native` |
-| Impressora de rede | `PRINTER_HOST=IP`, `PRINTER_PORT=9101` (evitar conflito com agente :9100) |
+| Impressora de rede | Opcional — deixe vazio no wizard; auto-detect usa porta **9100** na LAN |
 
 **Não** use `ACBR_LIB_ALLOW_PARITY` nem `PRINTER_ALLOW_PARITY` em produção.
 
