@@ -41,9 +41,19 @@ if ($xsd -ge 10) {
     $fail++
 }
 
-$bundle = Get-ChildItem (Join-Path $App "frontend-dist\assets\index-*.js") -File -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($bundle -and (Select-String -Path $bundle.FullName -Pattern "api-proxy" -Quiet)) {
-    Write-Host "[OK] Frontend bundle - usa /api-proxy em :9100"
+$indexHtml = Join-Path $App "frontend-dist\index.html"
+$bundlePath = $null
+if (Test-Path $indexHtml) {
+    $entry = Select-String -Path $indexHtml -Pattern 'src="/assets/(index-[^"]+\.js)"' | Select-Object -First 1
+    if ($entry -and $entry.Matches.Count -gt 0) {
+        $bundlePath = Join-Path $App ("frontend-dist\assets\" + $entry.Matches[0].Groups[1].Value)
+    }
+}
+if (-not $bundlePath) {
+    $bundlePath = (Get-ChildItem (Join-Path $App "frontend-dist\assets\index-*.js") -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+}
+if ($bundlePath -and (Test-Path $bundlePath) -and (Select-String -Path $bundlePath -Pattern "api-proxy" -Quiet)) {
+    Write-Host "[OK] Frontend bundle - usa /api-proxy em :9100 ($([IO.Path]::GetFileName($bundlePath)))"
 } else {
     Write-Host "[FALHA] Frontend bundle - api-proxy nao encontrado no JS"
     $fail++
