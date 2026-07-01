@@ -2180,6 +2180,66 @@ function iniciarServidor() {
     }
   });
 
+  // ── Imagens de produtos (Storage / DirectoryManager) ───────────────────────
+  app.get("/storage/produtos/:produtoId/imagem/meta", privateNetworkHeaders, (req, res) => {
+    try {
+      const produtoImagens = require("./storage/produtoImagens");
+      const meta = produtoImagens.obterMeta(req.params.produtoId, req.query.tenantId);
+      if (!meta) return res.status(404).json({ erro: "Imagem não encontrada" });
+      res.json(meta);
+    } catch (e) {
+      res.status(500).json({ erro: e.message });
+    }
+  });
+
+  app.get("/storage/produtos/:produtoId/imagem/:variant", privateNetworkHeaders, (req, res) => {
+    try {
+      const variant = String(req.params.variant || "").toLowerCase();
+      if (!["thumb", "medium", "original"].includes(variant)) {
+        return res.status(400).json({ erro: "Variante inválida" });
+      }
+      const produtoImagens = require("./storage/produtoImagens");
+      const hit = produtoImagens.obterArquivo(req.params.produtoId, variant, req.query.tenantId);
+      if (!hit) return res.status(404).json({ erro: "Arquivo não encontrado" });
+      res.setHeader("Content-Type", hit.mime);
+      res.setHeader("Cache-Control", "public, max-age=86400, immutable");
+      res.sendFile(hit.file);
+    } catch (e) {
+      res.status(500).json({ erro: e.message });
+    }
+  });
+
+  app.put("/storage/produtos/:produtoId/imagem", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    try {
+      const produtoImagens = require("./storage/produtoImagens");
+      const meta = await produtoImagens.salvar({
+        produtoId: req.params.produtoId,
+        base64: req.body?.base64,
+        nome: req.body?.nome,
+        usuario: req.body?.usuario,
+        tenantId: req.body?.tenantId,
+        ip: req.ip,
+      });
+      res.json({ ok: true, imagem: meta });
+    } catch (e) {
+      res.status(400).json({ erro: e.message });
+    }
+  });
+
+  app.delete("/storage/produtos/:produtoId/imagem", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    try {
+      const produtoImagens = require("./storage/produtoImagens");
+      const out = produtoImagens.remover(req.params.produtoId, {
+        usuario: req.body?.usuario,
+        tenantId: req.body?.tenantId,
+        ip: req.ip,
+      });
+      res.json(out);
+    } catch (e) {
+      res.status(500).json({ erro: e.message });
+    }
+  });
+
   app.get("/impressora/listar", exigirAgentToken, (req, res) => {
     res.json(impressora.listar());
   });

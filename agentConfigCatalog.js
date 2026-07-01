@@ -418,6 +418,13 @@ const CATALOGO = {
     grupo: "operacao",
     label: "Auto-update do agente",
   },
+  exibirImagensPdv: {
+    env: "PDV_EXIBIR_IMAGENS",
+    tipo: "boolean",
+    default: false,
+    grupo: "operacao",
+    label: "Exibir thumbnails de produtos no PDV",
+  },
   printerProvider: {
     env: "PRINTER_PROVIDER",
     tipo: "string",

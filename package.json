@@ -14,7 +14,7 @@
     "uninstall-service": "node install-service.js --uninstall",
     "pretest": "NODE_ENV=test LOG_SILENT=true LOG_PATCH_CONSOLE=false node test/cleanup-test-data.js",
     "posttest": "NODE_ENV=test LOG_SILENT=true node test/cleanup-test-data.js",
-    "test": "NODE_ENV=test LOG_SILENT=true LOG_PATCH_CONSOLE=false sh -c 'node test/directory-manager.test.js && node test/logging-service.test.js && node test/installer-diagnostic.test.js && node test/fila-venda.test.js && node test/fiscal-driver.test.js && node test/api-proxy.test.js && node test/spa-fallback.test.js && node test/boot-guards.test.js && node test/contract.test.js && node test/acbr-resposta.test.js && node test/fiscal-hardening.test.js'",
+    "test": "NODE_ENV=test LOG_SILENT=true LOG_PATCH_CONSOLE=false sh -c 'node test/directory-manager.test.js && node test/logging-service.test.js && node test/installer-diagnostic.test.js && node test/produto-imagens.test.js && node test/fila-venda.test.js && node test/fiscal-driver.test.js && node test/api-proxy.test.js && node test/spa-fallback.test.js && node test/boot-guards.test.js && node test/contract.test.js && node test/acbr-resposta.test.js && node test/fiscal-hardening.test.js'",
     "test:integration": "node test/fiscal-production.test.js && node test/agent-config-sync.test.js && node test/fiscal-local-config.test.js && node test/fiscal-setup.test.js && node test/fiscal-evento.test.js && node test/fiscal-ini-policy.test.js && node test/nfe-validacao.test.js && node test/documentos-xml.test.js",
     "test:fiscal": "node test/fiscal-hardening.test.js",
     "test:production": "node test/fiscal-production.test.js",
@@ -47,7 +47,8 @@
     "express": "^4.18.2",
     "node-fetch": "^2.7.0",
     "node-windows": "^1.0.0-beta.8",
-    "pino": "^8.20.0"
+    "pino": "^8.20.0",
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
