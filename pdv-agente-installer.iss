@@ -58,39 +58,17 @@ Name: "openpanel"; Description: "Abrir o painel local após a instalação (http
 
 [Files]
 Source: "dist\node\*"; DestDir: "{app}\node"; Flags: recursesubdirs createallsubdirs
-
-Source: "dist\app\*"; DestDir: "{app}\app"; \
-    Flags: ignoreversion recursesubdirs createallsubdirs; \
-    Excludes: "node_modules\*,\data\*,daemon\*,frontend-dist\*,.env,homolog-acbrlib\*,test\*,.git\*,RESULTADO-*.md,*.log"
-
-Source: "dist\app\acbrlib\data\Schemas\*"; DestDir: "{app}\app\acbrlib\data\Schemas"; \
-    Flags: recursesubdirs createallsubdirs ignoreversion
-
-Source: "dist\app\acbrlib\data\config\ACBrNFeServicos.ini"; \
-    DestDir: "{app}\app\acbrlib\data\config"; \
-    Flags: ignoreversion skipifsourcedoesntexist
-
+Source: "dist\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "node_modules\*,\data\*,daemon\*,frontend-dist\*,.env,homolog-acbrlib\*,test\*,.git\*,RESULTADO-*.md,*.log"
+Source: "dist\app\acbrlib\data\Schemas\*"; DestDir: "{app}\app\acbrlib\data\Schemas"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "dist\app\acbrlib\data\config\ACBrNFeServicos.ini"; DestDir: "{app}\app\acbrlib\data\config"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "dist\app\.env.example"; DestDir: "{app}\app"; DestName: ".env.example"; Flags: ignoreversion
-
-Source: "dist\app\frontend-dist\*"; DestDir: "{app}\app\frontend-dist"; \
-    Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
-
-Source: "dist\app\docs\*"; DestDir: "{app}\app\docs"; \
-    Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
-
-Source: "dist\app\templates\*"; DestDir: "{app}\app\templates"; \
-    Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
-
+Source: "dist\app\frontend-dist\*"; DestDir: "{app}\app\frontend-dist"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
+Source: "dist\app\docs\*"; DestDir: "{app}\app\docs"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
+Source: "dist\app\templates\*"; DestDir: "{app}\app\templates"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
 Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
-
-Source: "dist\acbrlib\*"; DestDir: "{app}\app\acbrlib"; \
-    Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
-
-Source: "dist\lib\*"; DestDir: "{app}\app\acbrlib\lib"; \
-    Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
-
-Source: "dist\posprinter\*"; DestDir: "{app}\app\posprinter"; \
-    Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
+Source: "dist\acbrlib\*"; DestDir: "{app}\app\acbrlib"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
+Source: "dist\lib\*"; DestDir: "{app}\app\acbrlib\lib"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
+Source: "dist\posprinter\*"; DestDir: "{app}\app\posprinter"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
 
 [Dirs]
 Name: "{app}\app\data"; Permissions: users-modify; Flags: uninsneveruninstall
@@ -141,6 +119,12 @@ begin
   Result := LowerCase(Trim(ExpandConstant('{param:MODE|}')));
 end;
 
+function IsExistingInstall: Boolean;
+begin
+  Result := RegKeyExists(HKLM,
+    'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#MyAppId}_is1');
+end;
+
 function InitializeSetup: Boolean;
 var
   UninstallString: String;
@@ -165,7 +149,7 @@ begin
 
   if BootstrapMode = '' then
   begin
-    if IsUpgrade then
+    if IsExistingInstall then
       BootstrapMode := 'update'
     else
       BootstrapMode := 'install';
