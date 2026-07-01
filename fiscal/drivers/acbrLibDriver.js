@@ -20,6 +20,8 @@ const { PATHS } = require("../../marginPaths");
 const acbrLibResposta = require("../../acbrLibResposta");
 const acbrLibRuntime = require("./acbrLibRuntime");
 const { validarPayloadNfe } = require("../../fiscalValidacaoNfe");
+const fiscalTrace = require("../../fiscalTraceLog");
+const fiscalDhEmiIni = require("../fiscalDhEmiIni");
 
 const AGENT_ROOT = path.resolve(__dirname, "../..");
 
@@ -186,7 +188,9 @@ function resolverNumeracaoLib(payload, serie, modeloDf) {
 async function montarIniLib(payload, numeracao, modeloDf, empresa) {
   const fiscalIniPolicy = require("../fiscalIniPolicy");
   if (payload.documentIni && String(payload.documentIni).trim()) {
-    return patchNumeracaoIniLib(payload.documentIni, numeracao);
+    return fiscalDhEmiIni.prepararIniParaEmissao(
+      patchNumeracaoIniLib(payload.documentIni, numeracao),
+    );
   }
   fiscalIniPolicy.requireDocumentIniOrAllowLocal(
     payload,
@@ -305,7 +309,7 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
       schemas: iniVals.pathSchemas || path.join(AGENT_ROOT, "schemas", "NFe"),
       cert: iniVals.certFile,
       servicos: iniVals.servicos || path.join(AGENT_ROOT, "data", "ACBrNFeServicos.ini"),
-      notas: PATHS.ini,
+      notas: PATHS.xml,
       log: PATHS.logs,
       pdf: PATHS.pdf,
     },
@@ -315,6 +319,13 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
   const nativeIniPath = acbrLibRuntime.resolveNativeDocumentIniPath(iniPath, runtime);
 
   return acbr.withAcbrLock(async () => {
+    fiscalTrace.trace("ACBrLib", "Início emissão nativa", {
+      modelo,
+      ini: nativeIniPath,
+      staging: !!runtime.staged,
+      xmlDir: PATHS.xml,
+      pdfDir: PATHS.pdf,
+    });
     log.info(
       {
         libPath: runtime.libPath,
@@ -353,7 +364,24 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
         inst.validar();
         log.info("[ACBrLib] NFE_Validar OK");
 
-        const resposta = inst.enviar(1, false, true, false);
+        const emissaoTimeoutMs = parseInt(
+          process.env.ACBR_LIB_EMISSAO_TIMEOUT_MS || "90000",
+          10,
+        );
+        const resposta = await Promise.race([
+          Promise.resolve().then(() => inst.enviar(1, false, true, false)),
+          new Promise((_, reject) =>
+            setTimeout(
+              () =>
+                reject(
+                  new Error(
+                    `[ACBrLib] NFE_Enviar timeout após ${emissaoTimeoutMs}ms — verifique certificado, SEFAZ MG e logs do agente`,
+                  ),
+                ),
+              emissaoTimeoutMs,
+            ),
+          ),
+        ]);
         log.info(
           { respostaLen: String(resposta || "").length, preview: String(resposta || "").slice(0, 300) },
           "[ACBrLib] NFE_Enviar retorno",
@@ -384,6 +412,13 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
 
         const resultado = acbr.normalizarResultado(p, resposta, modelo);
         const artifacts = persistNativeEmissaoOutputs(inst, runtime, p.chave, modelo);
+        fiscalTrace.copiarLogAcbrStagingParaCanonico(runtime);
+        fiscalTrace.trace("ACBrLib", "Emissão nativa concluída", {
+          chave: resultado.chave,
+          cStat: resultado.cStat,
+          xmlPath: artifacts.xmlPath,
+          pdfPath: artifacts.pdfPath,
+        });
         log.info(
           {
             chave: resultado.chave,
@@ -408,6 +443,11 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
         } catch (_) {
           /* ignore */
         }
+        fiscalTrace.copiarLogAcbrStagingParaCanonico(runtime);
+        fiscalTrace.error("ACBrLib", "Falha na emissão nativa", {
+          err: err.message,
+          ultimoRetorno: String(ultimo || "").slice(0, 500),
+        });
         log.error({ err: err.message, ultimoRetorno: ultimo }, "[ACBrLib] Falha na emissão nativa");
         throw err;
       } finally {
@@ -468,7 +508,7 @@ function buildNativeRuntime() {
       schemas: iniVals.pathSchemas || path.join(AGENT_ROOT, "schemas", "NFe"),
       cert: iniVals.certFile,
       servicos: iniVals.servicos || path.join(AGENT_ROOT, "data", "ACBrNFeServicos.ini"),
-      notas: PATHS.ini,
+      notas: PATHS.xml,
       log: PATHS.logs,
       pdf: PATHS.pdf,
     },
@@ -592,8 +632,22 @@ function persistNativeEmissaoOutputs(inst, runtime, chave, modelo) {
   }
   if (xmlContent && String(xmlContent).trim()) {
     xmlPathCanon = docs.salvarXmlAutorizado(k, xmlContent);
+    fiscalTrace.trace("Persist", "XML autorizado salvo", { chave: k, path: xmlPathCanon });
+  } else {
+    fiscalTrace.warn("Persist", "XML vazio após emissão — SEFAZ pode não ter autorizado", {
+      chave: k,
+      stagedXml,
+      notasDir: runtime.notas,
+    });
   }
 
+  const tipoDanfe = String(modelo || "65") === "55" ? "1" : "4";
+  try {
+    inst.configGravarValor("DANFE", "TipoDANFE", tipoDanfe);
+  } catch (_) {
+    /* versões antigas da DLL */
+  }
+  acbrLibRuntime.applyDanfeLayoutConfig(inst, modelo);
   try {
     inst.imprimirPDF();
   } catch (pdfErr) {
@@ -619,6 +673,27 @@ function persistNativeEmissaoOutputs(inst, runtime, chave, modelo) {
     fs.mkdirSync(path.dirname(destPdf), { recursive: true });
     fs.copyFileSync(stagedPdf, destPdf);
     pdfPathCanon = destPdf;
+    fiscalTrace.trace("Persist", "PDF copiado para ProgramData", { chave: k, path: pdfPathCanon });
+  } else {
+    fiscalTrace.warn("Persist", "PDF não encontrado no staging", {
+      chave: k,
+      destPdf,
+      runtimePdf: runtime.pdf,
+    });
+  }
+
+  if (!xmlPathCanon) {
+    fiscalTrace.error("Persist", "Emissão sem XML em ProgramData", {
+      chave: k,
+      xmlDir: PATHS.xml,
+      logsDir: PATHS.logs,
+    });
+    const err = new Error(
+      `[ACBrLib] XML autorizado não persistido — chave ${k}. Verifique logs em ${PATHS.logs}`,
+    );
+    err.incerto = true;
+    err.chaveConsulta = k;
+    throw err;
   }
 
   return { xmlPath: xmlPathCanon, pdfPath: pdfPathCanon };
@@ -668,18 +743,18 @@ async function gerarPdfFiscalLib(chave, xmlPath, modeloDocumento = "65") {
   const docs = require("../../documentosFiscais");
 
   const existente = docs.localizarPdfPorChave(chave, modelo);
-  if (existente && docs.isPdfValid(existente)) {
+  if (existente && docs.pdfValidoParaModelo(existente, modelo)) {
     if (path.resolve(existente) !== path.resolve(destino)) {
       fs.copyFileSync(existente, destino);
     }
     return destino;
   }
-  if (fs.existsSync(destino) && docs.isPdfValid(destino)) {
+  if (fs.existsSync(destino) && docs.pdfValidoParaModelo(destino, modelo)) {
     return destino;
   }
 
   const stagedPdf = acbrLibRuntime.findStagedArtifactAnywhere(chave, ".pdf");
-  if (stagedPdf && docs.isPdfValid(stagedPdf)) {
+  if (stagedPdf && docs.pdfValidoParaModelo(stagedPdf, modelo)) {
     fs.mkdirSync(path.dirname(destino), { recursive: true });
     fs.copyFileSync(stagedPdf, destino);
     return destino;
@@ -710,6 +785,7 @@ async function gerarPdfFiscalLib(chave, xmlPath, modeloDocumento = "65") {
     } catch (_) {
       /* versões antigas da DLL */
     }
+    acbrLibRuntime.applyDanfeLayoutConfig(inst, modelo);
     try {
       inst.imprimirPDF();
     } catch (_) {

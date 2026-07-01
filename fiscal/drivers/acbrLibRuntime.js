@@ -224,7 +224,7 @@ function prepareNativeRuntime({ libPath, iniConfigPath, assets, stagingRoot, for
   const iniContent = `[Principal]
 TipoResposta=2
 LogNivel=4
-LogPath=${path.join("log")}
+LogPath=${dirs.log}
 
 [Sistema]
 Nome=MarginEngine-ACBrLib
@@ -275,6 +275,11 @@ SSLXmlSignLib=4
 [DANFE]
 PathPDF=${path.join("pdf")}
 TipoDANFE=1
+ImprimeCodigoEan=0
+
+[DANFENFe]
+ExibeEAN=0
+LarguraCodProd=72
 
 [NFCe]
 IdCSC=${iniVals.idCsc}
@@ -401,6 +406,23 @@ function schemasPathForNativeLib(runtime) {
   return path.join("Schemas", "NFe");
 }
 
+function applyDanfeLayoutConfig(inst, modeloDf = "55") {
+  if (String(modeloDf) !== "55") return;
+  const largura = String(process.env.DANFE_LARGURA_COD_PROD || "72").trim() || "72";
+  const sets = [
+    ["DANFE", "ImprimeCodigoEan", "0"],
+    ["DANFENFe", "ExibeEAN", "0"],
+    ["DANFENFe", "LarguraCodProd", largura],
+  ];
+  for (const [sec, key, val] of sets) {
+    try {
+      inst.configGravarValor(sec, key, val);
+    } catch (_) {
+      /* opcional por versão da DLL */
+    }
+  }
+}
+
 function applyNativeRuntimeConfig(inst, runtime) {
   const servicosName = path.basename(runtime.servicos || "ACBrNFeServicos.ini");
   const servicosRel = path.join("config", servicosName);
@@ -431,6 +453,7 @@ function applyNativeRuntimeConfig(inst, runtime) {
       /* opcional por versão */
     }
   }
+  applyDanfeLayoutConfig(inst, "55");
 }
 
 function applyNativeCertConfig(inst, runtime) {
@@ -505,6 +528,7 @@ module.exports = {
   findStagedArtifactAnywhere,
   listKnownStagingRoots,
   applyNativeRuntimeConfig,
+  applyDanfeLayoutConfig,
   applyNativeCertConfig,
   reloadNativeCertAfterCarregarIni,
   withNativeLibSession,

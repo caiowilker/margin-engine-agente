@@ -13,6 +13,7 @@ const fiscalRateLimit = require("./fiscalRateLimit");
 const fiscalRecuperacao = require("./fiscalRecuperacao");
 const fiscalStorage = require("./fiscalStorage");
 const fiscalNumeracao = require("./fiscalNumeracao");
+const fiscalTrace = require("./fiscalTraceLog");
 const { validarPayloadNfe } = require("./fiscalValidacaoNfe");
 const { PATHS } = require("./marginPaths");
 
@@ -168,10 +169,25 @@ async function gerarPdfComXml(chave, xmlPathAutorizado, modeloDocumento) {
 }
 
 function deveGerarPdfSincrono(resultado) {
+  // PDF síncrono só com opt-in explícito — NF-e 55 usa fila GERAR_PDF para não
+  // bloquear CONCLUIDO (DANFE via ACBr pode levar minutos no Windows).
   if (GERAR_PDF_EMIT) return true;
-  const modelo =
-    resultado?.modeloDocumento || inferirModeloDocumento(null, resultado?.chave);
-  return modelo === "55";
+  void resultado;
+  return false;
+}
+
+function agendarCallbackBackend(cfg, numeroVenda, correlationId, callbackPayload) {
+  filaFiscal.enfileirar(
+    "CALLBACK_BACKEND",
+    {
+      numeroVenda,
+      correlationId,
+      callbackPayload,
+    },
+    correlationId,
+    numeroVenda,
+  );
+  filaFiscal.dispararProcessamento();
 }
 
 /** PDF DANFC-e via ACBr — desligado por padrão (cupom térmico ESC/POS pelo agente). */
@@ -244,9 +260,21 @@ async function persistirAposAutorizacao(cfg, numeroVenda, correlationId, resulta
   let xmlPath = null;
   if (resultado.xml) {
     xmlPath = docs.salvarXmlAutorizado(resultado.chave, resultado.xml);
+  } else if (resultado.xmlPath) {
+    xmlPath = resultado.xmlPath;
   }
   const xmlResolvido = await resolverXmlParaCallback(resultado.chave, xmlPath);
   xmlPath = xmlResolvido.xmlPath || xmlPath;
+
+  let pdfPath = resultado.pdfPath || null;
+  if (!pdfPath && resultado.chave) {
+    const encontrado = docs.localizarPdfPorChave(resultado.chave, modelo);
+    if (encontrado) {
+      pdfPath = docs.copiarPdfParaCanonico(resultado.chave, encontrado, modelo);
+    }
+  }
+  const pdfContentBase64 =
+    pdfPath && docs.isPdfValid(pdfPath) ? docs.lerArquivoBase64(pdfPath) : null;
 
   filaFiscal.salvarDocumento({
     chave: resultado.chave,
@@ -257,7 +285,7 @@ async function persistirAposAutorizacao(cfg, numeroVenda, correlationId, resulta
     cStat: resultado.cStat,
     protocolo: resultado.protocolo,
     xmlPath,
-    pdfPath: null,
+    pdfPath,
     tipo: "AUTORIZADA",
     modeloDocumento: modelo,
   });
@@ -273,14 +301,16 @@ async function persistirAposAutorizacao(cfg, numeroVenda, correlationId, resulta
     xMotivo: resultado.xMotivo,
     xmlContent: xmlResolvido.xmlContent || resultado.xml || null,
     xmlPath,
+    pdfPath,
+    pdfContentBase64,
     modeloDocumento: modelo,
-    pdfPendente: GERAR_PDF_HABILITADO && !GERAR_PDF_EMIT,
+    pdfPendente: !pdfPath && GERAR_PDF_HABILITADO && !GERAR_PDF_EMIT,
     recuperado: !!resultado.recuperado,
   });
 
-  await enviarCallbackDocumentosFiscais(cfg, numeroVenda, correlationId, callbackPayload);
+  agendarCallbackBackend(cfg, numeroVenda, correlationId, callbackPayload);
 
-  if (GERAR_PDF_HABILITADO && !GERAR_PDF_EMIT && resultado.modeloDocumento !== "55") {
+  if (GERAR_PDF_HABILITADO && !GERAR_PDF_EMIT && !pdfPath && resultado.chave && xmlPath) {
     filaFiscal.enfileirar(
       "GERAR_PDF",
       {
@@ -288,20 +318,7 @@ async function persistirAposAutorizacao(cfg, numeroVenda, correlationId, resulta
         xmlPath,
         numeroVenda,
         correlationId,
-        modeloDocumento: resultado.modeloDocumento || "65",
-      },
-      correlationId,
-      numeroVenda,
-    );
-  } else if (resultado.modeloDocumento === "55" && !GERAR_PDF_EMIT) {
-    filaFiscal.enfileirar(
-      "GERAR_PDF",
-      {
-        chave: resultado.chave,
-        xmlPath,
-        numeroVenda,
-        correlationId,
-        modeloDocumento: "55",
+        modeloDocumento: modelo,
       },
       correlationId,
       numeroVenda,
@@ -313,9 +330,9 @@ async function persistirAposAutorizacao(cfg, numeroVenda, correlationId, resulta
   return {
     ...resultado,
     xmlPath,
-    pdfPath: null,
-    pdfContentBase64: null,
-    pdfPendente: GERAR_PDF_HABILITADO && !GERAR_PDF_EMIT,
+    pdfPath,
+    pdfContentBase64,
+    pdfPendente: !pdfPath && GERAR_PDF_HABILITADO && !GERAR_PDF_EMIT,
     numeroVenda,
   };
 }
@@ -390,7 +407,7 @@ async function persistirDocumentosFiscais(cfg, numeroVenda, correlationId, resul
       pdfErro,
       recuperado: !!resultado.recuperado,
     });
-    await enviarCallbackDocumentosFiscais(cfg, numeroVenda, correlationId, callbackPayload);
+    agendarCallbackBackend(cfg, numeroVenda, correlationId, callbackPayload);
 
     if (!pdfPath && resultado.chave && xmlPath) {
       filaFiscal.enfileirar(
@@ -583,7 +600,13 @@ async function emitirCompleto(cfg, body, job = null) {
     throw err;
   }
 
-  if (!resultado || resultado.fiscal === false) return { fiscal: false };
+  if (!resultado || resultado.fiscal === false) {
+    const err = new Error(
+      "Emissão fiscal desabilitada ou indisponível no agente (EMISSAO_FISCAL)",
+    );
+    err.permanente = true;
+    throw err;
+  }
 
   return persistirDocumentosFiscais(cfg, numeroVenda, correlationId, resultado);
 }
@@ -613,6 +636,14 @@ async function enfileirarEmissao(cfg, body, opts = {}) {
     correlationId,
     numeroVenda,
   );
+
+  fiscalTrace.trace("Fila", "Emissão enfileirada", {
+    numeroVenda,
+    correlationId: enq.correlationId || correlationId,
+    modelo: body.modeloDocumento || "65",
+    sync,
+    deduplicado: !!enq.deduplicado,
+  });
 
   const corrFinal = enq.correlationId || correlationId;
 
@@ -677,6 +708,69 @@ function consultarStatusEmissao(correlationId) {
     extrairModeloJob(correlationId) ||
     "65";
   return { ...st, modeloDocumento: modelo };
+}
+
+function consultarStatusEmissaoPorVenda(numeroVenda) {
+  const st = filaFiscal.consultarStatusEmissaoPorVenda(numeroVenda);
+  const corr = st.correlationId;
+  const modelo =
+    st.resultado?.modeloDocumento ||
+    (corr ? extrairModeloJob(corr) : null) ||
+    "65";
+  return { ...st, modeloDocumento: modelo };
+}
+
+async function sincronizarVendaFiscal(cfg, numeroVenda) {
+  if (!numeroVenda) throw new Error("numeroVenda obrigatório");
+  const st = consultarStatusEmissaoPorVenda(numeroVenda);
+  filaFiscal.dispararProcessamento();
+
+  if (
+    st.status === "INCERTO" ||
+    st.status === "RECUPERANDO" ||
+    st.status === "FALHA_TEMPORARIA" ||
+    st.status === "PROCESSANDO" ||
+    st.status === "PENDENTE" ||
+    st.status === "ENFILEIRADO"
+  ) {
+    return { ok: true, acao: "aguardando_agente", ...st };
+  }
+
+  if (st.status === "CONCLUIDO" || st.status === "CONCLUIDO_RECUPERADO") {
+    const resultado = st.resultado || {};
+    const doc = filaFiscal.buscarDocumentoPorVenda(numeroVenda);
+    const chave = resultado.chave || doc?.chave;
+    if (chave && cfg?.backendUrl) {
+      const xmlResolvido = await resolverXmlParaCallback(
+        chave,
+        doc?.xml_path || resultado.xmlPath || null,
+      );
+      const callbackPayload = montarCallbackPayload({
+        correlationId: st.correlationId,
+        chave,
+        numeroNfe: resultado.numero || resultado.numeroNfe || doc?.numero_nfe,
+        serieNfe: resultado.serie || resultado.serieNfe || doc?.serie_nfe,
+        protocolo: resultado.protocolo || doc?.protocolo,
+        cStat: resultado.cStat || doc?.c_stat || "100",
+        xMotivo: resultado.xMotivo,
+        qrcode: resultado.qrcode || resultado.qrcodeNfe,
+        xmlContent: xmlResolvido.xmlContent || resultado.xml || null,
+        xmlPath: xmlResolvido.xmlPath || doc?.xml_path || null,
+        modeloDocumento:
+          resultado.modeloDocumento ||
+          doc?.modelo_documento ||
+          inferirModeloDocumento(doc, chave),
+        pdfPendente: GERAR_PDF_HABILITADO && !GERAR_PDF_EMIT,
+        recuperado: st.status === "CONCLUIDO_RECUPERADO",
+      });
+      agendarCallbackBackend(cfg, numeroVenda, st.correlationId, callbackPayload);
+      filaFiscal.dispararProcessamento();
+      return { ok: true, acao: "callback_reenfileirado", ...st };
+    }
+    return { ok: true, acao: "concluido_sem_chave", ...st };
+  }
+
+  return { ok: true, acao: "status_consultado", ...st };
 }
 
 function extrairModeloJob(correlationId) {
@@ -761,18 +855,24 @@ async function obterPdfDocumento(chave, numeroVenda) {
   }
 
   let pdfPath = doc?.pdf_path;
-  if (!docs.isPdfValid(pdfPath) && chaveDoc) {
+  if (!docs.pdfValidoParaModelo(pdfPath, modelo) && chaveDoc) {
     const encontrado = docs.localizarPdfPorChave(chaveDoc, modelo);
-    if (encontrado) {
+    if (encontrado && docs.pdfValidoParaModelo(encontrado, modelo)) {
       pdfPath = docs.copiarPdfParaCanonico(chaveDoc, encontrado, modelo);
     }
   }
   const pdfDesatualizado =
-    docs.isPdfValid(pdfPath) &&
+    docs.pdfValidoParaModelo(pdfPath, modelo) &&
     xmlAutorizado &&
     doc?.xml_path &&
     doc.xml_path !== xmlAutorizado;
-  if (!docs.isPdfValid(pdfPath) || pdfDesatualizado) {
+  const pdfFormatoIncorreto =
+    modelo === "55" && docs.isPdfValid(pdfPath) && !docs.pareceDanfeA4(pdfPath);
+  if (
+    !docs.pdfValidoParaModelo(pdfPath, modelo) ||
+    pdfDesatualizado ||
+    pdfFormatoIncorreto
+  ) {
     pdfPath = await gerarPdfComXml(chaveDoc, xmlAutorizado, modelo);
   }
 
@@ -1008,6 +1108,9 @@ function registrarHandlersFila(lerConfigFn) {
 
   filaFiscal.registrarHandler("EMISSAO", async (payload, job) => {
     const cfg = await lerConfigFn();
+    if (!fiscalDriver.EMISSAO_FISCAL) {
+      throw Object.assign(new Error("EMISSAO_FISCAL desabilitada no agente"), { permanente: true });
+    }
     const correlationId = payload.correlationId || job.correlation_id;
     const numeroVenda = payload.numeroVenda || job.numero_venda;
     filaFiscal.salvarResultadoEmissao(correlationId, numeroVenda, "PROCESSANDO", null, null);
@@ -1048,6 +1151,30 @@ function registrarHandlersFila(lerConfigFn) {
     }
   });
 
+  filaFiscal.registrarHandler("EVENTO_FISCAL", async (payload) => {
+    const cfg = await lerConfigFn();
+    if (!cfg?.backendUrl || !payload.numeroVenda) {
+      throw new Error("EVENTO_FISCAL sem backend ou numeroVenda");
+    }
+    await httpRequest(
+      `${cfg.backendUrl.replace(/\/$/, "")}/pdv/vendas/${encodeURIComponent(payload.numeroVenda)}/fiscal/evento`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${cfg.backendToken}`,
+          "X-Correlation-Id": payload.correlationId || "",
+        },
+      },
+      JSON.stringify({
+        protocolo: payload.protocolo,
+        cStat: payload.cStat,
+        xMotivo: payload.xMotivo,
+        tipoEvento: payload.tipoEvento || payload.tipo,
+      }),
+    );
+  });
+
   filaFiscal.registrarHandler("GERAR_PDF", async (payload) => {
     const { chave, xmlPath, numeroVenda, correlationId, modeloDocumento } =
       payload;
@@ -1068,12 +1195,20 @@ function registrarHandlersFila(lerConfigFn) {
 
     let pdfPath = doc?.pdf_path;
     const pdfDesatualizado =
-      docs.isPdfValid(pdfPath) &&
+      docs.pdfValidoParaModelo(pdfPath, modelo) &&
       xmlAutorizado &&
       doc?.xml_path &&
       doc.xml_path !== xmlAutorizado;
+    const pdfFormatoIncorreto =
+      modelo === "55" &&
+      docs.isPdfValid(pdfPath) &&
+      !docs.pareceDanfeA4(pdfPath);
 
-    if (!docs.isPdfValid(pdfPath) || pdfDesatualizado) {
+    if (
+      !docs.pdfValidoParaModelo(pdfPath, modelo) ||
+      pdfDesatualizado ||
+      pdfFormatoIncorreto
+    ) {
       const t0 = Date.now();
       pdfPath = await gerarPdfParaModelo(chave, xmlAutorizado, modelo);
       fiscalMetrics.registrarEmissao(0, { pdfMs: Date.now() - t0, pdf: true });
@@ -1177,6 +1312,8 @@ module.exports = {
   enfileirarEmissao,
   enfileirarEmissaoNfe,
   consultarStatusEmissao,
+  consultarStatusEmissaoPorVenda,
+  sincronizarVendaFiscal,
   finalizarEmissaoRecuperada,
   reimprimirDanfceCompleto,
   obterPdfDocumento,

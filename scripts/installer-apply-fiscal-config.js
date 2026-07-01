@@ -105,6 +105,7 @@ const schemasDir = path.join(marginRoot, "acbr", "schemas", "NFe");
 const configDir = path.join(marginRoot, "acbr", "config");
 const xmlDir = path.join(marginRoot, "acbr", "xml");
 const pdfDir = path.join(marginRoot, "acbr", "pdf");
+const logsDir = path.join(marginRoot, "acbr", "logs");
 
 for (const d of [
   certDestDir,
@@ -112,6 +113,7 @@ for (const d of [
   configDir,
   xmlDir,
   pdfDir,
+  logsDir,
   path.join(acbrLibDir, "lib"),
   path.dirname(acbrLibIniDefault),
   path.dirname(acbrLibIniData),
@@ -191,6 +193,7 @@ const cscIni = cfg.cscToken ? "__VAULT__" : "";
 const iniContent = `[Principal]
 TipoResposta=2
 LogNivel=4
+LogPath=${path.join(logsDir)}
 
 [Sistema]
 Nome=MarginEngine-Agente
@@ -228,6 +231,11 @@ CSC=${cscIni}
 [DANFE]
 PathPDF=${pdfDir}
 TipoDANFE=1
+ImprimeCodigoEan=0
+
+[DANFENFe]
+ExibeEAN=0
+LarguraCodProd=72
 `;
 
 const iniTargets = [cfg.libIni || acbrLibIniDefault, acbrLibIniData];

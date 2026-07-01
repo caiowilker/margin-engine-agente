@@ -162,6 +162,50 @@ async function bootstrapFiscalNoBackend(backendUrl, backendToken, cfgRemoto) {
   }
 }
 
+async function enviarHeartbeat(backendUrl, backendToken) {
+  const fetch = require("node-fetch");
+  const fiscalTrace = require("./fiscalTraceLog");
+  const filaFiscal = require("./filaFiscal");
+  const providerId =
+    process.env.ACBR_DRIVER === "lib" ? "agent-local-lib" : "agent-local-monitor";
+  let filaStatus = {};
+  try {
+    filaStatus = filaFiscal.status() || {};
+  } catch {
+    /* ignore */
+  }
+  try {
+    const resp = await fetch(`${backendUrl}/pdv/agente/heartbeat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${backendToken}`,
+      },
+      body: JSON.stringify({
+        providerId,
+        filaFiscal: {
+          pendentes: filaStatus.pendentes ?? 0,
+          incerto: filaStatus.incerto ?? 0,
+          processando: filaStatus.processando ?? 0,
+        },
+      }),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => "");
+      fiscalTrace.warn("Heartbeat", "Backend rejeitou heartbeat", {
+        status: resp.status,
+        body: txt.slice(0, 120),
+      });
+      log.debug({ status: resp.status, body: txt.slice(0, 80) }, "[ConfigSync] heartbeat HTTP");
+    } else {
+      fiscalTrace.trace("Heartbeat", "OK — agente online no backend", { providerId });
+    }
+  } catch (err) {
+    fiscalTrace.warn("Heartbeat", "Falha ao enviar heartbeat", { err: err.message });
+    log.debug({ err: err.message }, "[ConfigSync] heartbeat falhou");
+  }
+}
+
 async function enviarAck(backendUrl, backendToken) {
   const fetch = require("node-fetch");
   const resp = await fetch(`${backendUrl}/pdv/agente/config/ack`, {
@@ -216,6 +260,7 @@ async function sincronizar(lerConfigFn) {
     } catch (ackErr) {
       log.warn("[ConfigSync] Config aplicada, ACK falhou:", ackErr.message);
     }
+    await enviarHeartbeat(backendUrl, backendToken);
   } catch (err) {
     estado.ultimoErro = err.message;
     runtimeConfig.manterUltimoConhecido();

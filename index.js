@@ -53,6 +53,7 @@ const fila = require("./fila");
 const configSync = require("./configSync");
 const credenciais = require("./credenciais");
 const marginPaths = require("./marginPaths");
+const fiscalTraceLog = require("./fiscalTraceLog");
 const filaFiscal = require("./filaFiscal");
 const acbrNfceSetup = require("./acbrNfceSetup");
 const fiscalService = require("./fiscalService");
@@ -389,6 +390,7 @@ const corsMiddleware = cors({
     "Content-Type",
     "X-Agent-Token",
     "X-Correlation-Id",
+    "X-Fiscal-Sync",
   ],
 });
 
@@ -404,7 +406,7 @@ function privateNetworkHeaders(req, res, next) {
   res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, X-Agent-Token, X-Correlation-Id",
+    "Content-Type, X-Agent-Token, X-Correlation-Id, X-Fiscal-Sync",
   );
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   if (req.method === "OPTIONS") {
@@ -966,11 +968,21 @@ function iniciarServidor() {
   app.get("/status-basico", privateNetworkHeaders, async (req, res) => {
     config = await lerConfig();
 
-    const [impressoraOk, impressoraInfo, fiscalProbe] = await Promise.all([
-      impressora.testar().catch(() => false),
-      impressora.getInfo().catch(() => null),
-      probeStatusFiscal(),
-    ]);
+    // Durante emissão/PDF fiscal, não bloqueia em testar() da impressora —
+    // resposta rápida evita falso "agente offline" no painel.
+    const fiscalOcupado =
+      fiscalDriver.isAcbrBusy() || filaFiscal.estaProcessando();
+    const [impressoraOk, impressoraInfo, fiscalProbe] = fiscalOcupado
+      ? [
+          null,
+          null,
+          await probeStatusFiscal(),
+        ]
+      : await Promise.all([
+          impressora.testar().catch(() => false),
+          impressora.getInfo().catch(() => null),
+          probeStatusFiscal(),
+        ]);
 
     const { pendentes, falhas } = await fila.contadores();
     const contingencia = lerContingencia();
@@ -1003,7 +1015,7 @@ function iniciarServidor() {
         const printerBootstrap = require("./print/printerBootstrap");
         const impSt = printerBootstrap.resolverStatusExibicao(impressoraInfo);
         return {
-          ok: impressoraOk,
+          ok: impressoraOk === null ? null : impressoraOk,
           tipo: impSt.metodo || process.env.PRINTER_TYPE || "auto",
           detectada: impressoraInfo?.impressora || impSt.detectada || null,
           host: impSt.host,
@@ -1349,7 +1361,8 @@ function iniciarServidor() {
       const sync =
         req.query.sync === "1" ||
         req.query.sync === "true" ||
-        req.headers["x-fiscal-sync"] === "1";
+        req.headers["x-fiscal-sync"] === "1" ||
+        (process.env.FISCAL_EMITIR_SYNC || "false").toLowerCase() === "true";
       const resultado = await fiscalService.enfileirarEmissaoNfe(
         cfg,
         {
@@ -1468,6 +1481,7 @@ function iniciarServidor() {
         const suffix = doc.modeloDocumento === "55" ? "danfe" : "danfce";
         const nome = `${doc.chave || numeroVenda || "documento"}-${suffix}.pdf`;
         res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
         res.setHeader("Content-Disposition", `attachment; filename="${nome}"`);
         res.send(doc.buffer);
       } catch (err) {
@@ -1495,6 +1509,37 @@ function iniciarServidor() {
         });
       } catch (err) {
         res.status(404).json({ erro: err.message });
+      }
+    },
+  );
+
+  app.get(
+    "/fiscal/emissao/venda/:numeroVenda",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    (req, res) => {
+      res.json(
+        fiscalService.consultarStatusEmissaoPorVenda(
+          decodeURIComponent(req.params.numeroVenda),
+        ),
+      );
+    },
+  );
+
+  app.post(
+    "/fiscal/sincronizar-venda",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    async (req, res) => {
+      try {
+        const numeroVenda = req.body?.numeroVenda;
+        if (!numeroVenda) {
+          return res.status(400).json({ erro: "numeroVenda obrigatório." });
+        }
+        const cfg = await lerConfig();
+        res.json(await fiscalService.sincronizarVendaFiscal(cfg, String(numeroVenda)));
+      } catch (err) {
+        res.status(500).json({ erro: err.message });
       }
     },
   );
@@ -1710,6 +1755,34 @@ function iniciarServidor() {
       });
     },
   );
+
+  app.get("/diagnostico/logs/fiscal", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    const lines = Math.min(
+      500,
+      Math.max(1, parseInt(req.query.lines || "500", 10) || 500),
+    );
+    const apenas = String(req.query.fonte || "todos").toLowerCase();
+    if (apenas === "trace") {
+      res.json({
+        limit: lines,
+        maxLines: fiscalTraceLog.MAX_LINES,
+        lines: fiscalTraceLog.tail(lines),
+        sources: { trace: fiscalTraceLog.tail(lines).length },
+      });
+      return;
+    }
+    if (apenas === "acbr") {
+      const acbr = fiscalTraceLog.tailAcbrLib(lines);
+      res.json({
+        limit: lines,
+        maxLines: fiscalTraceLog.MAX_LINES,
+        lines: acbr.lines,
+        sources: { acbrFiles: acbr.files },
+      });
+      return;
+    }
+    res.json(fiscalTraceLog.snapshot(lines));
+  });
 
   app.get("/diagnostico/alertas", privateNetworkHeaders, (req, res) => {
     const payload = coletarDadosAlertas();

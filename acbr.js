@@ -56,6 +56,7 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const fiscalNumeracao = require("./fiscalNumeracao");
+const fiscalDhEmiIni = require("./fiscal/fiscalDhEmiIni");
 const { validarPayloadNfce } = require("./fiscalValidacao");
 const { validarPayloadNfe, normalizarDestinatario } = require("./fiscalValidacaoNfe");
 const {
@@ -579,8 +580,7 @@ function gerarCodigoNumerico() {
 }
 
 function formatarDhEmi(data = new Date()) {
-  const p = (n) => String(n).padStart(2, "0");
-  return `${p(data.getDate())}/${p(data.getMonth() + 1)}/${data.getFullYear()} ${p(data.getHours())}:${p(data.getMinutes())}:${p(data.getSeconds())}`;
+  return fiscalDhEmiIni.formatarDhEmiAcbrIni(data);
 }
 
 function resolverTpAmb() {
@@ -612,7 +612,7 @@ function patchNumeracaoIni(ini, numeracao) {
     else if (line.startsWith("nNF=")) lines[i] = `nNF=${numero}`;
     else if (line.startsWith("cNF=")) lines[i] = `cNF=${cNf}`;
   }
-  return lines.join("\n");
+  return fiscalDhEmiIni.prepararIniParaEmissao(lines.join("\n"));
 }
 
 function crtUsaSimples(crt) {
@@ -1630,7 +1630,15 @@ async function emitirNfe(payload) {
   let resultado;
 
   for (let tentativa = 0; tentativa < 2; tentativa++) {
-    const ini = montarIniNfe({ ...payload, empresa }, numeracao, destinatario);
+    const fiscalIniPolicy = require("./fiscal/fiscalIniPolicy");
+    let iniBase;
+    if (payload.documentIni && String(payload.documentIni).trim()) {
+      iniBase = patchNumeracaoIni(payload.documentIni, numeracao);
+    } else {
+      fiscalIniPolicy.requireDocumentIniOrAllowLocal(payload, "NF-e");
+      iniBase = montarIniNfe({ ...payload, empresa }, numeracao, destinatario);
+    }
+    const ini = iniBase;
     iniPath = path.join(
       PATHS.ini,
       `nfe-${payload.numeroVenda || Date.now()}-${numeracao.numero}.ini`,
@@ -1767,15 +1775,26 @@ async function gerarPdfFiscal(chave, xmlPath, modeloDocumento = "65") {
     return destino;
   }
   const xml = resolverXmlChave(chave, xmlPath);
+  const larguraCod = process.env.DANFE_LARGURA_COD_PROD || "72";
+  const layoutDanfe =
+    modelo === "55"
+      ? [
+          'NFE.ConfigGravarValor("DANFE","ImprimeCodigoEan","0")',
+          'NFE.ConfigGravarValor("DANFENFe","ExibeEAN","0")',
+          `NFE.ConfigGravarValor("DANFENFe","LarguraCodProd","${larguraCod}")`,
+          "NFE.ConfigGravar()",
+        ]
+      : [];
   // Somente ImprimirDANFEPDF — ImprimirDanfe envia à impressora física (reimpressão usa imprimirDanfce).
   const comandos =
     modelo === "55"
-      ? [`NFE.ImprimirDANFEPDF(${qAcbr(xml)},,,"1","0")`]
+      ? [...layoutDanfe, `NFE.ImprimirDANFEPDF(${qAcbr(xml)},,,"1","0")`]
       : [`NFE.ImprimirDANFEPDF(${qAcbr(xml)},,,"1","1")`];
 
   for (const cmd of comandos) {
     try {
-      const resposta = await enviarNfe(cmd, ACBR_TIMEOUT_EMISSAO);
+      const enviar = modelo === "55" ? (c) => enviarNfeModelo(c, 55, ACBR_TIMEOUT_EMISSAO) : enviarNfe;
+      const resposta = await enviar(cmd);
       const p = parseResposta(resposta);
       const candidato =
         (p.pathPdf && fs.existsSync(p.pathPdf) && p.pathPdf) ||

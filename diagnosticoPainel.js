@@ -55,6 +55,7 @@ th{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.
 .chip-warn{background:#713f12;color:#fde68a}
 .chip-crit{background:#7f1d1d;color:#fecaca}
 .chip-muted{background:#334155;color:#cbd5e1}
+.log-box{background:#0a0f18;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:Consolas,"Courier New",monospace;font-size:.72rem;line-height:1.45;max-height:520px;overflow:auto;white-space:pre-wrap;word-break:break-word;color:#c8d6e8}
 .msg{margin-top:10px;padding:10px 12px;border-radius:8px;font-size:.82rem;display:none}
 .msg.show{display:block}
 .msg-ok{background:#14532d;color:#bbf7d0}
@@ -92,6 +93,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     <button type="button" class="tab" data-tab="fiscal">Preflight NF-e/NFC-e</button>
     <button type="button" class="tab" data-tab="config">Configuração fiscal</button>
     <button type="button" class="tab" data-tab="impressora">Impressora</button>
+    <button type="button" class="tab" data-tab="logs">Logs fiscal</button>
     <button type="button" class="tab" data-tab="apis">APIs JSON</button>
   </nav>
 
@@ -206,6 +208,24 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     </div>
   </section>
 
+  <section id="panel-logs" class="panel">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <h3 style="margin:0">Rastro fiscal (últimas 500 linhas)</h3>
+        <div class="actions" style="margin:0">
+          <button type="button" class="btn btn-secondary" id="btnLogsRefresh">Atualizar</button>
+          <label style="font-size:.78rem;color:var(--muted);display:flex;align-items:center;gap:6px">
+            <input type="checkbox" id="chkLogsAuto" checked/> Auto 5s
+          </label>
+        </div>
+      </div>
+      <p class="sub" style="margin:8px 0">Agente + ACBrLib — arquivo em <code style="color:var(--info)">ProgramData\\MarginEngine\\acbr\\logs\\fiscal-trace.log</code></p>
+      <div id="logsMeta" style="font-size:.75rem;color:var(--muted);margin-bottom:8px">Carregando...</div>
+      <pre id="logsBody" class="log-box">Carregando logs...</pre>
+      <div id="msgLogs" class="msg"></div>
+    </div>
+  </section>
+
   <section id="panel-apis" class="panel">
     <div class="card">
       <h3>Endpoints JSON (com token quando indicado)</h3>
@@ -219,6 +239,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
         <span class="link-card"><strong>Fiscal preflight</strong><span>GET /diagnostico/fiscal (token)</span></span>
         <span class="link-card"><strong>Fila fiscal</strong><span>GET /fila/fiscal (token)</span></span>
         <span class="link-card"><strong>Métricas</strong><span>GET /diagnostico/metricas (token)</span></span>
+        <a class="link-card" href="/diagnostico/logs/fiscal?lines=500"><strong>Logs fiscal</strong><span>GET /diagnostico/logs/fiscal?lines=500</span></a>
       </div>
     </div>
   </section>
@@ -268,6 +289,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
       btn.classList.add("active");
       document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
       if (location.hash !== "#" + btn.dataset.tab) location.hash = btn.dataset.tab;
+      if (btn.dataset.tab === "logs") void refreshLogsPanel();
     };
   });
   if (location.hash){
@@ -291,6 +313,9 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
   }
   async function loadFiscal(){
     return fetchJson("/diagnostico/fiscal", { headers: headers(false) });
+  }
+  async function loadLogsFiscal(){
+    return fetchJson("/diagnostico/logs/fiscal?lines=500", { headers: headers(false) });
   }
   async function loadMetricas(){
     try { return await fetchJson("/diagnostico/metricas", { headers: headers(false) }); }
@@ -466,6 +491,35 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     try { await postAction("/diagnostico/preflight/refresh"); } catch(_){}
   }
 
+  async function refreshLogsPanel(){
+    try {
+      var data = await loadLogsFiscal();
+      var lines = data.lines || [];
+      document.getElementById("logsBody").textContent = lines.length ? lines.join("\\n") : "(sem linhas — emita uma nota para gerar rastro)";
+      var src = data.sources || {};
+      document.getElementById("logsMeta").textContent =
+        "Total: " + (data.total || lines.length) + " · trace: " + (src.trace || 0) +
+        " · ACBr: " + (src.acbr || 0) + " · máx " + (data.maxLines || 500);
+    } catch(e){
+      document.getElementById("logsBody").textContent = "Erro: " + e.message;
+      document.getElementById("logsMeta").textContent = "";
+    }
+  }
+
+  document.getElementById("btnLogsRefresh").onclick = function(){ void refreshLogsPanel(); };
+  var logsAutoTimer = null;
+  function syncLogsAutoTimer(){
+    if (logsAutoTimer) { clearInterval(logsAutoTimer); logsAutoTimer = null; }
+    var chk = document.getElementById("chkLogsAuto");
+    if (chk && chk.checked) {
+      logsAutoTimer = setInterval(function(){
+        var panel = document.getElementById("panel-logs");
+        if (panel && panel.classList.contains("active")) void refreshLogsPanel();
+      }, 5000);
+    }
+  }
+  document.getElementById("chkLogsAuto").onchange = syncLogsAutoTimer;
+
   async function refreshAll(){
     try {
       var alertas = await loadAlertas();
@@ -534,6 +588,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
 
   refreshAll();
   refreshConfigPanel();
+  syncLogsAutoTimer();
   setInterval(refreshAll, 12000);
 })();
 </script>

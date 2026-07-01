@@ -23,6 +23,11 @@ function limparAntigos(arr, janelaMs) {
 function middleware() {
   return (req, res, next) => {
     const key = chaveIp(req);
+    const ipNorm = String(key).replace(/^::ffff:/, "");
+    // Mesmo computador (browser + agente) — não limitar recovery automático do painel
+    if (ipNorm === "127.0.0.1" || ipNorm === "::1") {
+      return next();
+    }
     let arr = tentativasPorIp.get(key);
     if (!arr) {
       arr = [];

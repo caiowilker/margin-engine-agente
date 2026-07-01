@@ -12,6 +12,7 @@
 [Principal]
 TipoResposta=2
 LogNivel=4
+LogPath=C:\ProgramData\MarginEngine\acbr\logs
 
 [Sistema]
 Nome=MarginEngine-Agente
@@ -50,3 +51,8 @@ CSC=
 [DANFE]
 PathPDF=C:\ProgramData\MarginEngine\acbr\pdf
 TipoDANFE=1
+ImprimeCodigoEan=0
+
+[DANFENFe]
+ExibeEAN=0
+LarguraCodProd=72

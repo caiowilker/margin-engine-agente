@@ -12,6 +12,7 @@ const TIPOS = [
   "CANCELAMENTO",
   "INUTILIZACAO",
   "EPEC",
+  "EVENTO_FISCAL",
 ];
 
 const STATUS = {
@@ -38,6 +39,7 @@ const PRIORIDADE = {
   GERAR_PDF: 4,
   INUTILIZACAO: 5,
   EPEC: 6,
+  EVENTO_FISCAL: 7,
 };
 
 const BACKOFF_MS = [60000, 120000, 300000, 900000, 1800000];
@@ -80,6 +82,9 @@ function migrateSchema() {
       `UPDATE fila_fiscal SET proximo_retry_at = COALESCE(proxima_tentativa, datetime('now'))
        WHERE proximo_retry_at IS NULL`,
     );
+  }
+  if (!names.includes("processando_desde")) {
+    db.exec(`ALTER TABLE fila_fiscal ADD COLUMN processando_desde TEXT`);
   }
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_fila_fiscal_numero_venda ON fila_fiscal(numero_venda);
@@ -387,7 +392,7 @@ async function processarUm(opcoes = {}) {
   if (flag === "processandoFiscal") processandoFiscal = true;
   else processandoPdf = true;
 
-  db.prepare(`UPDATE fila_fiscal SET status = 'PROCESSANDO' WHERE id = ?`).run(job.id);
+  db.prepare(`UPDATE fila_fiscal SET status = 'PROCESSANDO', processando_desde = datetime('now') WHERE id = ?`).run(job.id);
   const handler = handlers[job.tipo];
   let payload;
   try {
@@ -492,14 +497,18 @@ function registrarHandler(tipo, fn) {
 
 function liberarJobsTravados(minutos = null) {
   init();
-  const min = minutos ?? parseInt(process.env.FISCAL_JOB_STALE_MIN || "8", 10);
+  const min = minutos ?? parseInt(process.env.FISCAL_JOB_STALE_MIN || "15", 10);
   const jobs = db
     .prepare(
-      `SELECT id, correlation_id, numero_venda FROM fila_fiscal
-       WHERE tipo = 'EMISSAO' AND status = 'PROCESSANDO'
-         AND datetime(criado_em) < datetime('now', ?)`,
+      `SELECT id, correlation_id, numero_venda, tipo FROM fila_fiscal
+       WHERE status = 'PROCESSANDO'
+         AND (
+           (processando_desde IS NOT NULL AND datetime(processando_desde) < datetime('now', ?))
+           OR (processando_desde IS NULL AND tipo = 'EMISSAO' AND datetime(criado_em) < datetime('now', ?))
+           OR (processando_desde IS NULL AND tipo != 'EMISSAO' AND datetime(criado_em) < datetime('now', '-5 minutes'))
+         )`,
     )
-    .all(`-${min} minutes`);
+    .all(`-${min} minutes`, `-${min} minutes`);
   if (!jobs.length) return 0;
   for (const job of jobs) {
     const msg = `Job travado em PROCESSANDO há mais de ${min} min — aguardando recovery`;
@@ -763,6 +772,28 @@ function obterJobEmissao(correlationId) {
     .get(correlationId);
 }
 
+function consultarStatusEmissaoPorVenda(numeroVenda) {
+  init();
+  const nv = String(numeroVenda || "").trim();
+  if (!nv) {
+    return { correlationId: null, numeroVenda: nv, status: "NAO_ENCONTRADO", erro: null };
+  }
+  const row = obterResultadoPorVenda(nv);
+  if (row?.correlation_id) {
+    return consultarStatusEmissao(row.correlation_id);
+  }
+  const job = buscarJobEmissaoPorVenda(nv);
+  if (job) {
+    return {
+      correlationId: job.correlation_id,
+      numeroVenda: nv,
+      status: job.status,
+      erro: job.erro || null,
+    };
+  }
+  return { correlationId: null, numeroVenda: nv, status: "NAO_ENCONTRADO", erro: null };
+}
+
 function consultarStatusEmissao(correlationId) {
   init();
   const row = db
@@ -850,6 +881,15 @@ function aguardarConclusao(correlationId, timeoutMs = 120000) {
         reject(new Error(job.erro || row?.erro || "Emissão fiscal falhou"));
         return;
       }
+      if (row?.status === "INCERTO" || job?.status === "INCERTO") {
+        const err = new Error(
+          row?.erro || job?.erro || "Emissão incerta — recovery consultará SEFAZ",
+        );
+        err.incerto = true;
+        err.correlationId = correlationId;
+        reject(err);
+        return;
+      }
       if (Date.now() - inicio >= timeoutMs) {
         reject(new Error("Timeout aguardando emissão fiscal na fila"));
         return;
@@ -866,7 +906,7 @@ function dispararProcessamento() {
     let again = true;
     while (again && !filaPausada) {
       again = await processarUm({
-        apenasTipos: ["EMISSAO", "CANCELAMENTO", "CALLBACK_BACKEND"],
+        apenasTipos: ["EMISSAO", "CANCELAMENTO", "CALLBACK_BACKEND", "INUTILIZACAO", "EPEC", "EVENTO_FISCAL"],
         flag: "processandoFiscal",
       });
     }
@@ -884,14 +924,14 @@ function reprocessarIncertos(lerConfigFn) {
   const jobs = db
     .prepare(`SELECT * FROM fila_fiscal WHERE status = 'INCERTO' AND tipo = 'EMISSAO'`)
     .all();
-  if (jobs.length && typeof lerConfigFn === "function") {
-    return recuperarBoot(lerConfigFn);
+  if (!jobs.length) {
+    return Promise.resolve({ reprocessados: 0 });
   }
-  db.prepare(
-    `UPDATE fila_fiscal SET status = 'PENDENTE', proxima_tentativa = datetime('now')
-     WHERE status = 'INCERTO'`,
-  ).run();
-  return Promise.resolve({ reprocessados: jobs.length });
+  if (typeof lerConfigFn !== "function") {
+    log.warn("[fila_fiscal] reprocessarIncertos ignorado — lerConfigFn ausente");
+    return Promise.resolve({ reprocessados: 0, aviso: "lerConfigFn ausente" });
+  }
+  return recuperarBoot(lerConfigFn);
 }
 
 function buscarJobEmissaoPorVenda(numeroVenda) {
@@ -1162,6 +1202,7 @@ module.exports = {
   obterResultadoEmissao,
   obterResultadoPorVenda,
   consultarStatusEmissao,
+  consultarStatusEmissaoPorVenda,
   obterJobEmissao,
   aguardarConclusao,
   reprocessarIncertos,

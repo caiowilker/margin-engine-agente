@@ -115,6 +115,24 @@ function isPdfValid(filePath) {
   return buf.length > 128 && buf.slice(0, 4).toString() === "%PDF";
 }
 
+/** NF-e 55 no painel exige DANFE A4 — cupom térmico (NFC-e) tem página estreita. */
+function pareceDanfeA4(filePath) {
+  if (!isPdfValid(filePath)) return false;
+  const buf = fs.readFileSync(filePath);
+  const head = buf.slice(0, 24576).toString("latin1");
+  const media = head.match(/\/MediaBox\s*\[\s*[\d.]+\s+[\d.]+\s+([\d.]+)/);
+  if (media) return parseFloat(media[1]) > 400;
+  const crop = head.match(/\/CropBox\s*\[\s*[\d.]+\s+[\d.]+\s+([\d.]+)/);
+  if (crop) return parseFloat(crop[1]) > 400;
+  return buf.length > 32000;
+}
+
+function pdfValidoParaModelo(filePath, modeloDocumento) {
+  if (!isPdfValid(filePath)) return false;
+  if (String(modeloDocumento || "65") === "55") return pareceDanfeA4(filePath);
+  return true;
+}
+
 function backupQueuePath() {
   return path.join(PATHS.data || path.join(__dirname, "data"), "backup-pending.jsonl");
 }
@@ -596,6 +614,8 @@ module.exports = {
   lerArquivo,
   lerArquivoBase64,
   isPdfValid,
+  pareceDanfeA4,
+  pdfValidoParaModelo,
   extrairXmlDaResposta,
   extrairQrCodeDoXml,
   portalConsultaNfce,

@@ -52,6 +52,8 @@ function isPermanente(err) {
   if (/csc.*inv[aá]lid/i.test(msg)) return true;
   if (/munic[ií]pio/i.test(msg)) return true;
   if (/dados fiscais incompletos/i.test(msg)) return true;
+  if (/not a valid time|n[aã]o [eé] um(a)? valor v[aá]lido.*time/i.test(msg)) return true;
+  if (/dhEmi|dhSaiEnt|formato de data/i.test(msg) && /inv[aá]lid|valid time/i.test(msg)) return true;
   if (/c[oó]digo ibge/i.test(msg)) return true;
   if (/url-qrcode/i.test(msg)) return true;
   if (/acbrnfeservicos/i.test(msg)) return true;
