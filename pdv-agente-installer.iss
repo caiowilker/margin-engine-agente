@@ -118,25 +118,11 @@ Name: "{group}\Margin Engine — Painel"; Filename: "http://localhost:9100/"
 Name: "{commondesktop}\Margin Engine"; Filename: "http://localhost:9100/"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\node\node.exe"; \
-    Parameters: """{app}\app\scripts\installer-bootstrap.js"" ""{app}\app"" --mode={code:GetBootstrapMode} {code:GetBootstrapFlags}"; \
-    WorkingDir: "{app}\app"; \
-    Flags: runhidden waituntilterminated; \
-    StatusMsg: "Configurando Margin Engine..."; \
-    Environment: "MARGIN_NPM={app}\node\npm.cmd"
-
-Filename: "{cmd}"; \
-    Parameters: "/c start http://localhost:9100"; \
-    Flags: postinstall nowait skipifsilent runhidden shellexec; \
-    Tasks: openpanel; \
-    Description: "Abrir painel do Margin Engine"
+Filename: "{app}\node\node.exe"; Parameters: """{app}\app\scripts\installer-bootstrap.js"" ""{app}\app"" --mode={code:GetBootstrapMode}{code:GetBootstrapFlags} --npm={app}\node\npm.cmd"; WorkingDir: "{app}\app"; Flags: runhidden waituntilterminated; StatusMsg: "Configurando Margin Engine..."
+Filename: "{cmd}"; Parameters: "/c start http://localhost:9100"; Flags: postinstall nowait skipifsilent runhidden shellexec; Tasks: openpanel; Description: "Abrir painel do Margin Engine"
 
 [UninstallRun]
-Filename: "{app}\node\node.exe"; \
-    Parameters: """{app}\app\install-service.js"" --uninstall"; \
-    WorkingDir: "{app}\app"; \
-    Flags: runhidden waituntilterminated; \
-    RunOnceId: "RemoverServicoMarginEngine"
+Filename: "{app}\node\node.exe"; Parameters: """{app}\app\install-service.js"" --uninstall"; WorkingDir: "{app}\app"; Flags: runhidden waituntilterminated; RunOnceId: "RemoverServicoMarginEngine"
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\app\node_modules"

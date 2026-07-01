@@ -15,6 +15,10 @@ const args = process.argv.slice(3);
 const mode = (args.find((a) => a.startsWith("--mode=")) || "--mode=install").split("=")[1];
 const withService = args.includes("--service");
 const withFirewall = args.includes("--firewall") || mode === "install";
+const npmFromArg = args.find((a) => a.startsWith("--npm="));
+if (npmFromArg) {
+  process.env.MARGIN_NPM = npmFromArg.slice("--npm=".length);
+}
 
 process.chdir(appDir);
 process.env.MARGIN_ENGINE_AGENT_ROOT = appDir;
