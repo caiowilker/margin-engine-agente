@@ -58,7 +58,7 @@ Name: "openpanel"; Description: "Abrir o painel local após a instalação (http
 
 [Files]
 Source: "dist\node\*"; DestDir: "{app}\node"; Flags: recursesubdirs createallsubdirs
-Source: "dist\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "node_modules\*,\data\*,daemon\*,frontend-dist\*,.env,homolog-acbrlib\*,test\*,.git\*,RESULTADO-*.md,*.log"
+Source: "dist\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "node_modules\*,data\*,daemon\*,frontend-dist\*,.env,homolog-acbrlib\*,test\*,.git\*,RESULTADO-*.md,*.log"
 Source: "dist\app\acbrlib\data\Schemas\*"; DestDir: "{app}\app\acbrlib\data\Schemas"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "dist\app\acbrlib\data\config\ACBrNFeServicos.ini"; DestDir: "{app}\app\acbrlib\data\config"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "dist\app\.env.example"; DestDir: "{app}\app"; DestName: ".env.example"; Flags: ignoreversion
@@ -66,9 +66,6 @@ Source: "dist\app\frontend-dist\*"; DestDir: "{app}\app\frontend-dist"; Flags: r
 Source: "dist\app\docs\*"; DestDir: "{app}\app\docs"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
 Source: "dist\app\templates\*"; DestDir: "{app}\app\templates"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
 Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
-Source: "dist\acbrlib\*"; DestDir: "{app}\app\acbrlib"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
-Source: "dist\lib\*"; DestDir: "{app}\app\acbrlib\lib"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
-Source: "dist\posprinter\*"; DestDir: "{app}\app\posprinter"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
 
 [Dirs]
 Name: "{app}\app\data"; Permissions: users-modify; Flags: uninsneveruninstall
@@ -210,21 +207,27 @@ begin
   end;
 end;
 
-function UpdateReadyMemo(const Suppressible: Boolean; var NewReadyMemo: String): Boolean;
+function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo, MemoTypeInfo,
+  MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: String): String;
 var
   ModeLabel: String;
 begin
   if BootstrapMode = 'repair' then
-    ModeLabel := 'Reparar instalação existente'
+    ModeLabel := 'Reparar instalacao existente'
   else if BootstrapMode = 'update' then
     ModeLabel := 'Atualizar Margin Engine'
   else
-    ModeLabel := 'Instalação nova';
+    ModeLabel := 'Instalacao nova';
 
-  NewReadyMemo :=
-    'Modo: ' + ModeLabel + #13#10 +
-    'Produto: Margin Engine ' + ExpandConstant('{#MyAppVersion}') + #13#10 +
-    'Pasta: ' + WizardForm.DirEdit.Text + #13#10 +
-    'Dados: ' + ExpandConstant('{#MarginDataRoot}') + ' (preservados na desinstalação)';
-  Result := True;
+  Result := '';
+  if MemoDirInfo <> '' then
+    Result := Result + MemoDirInfo + NewLine + NewLine;
+  if MemoTasksInfo <> '' then
+    Result := Result + MemoTasksInfo + NewLine + NewLine;
+
+  Result := Result +
+    'Modo: ' + ModeLabel + NewLine + NewLine +
+    'Produto: Margin Engine {#MyAppVersion}' + NewLine + NewLine +
+    'Dados: ' + ExpandConstant('{commonappdata}\MarginEngine') +
+    ' (preservados na desinstalacao)';
 end;
