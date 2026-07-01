@@ -23,7 +23,7 @@
 #define MyAppId "B2E2B6B0-5F2A-4B6B-9D2C-1A2B3C4D5E6F"
 
 [Setup]
-AppId={{#MyAppId}}
+AppId={{{#MyAppId}}}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
