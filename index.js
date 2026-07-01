@@ -263,11 +263,11 @@ async function boot() {
   if (fiscalDriver.EMISSAO_FISCAL) {
     acbrNfceSetup.inicializar().then((r) => {
       if (r.pronto || r.ok) {
-        console.log("[ACBr NFC-e] Configuração validada");
+        console.log("[Margin Engine] Configuração fiscal validada");
       } else {
         console.warn(
-          "[ACBr NFC-e] Pendências:",
-          (r.acoes || []).join(" | ") || r.erro || "verifique ACBr Monitor",
+          "[Margin Engine] Pendências fiscais:",
+          (r.acoes || []).join(" | ") || r.erro || "verifique certificado e CSC no painel",
         );
       }
     });
@@ -277,7 +277,7 @@ async function boot() {
     (process.env.FISCAL_BOOT_CANCEL || "false").toLowerCase() === "true";
   if (bootCancel) {
     const cancelados = filaFiscal.cancelarEmissaoPendente(
-      "Cancelado no boot — refaça a emissão após atualizar dados fiscais/ACBr",
+      "Cancelado no boot — refaça a emissão após atualizar dados fiscais no painel",
     );
     if (cancelados > 0) {
       console.log(
@@ -310,7 +310,7 @@ async function boot() {
 async function reiniciarAcbrMonitor() {
   const exe = process.env.ACBR_MONITOR_EXE;
   if (!exe) {
-    console.warn("[Watchdog ACBr] ACBR_MONITOR_EXE não configurado — skip restart");
+    console.warn("[Margin Engine] Monitor fiscal (fallback) não configurado — reinício automático desativado");
     return;
   }
   const procName = process.env.ACBR_MONITOR_PROC || "ACBrMonitor.exe";
@@ -321,7 +321,7 @@ async function reiniciarAcbrMonitor() {
       }, 3000);
     });
   });
-  console.log("[Watchdog ACBr] ACBr Monitor reiniciado");
+  console.log("[Margin Engine] Monitor fiscal (fallback) reiniciado");
 }
 
 const AUTO_UPDATE =
@@ -2358,7 +2358,7 @@ function iniciarServidor() {
       process.exit(1);
     }
     console.log(`\n╔══════════════════════════════════════════╗`);
-    console.log(`║  PDV Margin Engine — Agente Local v1.0  ║`);
+    console.log(`║  Margin Engine — Agente Local v1.0       ║`);
     console.log(`║  ${AGENT_PUBLIC_BASE.padEnd(40)}║`);
     console.log(`╚══════════════════════════════════════════╝\n`);
     try {

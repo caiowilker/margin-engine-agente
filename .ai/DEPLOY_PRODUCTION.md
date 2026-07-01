@@ -2,16 +2,17 @@
 
 ## Checklist
 
-1. Copiar **todos** os `.js` listados em `manifest.json` para `C:\Program Files\PDV Margin Engine\app\`
-2. Copiar `manifest.json`
-3. Atualizar `.env`: `AGENT_TOKEN_REQUIRED=true`, `FISCAL_BOOT_CANCEL=false`
-4. Rebuild front (`margin-engine-front`) — correção `correlationId` deduplicado
-5. Reiniciar serviço Windows do agente
-6. Validar: `npm test` no repo
-7. Validar: `GET /diagnostico/metricas` com `X-Agent-Token`
-8. Testar venda: carrinho libera < 2s; NFC-e em background
-9. Confirmar `integrity_check` no log de boot
-10. Confirmar fila fiscal vazia ou jobs recuperados após reboot
+1. Preferir **`Margin-Engine-Setup-1.0.0.exe /MODE=update`** (preserva `%ProgramData%\MarginEngine`)
+2. Alternativa manual: copiar arquivos listados em `manifest.json` para `%ProgramFiles%\Margin Engine\app\`
+3. Copiar `manifest.json`
+4. Atualizar `.env`: `AGENT_TOKEN_REQUIRED=true`, `FISCAL_BOOT_CANCEL=false`
+5. Rebuild front (`margin-engine-front`) — correção `correlationId` deduplicado
+6. Reiniciar serviço Windows do agente
+7. Validar: `npm test` no repo
+8. Validar: `GET /diagnostico/metricas` com `X-Agent-Token`
+9. Testar venda: carrinho libera < 2s; NFC-e em background
+10. Confirmar `integrity_check` no log de boot
+11. Confirmar fila fiscal vazia ou jobs recuperados após reboot
 
 ## Migrations SQLite (automáticas no boot)
 

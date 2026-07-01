@@ -5,7 +5,7 @@
 #Requires -Version 5.1
 param(
     [string]$Src = "C:\build\pdv-agente\dist\app",
-    [string]$Dest = "C:\Program Files\PDV Margin Engine\app"
+    [string]$Dest = "${env:ProgramFiles}\Margin Engine\app"
 )
 
 $ErrorActionPreference = "Stop"

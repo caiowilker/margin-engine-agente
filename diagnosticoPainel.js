@@ -137,7 +137,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
   <section id="panel-fiscal" class="panel">
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-        <h3 style="margin:0">Preflight completo (ACBr + certificado + CSC)</h3>
+        <h3 style="margin:0">Verificação fiscal completa (certificado + CSC)</h3>
         <button type="button" class="btn btn-secondary" data-action="preflight-refresh">Atualizar preflight</button>
       </div>
       <div id="preflightBody" style="margin-top:12px;color:var(--muted);font-size:.85rem">Carregando...</div>
@@ -165,7 +165,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
         </label>
         <label style="display:grid;gap:4px;font-size:.82rem">
           <span>Caminho certificado A1 (.pfx)</span>
-          <input id="cfgCertPath" placeholder="C:\\MarginEngine\\cert\\cert.pfx ou ..\\cert\\cert.pfx" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text)"/>
+          <input id="cfgCertPath" placeholder="%ProgramData%\\MarginEngine\\cert\\cert.pfx" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text)"/>
         </label>
         <label style="display:grid;gap:4px;font-size:.82rem">
           <span>Senha do certificado</span>
@@ -196,7 +196,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
 
   <section id="panel-impressora" class="panel">
     <div class="card">
-      <h3 style="margin:0 0 8px">ACBr PosPrinter — detecção automática</h3>
+      <h3 style="margin:0 0 8px">Impressora térmica — detecção automática</h3>
       <p class="sub" style="margin:0 0 14px">USB, spooler Windows (RAW) ou rede TCP (porta 9100). O agente detecta ao iniciar; use os botões abaixo para forçar agora.</p>
       <div id="printerStatus" style="margin-bottom:12px;font-size:.82rem;color:var(--muted)">Carregando...</div>
       <div class="actions">
@@ -219,7 +219,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
           </label>
         </div>
       </div>
-      <p class="sub" style="margin:8px 0">Agente + ACBrLib — arquivo em <code style="color:var(--info)">ProgramData\\MarginEngine\\acbr\\logs\\fiscal-trace.log</code></p>
+      <p class="sub" style="margin:8px 0">Logs do Margin Engine em <code style="color:var(--info)">%ProgramData%\\MarginEngine\\Logs\\</code></p>
       <div id="logsMeta" style="font-size:.75rem;color:var(--muted);margin-bottom:8px">Carregando...</div>
       <pre id="logsBody" class="log-box">Carregando logs...</pre>
       <div id="msgLogs" class="msg"></div>
@@ -331,7 +331,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
       metricCard("Fila pendente", a.pendentes ?? 0) +
       metricCard("Incertos", a.incertos ?? 0, "recovery automático") +
       metricCard("Recuperando", a.recuperando ?? 0) +
-      metricCard("ACBr", a.acbr || "?", a.acbrAtualizadoEm || "") +
+      metricCard("Emissor fiscal", a.acbr || "?", a.acbrAtualizadoEm || "") +
       metricCard("Falhas 24h", a.falhasUltimas24h ?? 0) +
       metricCard("Taxa sucesso", (a.metricas && a.metricas.taxaSucessoPercent != null ? a.metricas.taxaSucessoPercent + "%" : "—"));
     var rows = (a.ultimasEmissoes || []).map(function(e){
@@ -425,7 +425,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
       var detLabel = typeof d === "string" ? d : (d.nome || (d.host ? d.host+":"+(d.porta||d.port||"9100") : "") || "—");
       lines.push("Detectada: <strong>"+detLabel+"</strong>");
     }
-    if (st.driver && st.driver.mode) lines.push("Modo ACBr: <strong>"+st.driver.mode+"</strong>");
+    if (st.driver && st.driver.mode) lines.push("Modo emissor: <strong>"+st.driver.mode+"</strong>");
     document.getElementById("printerStatus").innerHTML = lines.join(" · ");
   }
 
@@ -499,7 +499,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
       var src = data.sources || {};
       document.getElementById("logsMeta").textContent =
         "Total: " + (data.total || lines.length) + " · trace: " + (src.trace || 0) +
-        " · ACBr: " + (src.acbr || 0) + " · máx " + (data.maxLines || 500);
+        " · emissor: " + (src.acbr || 0) + " · máx " + (data.maxLines || 500);
     } catch(e){
       document.getElementById("logsBody").textContent = "Erro: " + e.message;
       document.getElementById("logsMeta").textContent = "";

@@ -18,14 +18,26 @@ Documento para **técnico de campo**. Não exige conhecimento de programação.
 
 ### Sequência — Windows (recomendado)
 
-1. Copie a pasta `agente-local` para o PC do caixa (ex.: `C:\Program Files\PDV Margin Engine\app\`).
-2. Clique com botão direito em **`setup.bat`** → **Executar como administrador**.
-3. Aguarde: instala Node (se necessário), roda `npm install`, cria `.env`, instala serviço Windows.
-4. Abra o navegador em **http://localhost:9100**.
-5. Digite o **código de ativação** gerado no painel administrativo.
+1. Execute **`Margin-Engine-Setup-1.0.0.exe`** como administrador (instalação, atualização ou reparo).
+2. No wizard, confirme o diretório padrão (`%ProgramFiles%\Margin Engine`) e marque **Registrar como serviço Windows**.
+3. Ao finalizar, abra **http://localhost:9100** (atalho criado pelo instalador).
+4. Digite o **código de ativação** gerado no painel administrativo.
+5. Configure certificado, CSC e impressora **no painel** (se necessário).
 6. Confirme que a página mostra o agente **online**.
 
-### Sequência — manual (Linux ou Windows sem setup.bat)
+Dados persistentes ficam em **`%ProgramData%\MarginEngine`** (não removidos na desinstalação).
+
+### Sequência — desenvolvimento / manual (Linux ou Windows sem instalador)
+
+1. Clone ou copie o repositório `agente-local` para a máquina.
+2. Execute `npm install`, copie `.env.example` → `.env`, ajuste porta e fiscal se necessário.
+3. `npm run manifest` e `npm run predeploy`.
+4. `node install-service.js` (Windows, como admin) ou `npm start` (foreground).
+5. Ative em **http://localhost:9100**.
+
+**Não use caminhos fixos** — o agente resolve pastas via `DirectoryManager` (`%ProgramData%\MarginEngine` no Windows).
+
+### Sequência — manual legado (setup.bat)
 
 ```bash
 cd agente-local
@@ -44,12 +56,18 @@ Depois acesse **http://localhost:9100** e ative com o código do painel.
 
 ## 2. Atualização de versão
 
-### Como atualizar sem perder dados
+### Como atualizar sem perder dados (recomendado)
 
-1. **Pare o serviço** do agente (Serviços Windows → "PDV Margin Engine Agent" → Parar).
-2. **Faça backup** da pasta `data/` (veja seção 6).
-3. Copie os arquivos novos **por cima** dos antigos, **exceto**:
-   - Não apague `data/` (bancos, config, logs).
+1. Execute **`Margin-Engine-Setup-1.0.0.exe /MODE=update`** como administrador (ou o mesmo instalador sobre a versão existente).
+2. O bootstrap preserva **`%ProgramData%\MarginEngine`** (bancos, config, logs, fiscal).
+3. Ao finalizar, confira **http://localhost:9100/diagnostico/dashboard** → `manifestOk: true`.
+
+### Atualização manual (desenvolvimento)
+
+1. **Pare o serviço** do agente (Serviços Windows → **Margin Engine** → Parar).
+2. **Faça backup** de `%ProgramData%\MarginEngine` (veja seção 6).
+3. Copie os arquivos novos **por cima** dos antigos em `%ProgramFiles%\Margin Engine\app\`, **exceto**:
+   - Não apague dados em ProgramData.
    - Não sobrescreva `.env` se já estiver configurado — compare com `.env.example` e adicione só variáveis novas.
 4. Na pasta do agente, execute:
 
@@ -88,8 +106,8 @@ Acesse **http://localhost:9100/diagnostico/dashboard** no navegador do caixa. A 
 |-----------|-------------|
 | **statusGeral: ok** | Tudo normal — nenhuma ação necessária |
 | **statusGeral: atencao** | Algo merece olhar (fila crescendo, disco baixo, incertos) |
-| **statusGeral: critico** | ACBr offline, disco cheio ou muitos jobs falhos — ação imediata |
-| **ACBr** | Conexão com ACBr Monitor (porta 9200). Offline = NFC-e não emite |
+| **statusGeral: critico** | Emissor fiscal offline, disco cheio ou muitos jobs falhos — ação imediata |
+| **Emissor fiscal** | Conexão com módulo fiscal (ACBrLib ou monitor fallback). Offline = documentos na fila |
 | **fila fiscal** | Jobs pendentes de emissão. Zero ou poucos = normal |
 | **incertos** | Emissões com resultado desconhecido (timeout SEFAZ). Recovery tenta resolver |
 | **manifestOk** | Integridade dos arquivos do agente |
@@ -100,11 +118,11 @@ Acesse **http://localhost:9100/diagnostico/dashboard** no navegador do caixa. A 
 | Situação | Ação |
 |----------|------|
 | Agente offline (front não conecta) | Ver seção 5 — porta, serviço, `.env` |
-| ACBr offline | Reiniciar ACBr Monitor; se persistir, suporte |
+| Emissor fiscal offline | Reiniciar serviço Margin Engine; verificar certificado/CSC no painel; se persistir, suporte |
 | 1–3 jobs incertos | Aguardar 30 min (recovery automático) |
 | Mais de 5 incertos ou > 4h em INCERTO | Forçar recovery (abaixo) ou suporte |
 | Disco crítico | Liberar espaço (seção 5); se não resolver, suporte |
-| Vendas OK mas NFC-e não sai | Verificar ACBr + `EMISSAO_FISCAL=true` |
+| Vendas OK mas NFC-e não sai | Verificar painel fiscal + `EMISSAO_FISCAL=true`; venda segue com cupom não fiscal (fail-safe) |
 | Erro após update (`manifestOk: false`) | Rodar `npm run manifest` e reiniciar serviço |
 | Token inválido (401) | Reativar terminal pelo painel |
 
@@ -272,19 +290,18 @@ O arquivo `.env` do agente serve só para:
 
 ## 4. Troubleshooting
 
-### ACBr offline
+### Emissor fiscal offline
 
 **O que fazer:**
-1. Abra o **ACBr Monitor** manualmente.
-2. Verifique certificado A1 válido e CSC configurado.
-3. Teste: menu do ACBr → Status do serviço SEFAZ.
-4. Confirme `.env`: `ACBR_HOST=127.0.0.1`, `ACBR_PORT=9200`.
-5. Reinicie o agente após ACBr voltar.
+1. Abra o **painel** em http://localhost:9100/diagnostico/painel e verifique status do módulo fiscal.
+2. Confirme certificado A1 válido e CSC no painel (ou variáveis `.env`).
+3. Se usar monitor fallback: reinicie o processo configurado em `ACBR_MONITOR_EXE`.
+4. Reinicie o serviço **Margin Engine** após correção.
 
 **O que NÃO fazer:**
-- Não reinstalar o agente inteiro por causa de ACBr offline.
-- Não apagar `data/fila_fiscal.db` — perde fila de emissão.
-- Não emitir NFC-e duplicada manualmente pelo ACBr para a mesma venda.
+- Não reinstalar o agente inteiro por falha fiscal temporária.
+- Não apagar `%ProgramData%\MarginEngine\fila\fila_fiscal.db` — perde fila de emissão.
+- Não emitir documento duplicado manualmente para a mesma venda.
 
 ### Job preso em INCERTO há mais de 4 horas
 
@@ -300,22 +317,23 @@ O arquivo `.env` do agente serve só para:
 
 | Local | Conteúdo |
 |-------|----------|
-| `C:\ProgramData\MarginEngine\acbr\xml\` | XMLs autorizados |
-| `C:\ProgramData\MarginEngine\acbr\pdf\` | DANFC-e / DANFE PDF (`{chave}-danfce.pdf` ou `{chave}-danfe.pdf`) |
-| `C:\ProgramData\MarginEngine\acbr\backup\` | Backups fiscais |
-| `agente-local\data\` | Bancos SQLite e logs |
+| `%ProgramData%\MarginEngine\Fiscal\XML\` | XMLs autorizados |
+| `%ProgramData%\MarginEngine\Fiscal\PDF\` | DANFC-e / DANFE PDF |
+| `%ProgramData%\MarginEngine\Backup\` | Backups fiscais |
+| `%ProgramData%\MarginEngine\data\` | Bancos SQLite |
+| `%ProgramData%\MarginEngine\Logs\` | Logs do agente |
 
 **Como liberar:**
 1. Confirme que XMLs antigos já foram transmitidos/arquivados no ERP.
 2. O purge automático remove arquivos com mais de 180 dias (configurável via `.env`).
 3. Para emergência: mova XML/PDF antigos para HD externo (não delete sem autorização fiscal).
-4. Limpe logs antigos em `data/logs/` (mantenha os últimos 7 dias se possível).
+4. Limpe logs antigos em `%ProgramData%\MarginEngine\Logs\` (mantenha os últimos 7 dias se possível).
 
 ### Agente não sobe
 
 1. **Porta ocupada:** outro processo usando 9100 — altere `PORT` no `.env` ou pare o conflito.
 2. **`.env` inválido:** compare com `.env.example`; `PORT` e `ACBR_PORT` devem ser números.
-3. **Integridade do banco:** rode `npm run predeploy` — falha em `integrity_check` indica banco corrompido; restaure backup de `data/`.
+3. **Integridade do banco:** rode `npm run predeploy` — falha em `integrity_check` indica banco corrompido; restaure backup de `%ProgramData%\MarginEngine\data\`.
 4. **Serviço Windows:** verifique Event Viewer / log do serviço; tente `npm start` manual no terminal para ver erro.
 
 ---
@@ -360,31 +378,32 @@ Navegadores modernos exigem o header `Access-Control-Allow-Private-Network: true
 
 ### Onde ficam os dados
 
-| Arquivo / pasta | Função |
-|-----------------|--------|
-| `data/config.json` | Configuração do PDV (sem token em texto puro) |
-| `data/fila.db` | Fila offline de vendas + EPEC |
-| `data/fila_fiscal.db` | Fila de emissão NFC-e |
+Todos os dados persistentes ficam em **`%ProgramData%\MarginEngine`** (Windows) ou no caminho definido por `MARGIN_ENGINE_ROOT`.
+
+| Arquivo / pasta (relativo à raiz) | Função |
+|-----------------------------------|--------|
+| `Config/config.json` | Configuração do PDV (sem token em texto puro) |
+| `fila/fila.db` | Fila offline de vendas + EPEC |
+| `fila/fila_fiscal.db` | Fila de emissão NFC-e |
 | `data/fiscal_metrics.db` | Métricas de performance |
 | `data/audit.db` | Log de auditoria (operações sensíveis) |
-| `data/logs/` | Logs do agente |
-| `C:\ProgramData\MarginEngine\acbr\xml\` | XMLs fiscais |
-| `C:\ProgramData\MarginEngine\acbr\pdf\` | PDFs DANFC-e |
+| `Logs/` | Logs do agente (LoggingService) |
+| `Fiscal/XML/` | XMLs fiscais |
+| `Fiscal/PDF/` | PDFs DANFC-e |
 | Credenciais | Windows Credential Manager (token do backend) |
 
 ### Backup manual
 
 1. Pare o serviço do agente.
-2. Copie a pasta **`data/`** inteira para pendrive ou nuvem.
-3. Copie **`C:\ProgramData\MarginEngine\`** (ou `$MARGIN_ENGINE_ROOT`).
-4. Anote a versão: `GET http://localhost:9100/diagnostico/saude` → campo `versao`.
+2. Copie **`%ProgramData%\MarginEngine`** inteira para pendrive ou nuvem.
+3. Anote a versão: `GET http://localhost:9100/diagnostico/saude` → campo `versao`.
 
 ### Restaurar em troca de máquina
 
-1. Instale o agente na máquina nova (seção 1).
+1. Instale o Margin Engine na máquina nova (seção 1).
 2. Pare o serviço.
-3. Restaure `data/` e `ProgramData\MarginEngine\` nos mesmos caminhos.
-4. Rode `npm run manifest` na pasta do agente.
+3. Restaure `%ProgramData%\MarginEngine` no mesmo caminho padrão.
+4. Rode `npm run manifest` na pasta do app (`%ProgramFiles%\Margin Engine\app`).
 5. Reative pelo painel **somente se** o token/cofre não foi migrado (Windows Credential Manager não migra entre PCs — nesse caso, gere novo código de ativação).
 6. Inicie o serviço e confirme `manifestOk: true` no dashboard.
 

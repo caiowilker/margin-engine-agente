@@ -26,7 +26,7 @@ const { execSync, exec } = require("child_process");
 
 // ── Banner ────────────────────────────────────────────────────────────────────
 console.log("\n╔══════════════════════════════════════════════╗");
-console.log("║   PDV Margin Engine — Instalador v4.0        ║");
+console.log("║   Margin Engine — Serviço do agente local    ║");
 console.log("╚══════════════════════════════════════════════╝\n");
 
 // ── Verifica Node.js ──────────────────────────────────────────────────────────
@@ -73,11 +73,13 @@ if (!fs.existsSync(nodeModules)) {
   console.log("✓ Dependências já instaladas");
 }
 
-// ── Cria diretório de dados ───────────────────────────────────────────────────
-const dataDir = path.join(__dirname, "data");
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-  console.log("✓ Diretório data/ criado");
+// ── Diretórios de dados (ProgramData via DirectoryManager) ───────────────────
+const { getDirectoryManager } = require("./runtime/directoryManager");
+try {
+  getDirectoryManager().ensureAll();
+  console.log("✓ Diretórios Margin Engine preparados");
+} catch (err) {
+  console.warn("⚠ Não foi possível preparar todos os diretórios:", err.message);
 }
 
 // ── Cria .env a partir do .env.example se não existir ────────────────────────
@@ -122,7 +124,7 @@ if (!Service) {
 
 // ── Configura serviço ─────────────────────────────────────────────────────────
 const svc = new Service({
-  name: "PDV Margin Engine",
+  name: "Margin Engine",
   description:
     "Agente local do Margin Engine — impressão, fila offline e serviços do PDV.",
   script: path.join(__dirname, "index.js"),
@@ -160,7 +162,7 @@ svc.on("alreadyinstalled", () => {
 });
 
 svc.on("uninstall", () => {
-  console.log("✓ Serviço PDV Margin Engine removido.");
+  console.log("✓ Serviço Margin Engine removido.");
 });
 
 svc.on("start", () => {
@@ -177,9 +179,9 @@ svc.on("error", (e) => {
 
 // ── Executar ──────────────────────────────────────────────────────────────────
 if (uninstall) {
-  console.log("\nRemovendo serviço PDV Margin Engine...");
+  console.log("\nRemovendo serviço Margin Engine...");
   svc.uninstall();
 } else {
-  console.log("\nInstalando serviço PDV Margin Engine...");
+  console.log("\nInstalando serviço Margin Engine...");
   svc.install();
 }
