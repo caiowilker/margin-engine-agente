@@ -1,38 +1,29 @@
 ; ============================================================
-; PDV Margin Engine — Instalador do Agente Local v1.0 (Inno Setup)
+; Margin Engine — Instalador Enterprise (Inno Setup 6+)
 ;
-; Sincronize MyAppVersion com dist\app\package.json (agente-local = 1.0.0).
-; Saída: output\PDV-Agente-Setup-<versão>.exe
+; Wizard: Bem-vindo → Licença → Diretório → Atalhos → Instalar → Finalizar
+; Linguagem do produto: apenas "Margin Engine" (sem termos internos).
 ;
-; Margin Platform 1.0 (wizard enxuto):
-;   - Fiscal: ACBrLib Pro embutido (DLL em app\acbrlib\lib\) — sem pergunta de caminho
-;   - Impressão: ACBrPosPrinter embutido — porta USB/COM na última tela
-;   - ACBr Monitor / ESC/POS: só via .env pós-instalação (suporte avançado)
+; Modos (mesmo executável):
+;   Instalar   — padrão
+;   Reparar    — /MODE=repair
+;   Atualizar  — /MODE=update ou upgrade automático
+;   Desinstalar — /MODE=uninstall
 ;
-; Pré-requisito de build (Windows):
-;   1. Copiar agente-local → dist\app\ (sem node_modules, .env, data\ do agente, test\, homolog-acbrlib\)
-;      IMPORTANTE: manter acbrlib\data\Schemas\ (XSDs NFC-e/NFe) — não confundir com app\data\ runtime
-;   2. Copiar Node.js portátil x64 → dist\node\
-;   3. (Opcional) DLLs extras → dist\acbrlib\lib\ e dist\posprinter\lib\
-;   4. Compilar este .iss no Inno Setup 6+
-;
-; Estrutura esperada em dist\app\ (cópia do repositório agente-local):
-;   acbrlib\lib\ACBrNFe64.dll + deps + data\Schemas + data\config\
-;   posprinter\lib\ACBrPosPrinter64.dll + deps
-;   fiscal\, print\, scripts\, templates\, index.js, package.json, …
-;
-; Dados em ProgramData\MarginEngine NUNCA são apagados (uninsneveruninstall).
+; Build: npm run sync:windows-build → compile-installer.ps1
+; Saída: output\Margin-Engine-Setup-<versão>.exe
 ; ============================================================
 
-#define MyAppName "PDV Margin Engine"
+#define MyAppName "Margin Engine"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Margin Engine"
 #define MyAppURL "https://marginengine.com.br"
-#define MyInstallDir "PDV Margin Engine"
+#define MyInstallDir "Margin Engine"
 #define MarginDataRoot "{commonappdata}\MarginEngine"
+#define MyAppId "B2E2B6B0-5F2A-4B6B-9D2C-1A2B3C4D5E6F"
 
 [Setup]
-AppId={{B2E2B6B0-5F2A-4B6B-9D2C-1A2B3C4D5E6F}}
+AppId={{#MyAppId}}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
@@ -42,33 +33,36 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyInstallDir}
 DefaultGroupName={#MyAppName}
-DisableProgramGroupPage=yes
+DisableProgramGroupPage=no
 OutputDir=output
-OutputBaseFilename=PDV-Agente-Setup-{#MyAppVersion}
+OutputBaseFilename=Margin-Engine-Setup-{#MyAppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=admin
 WizardStyle=modern
+LicenseFile=LICENSE.txt
+UninstallDisplayName={#MyAppName}
+SetupIconFile=compiler:SetupClassicIcon.ico
+ChangesEnvironment=no
+MinVersion=10.0
 
 [Languages]
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 
 [Tasks]
-Name: "installservice"; Description: "Registrar e iniciar o agente como serviço Windows"; GroupDescription: "Serviço:"; Flags: checkedonce
+Name: "desktopicon"; Description: "Criar atalho do Margin Engine na Área de Trabalho"; GroupDescription: "Atalhos:"; Flags: unchecked
+Name: "installservice"; Description: "Registrar e iniciar o Margin Engine como serviço Windows"; GroupDescription: "Serviço:"; Flags: checkedonce
 Name: "openpanel"; Description: "Abrir o painel local após a instalação (http://localhost:9100)"; GroupDescription: "Finalização:"; Flags: checkedonce
 
 [Files]
-; ── Node.js portátil ──
 Source: "dist\node\*"; DestDir: "{app}\node"; Flags: recursesubdirs createallsubdirs
 
-; ── Agente (cópia completa de agente-local) ──
 Source: "dist\app\*"; DestDir: "{app}\app"; \
     Flags: ignoreversion recursesubdirs createallsubdirs; \
     Excludes: "node_modules\*,\data\*,daemon\*,frontend-dist\*,.env,homolog-acbrlib\*,test\*,.git\*,RESULTADO-*.md,*.log"
 
-; XSDs ACBr (obrigatório — erro -10 sem eles). Cópia explícita: não depender só do recursesubdirs.
 Source: "dist\app\acbrlib\data\Schemas\*"; DestDir: "{app}\app\acbrlib\data\Schemas"; \
     Flags: recursesubdirs createallsubdirs ignoreversion
 
@@ -87,363 +81,180 @@ Source: "dist\app\docs\*"; DestDir: "{app}\app\docs"; \
 Source: "dist\app\templates\*"; DestDir: "{app}\app\templates"; \
     Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
 
-; ── ACBrLib NFe (overlay opcional do build) ──
+Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
+
 Source: "dist\acbrlib\*"; DestDir: "{app}\app\acbrlib"; \
     Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
 
-; Legado: dist\lib\ → acbrlib\lib\
 Source: "dist\lib\*"; DestDir: "{app}\app\acbrlib\lib"; \
     Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
 
-; ── ACBrPosPrinter (overlay opcional) ──
 Source: "dist\posprinter\*"; DestDir: "{app}\app\posprinter"; \
     Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
 
 [Dirs]
 Name: "{app}\app\data"; Permissions: users-modify; Flags: uninsneveruninstall
-Name: "{app}\app\data\logs"; Permissions: users-modify; Flags: uninsneveruninstall
-Name: "{app}\app\acbrlib\data\config"; Permissions: users-modify; Flags: uninsneveruninstall
-; Schemas (XSD): somente leitura — instalados via [Files]; sem Permissions (users-readonly não existe no Inno Setup)
-Name: "{app}\app\posprinter\data\config"; Permissions: users-modify; Flags: uninsneveruninstall
-
 Name: "{#MarginDataRoot}"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\cert"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\Logs"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\Config"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\Backup"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\Fiscal"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\Fiscal\XML"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\Fiscal\PDF"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\Temp"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\Cache"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\Diagnostics"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\acbr"; Permissions: users-modify; Flags: uninsneveruninstall
-Name: "{#MarginDataRoot}\acbr\config"; Permissions: users-modify; Flags: uninsneveruninstall
-Name: "{#MarginDataRoot}\acbr\schemas"; Permissions: users-modify; Flags: uninsneveruninstall
-Name: "{#MarginDataRoot}\acbr\schemas\NFe"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\acbr\xml"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\acbr\pdf"; Permissions: users-modify; Flags: uninsneveruninstall
-Name: "{#MarginDataRoot}\acbr\cancelamentos"; Permissions: users-modify; Flags: uninsneveruninstall
-Name: "{#MarginDataRoot}\acbr\backup"; Permissions: users-modify; Flags: uninsneveruninstall
-Name: "{#MarginDataRoot}\acbr\entrada"; Permissions: users-modify; Flags: uninsneveruninstall
-Name: "{#MarginDataRoot}\acbr\saida"; Permissions: users-modify; Flags: uninsneveruninstall
-Name: "{#MarginDataRoot}\acbr\ini"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\acbr\logs"; Permissions: users-modify; Flags: uninsneveruninstall
-Name: "{#MarginDataRoot}\fila"; Permissions: users-modify; Flags: uninsneveruninstall
-Name: "{#MarginDataRoot}\spool"; Permissions: users-modify; Flags: uninsneveruninstall
-Name: "{#MarginDataRoot}\impressao"; Permissions: users-modify; Flags: uninsneveruninstall
-Name: "{#MarginDataRoot}\temp"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\acbr\config"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\data"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\fila"; Permissions: users-modify; Flags: uninsneveruninstall
+
+[Icons]
+Name: "{group}\Margin Engine — Painel"; Filename: "http://localhost:9100/"
+Name: "{commondesktop}\Margin Engine"; Filename: "http://localhost:9100/"; Tasks: desktopicon
 
 [Run]
-; 1. .env inicial
-Filename: "{cmd}"; \
-    Parameters: "/c if not exist ""{app}\app\.env"" copy /Y ""{app}\app\.env.example"" ""{app}\app\.env"""; \
-    WorkingDir: "{app}\app"; \
-    Flags: runhidden; \
-    StatusMsg: "Configurando ambiente (.env)..."
-
-; 2. Config fiscal (wizard → fiscal-install.json)
 Filename: "{app}\node\node.exe"; \
-    Parameters: """{app}\app\scripts\installer-apply-fiscal-config.js"" ""{app}\app"" ""{tmp}\fiscal-install.json"""; \
+    Parameters: """{app}\app\scripts\installer-bootstrap.js"" ""{app}\app"" --mode={code:GetBootstrapMode} {code:GetBootstrapFlags}"; \
     WorkingDir: "{app}\app"; \
     Flags: runhidden waituntilterminated; \
-    StatusMsg: "Aplicando configuração fiscal (ACBrLib / certificado / CSC)..."
-
-; 3. Config impressora (wizard → print-install.json)
-Filename: "{app}\node\node.exe"; \
-    Parameters: """{app}\app\scripts\installer-apply-print-config.js"" ""{app}\app"" ""{tmp}\print-install.json"""; \
-    WorkingDir: "{app}\app"; \
-    Flags: runhidden waituntilterminated; \
-    StatusMsg: "Aplicando configuração da impressora (ACBrPosPrinter)..."
-
-; 4. Dependências npm
-Filename: "{app}\node\npm.cmd"; \
-    Parameters: "ci --omit=dev"; \
-    WorkingDir: "{app}\app"; \
-    Flags: runhidden waituntilterminated; \
-    StatusMsg: "Instalando dependências Node.js (1–3 min)..."
-
-Filename: "{app}\node\npm.cmd"; \
-    Parameters: "rebuild better-sqlite3"; \
-    WorkingDir: "{app}\app"; \
-    Flags: runhidden waituntilterminated; \
-    StatusMsg: "Compilando módulo nativo SQLite..."
-
-Filename: "{app}\node\npm.cmd"; \
-    Parameters: "run manifest"; \
-    WorkingDir: "{app}\app"; \
-    Flags: runhidden waituntilterminated; \
-    StatusMsg: "Gerando manifest de integridade..."
-
-Filename: "{cmd}"; \
-    Parameters: "/c cd /d ""{app}\app"" && ""{app}\node\npm.cmd"" run predeploy > ""{app}\app\data\predeploy-install.log"" 2>&1 || exit /b 0"; \
-    Flags: runhidden waituntilterminated; \
-    StatusMsg: "Verificando instalação (pre-deploy)..."
-
-Filename: "{app}\node\node.exe"; \
-    Parameters: """{app}\app\install-service.js"""; \
-    WorkingDir: "{app}\app"; \
-    Flags: runhidden waituntilterminated; \
-    Tasks: installservice; \
-    StatusMsg: "Registrando serviço do Windows..."
+    StatusMsg: "Configurando Margin Engine..."; \
+    Environment: "MARGIN_NPM={app}\node\npm.cmd"
 
 Filename: "{cmd}"; \
     Parameters: "/c start http://localhost:9100"; \
     Flags: postinstall nowait skipifsilent runhidden shellexec; \
     Tasks: openpanel; \
-    Description: "Abrir painel do agente"
+    Description: "Abrir painel do Margin Engine"
 
 [UninstallRun]
 Filename: "{app}\node\node.exe"; \
     Parameters: """{app}\app\install-service.js"" --uninstall"; \
     WorkingDir: "{app}\app"; \
     Flags: runhidden waituntilterminated; \
-    RunOnceId: "RemoverServicoPDV"
+    RunOnceId: "RemoverServicoMarginEngine"
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\app\node_modules"
 Type: filesandordirs; Name: "{app}\app\daemon"
 
 [Messages]
-brazilianportuguese.WelcomeLabel2=Este instalador configura o Agente Local do PDV Margin Engine no caixa.%n%nO agente conecta impressora e emissão fiscal ao navegador do PDV. As bibliotecas ACBr (NFC-e e impressora) já vêm incluídas — não é necessário instalar ACBr Monitor nem copiar DLLs manualmente.%n%nNa sequência você pode informar certificado A1 e CSC (se emitir NFC-e) e a porta da impressora térmica.%n%nDados em ProgramData\MarginEngine não são removidos na desinstalação.
+brazilianportuguese.WelcomeLabel2=Este assistente instala o **Margin Engine** no ponto de venda.%n%nO agente local conecta impressão, documentos fiscais e operação offline ao navegador do PDV.%n%nOs dados do caixa em ProgramData\MarginEngine **não são removidos** na desinstalação.%n%nPara reparar ou atualizar uma instalação existente, execute o mesmo instalador com /MODE=repair ou /MODE=update.
+brazilianportuguese.FinishedLabel=O Margin Engine foi instalado no computador.%n%nNa próxima tela você verá o resultado do diagnóstico rápido.%n%nAbra o painel em http://localhost:9100 para ativar o terminal.
 
 [Code]
 var
-  FiscalEnablePage: TInputOptionWizardPage;
-  CertFilePage: TInputFileWizardPage;
-  FiscalAmbientePage: TInputOptionWizardPage;
-  FiscalParamsPage: TInputQueryWizardPage;
-  PrintParamsPage: TInputQueryWizardPage;
+  BootstrapMode: String;
 
-function JsonEscape(const S: String): String;
+function GetModeParam: String;
+begin
+  Result := LowerCase(Trim(ExpandConstant('{param:MODE|}')));
+end;
+
+function InitializeSetup: Boolean;
 var
-  I: Integer;
-  C: String;
-begin
-  Result := '';
-  for I := 1 to Length(S) do
-  begin
-    C := S[I];
-    if C = '\' then
-      Result := Result + '\\'
-    else if C = '"' then
-      Result := Result + '\"'
-    else if Ord(C[1]) < 32 then
-      Result := Result + ' '
-    else
-      Result := Result + C;
-  end;
-end;
-
-function FiscalEmissaoAtiva: Boolean;
-begin
-  Result := (FiscalEnablePage.SelectedValueIndex = 0);
-end;
-
-function AmbienteSefazValor: String;
-begin
-  if FiscalAmbientePage.SelectedValueIndex = 1 then
-    Result := 'producao'
-  else
-    Result := 'homologacao';
-end;
-
-procedure InitializeWizard;
-begin
-  FiscalEnablePage := CreateInputOptionPage(
-    wpSelectTasks,
-    'Emissão fiscal',
-    'Este caixa vai emitir NFC-e / NF-e na SEFAZ?',
-    'O Agente Margin Engine usa bibliotecas fiscais já incluídas no instalador. ' +
-    'Com emissão desligada o PDV opera cupom não fiscal (sem certificado).',
-    True, False);
-  FiscalEnablePage.Add('Sim — emitir NFC-e/NF-e (informar certificado A1 e CSC)');
-  FiscalEnablePage.Add('Não — cupom não fiscal (padrão para teste)');
-  FiscalEnablePage.Values[1] := True;
-
-  CertFilePage := CreateInputFilePage(
-    FiscalEnablePage.ID,
-    'Certificado digital A1',
-    'Arquivo .pfx do emitente',
-    'O certificado assina NFC-e e NF-e. Uma cópia segura será guardada em ' +
-    'ProgramData\MarginEngine\cert.');
-
-  CertFilePage.Add(
-    'Arquivo do certificado (.pfx):',
-    'Certificados A1 (*.pfx)|*.pfx|Todos os arquivos (*.*)|*.*',
-    '.pfx');
-
-  FiscalAmbientePage := CreateInputOptionPage(
-    CertFilePage.ID,
-    'Ambiente SEFAZ',
-    'As NFC-e deste caixa serão emitidas em qual ambiente?',
-    'Homologação gera notas de teste (sem valor fiscal). ' +
-    'Produção envia documentos reais à SEFAZ — use CSC e certificado de produção.',
-    True, False);
-  FiscalAmbientePage.Add('Homologação — testes e validação (recomendado para começar)');
-  FiscalAmbientePage.Add('Produção — NFC-e com valor fiscal real');
-  FiscalAmbientePage.Values[0] := True;
-
-  FiscalParamsPage := CreateInputQueryPage(
-    FiscalAmbientePage.ID,
-    'Parâmetros SEFAZ e NFC-e',
-    'Senha do certificado, UF e CSC (Token)',
-    'Use o CSC cadastrado na SEFAZ da UF para o ambiente escolhido na tela anterior.');
-
-  FiscalParamsPage.Add('Senha do certificado A1:', True);
-  FiscalParamsPage.Add('UF do emitente (ex: MG):', False);
-  FiscalParamsPage.Add('Id CSC NFC-e (ex: 000001):', False);
-  FiscalParamsPage.Add('Token CSC NFC-e:', True);
-
-  FiscalParamsPage.Values[1] := 'MG';
-  FiscalParamsPage.Values[2] := '000001';
-
-  PrintParamsPage := CreateInputQueryPage(
-    FiscalParamsPage.ID,
-    'Impressora térmica',
-    'Detecção automática (ACBr PosPrinter)',
-    'O driver de impressão já está incluído. Deixe a porta em branco para o agente ' +
-    'detectar sozinho USB, spooler Windows ou rede TCP (porta 9100). ' +
-    'Opcional: USB, COM1, RAW:Nome da impressora ou TCP:192.168.0.10:9100.');
-
-  PrintParamsPage.Add('Porta ACBr (opcional — vazio = auto):', False);
-  PrintParamsPage.Add('Nome da impressora no Windows (opcional):', False);
-
-  PrintParamsPage.Values[0] := '';
-end;
-
-function ShouldSkipPage(PageID: Integer): Boolean;
-begin
-  Result := False;
-
-  if (PageID = CertFilePage.ID) or (PageID = FiscalAmbientePage.ID) or
-     (PageID = FiscalParamsPage.ID) then
-    Result := not FiscalEmissaoAtiva;
-end;
-
-function NextButtonClick(CurPageID: Integer): Boolean;
-var
-  Uf: String;
+  UninstallString: String;
+  ErrorCode: Integer;
 begin
   Result := True;
+  BootstrapMode := GetModeParam;
 
-  if CurPageID = CertFilePage.ID then
+  if BootstrapMode = 'uninstall' then
   begin
-    if Trim(CertFilePage.Values[0]) = '' then
+    if RegQueryStringValue(HKLM,
+      'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#MyAppId}_is1',
+      'UninstallString', UninstallString) then
     begin
-      MsgBox('Selecione o arquivo do certificado A1 (.pfx).', mbError, MB_OK);
-      Result := False;
-      Exit;
-    end;
-    if not FileExists(CertFilePage.Values[0]) then
-    begin
-      MsgBox('Arquivo de certificado não encontrado.', mbError, MB_OK);
-      Result := False;
-    end;
+      Exec(RemoveQuotes(UninstallString), '', '', SW_SHOW, ewWaitUntilTerminated, ErrorCode);
+    end
+    else
+      MsgBox('Margin Engine não encontrado para desinstalação.', mbInformation, MB_OK);
+    Result := False;
+    Exit;
   end;
 
-  if CurPageID = FiscalAmbientePage.ID then
+  if BootstrapMode = '' then
   begin
-    if FiscalAmbientePage.SelectedValueIndex = 1 then
-    begin
-      if MsgBox(
-        'Ambiente PRODUÇÃO emite NFC-e com valor fiscal real na SEFAZ.' + #13#10 +
-        'Confirma que o certificado A1 e o CSC são de produção?',
-        mbConfirmation, MB_YESNO) = IDNO then
-        Result := False;
-    end;
-  end;
-
-  if CurPageID = FiscalParamsPage.ID then
-  begin
-    if Trim(FiscalParamsPage.Values[0]) = '' then
-    begin
-      MsgBox('Informe a senha do certificado A1.', mbError, MB_OK);
-      Result := False;
-      Exit;
-    end;
-    Uf := UpperCase(Trim(FiscalParamsPage.Values[1]));
-    if Length(Uf) <> 2 then
-    begin
-      MsgBox('UF deve ter 2 letras (ex: MG, SP).', mbError, MB_OK);
-      Result := False;
-    end;
+    if IsUpgrade then
+      BootstrapMode := 'update'
+    else
+      BootstrapMode := 'install';
   end;
 end;
 
-procedure SaveFiscalInstallConfig;
-var
-  JsonPath: String;
-  Driver, Emissao, Cert, Senha, Uf, Amb, CscId, CscTok, LibDll, LibIni: String;
-  Lines: TArrayOfString;
+function GetBootstrapMode(Param: String): String;
 begin
-  JsonPath := ExpandConstant('{tmp}\fiscal-install.json');
-
-  if FiscalEmissaoAtiva then
-    Emissao := 'true'
-  else
-    Emissao := 'false';
-
-  Driver := 'lib';
-  LibDll := JsonEscape(ExpandConstant('{app}\app\acbrlib\lib\ACBrNFe64.dll'));
-  LibIni := JsonEscape(ExpandConstant('{app}\app\acbrlib\data\config\acbrlib.ini'));
-
-  Cert := JsonEscape(CertFilePage.Values[0]);
-  Senha := JsonEscape(FiscalParamsPage.Values[0]);
-  Uf := JsonEscape(UpperCase(Trim(FiscalParamsPage.Values[1])));
-  Amb := JsonEscape(AmbienteSefazValor);
-  CscId := JsonEscape(Trim(FiscalParamsPage.Values[2]));
-  CscTok := JsonEscape(Trim(FiscalParamsPage.Values[3]));
-
-  SetArrayLength(Lines, 1);
-  Lines[0] :=
-    '{' +
-    '"emissaoFiscal":' + Emissao + ',' +
-    '"driver":"' + Driver + '",' +
-    '"certPath":"' + Cert + '",' +
-    '"certSenha":"' + Senha + '",' +
-    '"uf":"' + Uf + '",' +
-    '"ambiente":"' + Amb + '",' +
-    '"cscId":"' + CscId + '",' +
-    '"cscToken":"' + CscTok + '",' +
-    '"libPath":"' + LibDll + '",' +
-    '"libIni":"' + LibIni + '"' +
-    '}';
-
-  SaveStringsToFile(JsonPath, Lines, False);
+  Result := BootstrapMode;
 end;
 
-procedure SavePrintInstallConfig;
-var
-  JsonPath: String;
-  Provider, Porta, Nome, LibPath, IniPath: String;
-  Lines: TArrayOfString;
+function GetBootstrapFlags(Param: String): String;
 begin
-  JsonPath := ExpandConstant('{tmp}\print-install.json');
+  Result := '';
+  if IsTaskSelected('installservice') then
+    Result := Result + ' --service';
+  if (BootstrapMode = 'install') or (BootstrapMode = 'update') then
+    Result := Result + ' --firewall';
+end;
 
-  Provider := 'acbr-posprinter';
-
-  Porta := JsonEscape(Trim(PrintParamsPage.Values[0]));
-  Nome := JsonEscape(Trim(PrintParamsPage.Values[1]));
-  LibPath := JsonEscape(ExpandConstant('{app}\app\posprinter\lib\ACBrPosPrinter64.dll'));
-  IniPath := JsonEscape(ExpandConstant('{app}\app\data\posprinter.ini'));
-
-  SetArrayLength(Lines, 1);
-  Lines[0] :=
-    '{' +
-    '"provider":"' + Provider + '",' +
-    '"fallback":"native",' +
-    '"autoDetect":true,' +
-    '"porta":"' + Porta + '",' +
-    '"modelo":"0",' +
-    '"encoding":"UTF8",' +
-    '"cut":"partial",' +
-    '"nomeImpressora":"' + Nome + '",' +
-    '"libPath":"' + LibPath + '",' +
-    '"iniPath":"' + IniPath + '",' +
-    '"testarImpressao":false' +
-    '}';
-
-  SaveStringsToFile(JsonPath, Lines, False);
+function ReadDiagnosticReport: String;
+var
+  ReportPath: String;
+  Lines: TArrayOfString;
+  I: Integer;
+begin
+  Result := '';
+  ReportPath := ExpandConstant('{#MarginDataRoot}\Diagnostics\install-last-report.txt');
+  if not FileExists(ReportPath) then
+  begin
+    Result := 'Diagnóstico não gerado. Verifique os logs do instalador.';
+    Exit;
+  end;
+  if LoadStringsFromFile(ReportPath, Lines) then
+  begin
+    for I := 0 to GetArrayLength(Lines) - 1 do
+    begin
+      if I > 0 then
+        Result := Result + #13#10;
+      Result := Result + Lines[I];
+    end;
+  end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Report: String;
 begin
-  if CurStep = ssInstall then
+  if CurStep = ssDone then
   begin
-    SaveFiscalInstallConfig;
-    SavePrintInstallConfig;
+    Report := ReadDiagnosticReport;
+    if Pos('ATENÇÃO', Report) > 0 then
+      MsgBox(Report, mbError, MB_OK)
+    else if Pos('Problemas encontrados', Report) > 0 then
+      MsgBox(Report, mbInformation, MB_OK)
+    else if Report <> '' then
+      MsgBox(Report, mbInformation, MB_OK);
   end;
+end;
+
+function UpdateReadyMemo(const Suppressible: Boolean; var NewReadyMemo: String): Boolean;
+var
+  ModeLabel: String;
+begin
+  if BootstrapMode = 'repair' then
+    ModeLabel := 'Reparar instalação existente'
+  else if BootstrapMode = 'update' then
+    ModeLabel := 'Atualizar Margin Engine'
+  else
+    ModeLabel := 'Instalação nova';
+
+  NewReadyMemo :=
+    'Modo: ' + ModeLabel + #13#10 +
+    'Produto: Margin Engine ' + ExpandConstant('{#MyAppVersion}') + #13#10 +
+    'Pasta: ' + WizardForm.DirEdit.Text + #13#10 +
+    'Dados: ' + ExpandConstant('{#MarginDataRoot}') + ' (preservados na desinstalação)';
+  Result := True;
 end;

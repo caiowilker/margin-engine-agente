@@ -39,6 +39,7 @@ rsync -a --delete "${RSYNC_EXCLUDES[@]}" "$AGENT_ROOT/" "$BUILD_ROOT/dist/app/"
 
 echo "==> Copiando scripts de build Windows"
 cp "$AGENT_ROOT/pdv-agente-installer.iss" "$BUILD_ROOT/pdv-agente-installer.iss"
+cp "$AGENT_ROOT/LICENSE.txt" "$BUILD_ROOT/LICENSE.txt"
 for f in prepare-build.ps1 compile-installer.ps1 validate-build.ps1 deploy-to-installed.ps1 LEIA-ME.md; do
   if [[ -f "$WIN_BUILD_SCRIPTS/$f" ]]; then
     cp "$WIN_BUILD_SCRIPTS/$f" "$BUILD_ROOT/$f"

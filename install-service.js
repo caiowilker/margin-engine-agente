@@ -12,6 +12,9 @@
 
 require("dotenv").config();
 
+const { initLogging } = require("./runtime/loggingService");
+initLogging({ patchConsole: process.env.LOG_PATCH_CONSOLE !== "false" });
+
 const PORT = Number(process.env.PORT || process.env.AGENT_PORT || 9100);
 const AGENT_PUBLIC_BASE = (
   process.env.AGENT_PUBLIC_HOST || `http://127.0.0.1:${PORT}`
@@ -121,7 +124,7 @@ if (!Service) {
 const svc = new Service({
   name: "PDV Margin Engine",
   description:
-    "Agente local do PDV Margin Engine — impressora, ACBr e fila offline.",
+    "Agente local do Margin Engine — impressão, fila offline e serviços do PDV.",
   script: path.join(__dirname, "index.js"),
   nodeOptions: [],
   env: [{ name: "NODE_ENV", value: "production" }],

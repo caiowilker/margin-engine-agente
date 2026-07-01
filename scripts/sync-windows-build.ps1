@@ -45,6 +45,7 @@ Sync-Tree -Source $AgentRoot -Dest $AppDest -ExcludeDirNames $ExcludeDirs -Exclu
 
 Write-Host "==> Copiando scripts de build"
 Copy-Item -Force (Join-Path $AgentRoot "pdv-agente-installer.iss") (Join-Path $BuildRoot "pdv-agente-installer.iss")
+Copy-Item -Force (Join-Path $AgentRoot "LICENSE.txt") (Join-Path $BuildRoot "LICENSE.txt")
 foreach ($f in @("prepare-build.ps1", "compile-installer.ps1", "validate-build.ps1", "deploy-to-installed.ps1", "LEIA-ME.md")) {
     $src = Join-Path $WinScripts $f
     if (Test-Path $src) { Copy-Item -Force $src (Join-Path $BuildRoot $f) }

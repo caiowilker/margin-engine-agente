@@ -25,10 +25,14 @@ const fs = require("fs");
 const crypto = require("crypto");
 const os = require("os");
 const log = require("./logger").child({ modulo: "credenciais" });
+const { getDirectoryManager } = require("./runtime/directoryManager");
 
 const SERVICE_NAME = "PDVMarginEngine";
 const ACCOUNT_NAME = "agente-local";
-const FALLBACK_PATH = path.join(__dirname, "data", ".vault");
+
+function fallbackVaultPath() {
+  return getDirectoryManager().file("agent", ".vault");
+}
 
 // -- Tenta carregar @napi-rs/keyring ------------------------------------------
 // API: Entry.setPassword / Entry.getPassword / Entry.deletePassword
@@ -114,9 +118,9 @@ async function salvar(dados) {
   }
 
   // Fallback: arquivo criptografado
-  const dir = path.dirname(FALLBACK_PATH);
+  const dir = path.dirname(fallbackVaultPath());
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(FALLBACK_PATH, encriptar(json), "utf8");
+  fs.writeFileSync(fallbackVaultPath(), encriptar(json), "utf8");
   log.info("Credenciais salvas em arquivo criptografado (fallback)");
 }
 
@@ -143,9 +147,9 @@ async function ler() {
   }
 
   // Fallback: arquivo criptografado
-  if (fs.existsSync(FALLBACK_PATH)) {
+  if (fs.existsSync(fallbackVaultPath())) {
     try {
-      const json = decriptar(fs.readFileSync(FALLBACK_PATH, "utf8"));
+      const json = decriptar(fs.readFileSync(fallbackVaultPath(), "utf8"));
       return JSON.parse(json);
     } catch (err) {
       log.error(
@@ -157,7 +161,7 @@ async function ler() {
   }
 
   // Migracao: se ainda existir o antigo config.json em texto puro, migra
-  const legadoPath = path.join(__dirname, "data", "config.json");
+  const legadoPath = getDirectoryManager().file("agent", "config.json");
   if (fs.existsSync(legadoPath)) {
     try {
       const legado = JSON.parse(fs.readFileSync(legadoPath, "utf8"));
@@ -185,8 +189,8 @@ async function limpar() {
       entry.deletePassword();
     } catch (_) {}
   }
-  if (fs.existsSync(FALLBACK_PATH)) {
-    fs.unlinkSync(FALLBACK_PATH);
+  if (fs.existsSync(fallbackVaultPath())) {
+    fs.unlinkSync(fallbackVaultPath());
   }
   log.info("Credenciais removidas do cofre");
 }

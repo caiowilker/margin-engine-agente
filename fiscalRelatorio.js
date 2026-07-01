@@ -2,9 +2,10 @@
 const path = require("path");
 const Database = require("better-sqlite3");
 const fiscalMetrics = require("./fiscalMetrics");
+const { getDirectoryManager } = require("./runtime/directoryManager");
 
 function openDb(relative) {
-  const fp = path.join(__dirname, "data", relative);
+  const fp = getDirectoryManager().file("agent", relative);
   if (!require("fs").existsSync(fp)) return null;
   return new Database(fp, { readonly: true });
 }

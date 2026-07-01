@@ -5,6 +5,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { resolveStagingDir } = require("../runtime/windowsEnv");
 
 const AGENT_ROOT = path.resolve(__dirname, "..");
 
@@ -63,8 +64,7 @@ function prepareRuntimePaths() {
   }
 
   const staging =
-    process.env.ACBR_POS_WIN_STAGING ||
-    path.join(process.env.TEMP || process.env.LOCALAPPDATA || "C:\\Temp", "margin-acbr-posprinter");
+    process.env.ACBR_POS_WIN_STAGING || resolveStagingDir("margin-acbr-posprinter");
   copyDirRecursive(path.dirname(sourceLib), staging);
   const stagedLib = path.join(staging, path.basename(sourceLib));
   fs.mkdirSync(path.dirname(iniPath), { recursive: true });

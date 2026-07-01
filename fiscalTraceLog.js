@@ -5,6 +5,7 @@
 const fs = require("fs");
 const path = require("path");
 const { PATHS, ensureDirs } = require("./marginPaths");
+const { resolveStagingDir } = require("./runtime/windowsEnv");
 
 const MAX_LINES = Math.min(
   2000,
@@ -114,8 +115,7 @@ function tailAcbrLib(n) {
   }
 
   const stagingLog = path.join(
-    process.env.ACBR_WIN_STAGING ||
-      path.join(process.env.TEMP || process.env.LOCALAPPDATA || "C:\\Temp", "margin-acbrlib"),
+    process.env.ACBR_WIN_STAGING || resolveStagingDir("margin-acbrlib"),
     "log",
   );
   if (fs.existsSync(stagingLog)) {

@@ -4,6 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const fiscalRetry = require("./fiscalRetry");
 const log = require("./logger");
+const { getDirectoryManager } = require("./runtime/directoryManager");
 
 const TIPOS = [
   "EMISSAO",
@@ -56,9 +57,9 @@ let handlers = {};
 
 function dbPath() {
   if (process.env.FISCAL_DB_PATH) return process.env.FISCAL_DB_PATH;
-  const dir = path.join(__dirname, "data");
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return path.join(dir, "fila_fiscal.db");
+  const p = getDirectoryManager().file("agent", "fila_fiscal.db");
+  getDirectoryManager().ensurePath(path.dirname(p), "agentData");
+  return p;
 }
 
 function migrateSchema() {

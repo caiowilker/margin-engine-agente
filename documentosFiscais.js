@@ -6,6 +6,15 @@ const fiscalStorage = require("./fiscalStorage");
 const auditLog = require("./auditLog");
 const log = require("./logger").child({ modulo: "documentos_fiscais" });
 const { coalescerRespostaAcbr } = require("./acbrResposta");
+const { writeFileAtomicSync } = require("./runtime/atomicWrite");
+const { getDirectoryManager } = require("./runtime/directoryManager");
+
+function writeFiscalFile(filePath, data, encoding) {
+  writeFileAtomicSync(filePath, data, {
+    encoding,
+    ensureDir: (dir) => getDirectoryManager().ensurePath(dir, "fiscal"),
+  });
+}
 
 function salvarComVerificacaoDisco(tipo, dir, salvarFn) {
   const minMap = {
@@ -39,7 +48,7 @@ function salvarXmlAutorizado(chave, xmlContent) {
     const autorizado = prot.cStat === "100" || prot.cStat === "150";
     const suffix = autorizado ? "-procNFe.xml" : "-nfe.xml";
     const file = path.join(PATHS.xml, `${k}${suffix}`);
-    fs.writeFileSync(file, xmlContent, "utf8");
+    writeFiscalFile(file, xmlContent, "utf8");
     backup(file);
     return file;
   });
@@ -48,7 +57,7 @@ function salvarXmlAutorizado(chave, xmlContent) {
 function salvarXmlCancelamento(chave, xmlContent) {
   return salvarComVerificacaoDisco("xml", PATHS.cancelamentos, () => {
     const file = path.join(PATHS.cancelamentos, `${chave}-canc.xml`);
-    fs.writeFileSync(file, xmlContent, "utf8");
+    writeFiscalFile(file, xmlContent, "utf8");
     backup(file);
     return file;
   });
@@ -57,7 +66,7 @@ function salvarXmlCancelamento(chave, xmlContent) {
 function salvarXmlInutilizacao(serie, ini, fim, xmlContent) {
   return salvarComVerificacaoDisco("xml", PATHS.xml, () => {
     const file = path.join(PATHS.xml, `inutilizacao-${serie}-${ini}-${fim}.xml`);
-    fs.writeFileSync(file, xmlContent, "utf8");
+    writeFiscalFile(file, xmlContent, "utf8");
     backup(file);
     return file;
   });
@@ -71,7 +80,7 @@ function salvarXmlEvento(chave, xmlContent, tipoEvento) {
       .replace(/[^a-z0-9_-]/g, "")
       .slice(0, 24);
     const file = path.join(PATHS.xml, `${k}-${tag}.xml`);
-    fs.writeFileSync(file, xmlContent, "utf8");
+    writeFiscalFile(file, xmlContent, "utf8");
     backup(file);
     return file;
   });
@@ -80,7 +89,7 @@ function salvarXmlEvento(chave, xmlContent, tipoEvento) {
 function salvarPdfDanfce(chave, pdfBuffer) {
   return salvarComVerificacaoDisco("pdf", PATHS.pdf, () => {
     const file = path.join(PATHS.pdf, `${chave}-danfce.pdf`);
-    fs.writeFileSync(file, pdfBuffer);
+    writeFiscalFile(file, pdfBuffer);
     backup(file);
     return file;
   });
@@ -134,7 +143,7 @@ function pdfValidoParaModelo(filePath, modeloDocumento) {
 }
 
 function backupQueuePath() {
-  return path.join(PATHS.data || path.join(__dirname, "data"), "backup-pending.jsonl");
+  return getDirectoryManager().file("agent", "backup-pending.jsonl");
 }
 
 function enqueueBackupRetry(sourceFile) {

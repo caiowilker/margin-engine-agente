@@ -2,13 +2,14 @@
 const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
+const { getDirectoryManager } = require("./runtime/directoryManager");
 
 let db = null;
 
 function dbPath() {
-  const dir = path.join(__dirname, "data");
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return path.join(dir, "audit.db");
+  const p = getDirectoryManager().file("agent", "audit.db");
+  getDirectoryManager().ensurePath(path.dirname(p), "agentData");
+  return p;
 }
 
 function init() {

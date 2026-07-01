@@ -7,10 +7,14 @@ const fs = require("fs");
 const crypto = require("crypto");
 const os = require("os");
 const log = require("./logger").child({ modulo: "fiscal_secrets" });
+const { getDirectoryManager } = require("./runtime/directoryManager");
 
 const SERVICE_NAME = "PDVMarginEngine";
 const ACCOUNT_NAME = "fiscal-secrets";
-const FALLBACK_PATH = path.join(__dirname, "data", ".fiscal-vault");
+
+function fallbackVaultPath() {
+  return getDirectoryManager().file("agent", ".fiscal-vault");
+}
 
 let KeyringEntry = null;
 try {
@@ -63,9 +67,9 @@ async function salvar(dados) {
       log.warn({ err: err.message }, "keyring fiscal falhou ao salvar");
     }
   }
-  const dir = path.dirname(FALLBACK_PATH);
+  const dir = path.dirname(fallbackVaultPath());
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(FALLBACK_PATH, encriptar(json), "utf8");
+  fs.writeFileSync(fallbackVaultPath(), encriptar(json), "utf8");
 }
 
 async function ler() {
@@ -80,9 +84,9 @@ async function ler() {
       }
     }
   }
-  if (fs.existsSync(FALLBACK_PATH)) {
+  if (fs.existsSync(fallbackVaultPath())) {
     try {
-      return JSON.parse(decriptar(fs.readFileSync(FALLBACK_PATH, "utf8")));
+      return JSON.parse(decriptar(fs.readFileSync(fallbackVaultPath(), "utf8")));
     } catch (err) {
       log.error({ err: err.message }, "Falha ao decriptar vault fiscal");
     }
@@ -97,8 +101,8 @@ async function limpar() {
       entry.deletePassword();
     } catch (_) {}
   }
-  if (fs.existsSync(FALLBACK_PATH)) {
-    fs.unlinkSync(FALLBACK_PATH);
+  if (fs.existsSync(fallbackVaultPath())) {
+    fs.unlinkSync(fallbackVaultPath());
   }
 }
 
@@ -115,16 +119,16 @@ function salvarSync(dados) {
       log.warn({ err: err.message }, "keyring fiscal falhou ao salvar (sync)");
     }
   }
-  const dir = path.dirname(FALLBACK_PATH);
+  const dir = path.dirname(fallbackVaultPath());
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(FALLBACK_PATH, encriptar(json), "utf8");
+  fs.writeFileSync(fallbackVaultPath(), encriptar(json), "utf8");
   return merged;
 }
 
 function lerSync() {
-  if (!fs.existsSync(FALLBACK_PATH)) return {};
+  if (!fs.existsSync(fallbackVaultPath())) return {};
   try {
-    return JSON.parse(decriptar(fs.readFileSync(FALLBACK_PATH, "utf8")));
+    return JSON.parse(decriptar(fs.readFileSync(fallbackVaultPath(), "utf8")));
   } catch (_) {
     return {};
   }

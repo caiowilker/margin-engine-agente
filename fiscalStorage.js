@@ -4,6 +4,7 @@ const path = require("path");
 const Database = require("better-sqlite3");
 const { PATHS } = require("./marginPaths");
 const log = require("./logger").child({ modulo: "fiscal_storage" });
+const { getDirectoryManager } = require("./runtime/directoryManager");
 
 const MIN_DISK_MB = parseInt(process.env.FISCAL_MIN_DISK_MB || "500", 10);
 const MIN_MB_XML = parseInt(process.env.DISK_MIN_MB_XML || "50", 10);
@@ -113,13 +114,13 @@ function integrityCheck(dbPath) {
 }
 
 function integrityCheckBoot() {
-  const base = path.join(__dirname, "data");
+  const dm = getDirectoryManager();
   const dbs = [
-    path.join(base, "fila_fiscal.db"),
-    path.join(base, "fila.db"),
-    path.join(base, "fiscal_numeracao.db"),
-    path.join(base, "fiscal_metrics.db"),
-    path.join(base, "audit.db"),
+    dm.file("agent", "fila_fiscal.db"),
+    dm.file("agent", "fila.db"),
+    dm.file("agent", "fiscal_numeracao.db"),
+    dm.file("agent", "fiscal_metrics.db"),
+    dm.file("agent", "audit.db"),
   ];
   const resultados = dbs.map((p) => integrityCheck(p));
   const falhas = resultados.filter((r) => !r.ok && !r.skipped);

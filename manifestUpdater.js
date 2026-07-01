@@ -3,9 +3,13 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { execSync } = require("child_process");
+const { getDirectoryManager } = require("./runtime/directoryManager");
 
 const MANIFEST_PATH = path.join(__dirname, "manifest.json");
-const BACKUP_DIR = path.join(__dirname, "data", "backup-pre-update");
+
+function backupDir() {
+  return getDirectoryManager().file("agent", "backup-pre-update");
+}
 
 let manifestBootOk = true;
 let manifestBootMotivo = null;
@@ -71,9 +75,10 @@ function getManifestBootMotivo() {
 }
 
 function backupArquivos(arquivos) {
-  if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  const root = backupDir();
+  getDirectoryManager().ensurePath(root, "agentData");
   const stamp = Date.now();
-  const dir = path.join(BACKUP_DIR, String(stamp));
+  const dir = path.join(root, String(stamp));
   fs.mkdirSync(dir, { recursive: true });
   for (const nome of arquivos) {
     const src = path.join(__dirname, nome);
@@ -86,10 +91,11 @@ function backupArquivos(arquivos) {
 }
 
 function rollbackUltimo() {
-  if (!fs.existsSync(BACKUP_DIR)) throw new Error("Nenhum backup disponível");
+  const root = backupDir();
+  if (!fs.existsSync(root)) throw new Error("Nenhum backup disponível");
   const dirs = fs
-    .readdirSync(BACKUP_DIR)
-    .map((d) => path.join(BACKUP_DIR, d))
+    .readdirSync(root)
+    .map((d) => path.join(root, d))
     .filter((d) => fs.statSync(d).isDirectory())
     .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
   if (!dirs.length) throw new Error("Nenhum backup disponível");

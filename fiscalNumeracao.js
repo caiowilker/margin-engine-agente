@@ -1,6 +1,7 @@
 // Numeração NFC-e — sequência local por série/modelo/dispositivo (multi-caixa).
 const path = require("path");
 const fs = require("fs");
+const { getDirectoryManager } = require("./runtime/directoryManager");
 
 const MODELO_NFCE = "65";
 const SERIE_PADRAO = process.env.NFE_SERIE || "1";
@@ -25,12 +26,12 @@ function resolveDispositivoId() {
 function dbPath() {
   if (process.env.FISCAL_NUMERACAO_DB) {
     const p = process.env.FISCAL_NUMERACAO_DB;
-    fs.mkdirSync(path.dirname(p), { recursive: true });
+    getDirectoryManager().ensurePath(path.dirname(p), "agentData");
     return p;
   }
-  const dir = path.join(__dirname, "data");
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return path.join(dir, "fiscal_numeracao.db");
+  const p = getDirectoryManager().file("agent", "fiscal_numeracao.db");
+  getDirectoryManager().ensurePath(path.dirname(p), "agentData");
+  return p;
 }
 
 function migrateSchema(conn) {

@@ -24,9 +24,10 @@
 const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
+const { getDirectoryManager } = require("./runtime/directoryManager");
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data", "fila.db");
-const CONFIG_PATH = path.join(__dirname, "data", "config.json");
+const DB_PATH = process.env.DB_PATH || getDirectoryManager().file("agent", "fila.db");
+const CONFIG_PATH = getDirectoryManager().file("agent", "config.json");
 const MAX_TENTATIVAS = parseInt(process.env.MAX_TENTATIVAS || "10", 10);
 const TIMEOUT_MS = parseInt(process.env.BACKEND_TIMEOUT_MS || "5000", 10);
 

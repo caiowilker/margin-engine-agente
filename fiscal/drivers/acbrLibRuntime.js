@@ -4,6 +4,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { resolveStagingDir } = require("../../runtime/windowsEnv");
 const fiscalSecrets = require("../../fiscalSecrets");
 
 function isUncPath(p) {
@@ -135,11 +136,7 @@ function copyDirRecursive(src, dest) {
 }
 
 function getWinStagingRoot(custom) {
-  return (
-    custom ||
-    process.env.ACBR_WIN_STAGING ||
-    path.join(process.env.TEMP || process.env.LOCALAPPDATA || "C:\\Temp", "margin-acbrlib")
-  );
+  return custom || process.env.ACBR_WIN_STAGING || resolveStagingDir("margin-acbrlib");
 }
 
 /**

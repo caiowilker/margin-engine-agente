@@ -1,34 +1,45 @@
-// MarginEngine — estrutura de diretórios fiscal (armazenamento)
-const path = require("path");
-const fs = require("fs");
+// MarginEngine — estrutura de diretórios (delegado ao DirectoryManager)
+const { getDirectoryManager } = require("./runtime/directoryManager");
 
-const ROOT =
-  process.env.MARGIN_ENGINE_ROOT ||
-  path.join(process.env.PROGRAMDATA || "C:\\ProgramData", "MarginEngine");
-
-const PATHS = {
-  root: ROOT,
-  data: path.join(ROOT, "data"),
-  acbr: path.join(ROOT, "acbr"),
-  entrada: path.join(ROOT, "acbr", "entrada"),
-  saida: path.join(ROOT, "acbr", "saida"),
-  ini: path.join(ROOT, "acbr", "ini"),
-  xml: path.join(ROOT, "acbr", "xml"),
-  pdf: path.join(ROOT, "acbr", "pdf"),
-  logs: path.join(ROOT, "acbr", "logs"),
-  backup: path.join(ROOT, "acbr", "backup"),
-  cancelamentos: path.join(ROOT, "acbr", "cancelamentos"),
-  inutilizacoes: path.join(ROOT, "acbr", "xml"),
-  fila: path.join(ROOT, "fila"),
-  spool: path.join(ROOT, "spool"),
-  impressao: path.join(ROOT, "impressao"),
-  temp: path.join(ROOT, "temp"),
-};
-
-function ensureDirs() {
-  Object.values(PATHS).forEach((dir) => {
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  });
+function getDm() {
+  return getDirectoryManager();
 }
 
-module.exports = { PATHS, ensureDirs, ROOT };
+function ensureDirs() {
+  return getDm().ensureAll();
+}
+
+function getPaths() {
+  const dm = getDm();
+  const p = dm.PATHS;
+  return {
+    root: p.root,
+    data: p.agentData,
+    acbr: p.acbr,
+    entrada: p.fiscalEntrada,
+    saida: p.fiscalSaida,
+    ini: p.fiscalIni,
+    xml: p.acbrXml,
+    pdf: p.acbrPdf,
+    logs: p.fiscalLogs,
+    backup: p.fiscalBackup,
+    cancelamentos: p.fiscalCancelamentos,
+    inutilizacoes: p.acbrXml,
+    fila: p.fila,
+    spool: p.spool,
+    impressao: p.impressao,
+    temp: p.temp,
+  };
+}
+
+const dm = getDm();
+const PATHS = getPaths();
+const ROOT = dm.ROOT;
+
+module.exports = {
+  PATHS,
+  ensureDirs,
+  ROOT,
+  getPaths,
+  getDirectoryManager: getDm,
+};

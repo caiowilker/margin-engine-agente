@@ -2,6 +2,7 @@
 const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
+const { getDirectoryManager } = require("./runtime/directoryManager");
 
 const MAX_SAMPLES = parseInt(process.env.FISCAL_METRICS_SAMPLES || "2000", 10);
 
@@ -21,9 +22,10 @@ const counters = {
 let ultimaAutorizacaoEm = null;
 
 function dbPath() {
-  const dir = path.join(__dirname, "data");
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return process.env.FISCAL_METRICS_DB || path.join(dir, "fiscal_metrics.db");
+  if (process.env.FISCAL_METRICS_DB) return process.env.FISCAL_METRICS_DB;
+  const p = getDirectoryManager().file("agent", "fiscal_metrics.db");
+  getDirectoryManager().ensurePath(path.dirname(p), "agentData");
+  return p;
 }
 
 function init() {

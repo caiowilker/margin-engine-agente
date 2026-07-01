@@ -39,6 +39,13 @@
 
 require("dotenv").config();
 
+const { initLogging } = require("./runtime/loggingService");
+const { version: VERSAO_BOOT } = require("./package.json");
+initLogging({
+  versao: VERSAO_BOOT,
+  patchConsole: process.env.LOG_PATCH_CONSOLE !== "false",
+});
+
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
@@ -53,6 +60,8 @@ const fila = require("./fila");
 const configSync = require("./configSync");
 const credenciais = require("./credenciais");
 const marginPaths = require("./marginPaths");
+const { getDirectoryManager } = require("./runtime/directoryManager");
+const { writeJsonAtomicSync } = require("./runtime/atomicWrite");
 const fiscalTraceLog = require("./fiscalTraceLog");
 const filaFiscal = require("./filaFiscal");
 const acbrNfceSetup = require("./acbrNfceSetup");
@@ -88,28 +97,41 @@ const { version: VERSAO_ATUAL } = require("./package.json");
 // ── Config persistida ─────────────────────────────────────────────────────────
 // Apenas dados NÃO-SENSÍVEIS ficam no config.json (url, nome, ids, flags).
 // O backendToken é lido exclusivamente do cofre (credenciais.js).
-const CONFIG_PATH = path.join(__dirname, "data", "config.json");
+function configPath() {
+  return getDirectoryManager().file("agent", "config.json");
+}
+
+function contingenciaPath() {
+  return getDirectoryManager().file("agent", "contingencia.json");
+}
+
+function filaDbPath() {
+  return process.env.DB_PATH || getDirectoryManager().file("agent", "fila.db");
+}
+
+function backupPreUpdateDir() {
+  return getDirectoryManager().file("agent", "backup-pre-update");
+}
 
 // Cache em memória — evita chamar o cofre a cada request.
-// Atualizado por lerConfig() e salvarConfig().
 let _configCache = null;
 
 function lerConfigPublica() {
   try {
-    if (fs.existsSync(CONFIG_PATH)) {
-      return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+    const p = configPath();
+    if (fs.existsSync(p)) {
+      return JSON.parse(fs.readFileSync(p, "utf8"));
     }
   } catch {}
   return {};
 }
 
 function salvarConfigPublica(dados) {
-  const dir = path.dirname(CONFIG_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  // Garante que o token nunca seja gravado em texto puro
   const seguro = { ...dados };
   delete seguro.backendToken;
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(seguro, null, 2), "utf8");
+  writeJsonAtomicSync(configPath(), seguro, {
+    ensureDir: (dir) => getDirectoryManager().ensurePath(dir, "agentData"),
+  });
 }
 
 /**
@@ -202,6 +224,7 @@ async function boot() {
     fila.atualizarConfig(config.backendUrl, config.backendToken);
   }
 
+  getDirectoryManager().ensureAll();
   marginPaths.ensureDirs();
   fiscalNumeracao.init();
   fiscalMetrics.init();
@@ -305,12 +328,10 @@ const AUTO_UPDATE =
   (process.env.AUTO_UPDATE || "false").toLowerCase() === "true";
 
 // ── Contingência EPEC ─────────────────────────────────────────────────────────
-const CONTINGENCIA_PATH = path.join(__dirname, "data", "contingencia.json");
-
 function lerContingencia() {
   try {
-    if (fs.existsSync(CONTINGENCIA_PATH))
-      return JSON.parse(fs.readFileSync(CONTINGENCIA_PATH, "utf8"));
+    const p = contingenciaPath();
+    if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, "utf8"));
   } catch {}
   return {
     ativa: false,
@@ -321,22 +342,21 @@ function lerContingencia() {
 }
 
 function salvarContingencia(estado) {
-  const dir = path.dirname(CONTINGENCIA_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(CONTINGENCIA_PATH, JSON.stringify(estado, null, 2));
+  writeJsonAtomicSync(contingenciaPath(), estado, {
+    ensureDir: (dir) => getDirectoryManager().ensurePath(dir, "agentData"),
+  });
 }
 
 let estadoContingencia = lerContingencia();
 
 // ── SQLite ────────────────────────────────────────────────────────────────────
 const Database = require("better-sqlite3");
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data", "fila.db");
 let db;
 
 function inicializarDb() {
-  const dir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  db = new Database(DB_PATH);
+  const dbPath = filaDbPath();
+  getDirectoryManager().ensurePath(path.dirname(dbPath), "agentData");
+  db = new Database(dbPath);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   db.pragma("busy_timeout = 5000");
@@ -551,7 +571,7 @@ async function aplicarAtualizacao(urlDownload, novaVersao, shaEsperado) {
       throw new Error("Pacote inválido: manifest.json ou index.js ausente");
     }
 
-    const backupDir = path.join(__dirname, "data", "backup-pre-update");
+    const backupDir = backupPreUpdateDir();
     if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
 
     if (fs.existsSync(manifestNoPacote)) {
@@ -581,7 +601,7 @@ async function aplicarAtualizacao(urlDownload, novaVersao, shaEsperado) {
     updaterState.ultimoErro = err.message;
     console.error(`[Updater] ✗ Falha ao aplicar atualização: ${err.message}`);
     try {
-      const backupDir = path.join(__dirname, "data", "backup-pre-update");
+      const backupDir = backupPreUpdateDir();
       const jsFiles = [
         "index.js",
         "impressora.js",
@@ -711,6 +731,24 @@ function iniciarServidor() {
   app.use(securityHeaders);
   app.use(corsMiddleware);
   app.use(express.json({ limit: "2mb" }));
+
+  const { getLoggingService } = require("./runtime/loggingService");
+  app.use((req, res, next) => {
+    const cfg = lerConfigPublica();
+    getLoggingService().runWithContext(
+      {
+        correlationId:
+          req.headers["x-correlation-id"] ||
+          req.headers["x-request-id"] ||
+          req.headers["x-correlationid"] ||
+          null,
+        tenant: cfg.tenantId || cfg.tenant || null,
+        caixa: cfg.dispositivoId || cfg.pdvId || process.env.PDV_DISPOSITIVO_ID || null,
+        empresa: cfg.empresaNome || cfg.empresa || null,
+      },
+      () => next(),
+    );
+  });
 
   const { criarApiProxy } = require("./apiProxy");
   app.use("/api-proxy", privateNetworkHeaders, criarApiProxy({ lerConfigSync }));
