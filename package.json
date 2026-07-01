@@ -24,7 +24,7 @@
     "test:print": "node test/print-provider.test.js && node test/printer-local-config.test.js && node test/print-extended.test.js && node test/thermal-text.test.js && node scripts/print-benchmark.js",
     "test:agent-print": "node test/print-provider.test.js && node test/printer-local-config.test.js && node test/print-extended.test.js && node test/thermal-text.test.js && node scripts/print-benchmark.js",
     "benchmark:print": "node scripts/print-benchmark.js",
-    "test": "node test/fiscal-hardening.test.js && node test/fiscal-production.test.js && node test/fiscal-chaos.test.js && node test/fila-venda.test.js && node test/fiscal-driver.test.js && node test/api-proxy.test.js",
+    "test": "node test/fiscal-hardening.test.js && node test/fiscal-production.test.js && node test/fiscal-chaos.test.js && node test/fila-venda.test.js && node test/fiscal-driver.test.js && node test/api-proxy.test.js && node test/spa-fallback.test.js",
     "manifest": "node scripts/generate-manifest.js",
     "predeploy": "node scripts/pre-deploy-check.js",
     "smoke": "node scripts/smoke-test.js",

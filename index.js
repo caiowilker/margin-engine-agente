@@ -733,21 +733,6 @@ function iniciarServidor() {
     next();
   });
 
-  // ── Frontend estático ───────────────────────────────────────────────────────
-  const FRONTEND_DIST = path.join(__dirname, "frontend-dist");
-  const FRONTEND_INDEX = path.join(FRONTEND_DIST, "index.html");
-  if (fs.existsSync(FRONTEND_INDEX)) {
-    app.use(express.static(FRONTEND_DIST));
-    app.get(
-      /^(?!\/api|\/api-proxy|\/status|\/venda|\/fila|\/impressora|\/acbr|\/ativar|\/auth|\/config|\/contingencia|\/diagnostico|\/updater).*$/,
-      (req, res) => res.sendFile(FRONTEND_INDEX),
-    );
-  } else if (fs.existsSync(path.join(__dirname, "status.html"))) {
-    app.get(["/", "/status.html"], (req, res) => {
-      res.sendFile(path.join(__dirname, "status.html"));
-    });
-  }
-
   // ── Diagnóstico (API JSON) ─────────────────────────────────────────────────
   // Expõe dados sensíveis (backendUrl, tenantId, dispositivoId, hostname,
   // caminho do banco etc.) — exige X-Agent-Token quando o PDV está ativado.
@@ -2137,20 +2122,31 @@ function iniciarServidor() {
     res.json({ ok: true, ...resultado });
   });
 
-  // ── Página raiz ───────────────────────────────────────────────────────────────
-  // Página estática e somente leitura, sem botões/ações e sem dados sensíveis
-  // (sem backendUrl, tenantId, dispositivoId, tokens). Serve apenas para o
-  // instalador/operador confirmar visualmente que o agente está rodando.
-  // Os dados são obtidos via /status-basico (também público, mesma restrição).
-  // Gestão completa do PDV acontece no painel web (/pdv/diagnostico),
-  // autenticado e via X-Agent-Token.
+  // ── Página raiz (sem frontend-dist) ─────────────────────────────────────────
+  const FRONTEND_INDEX = path.join(__dirname, "frontend-dist", "index.html");
   const STATUS_HTML = path.join(__dirname, "status.html");
-  app.get("/", (req, res) => {
+  if (!fs.existsSync(FRONTEND_INDEX)) {
+    app.get("/", (req, res) => {
+      if (fs.existsSync(STATUS_HTML)) {
+        return res.sendFile(STATUS_HTML);
+      }
+      res.status(404).send("status.html não encontrado");
+    });
     if (fs.existsSync(STATUS_HTML)) {
-      return res.sendFile(STATUS_HTML);
+      app.get("/status.html", (req, res) => res.sendFile(STATUS_HTML));
     }
-    res.status(404).send("status.html não encontrado");
-  });
+  }
+
+  // ── Frontend estático + SPA (DEPOIS de todas as rotas API) ─────────────────
+  // Se montado antes, /fiscal/* e /health devolvem index.html → JSON parse error no PDV.
+  const FRONTEND_DIST = path.join(__dirname, "frontend-dist");
+  if (fs.existsSync(FRONTEND_INDEX)) {
+    app.use(express.static(FRONTEND_DIST));
+    app.get(
+      /^(?!\/api|\/api-proxy|\/status|\/health|\/venda|\/fila|\/impressora|\/acbr|\/ativar|\/auth|\/config|\/contingencia|\/diagnostico|\/updater|\/fiscal).*$/,
+      (req, res) => res.sendFile(FRONTEND_INDEX),
+    );
+  }
 
   // ── Error handler ─────────────────────────────────────────────────────────────
   app.use((err, req, res, _next) => {
