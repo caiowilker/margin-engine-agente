@@ -401,6 +401,8 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     return fetchJson("/config/fiscal");
   }
 
+  var emissaoFiscalTouched = false;
+
   function renderFiscalConfig(cfg){
     document.getElementById("cfgAmbiente").value = cfg.ambienteSefaz || "homologacao";
     document.getElementById("cfgUf").value = cfg.uf || "MG";
@@ -410,6 +412,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     document.getElementById("cfgIdCsc").value = (cfg.nfce && cfg.nfce.idCsc) || "000001";
     document.getElementById("cfgCsc").value = "";
     document.getElementById("cfgEmissao").checked = !!cfg.emissaoFiscal;
+    emissaoFiscalTouched = false;
     var st = [];
     var driverLabel = (cfg.driver === "lib" || cfg.driver === "acbr-lib") ? "emissor integrado" : (cfg.driver || "?");
     var ambLabel = cfg.ambienteSefaz === "producao" ? "Produção" : "Homologação";
@@ -490,6 +493,10 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     } catch(e){ showMsg("msgPrinter", e.message, "err"); }
   };
 
+  document.getElementById("cfgEmissao").onchange = function(){
+    emissaoFiscalTouched = true;
+  };
+
   document.getElementById("btnReloadConfig").onclick = refreshConfigPanel;
   document.getElementById("formFiscalConfig").onsubmit = async function(ev){
     ev.preventDefault();
@@ -501,9 +508,11 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
       ambienteSefaz: document.getElementById("cfgAmbiente").value,
       uf: document.getElementById("cfgUf").value,
       certificadoArquivo: document.getElementById("cfgCertPath").dataset.fullPath || document.getElementById("cfgCertPath").value,
-      nfceIdCsc: document.getElementById("cfgIdCsc").value,
-      emissaoFiscal: document.getElementById("cfgEmissao").checked
+      nfceIdCsc: document.getElementById("cfgIdCsc").value
     };
+    if (emissaoFiscalTouched) {
+      body.emissaoFiscal = document.getElementById("cfgEmissao").checked;
+    }
     var senha = document.getElementById("cfgCertSenha").value;
     var csc = document.getElementById("cfgCsc").value;
     if (senha) body.certificadoSenha = senha;

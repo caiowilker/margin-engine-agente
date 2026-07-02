@@ -86,6 +86,13 @@ function obterEmissaoFiscalLocal() {
 }
 
 function sincronizarEmissaoFiscalLocal() {
+  try {
+    const fiscalLocalConfig = require("./fiscalLocalConfig");
+    fiscalLocalConfig.reconciliarEmissaoComEnv();
+  } catch (_) {
+    /* testes isolados */
+  }
+
   const authority = fiscalConfigAuthority.obterStatus();
   const emissao = authority.ativo
     ? authority.localEmissaoFiscal

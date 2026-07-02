@@ -2731,6 +2731,12 @@ function iniciarServidor() {
   // ── Inicialização ─────────────────────────────────────────────────────────────
   fila.inicializar();
   inicializarDb();
+  try {
+    const fiscalLocalConfig = require("./fiscalLocalConfig");
+    fiscalLocalConfig.sincronizarSegredosDoEnv();
+  } catch (err) {
+    log.warn({ err: err.message }, "[Agente] Falha ao sincronizar segredos fiscais do .env");
+  }
   configSync.iniciar(lerConfig, fiscalDriver);
 
   const SYNC_INTERVAL = parseInt(process.env.SYNC_INTERVAL_MS || "30000", 10);

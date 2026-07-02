@@ -126,6 +126,17 @@ function salvarSync(dados) {
 }
 
 function lerSync() {
+  const entry = getEntry();
+  if (entry) {
+    try {
+      const json = entry.getPassword();
+      if (json) return JSON.parse(json);
+    } catch (err) {
+      if (!err.message?.includes("No entry")) {
+        log.warn({ err: err.message }, "keyring fiscal falhou ao ler (sync)");
+      }
+    }
+  }
   if (!fs.existsSync(fallbackVaultPath())) return {};
   try {
     return JSON.parse(decriptar(fs.readFileSync(fallbackVaultPath(), "utf8")));

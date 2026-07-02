@@ -98,6 +98,74 @@ async function run() {
     assert.strictEqual(fiscalLocalConfig.ambienteToTpAmb("homologacao"), "2");
   });
 
+  await test("reconciliarEmissaoComEnv prioriza .env editado após autoridade local", () => {
+    const authority = require("../fiscalConfigAuthority");
+    authority.resetAutoridadeLocal();
+    authority.marcarAutoridadeLocal(false);
+
+    fs.writeFileSync(
+      ENV,
+      `EMISSAO_FISCAL=true
+ACBR_DRIVER=lib
+AMBIENTE_SEFAZ=homologacao
+`,
+      "utf8",
+    );
+    const envMaisRecente = Date.now() + 5000;
+    fs.utimesSync(ENV, envMaisRecente / 1000, envMaisRecente / 1000);
+    const reconciliado = fiscalLocalConfig.reconciliarEmissaoComEnv();
+    assert.strictEqual(reconciliado, true);
+    assert.strictEqual(authority.obterStatus().ativo, false);
+    assert.strictEqual(process.env.EMISSAO_FISCAL, "true");
+  });
+
+  await test("sincronizarSegredosDoEnv migra senha e CSC do .env para INI/cofre", async () => {
+    const fiscalSecrets = require("../fiscalSecrets");
+    await fiscalSecrets.limpar();
+
+    fs.writeFileSync(
+      INI,
+      `[ACBrNFe]
+Ambiente=2
+ModeloDF=65
+
+[Certificado]
+Arquivo=
+Senha=
+
+[DFe]
+UF=MG
+
+[NFCe]
+IdCSC=
+CSC=
+`,
+      "utf8",
+    );
+
+    fs.writeFileSync(
+      ENV,
+      `EMISSAO_FISCAL=true
+ACBR_DRIVER=lib
+AMBIENTE_SEFAZ=homologacao
+CERT_A1_PASS=senhaEnv123
+NFE_CSC_TOKEN=tokenEnv456
+CERT_A1_PATH=C:\\\\cert\\\\meu.pfx
+NFE_CSC_ID=000002
+`,
+      "utf8",
+    );
+
+    const result = fiscalLocalConfig.sincronizarSegredosDoEnv();
+    assert.strictEqual(result.aplicado, true);
+
+    const raw = fs.readFileSync(INI, "utf8");
+    assert.match(raw, /Senha=__VAULT__/);
+    assert.match(raw, /CSC=__VAULT__/);
+    assert.match(raw, /Arquivo=C:\\cert\\meu\.pfx/);
+    assert.match(raw, /IdCSC=000002/);
+  });
+
   fiscalLocalConfig.resolveAgentEnvPath = origEnvPath;
   delete process.env.FISCAL_LOCAL_ENV_OVERRIDE;
 

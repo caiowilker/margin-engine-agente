@@ -432,11 +432,124 @@ function aplicarAmbiente(ambienteSefaz) {
   return salvar({ ambienteSefaz });
 }
 
+/**
+ * Se o .env foi editado manualmente após um save do painel, prioriza EMISSAO_FISCAL do .env.
+ * Evita bloqueio quando o operador salva certificado/CSC com o checkbox desmarcado por engano.
+ */
+function reconciliarEmissaoComEnv() {
+  const { path: envPath, map } = lerEnvMap();
+  if (!envPath || !fs.existsSync(envPath)) return null;
+
+  const envEmissao =
+    String(map.EMISSAO_FISCAL || process.env.EMISSAO_FISCAL || "false").toLowerCase() ===
+    "true";
+
+  try {
+    const fiscalConfigAuthority = require("./fiscalConfigAuthority");
+    const authority = fiscalConfigAuthority.obterStatus();
+    if (!authority.ativo || authority.localEmissaoFiscal === envEmissao) {
+      return null;
+    }
+
+    const envMtime = fs.statSync(envPath).mtimeMs;
+    const authMtime = new Date(authority.localAuthorityAt).getTime();
+    if (envMtime <= authMtime) return null;
+
+    log.info(
+      { envEmissao, authority: authority.localEmissaoFiscal },
+      "[FiscalLocalConfig] .env mais recente que autoridade local — priorizando EMISSAO_FISCAL do .env",
+    );
+    fiscalConfigAuthority.resetAutoridadeLocal();
+    process.env.EMISSAO_FISCAL = envEmissao ? "true" : "false";
+    return envEmissao;
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Migra CERT_A1_PASS, NFE_CSC_TOKEN e caminhos do .env para cofre + acbrlib.ini no boot.
+ * O instalador remove segredos do .env; valores adicionados manualmente precisam chegar ao motor fiscal.
+ */
+function sincronizarSegredosDoEnv() {
+  const { map } = lerEnvMap();
+  const vault = fiscalSecrets.lerSync();
+  const vaultPatch = {};
+
+  const certPass = desescaparValorEnv(map.CERT_A1_PASS || "");
+  const cscToken = desescaparValorEnv(map.NFE_CSC_TOKEN || "");
+  const certPath = desescaparValorEnv(map.CERT_A1_PATH || "");
+  const cscId = String(map.NFE_CSC_ID || "").trim();
+
+  if (!vault.certificadoSenha && certPass) {
+    vaultPatch.certificadoSenha = certPass;
+  }
+  if (!vault.nfceCsc && cscToken) {
+    vaultPatch.nfceCsc = cscToken;
+  }
+  if (Object.keys(vaultPatch).length === 0 && !certPath && !cscId) {
+    return { aplicado: false };
+  }
+
+  let iniPath = resolveLibIniPath();
+  if (!iniPath || !fs.existsSync(iniPath)) {
+    iniPath = ensureIniFile(iniPath);
+  }
+
+  let raw = fs.readFileSync(iniPath, "utf8");
+  let iniChanged = false;
+
+  if (certPath) {
+    const certIni = getIniValue(parseIni(raw), [["Certificado", "Arquivo"]]);
+    if (!certIni) {
+      for (const sec of SECOES_CERT) {
+        raw = upsertIniKey(raw, sec, "Arquivo", certPath);
+      }
+      iniChanged = true;
+    }
+  }
+
+  if (cscId) {
+    const idIni = getIniValue(parseIni(raw), [["NFCe", "IdCSC"]]);
+    if (!idIni) {
+      for (const sec of SECOES_NFCE) {
+        raw = upsertIniKey(raw, sec, "IdCSC", cscId);
+      }
+      iniChanged = true;
+    }
+  }
+
+  if (Object.keys(vaultPatch).length > 0) {
+    fiscalSecrets.salvarSync(vaultPatch);
+    if (vaultPatch.certificadoSenha) {
+      for (const sec of SECOES_CERT) {
+        raw = upsertIniKey(raw, sec, "Senha", "__VAULT__");
+      }
+      iniChanged = true;
+    }
+    if (vaultPatch.nfceCsc) {
+      for (const sec of SECOES_NFCE) {
+        raw = upsertIniKey(raw, sec, "CSC", "__VAULT__");
+      }
+      iniChanged = true;
+    }
+    log.info("[FiscalLocalConfig] Segredos do .env migrados para o cofre fiscal");
+  }
+
+  if (iniChanged) {
+    fs.writeFileSync(iniPath, raw, "utf8");
+  }
+
+  return { aplicado: Object.keys(vaultPatch).length > 0 || iniChanged };
+}
+
 module.exports = {
   ler,
   lerEmissaoFiscalRuntime,
   salvar,
   aplicarAmbiente,
+  reconciliarEmissaoComEnv,
+  sincronizarSegredosDoEnv,
   resolveLibIniPath,
   resolveLibPath,
   resolveAgentEnvPath,
