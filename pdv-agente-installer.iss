@@ -135,6 +135,17 @@ var
   UninstallKeepData: Boolean;
   InstalledVersion: String;
 
+function GetModeParam: String;
+begin
+  Result := LowerCase(Trim(ExpandConstant('{param:MODE|}')));
+end;
+
+function IsExistingInstall: Boolean;
+begin
+  Result := RegKeyExists(HKLM,
+    'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#MyAppId}_is1');
+end;
+
 function GetInstalledVersion: String;
 begin
   Result := '';
@@ -176,17 +187,6 @@ begin
       mbError, MB_OK);
     Result := False;
   end;
-end;
-
-function GetModeParam: String;
-begin
-  Result := LowerCase(Trim(ExpandConstant('{param:MODE|}')));
-end;
-
-function IsExistingInstall: Boolean;
-begin
-  Result := RegKeyExists(HKLM,
-    'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#MyAppId}_is1');
 end;
 
 function InitializeSetup: Boolean;
