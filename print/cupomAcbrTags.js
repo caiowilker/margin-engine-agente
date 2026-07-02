@@ -267,16 +267,21 @@ function renderPaginaTeste() {
   const cfg = require("./printerLocalConfig").ler();
   const logo = require("./printerLogo").ler();
   const logoLine = logo.ativo ? "Logo: configurado (BMP)" : "Logo: nao configurado";
+  let versao = "1.0.0";
+  try {
+    versao = require("../../package.json").version || versao;
+  } catch (_) {}
+  const factory = require("./factory");
+  const driver = factory.getDriverInfo?.() || {};
   return `</zera>
 </linha_dupla>
 ${tagLogoHeader()}<ce><n>TESTE IMPRESSORA</n></ce>
-<ce>Margin Platform 1.0 — Producao</ce>
+<ce>Margin Engine v${versao}</ce>
 </linha_simples>
-Provider: ${process.env.PRINTER_PROVIDER || "acbr-posprinter"}
-Efetivo: ${cfg.mode}
-Modelo ACBr: ${cfg.modelo}
+Driver: ${driver.label || driver.provider || "PosPrinter"}
+Modelo: ${cfg.modelo}
 Porta: ${cfg.porta}
-Colunas: ${cfg.colunas}
+Largura: ${cfg.colunas || 48} colunas
 ${logoLine}
 </linha_simples>
 Texto — Ç Ã Á É Ê Ó Ú ° R$ acentuação UTF-8

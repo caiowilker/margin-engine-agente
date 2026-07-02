@@ -133,6 +133,50 @@ brazilianportuguese.FinishedLabel=O Margin Engine foi instalado neste computador
 var
   BootstrapMode: String;
   UninstallKeepData: Boolean;
+  InstalledVersion: String;
+
+function GetInstalledVersion: String;
+begin
+  Result := '';
+  if RegQueryStringValue(HKLM,
+    'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#MyAppId}_is1',
+    'DisplayVersion', Result) then
+    Exit;
+  Result := '';
+end;
+
+function StopMarginEngineService: Boolean;
+var
+  ErrorCode: Integer;
+  NodeExe: String;
+  ScriptPath: String;
+begin
+  Result := True;
+  if not IsExistingInstall then
+    Exit;
+  if (BootstrapMode <> 'update') and (BootstrapMode <> 'repair') then
+    Exit;
+  NodeExe := ExpandConstant('{app}\node\node.exe');
+  ScriptPath := ExpandConstant('{app}\app\scripts\installer-service-control.js');
+  if (not FileExists(NodeExe)) or (not FileExists(ScriptPath)) then
+    Exit;
+  if not Exec(NodeExe, '"' + ScriptPath + '" stop', ExpandConstant('{app}\app'),
+    SW_HIDE, ewWaitUntilTerminated, ErrorCode) then
+  begin
+    MsgBox('Não foi possível parar o serviço Margin Engine antes da atualização.' + #13#10 +
+      'Pare manualmente em Serviços do Windows e execute o instalador novamente.',
+      mbError, MB_OK);
+    Result := False;
+    Exit;
+  end;
+  if ErrorCode <> 0 then
+  begin
+    MsgBox('O serviço Margin Engine não parou dentro do tempo esperado.' + #13#10 +
+      'Verifique Serviços do Windows e tente novamente.',
+      mbError, MB_OK);
+    Result := False;
+  end;
+end;
 
 function GetModeParam: String;
 begin
@@ -173,6 +217,22 @@ begin
       BootstrapMode := 'update'
     else
       BootstrapMode := 'install';
+  end;
+
+  if (BootstrapMode = 'update') or (BootstrapMode = 'repair') then
+  begin
+    InstalledVersion := GetInstalledVersion;
+    if (InstalledVersion <> '') and (CompareVersion('{#MyAppVersion}', InstalledVersion) < 0) then
+    begin
+      MsgBox(
+        'Não é possível instalar uma versão anterior do Margin Engine.' + #13#10 + #13#10 +
+        'Versão do instalador: {#MyAppVersion}' + #13#10 +
+        'Versão instalada: ' + InstalledVersion + #13#10 + #13#10 +
+        'Use o instalador da mesma versão (reparo) ou de uma versão mais recente (atualização).',
+        mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
   end;
 end;
 
@@ -231,6 +291,14 @@ begin
   Result := ' --service --firewall --open';
   if IsTaskSelected('desktopicon') then
     Result := Result + ' --desktop';
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  NeedsRestart := False;
+  if not StopMarginEngineService then
+    Result := 'O serviço Margin Engine precisa estar parado para concluir a instalação.';
 end;
 
 function ReadDiagnosticReport: String;

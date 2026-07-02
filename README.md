@@ -86,7 +86,9 @@ no painel administrativo. O agente se configura automaticamente
 ```
 [Navegador]  →  https://pdv.suaempresa.com.br   (frontend web)
      ↓
-[Navegador]  →  http://localhost:9100/status     (agente local)
+[Navegador]  →  http://localhost:9100/status-basico   (agente local, sem token)
+     ↓
+[Navegador]  →  http://localhost:9100/status           (com X-Agent-Token após ativação)
      ↓
 [Agente]     →  https://SEU_BACKEND.com.br       (backend Spring)
 ```
@@ -100,7 +102,8 @@ modernos (localhost é exceção de mixed-content).
 
 | Método | Endpoint                          | Descrição                                   |
 |--------|-----------------------------------|---------------------------------------------|
-| GET    | /status                           | Status geral (impressora, ACBr, fila, EPEC) |
+| GET    | /status-basico                    | Status reduzido (sem token, rede local)     |
+| GET    | /status                           | Status completo (exige X-Agent-Token)       |
 | GET    | /config                           | Configuração atual do agente                |
 | POST   | /ativar                           | Ativa o agente com código do painel         |
 | POST   | /venda                            | Registra venda (online ou offline)          |

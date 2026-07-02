@@ -7,6 +7,23 @@ const { renderPaginaTeste } = require("../cupomAcbrTags");
 const { renderPayloadTags } = require("../renderPrint");
 const { normalizarCupomPayload } = require("../cupomValidate");
 const native = require("./nativeEscPosProvider");
+const caixaTags = require("./caixaAcbrTags");
+
+async function imprimirViaTags(renderFn, payload, fallbackNative) {
+  const mode = getIntegrationMode();
+  if (mode === "parity") {
+    return fallbackNative(payload);
+  }
+  const tags = renderFn(payload || {});
+  const t0 = Date.now();
+  await imprimirTags(tags);
+  return {
+    ok: true,
+    provider: "acbr-posprinter",
+    durationMs: Date.now() - t0,
+    lines: tags.split("\n").length,
+  };
+}
 
 const DRIVER_INFO = {
   provider: "acbr-posprinter",
@@ -187,8 +204,10 @@ module.exports = {
   imprimirSegundaVia,
   imprimirTags,
   imprimirTeste,
-  imprimirAbertura: (p) => native.imprimirAbertura(p),
-  imprimirFechamento: (p) => native.imprimirFechamento(p),
-  imprimirMovimentoCaixa: (p) => native.imprimirMovimentoCaixa(p),
+  imprimirAbertura: (p) => imprimirViaTags(caixaTags.renderAberturaTags, p, native.imprimirAbertura),
+  imprimirFechamento: (p) =>
+    imprimirViaTags(caixaTags.renderFechamentoTags, p, native.imprimirFechamento),
+  imprimirMovimentoCaixa: (p) =>
+    imprimirViaTags(caixaTags.renderMovimentoCaixaTags, p, native.imprimirMovimentoCaixa),
   abrirGaveta,
 };

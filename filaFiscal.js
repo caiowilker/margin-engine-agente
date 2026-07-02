@@ -46,6 +46,11 @@ const PRIORIDADE = {
 const BACKOFF_MS = [60000, 120000, 300000, 900000, 1800000];
 const WORKER_MS = parseInt(process.env.FISCAL_WORKER_MS || "500", 10);
 const PDF_WORKER_MS = parseInt(process.env.FISCAL_PDF_WORKER_MS || "2000", 10);
+const FISCAL_QUEUE_WARN_MAX = parseInt(process.env.FISCAL_QUEUE_WARN_MAX || "100", 10);
+const FISCAL_QUEUE_CRITICAL_MAX = parseInt(
+  process.env.FISCAL_QUEUE_CRITICAL_MAX || "300",
+  10,
+);
 
 let db = null;
 let workerTimer = null;
@@ -317,7 +322,52 @@ function enfileirar(tipo, payload, correlationId = null, numeroVenda = null) {
        VALUES (?, ?, ?, ?, ?, ?, 'PENDENTE')`,
     )
     .run(tipo, correlationId, nv, chaveFiscal, prioridadeTipo(tipo), payloadStr);
+  avaliarLimitesFilaFiscal();
   return { id: r.lastInsertRowid, deduplicado: false, correlationId };
+}
+
+function obterMetricasFila() {
+  init();
+  const row = db
+    .prepare(
+      `
+    SELECT
+      COUNT(*) AS total,
+      SUM(CASE WHEN status IN ('PENDENTE','PROCESSANDO','INCERTO','RECUPERANDO','FALHA_TEMPORARIA') THEN 1 ELSE 0 END) AS ativos,
+      MIN(CASE WHEN status IN ('PENDENTE','PROCESSANDO','INCERTO','RECUPERANDO','FALHA_TEMPORARIA') THEN criado_em END) AS oldest_ativo
+    FROM fila_fiscal
+  `,
+    )
+    .get();
+  const totalAtivo = row?.ativos || 0;
+  const oldestAgeMinutes = row?.oldest_ativo
+    ? Math.max(
+        0,
+        Math.round((Date.now() - new Date(row.oldest_ativo).getTime()) / 60000),
+      )
+    : null;
+  return {
+    total: totalAtivo,
+    totalBruto: row?.total || 0,
+    limiteAviso: FISCAL_QUEUE_WARN_MAX,
+    limiteCritico: FISCAL_QUEUE_CRITICAL_MAX,
+    oldestAgeMinutes,
+    status:
+      totalAtivo >= FISCAL_QUEUE_CRITICAL_MAX
+        ? "critico"
+        : totalAtivo >= FISCAL_QUEUE_WARN_MAX
+          ? "alerta"
+          : "ok",
+  };
+}
+
+function avaliarLimitesFilaFiscal() {
+  try {
+    const fiscalAlertas = require("./fiscalAlertas");
+    if (typeof fiscalAlertas.verificarFila === "function") {
+      fiscalAlertas.verificarFila("fila_fiscal", obterMetricasFila());
+    }
+  } catch (_) {}
 }
 
 function atualizarPayload(jobId, patch) {
@@ -528,6 +578,7 @@ async function processarUm(opcoes = {}) {
 
   if (flag === "processandoFiscal") processandoFiscal = false;
   else processandoPdf = false;
+  avaliarLimitesFilaFiscal();
   return true;
 }
 
@@ -621,6 +672,7 @@ function status() {
     falhas: map.FALHA_PERMANENTE || 0,
     concluidos: map.CONCLUIDO || 0,
     processando: map.PROCESSANDO || 0,
+    metricas: obterMetricasFila(),
   };
 }
 
@@ -700,6 +752,7 @@ function contadoresAlertas() {
            AND datetime(proximo_retry_at) > datetime('now')`,
       )
       .get().n || 0;
+  const metricasFila = obterMetricasFila();
   return {
     filaFiscal: filaFiscalTotal,
     processando: st.processando,
@@ -707,6 +760,7 @@ function contadoresAlertas() {
     recuperando: st.recuperando,
     incertosComBackoff,
     falhasUltimas24h,
+    filaFiscalMetricas: metricasFila,
     ultimaEmissao: ultimaEmissao || null,
     ultimaEmissaoSucesso: ultimaEmissaoSucesso || null,
     ultimaRejeicao: ultimaRejeicao || null,

@@ -21,18 +21,26 @@ function resolverQrCodeNfce(payload) {
   return null;
 }
 
-function validarCupomPayload(payload) {
+function validarCupomPayload(payload, opts = {}) {
   if (!payload || typeof payload !== "object") {
     throw new Error("Payload de cupom inválido");
   }
   const imprimirQr =
     (process.env.IMPRIMIR_QR_NFCE ?? "true").toLowerCase() !== "false";
   const qrcodeNfe = resolverQrCodeNfce(payload);
+  const relaxQr =
+    opts.relaxQr === true ||
+    payload.permitirSemQr === true ||
+    payload.origem === "contingencia" ||
+    payload.origem === "offline" ||
+    payload.somenteDanfeTermico === true ||
+    payload.danfeTermico === true;
   if (
     payload?.chaveNfe &&
     isNfceModelo65(payload.chaveNfe) &&
     imprimirQr &&
     !qrcodeNfe &&
+    !relaxQr &&
     payload.origem !== "offline" &&
     payload.origem !== "local"
   ) {

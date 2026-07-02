@@ -157,17 +157,78 @@ function npmInstallIfNeeded() {
   run(`"${npm}" rebuild better-sqlite3`, { inherit: true });
 }
 
+function stopAgentService() {
+  try {
+    const ctl = require(path.join(appDir, "scripts", "installer-service-control"));
+    const r = ctl.stopService();
+    if (!r.ok && !r.skipped) {
+      throw new Error(r.error || `Serviço não parou (estado: ${r.state})`);
+    }
+    log.info({ acao: "service_stop", ...r }, "Serviço Margin Engine parado para manutenção");
+    return r;
+  } catch (err) {
+    if (process.platform !== "win32") return { ok: true, skipped: true };
+    log.error({ err: err.message }, "Não foi possível parar o serviço");
+    return { ok: false, error: err.message };
+  }
+}
+
+function backupPreUpdate() {
+  if (mode !== "update") return null;
+  const manifestPath = path.join(appDir, "manifest.json");
+  if (!fs.existsSync(manifestPath)) return null;
+  const backupDir = path.join(appDir, "data", "backup-pre-installer");
+  fs.mkdirSync(backupDir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const dest = path.join(backupDir, `manifest-${stamp}.json`);
+  fs.copyFileSync(manifestPath, dest);
+  log.info({ acao: "backup_manifest", dest }, "Backup do manifest antes da atualização");
+  return dest;
+}
+
 function npmRepairSteps() {
   const npm = process.env.MARGIN_NPM || "npm";
-  if (!fs.existsSync(path.join(appDir, "node_modules"))) {
-    run(`"${npm}" ci --omit=dev`, { inherit: true });
-  }
+  run(`"${npm}" ci --omit=dev`, { inherit: true });
   run(`"${npm}" rebuild better-sqlite3`, { inherit: true });
+}
+
+function validatePostUpdate() {
+  const manifestPath = path.join(appDir, "manifest.json");
+  if (!fs.existsSync(manifestPath)) {
+    throw new Error("manifest.json ausente após atualização");
+  }
+  try {
+    const { verificarManifestBoot } = require(path.join(appDir, "manifestUpdater"));
+    if (typeof verificarManifestBoot === "function") {
+      const ok = verificarManifestBoot();
+      if (ok === false) throw new Error("Integridade do manifest falhou");
+    }
+  } catch (err) {
+    log.warn({ err: err.message }, "Verificação de manifest reportou aviso");
+  }
+  return true;
 }
 
 function generateManifest() {
   const npm = process.env.MARGIN_NPM || "npm";
   run(`"${npm}" run manifest`, { inherit: true });
+}
+
+function startAgentService() {
+  if (!withService) return { ok: true, skipped: true };
+  try {
+    const ctl = require(path.join(appDir, "scripts", "installer-service-control"));
+    const r = ctl.startService();
+    if (!r.ok && !r.skipped) {
+      throw new Error(r.error || `Serviço não iniciou (estado: ${r.state})`);
+    }
+    log.info({ acao: "service_start", ...r }, "Serviço Margin Engine reiniciado");
+    return r;
+  } catch (err) {
+    if (process.platform !== "win32") return { ok: true, skipped: true };
+    log.warn({ err: err.message }, "Não foi possível reiniciar o serviço automaticamente");
+    return { ok: false, error: err.message };
+  }
 }
 
 function runPredeploy() {
@@ -235,6 +296,18 @@ async function runDiagnostic() {
 async function main() {
   log.info({ acao: "bootstrap_start", modo: mode }, "Margin Engine — bootstrap do instalador");
 
+  const needsServiceCycle = withService && (mode === "update" || mode === "repair");
+  if (needsServiceCycle) {
+    const stop = stopAgentService();
+    if (!stop.ok && !stop.skipped) {
+      throw new Error(
+        stop.error ||
+          "Não foi possível parar o serviço Margin Engine. Encerre manualmente e execute novamente.",
+      );
+    }
+    if (mode === "update") backupPreUpdate();
+  }
+
   validateDependencies();
   const dm = ensureDirectories();
   ensureEnv();
@@ -246,6 +319,7 @@ async function main() {
     generateManifest();
     runPredeploy();
     ensureFirewall();
+    if (mode === "update") validatePostUpdate();
   }
 
   if (mode === "repair") {
@@ -256,6 +330,9 @@ async function main() {
   }
 
   registerService();
+  if (needsServiceCycle) {
+    startAgentService();
+  }
   const online = waitForOnline();
   createShortcuts();
   if (online.ok) {

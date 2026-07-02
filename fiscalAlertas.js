@@ -11,6 +11,7 @@ let ultimoAcbrStatus = null;
 let ultimoDiscoCritico = false;
 let alertasDispatchados = 0;
 let relatorioTimer = null;
+const estadoFilas = new Map();
 
 function agenteUrl() {
   const port = process.env.AGENT_PORT || process.env.PORT || "9100";
@@ -148,6 +149,44 @@ function verificarDiscoCritico(espacoDisco) {
   }
 }
 
+function verificarFila(nome, snapshot) {
+  if (!nome || !snapshot) return;
+  const total = Number(snapshot.total ?? 0);
+  const warn = Number(snapshot.limiteAviso ?? 0);
+  const critical = Number(snapshot.limiteCritico ?? 0);
+  const status =
+    critical > 0 && total >= critical
+      ? "critico"
+      : warn > 0 && total >= warn
+        ? "alerta"
+        : "ok";
+  const anterior = estadoFilas.get(nome) || "ok";
+  estadoFilas.set(nome, status);
+  if (status === "ok" || status === anterior) return;
+  void enviarWebhook(
+    "FILA_CRESCENDO",
+    `Fila ${nome} em ${status} (${total} item(ns))`,
+    {
+      nome,
+      status,
+      total,
+      limiteAviso: warn || null,
+      limiteCritico: critical || null,
+      oldestAgeMinutes: snapshot.oldestAgeMinutes ?? null,
+      detalhes: snapshot,
+    },
+  );
+  try {
+    auditLog.registrar("FILA_ALERTA", {
+      nome,
+      status,
+      total,
+      limiteAviso: warn || null,
+      limiteCritico: critical || null,
+    });
+  } catch (_) {}
+}
+
 function contarAlertasDispatchados() {
   return alertasDispatchados;
 }
@@ -176,6 +215,7 @@ module.exports = {
   verificarIncertos,
   onAcbrStatusChange,
   verificarDiscoCritico,
+  verificarFila,
   contarAlertasDispatchados,
   enviarRelatorioWebhook,
   iniciarRelatorioAutomatico,

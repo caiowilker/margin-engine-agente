@@ -105,6 +105,18 @@ const payload = {
     assert.strictEqual(lista.length, 1);
   });
 
+  await test("metricas — expõe limites e antiguidade da fila", async () => {
+    await fila.registrarLocalFirst({
+      ...payload,
+      numeroVendaCliente: "PDV-TEST-LOCAL-4",
+    });
+    const m = fila.metricas();
+    assert.ok(m.total >= 1);
+    assert.ok(m.pendentes >= 1);
+    assert.ok(typeof m.limiteAviso === "number");
+    assert.ok(typeof m.limiteCritico === "number");
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
 })();

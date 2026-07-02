@@ -1,9 +1,9 @@
 # PROGRESS — Agente Local
 
-**Última atualização:** 2026-06-29
+**Última atualização:** 2026-07-01  
+**Versão:** `1.0.0` — certificada com a plataforma
 
-> **Missão 1.0:** [`../../margin-engine/.ai/MISSAO_1.0.md`](../../margin-engine/.ai/MISSAO_1.0.md)  
-> **Execução Fiscal:** [`../../margin-engine/.ai/EXECUCAO_1.0_PARTE_01_FISCAL.md`](../../margin-engine/.ai/EXECUCAO_1.0_PARTE_01_FISCAL.md)  
+> **Certificação:** [`../../margin-engine/.ai/certification/CERTIFICACAO_1.0.md`](../../margin-engine/.ai/certification/CERTIFICACAO_1.0.md)  
 > **Estado oficial:** [`../../margin-engine/.ai/PROJECT_STATUS.md`](../../margin-engine/.ai/PROJECT_STATUS.md)
 
 ---
@@ -12,84 +12,50 @@
 
 | Dimensão | Indicador |
 |----------|-----------|
-| ACBr Monitor (produção) | 🟢 Estável |
+| ACBrLib (padrão 1.0) | 🟢 `ACBR_DRIVER=lib` default |
+| ACBr Monitor (fallback) | 🟢 `ACBR_DRIVER=monitor` |
 | Fila fiscal + callback | 🟢 Produção |
-| Impressão térmica + QR | 🟢 Produção |
-| Idempotência venda | 🟢 Mergeado |
-| ACBrLib (padrão 1.0) | 🟢 Código + CI ✅ · homolog SEFAZ **Windows (você)** |
-| Impressão térmica (ACBrPosPrinter) | 🟢 Provider Pattern + CI · homolog hardware **Windows** |
-| Homologação SEFAZ por loja | 🔵 `homolog-acbrlib/README.md` |
+| Impressão (PrintJobService + hardening F13) | 🟢 Pipeline único certificado |
+| Contingência EPEC | 🟢 Automática F14/F16 |
+| Instalador Windows | 🟢 Stop/start + anti-downgrade |
+| Recovery SQLite degradado | 🟢 F15 |
+| Testes automatizados | 🟢 `npm test` verde |
 
 ---
 
-## Concluído — Fiscal
+## Entregas F13–F17
 
-* Fila fiscal SQLite, mutex ACBr, callback backend com PDF Base64 e `qrcode`
-* Preflight A1/CSC, reconciliação automática, retry classificado
-* NF-e 55 + NFC-e 65, DANFC-e/DANFE PDF, inutilização, cancelamento
-* Rotas `/fiscal/*`, `/acbr/*`, diagnóstico fiscal
-* **Idempotência venda** — `registrarLocalFirst` por `numeroVendaCliente` (hotfix 27/06)
-* **fiscalDriver** — factory `monitor` | `lib` (`fiscal/`, ADR-011)
-* **EPEC nativo Lib** — `emitirEpecLib` (`carregarXML` + `enviar`)
-* **Diagnóstico** — `/diagnostico` expõe `acbr.driver/mode/native`; pacote ZIP JSON
-* **Config fiscal local** — `GET/PUT /config/fiscal`, painel diagnóstico, sync ambiente INI
-* **fiscalDriverResposta** + **acbrLibResposta** — parse unificado Monitor/Lib
-* **fiscalDriverNfceSetup** — preflight Lib-aware
-* **L9 eventos fiscais** — CCe + manifestação (builders Java + `POST /fiscal/evento` + `enviarEventoFiscal` Lib/Monitor)
-* **Benchmark regressão CI** — `MarginBenchmarkRegressionTest`
+| Frente | Entrega |
+|--------|---------|
+| F13 | `print/printJobService.js`, worker, retry, catálogo config |
+| F14 | Watchdog → contingência; instalador stop/restart; docs antivírus |
+| F15 | Limites fila offline/fiscal; `recoverCorruptedBootDbs`; métricas diagnóstico |
+| F16 | EPEC UUID; restore SEFAZ; bootstrap abort; paths docs |
+| F17 | Certificação plataforma 1.0.0 |
 
 ---
 
-## Concluído — Impressão e cupom (2026-06)
+## Driver fiscal
 
-| Item | Arquivo |
-|------|---------|
-| QR ESC/POS nível M + fallback PNG | `impressora.js` |
-| Bloqueio NFC-e 65 sem URL QR | `imprimirCupom` |
-| Portal consulta dinâmico (host da UF) | `documentosFiscais.js` |
-| NF-e 55 vs NFC-e 65 no layout fiscal | `renderCupomConteudo` |
-| Endereço sem duplicar bairro | `formatarLinhaEnderecoEmpresa` |
-| CORS/PNA rotas `/impressora/*` | `index.js` |
-| Config sync catálogo com backend | `configSync.js` |
+```
+fiscal/factory.js
+  ├── lib      ← padrão 1.0 (ACBrLib Pro)
+  └── monitor  ← fallback (ACBr Monitor TCP)
+```
+
+Contrato unificado: `fiscal/contract.js` + testes paridade.
 
 ---
 
-## Desenvolvimento local (merge pendente)
+## Operação
 
-| Item | Status |
-|------|--------|
-| `fiscal/factory.js` + `acbrLibDriver.js` | ✅ código local |
-| `acbrlib/` + homolog produção | ✅ |
-| Docs `ACBRLIB-INTEGRACAO.md`, instalador Windows | ✅ |
-| Refator recovery / watchdog / reconciliação | ✅ diff local |
-
-> Branch `main` pode estar **behind** do remoto (hotfix mergeado). Alinhar com `git pull`.
+- Docs: `docs/OPERACAO.md`, `docs/CONTRATOS_API.md`
+- Checklist Windows: `../../margin-engine/.ai/homologacao/checklist-homologacao-windows-1.0.md`
+- Deploy: `.ai/DEPLOY_PRODUCTION.md`
 
 ---
 
-## Deploy
+## Pendente (não bloqueante 1.0)
 
-* `EMISSAO_FISCAL=true`, ACBr `127.0.0.1:9200`
-* Certificado A1 + CSC no ACBrMonitorPLUS
-* `IMPRIMIR_QR_NFCE=true` (padrão)
-* Ver `.ai/DEPLOY_PRODUCTION.md`
-
----
-
-## Pendente operacional
-
-* Validar impressão QR em impressoras do cliente piloto
-* Homologação SEFAZ ponta a ponta por UF
-* Piloto ACBrLib com paridade MFCS Monitor = Lib
-
----
-
-## Referências
-
-| Documento | Conteúdo |
-|-----------|----------|
-| `.ai/project-brain.md` | Arquitetura agente |
-| [`../../margin-engine/.ai/PROJECT_STATUS.md`](../../margin-engine/.ai/PROJECT_STATUS.md) | Estado oficial Platform |
-| [`../../margin-engine/.ai/progress.md`](../../margin-engine/.ai/progress.md) | Progresso Platform |
-| `.ai/planning/migracao-acbrlib.md` | Migração ACBrLib |
-| `docs/OPERACAO.md`, `docs/CONTRATOS_API.md` | Operação e API |
+- Homologação SEFAZ em hardware Windows por loja piloto
+- Remoção componentes legados exportados sem uso (coordenação com front)

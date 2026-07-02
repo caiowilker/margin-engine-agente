@@ -117,7 +117,8 @@ function calcularStatusGeralEnterprise(ctx) {
     ctx.acbr === "degradado" ||
     ctx.incertosComBackoff > 0 ||
     ctx.discoCritico ||
-    ctx.impressoraOk === false
+    ctx.impressoraOk === false ||
+    ctx.sqliteRecoveryAtivo === true
   ) {
     return "DEGRADADO";
   }
@@ -128,6 +129,8 @@ function coletarContextoEnterprise(deps) {
   const wd = deps.watchdog.statusWatchdog();
   const alertas = deps.filaFiscal.contadoresAlertas();
   const filaSt = deps.filaFiscal.status();
+  const filaOfflineMetricas =
+    typeof deps.fila?.metricas === "function" ? deps.fila.metricas() : null;
   const acbrDet = deps.acbr.obterStatusDetalhe(wd.degraded);
   const espacoDisco = deps.fiscalStorage.statusDiscoPorTipo();
   const discoCritico = ["xml", "pdf", "backup"].some(
@@ -147,6 +150,10 @@ function coletarContextoEnterprise(deps) {
   }
 
   const backupInfo = deps.backup || coletarInfoBackup();
+  const sqliteRecovery =
+    typeof deps.fiscalStorage.getRecoveryState === "function"
+      ? deps.fiscalStorage.getRecoveryState()
+      : null;
 
   let impressora = {
     ok: false,
@@ -163,11 +170,16 @@ function coletarContextoEnterprise(deps) {
     const info = deps.impressoraInfo;
     const st = pb.resolverStatusExibicao(info);
     const driverInfo = factory.getDriverInfo?.() || {};
-    const ultima = info?.ultimaUsada || info?.ultimaImpressao || null;
+    let printObs = null;
+    try {
+      printObs = require("./print/printJobService").observabilidade();
+    } catch (_) {}
+    const ultimaJob = printObs?.ultimaImpressao;
+    const ultima = ultimaJob || info?.ultimaUsada || info?.ultimaImpressao || null;
     impressora = {
       ok: deps.impressoraOk === true,
-      modelo: st.nome || (typeof st.detectada === "object" ? st.detectada?.nome : st.detectada) || null,
-      porta: st.porta || st.acbrPorta || null,
+      modelo: st.nome || (typeof st.detectada === "object" ? st.detectada?.nome : st.detectada) || printObs?.ultimaImpressao?.modelo || null,
+      porta: st.porta || st.acbrPorta || printObs?.ultimaImpressao?.porta || null,
       driver: driverInfo.provider || st.metodo || null,
       estado:
         deps.impressoraOk === true
@@ -175,15 +187,34 @@ function coletarContextoEnterprise(deps) {
           : deps.impressoraOk === false
             ? "offline"
             : "desconhecido",
-      ultimaImpressao: ultima
-        ? typeof ultima === "object"
-          ? ultima.quando || ultima.em || JSON.stringify(ultima).slice(0, 80)
-          : String(ultima)
-        : null,
-      tempoMs: ultima?.durationMs ?? ultima?.tempoMs ?? null,
+      ultimaImpressao: ultimaJob
+        ? `${ultimaJob.tipo || "impressao"} · ${ultimaJob.impressoEm || ultimaJob.atualizadoEm || ""}`
+        : ultima
+          ? typeof ultima === "object"
+            ? ultima.quando || ultima.em || JSON.stringify(ultima).slice(0, 80)
+            : String(ultima)
+          : null,
+      tempoMs: ultimaJob?.duracaoMs ?? ultima?.durationMs ?? ultima?.tempoMs ?? printObs?.tempoMedioMs ?? null,
+      fila: printObs?.fila || null,
+      ultimoErro: printObs?.ultimoErro?.erro || null,
+      tempoMedioMs: printObs?.tempoMedioMs ?? null,
+      tempoMaximoMs: printObs?.tempoMaximoMs ?? null,
+      porTipo: printObs?.porTipo || null,
+      retries: printObs?.stats?.retries ?? 0,
+      jobsProcessados: printObs?.stats?.jobsProcessados ?? 0,
     };
   } catch (_) {
     /* impressora opcional em testes */
+  }
+
+  let diagnosticoImpressao = null;
+  try {
+    diagnosticoImpressao = require("./print/diagnosticoImpressao").coletarDiagnosticoImpressaoSync({
+      impressoraOk: deps.impressoraOk,
+      impressoraInfo: deps.impressoraInfo,
+    });
+  } catch (_) {
+    /* opcional */
   }
 
   const mem = process.memoryUsage();
@@ -241,6 +272,7 @@ function coletarContextoEnterprise(deps) {
     bancoOk: banco.ok,
     manifestOk: deps.manifestUpdater.isManifestOk(),
     impressoraOk: deps.impressoraOk,
+    sqliteRecoveryAtivo: sqliteRecovery?.ativo === true,
   };
 
   return {
@@ -268,11 +300,26 @@ function coletarContextoEnterprise(deps) {
       sessaoLib: libSession,
     },
     impressora,
+    diagnosticoImpressao,
     banco: {
       ...banco,
       path: sanitizarPath(banco.path),
       backup: backupInfo.ultimo || null,
       ultimaCompactacao: backupInfo.ultimaCompactacao || null,
+      recovery: sqliteRecovery
+        ? {
+            ativo: sqliteRecovery.ativo === true,
+            motivo: sqliteRecovery.motivo || null,
+            ultimoCheck: sqliteRecovery.ultimoCheck || null,
+            quarantined: Array.isArray(sqliteRecovery.quarantined)
+              ? sqliteRecovery.quarantined.map((q) => ({
+                  from: sanitizarPath(q.from),
+                  to: sanitizarPath(q.to),
+                  reason: q.reason || null,
+                }))
+              : [],
+          }
+        : null,
     },
     servico,
     atualizador: {
@@ -291,6 +338,8 @@ function coletarContextoEnterprise(deps) {
       incertos: alertas.incertos ?? 0,
       recuperando: alertas.recuperando ?? 0,
       falhas24h: alertas.falhasUltimas24h ?? 0,
+      offline: filaOfflineMetricas,
+      metricasFiscal: alertas.filaFiscalMetricas || filaSt.metricas || null,
     },
     espacoDisco,
     configSync: deps.configSync?.getStatus?.() || null,

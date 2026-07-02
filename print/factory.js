@@ -129,6 +129,12 @@ function resetPrintProvider() {
   cachedProvider = null;
   cachedName = null;
   cachedEffectiveName = null;
+  try {
+    const runtime = require("./acbrPosPrinterRuntime");
+    if (typeof runtime.invalidatePosPrinterSession === "function") {
+      runtime.invalidatePosPrinterSession();
+    }
+  } catch (_) {}
 }
 
 function warnIfSelectedAtBoot() {

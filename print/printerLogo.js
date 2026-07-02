@@ -11,6 +11,9 @@ const LOGO_DIR = path.join(AGENT_ROOT, "data", "printer");
 const LOGO_BMP = path.join(LOGO_DIR, "logo.bmp");
 const LOGO_META = path.join(LOGO_DIR, "logo.meta.json");
 
+/** Cache em memória — evita reler BMP a cada cupom. */
+let logoBufferCache = { sha256: null, buffer: null };
+
 function ensureDir() {
   fs.mkdirSync(LOGO_DIR, { recursive: true });
 }
@@ -71,6 +74,7 @@ function salvar(opts = {}) {
     }
     fs.writeFileSync(LOGO_BMP, buf);
     meta.sha256 = crypto.createHash("sha256").update(buf).digest("hex");
+    logoBufferCache = { sha256: meta.sha256, buffer: buf };
     meta.ativo = opts.ativo !== false;
     meta.modo = opts.modo || "arquivo";
     meta.atualizadoEm = new Date().toISOString();
@@ -86,6 +90,7 @@ function remover() {
   try {
     if (fs.existsSync(LOGO_BMP)) fs.unlinkSync(LOGO_BMP);
   } catch (_) {}
+  logoBufferCache = { sha256: null, buffer: null };
   salvarMeta({
     ativo: false,
     modo: "arquivo",
@@ -113,6 +118,25 @@ function ler() {
     caminhoRelativo: existe ? path.relative(AGENT_ROOT, LOGO_BMP) : null,
     dir: LOGO_DIR,
   };
+}
+
+function lerBuffer() {
+  const meta = lerMeta();
+  if (!meta.ativo) return null;
+  const explicitPath = process.env.PRINTER_LOGO_PATH;
+  const caminho =
+    fs.existsSync(LOGO_BMP)
+      ? LOGO_BMP
+      : explicitPath && fs.existsSync(explicitPath)
+        ? explicitPath
+        : null;
+  if (!caminho) return null;
+  if (logoBufferCache.sha256 === meta.sha256 && logoBufferCache.buffer) {
+    return logoBufferCache.buffer;
+  }
+  const buf = fs.readFileSync(caminho);
+  logoBufferCache = { sha256: meta.sha256, buffer: buf };
+  return buf;
 }
 
 module.exports = {

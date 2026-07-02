@@ -11,6 +11,12 @@ const MIN_MB_XML = parseInt(process.env.DISK_MIN_MB_XML || "50", 10);
 const MIN_MB_PDF = parseInt(process.env.DISK_MIN_MB_PDF || "50", 10);
 const MIN_MB_BACKUP = parseInt(process.env.DISK_MIN_MB_BACKUP || "100", 10);
 let modoDegradado = false;
+let recoveryState = {
+  ativo: false,
+  motivo: null,
+  quarantined: [],
+  ultimoCheck: null,
+};
 
 function resolverDirAlvo(targetPath) {
   if (!targetPath) return PATHS.root;
@@ -113,7 +119,20 @@ function integrityCheck(dbPath) {
   }
 }
 
-function integrityCheckBoot() {
+function quarantineDbFiles(dbPath, reason = "integrity_check") {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const moved = [];
+  for (const suffix of ["", "-wal", "-shm"]) {
+    const src = `${dbPath}${suffix}`;
+    if (!fs.existsSync(src)) continue;
+    const dest = `${src}.corrupt-${stamp}.bak`;
+    fs.renameSync(src, dest);
+    moved.push({ from: src, to: dest, reason });
+  }
+  return moved;
+}
+
+function recoverCorruptedBootDbs(strict = true) {
   const dm = getDirectoryManager();
   const dbs = [
     dm.file("agent", "fila_fiscal.db"),
@@ -124,13 +143,45 @@ function integrityCheckBoot() {
   ];
   const resultados = dbs.map((p) => integrityCheck(p));
   const falhas = resultados.filter((r) => !r.ok && !r.skipped);
-  if (falhas.length) {
-    log.error({ falhas }, "integrity_check falhou");
+  recoveryState = {
+    ativo: false,
+    motivo: null,
+    quarantined: [],
+    ultimoCheck: new Date().toISOString(),
+  };
+  if (falhas.length === 0) {
+    return { ok: true, strict, falhas: [], quarantined: [] };
+  }
+  if (strict) {
+    log.error({ falhas }, "integrity_check falhou em modo estrito");
     throw new Error(
       `SQLite integrity_check falhou: ${falhas.map((f) => f.path).join(", ")}`,
     );
   }
-  return resultados;
+  const quarantined = [];
+  for (const falha of falhas) {
+    try {
+      quarantined.push(...quarantineDbFiles(falha.path, falha.result || "integrity_check"));
+    } catch (err) {
+      log.error({ path: falha.path, err: err.message }, "Falha ao quarentenar SQLite corrompido");
+      throw err;
+    }
+  }
+  modoDegradado = true;
+  recoveryState = {
+    ativo: true,
+    motivo: "sqlite_corrompido_recuperado",
+    quarantined,
+    ultimoCheck: new Date().toISOString(),
+  };
+  log.warn(
+    {
+      falhas,
+      quarantined: quarantined.map((q) => q.to),
+    },
+    "SQLite corrompido detectado no boot; bancos foram quarentenados e o agente seguirá em modo degradado",
+  );
+  return { ok: false, strict, falhas, quarantined };
 }
 
 function purgeArquivos(diasXml = 180, diasPdf = 180, diasBackup = 90) {
@@ -172,6 +223,10 @@ function isModoDegradado() {
   return modoDegradado;
 }
 
+function getRecoveryState() {
+  return recoveryState;
+}
+
 function setModoDegradado(valor) {
   modoDegradado = !!valor;
 }
@@ -190,9 +245,10 @@ module.exports = {
   classificarStatusDisco,
   statusDiscoPorTipo,
   verificarEspacoDisco,
-  integrityCheckBoot,
+  recoverCorruptedBootDbs,
   purgeArquivos,
   isModoDegradado,
+  getRecoveryState,
   setModoDegradado,
   exigirEspacoParaEscrita,
   MIN_MB_XML,

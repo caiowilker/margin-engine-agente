@@ -35,7 +35,7 @@ function tagQrCode(content, opts = {}) {
 function tagBarcode(tipo, code, opts = {}) {
   const t = String(tipo || "CODE128").toUpperCase();
   if (!BARCODE_TIPOS[t]) {
-    throw new Error(`Tipo de código de barras inválido: ${tipo}`);
+    return null;
   }
   const altura = opts.altura ?? cfgNum("PRINTER_BARCODE_ALTURA", 50);
   const largura = opts.largura ?? cfgNum("PRINTER_BARCODE_LARGURA", 2);

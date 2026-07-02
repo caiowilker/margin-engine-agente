@@ -19,8 +19,8 @@ Documento para **técnico de campo**. Não exige conhecimento de programação.
 ### Sequência — Windows (recomendado)
 
 1. Execute **`Margin-Engine-Setup-1.0.0.exe`** como administrador (instalação, atualização ou reparo).
-2. No wizard, confirme o diretório padrão (`%ProgramFiles%\Margin Engine`) e marque **Registrar como serviço Windows**.
-3. Ao finalizar, abra **http://localhost:9100** (atalho criado pelo instalador).
+2. No wizard, confirme o diretório padrão (`%ProgramFiles%\Margin Engine`).
+3. Ao finalizar, o instalador configura o serviço Windows, atualiza o firewall e abre **http://localhost:9100** no navegador.
 4. Digite o **código de ativação** gerado no painel administrativo.
 5. Configure certificado, CSC e impressora **no painel** (se necessário).
 6. Confirme que a página mostra o agente **online**.
@@ -59,8 +59,10 @@ Depois acesse **http://localhost:9100** e ative com o código do painel.
 ### Como atualizar sem perder dados (recomendado)
 
 1. Execute **`Margin-Engine-Setup-1.0.0.exe /MODE=update`** como administrador (ou o mesmo instalador sobre a versão existente).
-2. O bootstrap preserva **`%ProgramData%\MarginEngine`** (bancos, config, logs, fiscal).
-3. Ao finalizar, confira **http://localhost:9100/diagnostico/dashboard** → `manifestOk: true`.
+2. O instalador **para o serviço automaticamente** antes de copiar arquivos e **reinicia** ao concluir o bootstrap.
+3. **Downgrade é bloqueado** — se a versão do instalador for anterior à instalada, o assistente exibe erro e cancela.
+4. O bootstrap preserva **`%ProgramData%\MarginEngine`** (bancos, config, logs, fiscal).
+5. Ao finalizar, confira **http://localhost:9100/diagnostico/dashboard** → `manifestOk: true`.
 
 ### Atualização manual (desenvolvimento)
 
@@ -93,6 +95,80 @@ O manifest grava o **SHA-256** de cada arquivo `.js`. O agente usa isso para det
    - **versão** = `1.0.0` (ou a versão esperada)
    - **manifestOk** = `true`
    - **statusGeral** = `ok` ou `atencao` (não `critico`)
+
+---
+
+## 2.1 Antivírus e Windows Defender
+
+O agente executa Node.js, acessa certificados A1, grava SQLite e comunica com a SEFAZ. Antivírus agressivos podem bloquear DLLs nativas (`better-sqlite3`, ACBrLib) ou atrasar a emissão fiscal.
+
+### Exclusões recomendadas (Windows Defender)
+
+Adicione **pastas** (não desative o antivírus inteiro):
+
+| Caminho | Motivo |
+|---------|--------|
+| `%ProgramFiles%\Margin Engine\` | Binários e `node_modules` do agente |
+| `%ProgramData%\MarginEngine\` | Bancos SQLite, XML/PDF fiscal, logs |
+| Processo `node.exe` em `%ProgramFiles%\Margin Engine\node\` | Serviço local na porta 9100 |
+
+**Como configurar:** Configurações do Windows → Privacidade e segurança → Segurança do Windows → Proteção contra vírus e ameaças → Gerenciar configurações → Exclusões → adicionar pastas acima.
+
+### Sintomas de falso positivo
+
+| Sintoma | Ação |
+|---------|------|
+| Serviço para sozinho após update | Conferir exclusões; executar **Reparar** no instalador |
+| `manifestOk: false` sem alteração manual | Regenerar manifest (`npm run manifest`) após confirmar que arquivos não foram quarentenados |
+| Emissão fiscal lenta ou timeout | Verificar se ACBrLib/DLL não está em quarentena |
+| Erro ao abrir `fila_fiscal.db` | Restaurar backup; adicionar `%ProgramData%\MarginEngine\` às exclusões |
+
+---
+
+## 2.2 Contingência fiscal (EPEC)
+
+Quando a SEFAZ fica indisponível, o agente entra em **contingência automática**:
+
+1. **Watchdog SEFAZ** — após falhas consecutivas, pausa a fila fiscal e ativa contingência.
+2. **Emissão EPEC** — vendas seguem enfileiradas localmente (SQLite) até a normalização.
+3. **Retransmissão** — quando a SEFAZ volta, o agente sincroniza EPECs pendentes (intervalo ~5 min + ao restaurar conexão).
+
+### Verificar status
+
+- Painel: **http://localhost:9100/contingencia/status**
+- Dashboard: indicador de fila fiscal e contingência ativa
+
+### Encerrar contingência manualmente
+
+Use somente quando a SEFAZ estiver estável e não houver EPECs pendentes:
+
+```bash
+curl -X POST http://localhost:9100/contingencia/encerrar \
+  -H "X-Agent-Token: SEU_TOKEN_DO_PAINEL"
+```
+
+### O que NÃO fazer
+
+- Não apagar `agent/fila.db` ou `agent/fila_fiscal.db` durante contingência.
+- Não emitir manualmente o mesmo documento duas vezes para a mesma venda.
+- Não desligar o serviço no meio de uma retransmissão EPEC.
+
+---
+
+## 2.3 Persistência de emergência do checkout
+
+Quando o backend cai durante o pagamento:
+
+1. Se o **agente local estiver online**, a venda já fica persistida de forma definitiva em `fila.db` no próprio caixa.
+2. Se **backend e agente** estiverem indisponíveis ao mesmo tempo, o front salva a venda em `pdv-emergencia` no navegador **apenas como buffer temporário**.
+3. Assim que o **agente voltar** (mesmo com backend ainda offline), o front reenfileira automaticamente essas vendas no agente.
+4. Quando o backend normaliza, o agente sincroniza a fila sem bloquear o caixa.
+
+### Regra operacional
+
+- **Não limpe dados do navegador** enquanto houver vendas de emergência pendentes.
+- Priorize restaurar o **agente local** primeiro; não é necessário esperar o backend para descarregar o buffer do navegador.
+- Depois da normalização, confirme no diagnóstico que a fila offline voltou a zero.
 
 ---
 
@@ -333,8 +409,12 @@ O arquivo `.env` do agente serve só para:
 
 1. **Porta ocupada:** outro processo usando 9100 — altere `PORT` no `.env` ou pare o conflito.
 2. **`.env` inválido:** compare com `.env.example`; `PORT` e `ACBR_PORT` devem ser números.
-3. **Integridade do banco:** rode `npm run predeploy` — falha em `integrity_check` indica banco corrompido; restaure backup de `%ProgramData%\MarginEngine\data\`.
-4. **Serviço Windows:** verifique Event Viewer / log do serviço; tente `npm start` manual no terminal para ver erro.
+3. **SQLite corrompido (modo degradado):**
+   - Em modo padrão, o boot pode parar se `FISCAL_INTEGRITY_STRICT=true`.
+   - Em modo degradado (`false`), o agente quarentena automaticamente bancos corrompidos em arquivos `*.corrupt-<data>.bak` e sobe para manter a operação.
+   - Verifique `/diagnostico` → `enterprise.banco.recovery`.
+4. **Recuperação SQLite:** copie os arquivos `.bak` quarentenados para análise/suporte antes de qualquer limpeza manual.
+5. **Serviço Windows:** verifique Event Viewer / log do serviço; tente `npm start` manual no terminal para ver erro.
 
 ---
 
@@ -383,10 +463,10 @@ Todos os dados persistentes ficam em **`%ProgramData%\MarginEngine`** (Windows) 
 | Arquivo / pasta (relativo à raiz) | Função |
 |-----------------------------------|--------|
 | `Config/config.json` | Configuração do PDV (sem token em texto puro) |
-| `fila/fila.db` | Fila offline de vendas + EPEC |
-| `fila/fila_fiscal.db` | Fila de emissão NFC-e |
-| `data/fiscal_metrics.db` | Métricas de performance |
-| `data/audit.db` | Log de auditoria (operações sensíveis) |
+| `agent/fila.db` | Fila offline de vendas (inclui tabela `epec_pendentes`) |
+| `agent/fila_fiscal.db` | Fila de emissão NFC-e / EPEC |
+| `agent/fiscal_metrics.db` | Métricas de performance fiscal |
+| `agent/audit.db` | Log de auditoria (operações sensíveis) |
 | `Logs/` | Logs do agente (LoggingService) |
 | `Fiscal/XML/` | XMLs fiscais |
 | `Fiscal/PDF/` | PDFs DANFC-e |

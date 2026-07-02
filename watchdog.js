@@ -12,7 +12,7 @@ function statusWatchdog() {
   return { degraded, falhasConsecutivas, intervalMs: INTERVAL_MS };
 }
 
-async function tick(restartAcbrFn) {
+async function tick(restartAcbrFn, hooks = {}) {
   const filaFiscal = require("./filaFiscal");
   if (fiscalDriver.isAcbrBusy?.() || filaFiscal.estaProcessando?.()) {
     return;
@@ -23,6 +23,11 @@ async function tick(restartAcbrFn) {
       if (degraded) {
         console.log("[Watchdog ACBr] Serviço restaurado — retomando fila fiscal");
         filaFiscal.retomarFila();
+        if (typeof hooks.onRestored === "function") {
+          hooks.onRestored().catch((e) =>
+            console.warn("[Watchdog ACBr] onRestored:", e.message),
+          );
+        }
       }
       falhasConsecutivas = 0;
       degraded = false;
@@ -37,6 +42,11 @@ async function tick(restartAcbrFn) {
       console.warn(
         `[Watchdog ACBr] DEGRADED após ${falhasConsecutivas} falhas — fila pausada`,
       );
+      if (typeof hooks.onDegraded === "function") {
+        hooks.onDegraded(err).catch((e) =>
+          console.warn("[Watchdog ACBr] onDegraded:", e.message),
+        );
+      }
       if (
         restartAcbrFn &&
         (process.env.ACBR_AUTO_RESTART || "false").toLowerCase() === "true"
@@ -51,10 +61,11 @@ async function tick(restartAcbrFn) {
   }
 }
 
-function iniciar(restartAcbrFn) {
+function iniciar(restartAcbrFn, hooks = {}) {
   if (timer) return;
-  timer = setInterval(() => tick(restartAcbrFn), INTERVAL_MS);
-  tick(restartAcbrFn);
+  const run = () => tick(restartAcbrFn, hooks);
+  timer = setInterval(run, INTERVAL_MS);
+  run();
 }
 
 function parar() {

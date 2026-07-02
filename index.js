@@ -34,7 +34,7 @@
 //   ✓ Fila offline SQLite
 //   ✓ Impressora térmica ESC/POS
 //   ✓ ACBr Monitor via socket TCP
-//   ✓ Contingência EPEC automática com scheduler
+//   ✓ Contingência EPEC: ativação automática via watchdog SEFAZ + sync pelo agente
 // ============================================================
 
 require("dotenv").config();
@@ -341,16 +341,22 @@ async function boot() {
     require("./fiscalConfigAuthority").carregarPersistido();
   } catch (_) {}
   try {
-    fiscalStorage.integrityCheckBoot();
+    fiscalStorage.recoverCorruptedBootDbs(
+      (process.env.FISCAL_INTEGRITY_STRICT || "true").toLowerCase() === "true",
+    );
   } catch (err) {
     console.error("[Boot] Falha integrity_check:", err.message);
-    if ((process.env.FISCAL_INTEGRITY_STRICT || "true").toLowerCase() === "true") {
-      throw err;
-    }
+    throw err;
   }
   const disco = fiscalStorage.verificarEspacoDisco();
   if (disco.degradado) {
     console.warn(`[Boot] Modo degradado — disco: ${disco.livreMb}MB livres`);
+  }
+  const sqliteRecovery = fiscalStorage.getRecoveryState?.();
+  if (sqliteRecovery?.ativo) {
+    console.warn(
+      `[Boot] Modo degradado — SQLite recuperado automaticamente (${sqliteRecovery.quarantined.length} arquivo(s) quarentenado(s))`,
+    );
   }
   setImmediate(() => {
     try {
@@ -373,7 +379,21 @@ async function boot() {
   iniciarServidor();
 
   filaFiscal.iniciarWorker();
-  watchdog.iniciar(reiniciarEmissorFiscal);
+  try {
+    require("./print/printJobService").iniciarWorker();
+  } catch (err) {
+    console.warn("[PrintJob] Worker não iniciado:", err.message);
+  }
+  watchdog.iniciar(reiniciarEmissorFiscal, {
+    onDegraded: (err) =>
+      ativarContingencia(err?.message || "SEFAZ indisponível — fila fiscal pausada"),
+    onRestored: async () => {
+      if (!estadoContingencia.ativa) return;
+      filaFiscal.retomarFila();
+      await tentarSincronizarEpecs();
+      await verificarEncerrarContingenciaEpec();
+    },
+  });
   fiscalPurge.iniciar();
   reconciliacaoFiscal.iniciar(lerConfig);
   try {
@@ -891,6 +911,7 @@ function coletarDadosAlertas() {
     const imp = impressoraParaEnterprise();
     const logsEnterprise = diagnosticoEnterprise.lerUltimosLogsEnterprise(15);
     const enterprise = diagnosticoEnterprise.coletarContextoEnterprise({
+      fila,
       filaFiscal,
       fiscalStorage,
       acbr: fiscalDriver,
@@ -1009,8 +1030,9 @@ function iniciarServidor() {
       ]);
       _diagImpressoraCache = { ok: impressoraOk, info: impressoraInfo, at: Date.now() };
 
-      const { pendentes: filaOffline, falhas: filaFalhas } =
-        await fila.contadores();
+      const { pendentes: filaOffline, falhas: filaFalhas } = await fila.contadores();
+      const filaOfflineMetricas =
+        typeof fila.metricas === "function" ? fila.metricas() : null;
       const contingencia = lerContingencia();
 
       let epecPendentes = 0;
@@ -1111,6 +1133,7 @@ function iniciarServidor() {
           pendentes: filaOffline,
           falhas: filaFalhas,
           auth: fila.statusAuth ? fila.statusAuth() : undefined,
+          metricas: filaOfflineMetricas,
         },
 
         contingencia: {
@@ -1142,6 +1165,7 @@ function iniciarServidor() {
             const diagnosticoEnterprise = require("./diagnosticoEnterprise");
             const logsEnterprise = diagnosticoEnterprise.lerUltimosLogsEnterprise(20);
             return diagnosticoEnterprise.coletarContextoEnterprise({
+              fila,
               filaFiscal,
               fiscalStorage,
               acbr: fiscalDriver,
@@ -2289,13 +2313,17 @@ function iniciarServidor() {
           );
         }
       }
-      const idLocal = backendEpecId || `epec-${Date.now()}`;
+      const idLocal = backendEpecId || `local:${numeroVenda}:${Date.now()}`;
       if (db) {
         db.prepare(
           `INSERT OR REPLACE INTO epec_pendentes (epec_id, numero_venda, xml_epec) VALUES (?, ?, ?)`,
         ).run(idLocal, numeroVenda, xmlEpec);
       }
-      res.json({ ok: true, epecId: idLocal });
+      res.json({
+        ok: true,
+        epecId: idLocal,
+        aguardandoBackend: !backendEpecId,
+      });
     } catch (err) {
       res.status(500).json({ erro: err.message });
     }
@@ -2348,12 +2376,26 @@ function iniciarServidor() {
   });
 
   // ── Impressora ────────────────────────────────────────────────────────────────
+  const { formatarErroHttpImpressao } = require("./print/printOperador");
+  function responderErroImpressao(res, err) {
+    res.status(500).json(formatarErroHttpImpressao(err));
+  }
+
   async function imprimirCupomHandler(req, res) {
     try {
       const resultado = await impressora.imprimirCupom(req.body);
-      res.json({ ok: true, ...resultado });
+      if (resultado?.queued) {
+        return res.status(202).json({
+          ok: false,
+          fila: true,
+          mensagem: resultado.message,
+          jobId: resultado.jobId,
+          job: resultado.job,
+        });
+      }
+      res.json({ ok: true, jobId: resultado.jobId, ...resultado });
     } catch (err) {
-      res.status(500).json({ erro: err.message });
+      responderErroImpressao(res, err);
     }
   }
 
@@ -2365,7 +2407,7 @@ function iniciarServidor() {
       await impressora.imprimirAbertura(req.body);
       res.json({ ok: true });
     } catch (err) {
-      res.status(500).json({ erro: err.message });
+      responderErroImpressao(res, err);
     }
   });
 
@@ -2374,7 +2416,7 @@ function iniciarServidor() {
       await impressora.imprimirFechamento(req.body);
       res.json({ ok: true });
     } catch (err) {
-      res.status(500).json({ erro: err.message });
+      responderErroImpressao(res, err);
     }
   });
 
@@ -2387,7 +2429,7 @@ function iniciarServidor() {
         await impressora.imprimirMovimentoCaixa(req.body);
         res.json({ ok: true });
       } catch (err) {
-        res.status(500).json({ erro: err.message });
+        responderErroImpressao(res, err);
       }
     },
   );
@@ -2397,7 +2439,7 @@ function iniciarServidor() {
       await impressora.abrirGaveta();
       res.json({ ok: true });
     } catch (err) {
-      res.status(500).json({ erro: err.message });
+      responderErroImpressao(res, err);
     }
   });
 
@@ -2433,6 +2475,7 @@ function iniciarServidor() {
         info?.impressora ||
         null,
       ultimaUsada: info?.ultimaUsada || null,
+      jobs: impressora.printJobService?.observabilidade?.() || null,
     });
   });
 
@@ -2441,7 +2484,7 @@ function iniciarServidor() {
       const resultado = await impressora.imprimirTeste();
       res.json({ ok: true, ...resultado });
     } catch (err) {
-      res.status(500).json({ erro: err.message });
+      responderErroImpressao(res, err);
     }
   });
 
@@ -2451,7 +2494,7 @@ function iniciarServidor() {
       const resultado = await impressora.imprimirSegundaVia(body);
       res.json({ ok: true, segundaVia: true, ...resultado });
     } catch (err) {
-      res.status(500).json({ erro: err.message });
+      responderErroImpressao(res, err);
     }
   });
 
@@ -2563,6 +2606,57 @@ function iniciarServidor() {
       res.json({ ok: true, ...result.info, config: result.config });
     } catch (err) {
       res.status(500).json({ erro: err.message });
+    }
+  });
+
+  app.get("/impressora/jobs", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    try {
+      const pjs = require("./print/printJobService");
+      const status = req.query.status ? String(req.query.status) : undefined;
+      const limit = req.query.limit ? Number(req.query.limit) : 50;
+      res.json({
+        jobs: pjs.listarJobs({ status, limit }),
+        observabilidade: pjs.observabilidade(),
+      });
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
+  });
+
+  app.get("/impressora/jobs/:id", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    try {
+      const job = require("./print/printJobService").buscarJob(req.params.id);
+      if (!job) return res.status(404).json({ erro: "Job não encontrado" });
+      res.json(job);
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
+  });
+
+  app.post("/impressora/jobs/:id/reprocessar", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    try {
+      const job = require("./print/printJobService").reprocessar(req.params.id);
+      res.json({ ok: true, job });
+    } catch (err) {
+      res.status(400).json({ erro: err.message });
+    }
+  });
+
+  app.post("/impressora/jobs/:id/reimprimir", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    try {
+      const job = require("./print/printJobService").reimprimir(req.params.id, req.body || {});
+      res.json({ ok: true, job });
+    } catch (err) {
+      res.status(400).json({ erro: err.message });
+    }
+  });
+
+  app.post("/impressora/jobs/:id/cancelar", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    try {
+      const job = require("./print/printJobService").cancelar(req.params.id);
+      res.json({ ok: true, job });
+    } catch (err) {
+      res.status(400).json({ erro: err.message });
     }
   });
 
@@ -2718,6 +2812,12 @@ function formatUptime(seconds) {
 }
 
 // ── Contingência: funções internas ────────────────────────────────────────────
+function isUuidEpec(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(value || ""),
+  );
+}
+
 async function registrarEpecNoBackend(cfg, numeroVenda, xmlEpec) {
   const fetch = require("node-fetch");
   const resp = await fetch(`${cfg.backendUrl}/pdv/contingencia/epec`, {
@@ -2817,7 +2917,7 @@ function registrarHandlerEpecFila() {
         );
       }
       const cfg = await lerConfig();
-      if (cfg.backendUrl && cfg.backendToken && payload.epecId) {
+      if (cfg.backendUrl && cfg.backendToken && payload.epecId && isUuidEpec(payload.epecId)) {
         const fetch = require("node-fetch");
         const patch = await fetch(
           `${cfg.backendUrl}/pdv/contingencia/epec/${payload.epecId}/transmitido?chaveEpec=${encodeURIComponent(resultado.chave)}`,
@@ -2873,6 +2973,25 @@ async function tentarSincronizarEpecs() {
     )
     .all();
   if (pendentes.length === 0) return;
+  for (const row of pendentes) {
+    if (!isUuidEpec(row.epec_id) && cfg.backendUrl && cfg.backendToken) {
+      try {
+        const backendId = await registrarEpecNoBackend(cfg, row.numero_venda, row.xml_epec);
+        if (backendId && isUuidEpec(backendId)) {
+          db.prepare(`UPDATE epec_pendentes SET epec_id = ? WHERE id = ?`).run(
+            backendId,
+            row.id,
+          );
+          row.epec_id = backendId;
+        }
+      } catch (err) {
+        console.warn(
+          `[EPEC] Retentativa de registro no backend falhou (${row.numero_venda}):`,
+          err.message,
+        );
+      }
+    }
+  }
   console.log(`[EPEC] Enfileirando ${pendentes.length} XML(s) para retransmissão...`);
   for (const row of pendentes) {
     filaFiscal.enfileirar(

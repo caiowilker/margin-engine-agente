@@ -275,25 +275,68 @@ function buildRuntimeValues() {
   return values;
 }
 
-async function withPosPrinterSession(fn) {
-  const bundle = loadLib();
-  if (!bundle || bundle.error) {
-    throw new Error(
-      bundle?.error ||
-        "[ACBrPosPrinter] Biblioteca nativa não encontrada — configure ACBR_POSPRINTER_LIB_PATH",
-    );
-  }
-  const iniPath = bundle.iniPath || resolveIniPath();
-  fs.mkdirSync(path.dirname(iniPath), { recursive: true });
-  if (!fs.existsSync(iniPath)) {
-    fs.writeFileSync(iniPath, defaultIniContent(), "utf8");
+async function withPosPrinterSession(fn, opts = {}) {
+  const SESSION_IDLE_MS = parseInt(process.env.ACBR_POS_SESSION_IDLE_MS || "45000", 10);
+  let _activeSession = withPosPrinterSession._session;
+  let _refCount = withPosPrinterSession._refCount || 0;
+  let _idleTimer = withPosPrinterSession._idleTimer;
+
+  function configKey() {
+    return JSON.stringify(buildRuntimeValues());
   }
 
-  const cwdBefore = process.cwd();
-  const libDir = bundle.root || path.dirname(bundle.libPath);
-  const cryptKey = process.env.ACBR_POSPRINTER_CRYPT_KEY || process.env.ACBR_LIB_CRYPT_KEY || "";
+  async function teardownSession(sess) {
+    if (!sess?.bundle) return;
+    try {
+      await promisify(sess.bundle.lib.POS_Desativar.async.bind(sess.bundle.lib.POS_Desativar));
+    } catch (_) {}
+    try {
+      await promisify(sess.bundle.lib.POS_Finalizar.async.bind(sess.bundle.lib.POS_Finalizar));
+    } catch (_) {}
+    try {
+      if (sess.cwdBefore) process.chdir(sess.cwdBefore);
+    } catch (_) {}
+    if (withPosPrinterSession._session === sess) {
+      withPosPrinterSession._session = null;
+    }
+  }
 
-  try {
+  function scheduleIdle(sess) {
+    if (_idleTimer) clearTimeout(_idleTimer);
+    _idleTimer = setTimeout(() => {
+      withPosPrinterSession._idleTimer = null;
+      if ((withPosPrinterSession._refCount || 0) <= 0 && withPosPrinterSession._session) {
+        teardownSession(withPosPrinterSession._session).catch(() => {});
+      }
+    }, SESSION_IDLE_MS);
+    withPosPrinterSession._idleTimer = _idleTimer;
+  }
+
+  const key = configKey();
+  if (_activeSession && _activeSession.configKey !== key) {
+    await teardownSession(_activeSession);
+    _activeSession = null;
+    withPosPrinterSession._session = null;
+  }
+
+  if (!_activeSession) {
+    const bundle = loadLib();
+    if (!bundle || bundle.error) {
+      throw new Error(
+        bundle?.error ||
+          "[ACBrPosPrinter] Biblioteca nativa não encontrada — configure ACBR_POSPRINTER_LIB_PATH",
+      );
+    }
+    const iniPath = bundle.iniPath || resolveIniPath();
+    fs.mkdirSync(path.dirname(iniPath), { recursive: true });
+    if (!fs.existsSync(iniPath)) {
+      fs.writeFileSync(iniPath, defaultIniContent(), "utf8");
+    }
+
+    const cwdBefore = process.cwd();
+    const libDir = bundle.root || path.dirname(bundle.libPath);
+    const cryptKey = process.env.ACBR_POSPRINTER_CRYPT_KEY || process.env.ACBR_LIB_CRYPT_KEY || "";
+
     if (fs.existsSync(libDir)) process.chdir(libDir);
     const iniForLib =
       bundle.staged && bundle.root && String(iniPath).startsWith(bundle.root)
@@ -304,20 +347,35 @@ async function withPosPrinterSession(fn) {
     await gravarConfigIni(bundle, iniForLib, buildRuntimeValues());
     await callPos(bundle, bundle.lib.POS_Ativar.async);
 
-    try {
-      return await fn(bundle);
-    } finally {
-      try {
-        await promisify(bundle.lib.POS_Desativar.async.bind(bundle.lib.POS_Desativar));
-      } catch (_) {}
-      try {
-        await promisify(bundle.lib.POS_Finalizar.async.bind(bundle.lib.POS_Finalizar));
-      } catch (_) {}
+    _activeSession = { bundle, configKey: key, cwdBefore, iniForLib };
+    withPosPrinterSession._session = _activeSession;
+  }
+
+  withPosPrinterSession._refCount = (_refCount += 1);
+  if (_idleTimer) {
+    clearTimeout(_idleTimer);
+    withPosPrinterSession._idleTimer = null;
+  }
+
+  try {
+    return await fn(_activeSession.bundle);
+  } catch (err) {
+    const invalidate =
+      opts.invalidateOnError ||
+      /porta|offline|inicializar|ativar|desativar|finalizar|pos_imprimir/i.test(
+        String(err?.message || ""),
+      );
+    if (invalidate && _activeSession) {
+      await teardownSession(_activeSession);
+      withPosPrinterSession._session = null;
+      _activeSession = null;
     }
+    throw err;
   } finally {
-    try {
-      process.chdir(cwdBefore);
-    } catch (_) {}
+    withPosPrinterSession._refCount = Math.max(0, (withPosPrinterSession._refCount || 1) - 1);
+    if (withPosPrinterSession._session) {
+      scheduleIdle(withPosPrinterSession._session);
+    }
   }
 }
 
@@ -399,6 +457,26 @@ async function lerVersaoNative() {
   });
 }
 
+async function invalidatePosPrinterSession() {
+  const sess = withPosPrinterSession._session;
+  if (!sess?.bundle) return;
+  withPosPrinterSession._refCount = 0;
+  try {
+    await promisify(sess.bundle.lib.POS_Desativar.async.bind(sess.bundle.lib.POS_Desativar));
+  } catch (_) {}
+  try {
+    await promisify(sess.bundle.lib.POS_Finalizar.async.bind(sess.bundle.lib.POS_Finalizar));
+  } catch (_) {}
+  try {
+    if (sess.cwdBefore) process.chdir(sess.cwdBefore);
+  } catch (_) {}
+  withPosPrinterSession._session = null;
+  if (withPosPrinterSession._idleTimer) {
+    clearTimeout(withPosPrinterSession._idleTimer);
+    withPosPrinterSession._idleTimer = null;
+  }
+}
+
 module.exports = {
   canLoadNativeLib,
   resolveLibPath,
@@ -406,6 +484,7 @@ module.exports = {
   prepareRuntimePaths,
   loadLib,
   withPosPrinterSession,
+  invalidatePosPrinterSession,
   imprimirTagsNative,
   abrirGavetaNative,
   lerStatusFormatadoNative,

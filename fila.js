@@ -30,6 +30,8 @@ const DB_PATH = process.env.DB_PATH || getDirectoryManager().file("agent", "fila
 const CONFIG_PATH = getDirectoryManager().file("agent", "config.json");
 const MAX_TENTATIVAS = parseInt(process.env.MAX_TENTATIVAS || "10", 10);
 const TIMEOUT_MS = parseInt(process.env.BACKEND_TIMEOUT_MS || "5000", 10);
+const OFFLINE_QUEUE_WARN = parseInt(process.env.OFFLINE_QUEUE_WARN || "50", 10);
+const OFFLINE_QUEUE_CRITICAL = parseInt(process.env.OFFLINE_QUEUE_CRITICAL || "200", 10);
 
 let BACKEND_URL = process.env.BACKEND_URL || "";
 let BACKEND_TOKEN = process.env.BACKEND_TOKEN || "";
@@ -170,6 +172,7 @@ function enfileirar(payload) {
     VALUES (?, ?)
   `);
   stmt.run(String(numero), JSON.stringify(payload));
+  avaliarLimitesFila(metricas());
 }
 
 function calcularLucroMargem(payload) {
@@ -213,6 +216,72 @@ function marcarSincronizado(numeroVenda) {
          sincronizado_em = strftime('%Y-%m-%dT%H:%M:%fZ','now')
      WHERE numero_venda = ?`,
   ).run(String(numeroVenda));
+  avaliarLimitesFila(metricas());
+}
+
+function metricas() {
+  try {
+    if (!db) {
+      return {
+        total: 0,
+        pendentes: 0,
+        falhas: 0,
+        sincronizadas: 0,
+        limiteAviso: OFFLINE_QUEUE_WARN,
+        limiteCritico: OFFLINE_QUEUE_CRITICAL,
+        oldestAgeMinutes: null,
+      };
+    }
+    const row = db
+      .prepare(
+        `
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN status = 'PENDENTE' THEN 1 ELSE 0 END) AS pendentes,
+        SUM(CASE WHEN status = 'FALHA_PERMANENTE' THEN 1 ELSE 0 END) AS falhas,
+        SUM(CASE WHEN status = 'SINCRONIZADO' THEN 1 ELSE 0 END) AS sincronizadas,
+        MIN(CASE WHEN status = 'PENDENTE' THEN criado_em END) AS oldest_pendente
+      FROM fila_vendas
+    `,
+      )
+      .get();
+    const oldestAgeMinutes = row?.oldest_pendente
+      ? Math.max(
+          0,
+          Math.round((Date.now() - new Date(row.oldest_pendente).getTime()) / 60000),
+        )
+      : null;
+    return {
+      total: row?.total || 0,
+      pendentes: row?.pendentes || 0,
+      falhas: row?.falhas || 0,
+      sincronizadas: row?.sincronizadas || 0,
+      limiteAviso: OFFLINE_QUEUE_WARN,
+      limiteCritico: OFFLINE_QUEUE_CRITICAL,
+      oldestAgeMinutes,
+    };
+  } catch (err) {
+    console.warn("[Fila] Erro ao calcular métricas:", err.message);
+    return {
+      total: 0,
+      pendentes: 0,
+      falhas: 0,
+      sincronizadas: 0,
+      limiteAviso: OFFLINE_QUEUE_WARN,
+      limiteCritico: OFFLINE_QUEUE_CRITICAL,
+      oldestAgeMinutes: null,
+      erro: err.message,
+    };
+  }
+}
+
+function avaliarLimitesFila(snapshot) {
+  try {
+    const fiscalAlertas = require("./fiscalAlertas");
+    if (typeof fiscalAlertas.verificarFila === "function") {
+      fiscalAlertas.verificarFila("vendas_offline", snapshot);
+    }
+  } catch (_) {}
 }
 
 function sincronizarVendaEmBackground(payload) {
@@ -542,21 +611,13 @@ function registrarFalhaLote(pendentes, erro) {
     for (const row of rows) stmt.run(erro, row.id);
   });
   tx(pendentes);
+  avaliarLimitesFila(metricas());
 }
 
 function contadores() {
   try {
     if (!db) return { pendentes: 0, falhas: 0 };
-    const row = db
-      .prepare(
-        `
-      SELECT
-        SUM(CASE WHEN status = 'PENDENTE'         THEN 1 ELSE 0 END) AS pendentes,
-        SUM(CASE WHEN status = 'FALHA_PERMANENTE' THEN 1 ELSE 0 END) AS falhas
-      FROM fila_vendas
-    `,
-      )
-      .get();
+    const row = metricas();
     return {
       pendentes: row?.pendentes || 0,
       falhas: row?.falhas || 0,
@@ -617,6 +678,7 @@ function resetarFalhas(numeros) {
       result = stmt.run();
     }
     console.log(`[Fila] ${result.changes} item(s) resetado(s) para PENDENTE.`);
+    avaliarLimitesFila(metricas());
     return { resetados: result.changes };
   } catch (err) {
     console.warn("[Fila] Erro ao resetar falhas:", err.message);
@@ -633,6 +695,7 @@ function purgeAntigos(dias = 30) {
          AND datetime(criado_em) < datetime('now', ?)`,
       )
       .run(`-${dias} days`);
+    avaliarLimitesFila(metricas());
     return { removidos: r.changes };
   } catch (err) {
     console.warn("[Fila] Erro no purge:", err.message);
@@ -650,6 +713,7 @@ module.exports = {
   montarRespostaVenda,
   sincronizar,
   contadores,
+  metricas,
   listar,
   resetarFalhas,
   statusAuth,
