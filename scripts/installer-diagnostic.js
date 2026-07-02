@@ -158,7 +158,7 @@ async function runDiagnostic() {
       "error",
       "ME-005",
       "Não foi possível preparar os diretórios de dados do Margin Engine.",
-      `Verifique permissões em ProgramData. Detalhe: ${err.message}`,
+      `Verifique permissões na pasta de dados do Margin Engine (${dm?.ROOT || "dados locais"}). Detalhe: ${err.message}`,
     );
   }
 

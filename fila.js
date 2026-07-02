@@ -629,7 +629,7 @@ function purgeAntigos(dias = 30) {
     if (!db) inicializar();
     const r = db
       .prepare(
-        `DELETE FROM fila_vendas WHERE status = 'CONCLUIDO'
+        `DELETE FROM fila_vendas WHERE status = 'SINCRONIZADO'
          AND datetime(criado_em) < datetime('now', ?)`,
       )
       .run(`-${dias} days`);

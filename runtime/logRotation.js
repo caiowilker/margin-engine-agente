@@ -32,6 +32,22 @@ function countLines(buf) {
   return n;
 }
 
+function compressRotatedAsync(rotated, gz) {
+  const input = fs.createReadStream(rotated);
+  const output = fs.createWriteStream(gz);
+  const gzip = zlib.createGzip();
+  input.on("error", () => {});
+  output.on("error", () => {});
+  input.pipe(gzip).pipe(output);
+  output.on("finish", () => {
+    try {
+      fs.unlinkSync(rotated);
+    } catch {
+      /* ignore */
+    }
+  });
+}
+
 function rotate(filePath, state) {
   const dir = path.dirname(filePath);
   const base = path.basename(filePath, ".log");
@@ -43,9 +59,7 @@ function rotate(filePath, state) {
       fs.renameSync(filePath, rotated);
       if (COMPRESS) {
         const gz = `${rotated}.gz`;
-        const data = fs.readFileSync(rotated);
-        fs.writeFileSync(gz, zlib.gzipSync(data));
-        fs.unlinkSync(rotated);
+        compressRotatedAsync(rotated, gz);
       }
     }
     fs.writeFileSync(filePath, "");
@@ -103,13 +117,21 @@ function checkAndRotateLog(filePath, state, options = {}) {
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
   const maxLines = options.maxLines ?? DEFAULT_MAX_LINES;
 
-  const stat = fs.statSync(filePath);
-  if (options.syncFromDisk) {
+  if (options.syncFromDisk !== false && options.addedBytes == null) {
+    const stat = fs.statSync(filePath);
     state.lastSize = stat.size;
+    if (stat.size > maxBytes) {
+      return rotate(filePath, state);
+    }
+  } else if ((state.lastSize || 0) > maxBytes) {
+    return rotate(filePath, state);
   }
 
-  if (stat.size > maxBytes) {
-    return rotate(filePath, state);
+  if (options.checkLines === false) {
+    if ((state.lastLineCount || 0) > maxLines) {
+      return rotate(filePath, state);
+    }
+    return false;
   }
 
   if (options.checkLines !== false) {
@@ -124,8 +146,15 @@ function checkAndRotateLog(filePath, state, options = {}) {
 
 function afterAppend(filePath, state, options = {}) {
   try {
-    const stat = fs.statSync(filePath);
-    state.lastSize = stat.size;
+    const addedBytes = options.addedBytes || 0;
+    const addedLines = options.addedLines || 0;
+    if (addedBytes > 0) {
+      state.lastSize = (state.lastSize || 0) + addedBytes;
+      state.lastLineCount = (state.lastLineCount || 0) + addedLines;
+    } else {
+      const stat = fs.statSync(filePath);
+      state.lastSize = stat.size;
+    }
     checkAndRotateLog(filePath, state, options);
   } catch {
     /* disco indisponível */

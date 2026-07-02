@@ -141,19 +141,29 @@ function purgeArquivos(diasXml = 180, diasPdf = 180, diasBackup = 90) {
   ];
   const agora = Date.now();
   let removidos = 0;
-  for (const { dir, dias } of cortes) {
-    if (!fs.existsSync(dir)) continue;
-    const limite = agora - dias * 86400000;
+
+  function purgeDir(dir, limite) {
+    if (!fs.existsSync(dir)) return;
     for (const nome of fs.readdirSync(dir)) {
       const fp = path.join(dir, nome);
       try {
         const st = fs.statSync(fp);
-        if (st.mtimeMs < limite) {
+        if (st.isDirectory()) {
+          purgeDir(fp, limite);
+          if (fs.readdirSync(fp).length === 0) {
+            fs.rmdirSync(fp);
+          }
+        } else if (st.mtimeMs < limite) {
           fs.unlinkSync(fp);
           removidos++;
         }
       } catch (_) {}
     }
+  }
+
+  for (const { dir, dias } of cortes) {
+    const limite = agora - dias * 86400000;
+    purgeDir(dir, limite);
   }
   return { removidos, diasXml, diasPdf, diasBackup };
 }

@@ -1,18 +1,11 @@
-; Template ACBrLib — provider fiscal OFICIAL (Margin Platform 1.0)
-; Arquivo: app\acbrlib\data\config\acbrlib.ini
-; (instalador também grava cópia em app\data\acbrlib.ini)
-;
-; Ambiente SEFAZ em [ACBrNFe] Ambiente:
-;   2 = homologação (testes) · 1 = produção (somente após piloto validado)
-;
-; Certificado/CSC: senha e CSC ficam no cofre fiscal (fiscalSecrets).
-; Deixe Senha= e CSC= vazios ou use __VAULT__ após o instalador.
-; Paths abaixo usam ProgramData — padrão do instalador Windows.
+; Template ACBrLib — NÃO editar paths manualmente.
+; O agente gera acbrlib.ini via DirectoryManager (runtime/acbrIniGenerator.js).
+; Este arquivo serve apenas como referência de seções — paths são resolvidos em runtime.
 
 [Principal]
 TipoResposta=2
 LogNivel=4
-LogPath=C:\ProgramData\MarginEngine\acbr\logs
+LogPath=
 
 [Sistema]
 Nome=MarginEngine-Agente
@@ -22,11 +15,11 @@ Versao=1.0.0
 Ambiente=2
 ModeloDF=65
 VersaoDF=4.00
-PathSchemas=C:\ProgramData\MarginEngine\acbr\schemas\NFe
-PathSalvar=C:\ProgramData\MarginEngine\acbr\xml
-PathNFe=C:\ProgramData\MarginEngine\acbr\xml
-PathPDF=C:\ProgramData\MarginEngine\acbr\pdf
-ArquivoServicos=C:\ProgramData\MarginEngine\acbr\config\ACBrNFeServicos.ini
+PathSchemas=
+PathSalvar=
+PathNFe=
+PathPDF=
+ArquivoServicos=
 SalvarGer=1
 SalvarWS=1
 ExibirErroSchema=1
@@ -34,7 +27,7 @@ FormaEmissao=0
 Timeout=30000
 
 [Certificado]
-Arquivo=C:\ProgramData\MarginEngine\cert\cert.pfx
+Arquivo=
 Senha=
 NumeroSerie=
 
@@ -49,7 +42,7 @@ IdCSC=000001
 CSC=
 
 [DANFE]
-PathPDF=C:\ProgramData\MarginEngine\acbr\pdf
+PathPDF=
 TipoDANFE=1
 ImprimeCodigoEan=0
 

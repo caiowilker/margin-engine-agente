@@ -1,23 +1,22 @@
 /**
  * DirectoryManager — único ponto de resolução de caminhos do agente.
  *
- * Usa %ProgramData%, %LOCALAPPDATA%, %TEMP% etc. com fallback inteligente.
- * Recria diretórios automaticamente — nunca falha só porque a pasta não existe.
+ * Usa CommonApplicationData, LocalApplicationData, ProgramFiles (APIs Windows).
+ * Recria diretórios automaticamente — nunca lança erro por pasta ausente.
  */
 const fs = require("fs");
 const path = require("path");
-const { RuntimeError, mapFsError } = require("./runtimeErrors");
 const {
   resolveProgramDataRoot,
   resolveProgramFilesRoot,
   resolveTempRoot,
-  isWritableDir,
 } = require("./windowsEnv");
 
 const LOGICAL_DIRS = [
   "logs",
   "config",
   "backup",
+  "cert",
   "fiscalXml",
   "fiscalPdf",
   "fiscalLogs",
@@ -57,6 +56,7 @@ function buildPaths(dataRoot) {
     logs: path.join(root, "Logs"),
     config: path.join(root, "Config"),
     backup: path.join(root, "Backup"),
+    cert: path.join(root, "cert"),
     fiscalXml: path.join(root, "Fiscal", "XML"),
     fiscalPdf: path.join(root, "Fiscal", "PDF"),
     fiscalLogs: path.join(acbr, "logs"),
@@ -85,6 +85,27 @@ function buildPaths(dataRoot) {
   };
 }
 
+function mkdirSafe(targetPath) {
+  const normalized = path.normalize(String(targetPath || ""));
+  if (!normalized) return false;
+  try {
+    fs.mkdirSync(normalized, { recursive: true });
+    return fs.existsSync(normalized);
+  } catch {
+    try {
+      const parent = path.dirname(normalized);
+      if (parent && parent !== normalized) {
+        fs.mkdirSync(parent, { recursive: true });
+        fs.mkdirSync(normalized, { recursive: true });
+        return fs.existsSync(normalized);
+      }
+    } catch {
+      /* melhor esforço */
+    }
+    return false;
+  }
+}
+
 class DirectoryManager {
   constructor(dataRootOverride) {
     if (dataRootOverride) {
@@ -94,6 +115,7 @@ class DirectoryManager {
       const resolved = resolveProgramDataRoot();
       this.ROOT = resolved.root;
       fallbackNote = resolved.fallbackFrom;
+      mkdirSafe(this.ROOT);
     }
 
     this.PATHS = buildPaths(this.ROOT);
@@ -111,12 +133,12 @@ class DirectoryManager {
 
   dir(key) {
     const p = this.PATHS[key];
-    if (!p) throw new RuntimeError("DIR-003", { motivo: `Diretório lógico desconhecido: ${key}` });
+    if (!p) return path.join(this.ROOT, String(key));
     return p;
   }
 
   file(...segments) {
-    if (segments.length === 0) throw new RuntimeError("DIR-003", { motivo: "file() requer segmentos" });
+    if (segments.length === 0) return this.ROOT;
     const [logical, ...rest] = segments;
     if (this.PATHS[logical]) {
       return path.join(this.PATHS[logical], ...rest);
@@ -124,20 +146,19 @@ class DirectoryManager {
     return path.join(this.ROOT, ...segments);
   }
 
-  ensurePath(targetPath, label) {
-    try {
-      fs.mkdirSync(targetPath, { recursive: true });
-      return targetPath;
-    } catch (err) {
-      throw mapFsError(err, {
-        diretorio: targetPath,
-        operacao: `criar diretório (${label || "runtime"})`,
-      });
-    }
+  /**
+   * Garante diretório — nunca lança erro (cria ou retorna caminho alvo).
+   */
+  ensurePath(targetPath, _label) {
+    const normalized = path.normalize(String(targetPath || ""));
+    if (!normalized) return normalized;
+    mkdirSafe(normalized);
+    return normalized;
   }
 
   ensureAll() {
     const seen = new Set();
+    mkdirSafe(this.ROOT);
     for (const key of LOGICAL_DIRS) {
       const p = this.PATHS[key];
       if (!p || seen.has(p)) continue;
@@ -150,11 +171,13 @@ class DirectoryManager {
   }
 
   getDiagnostics() {
+    const { getKnownFoldersDiagnostics } = require("./windowsEnv");
     return {
       dataRoot: this.ROOT,
       agentRoot: this._agentRoot,
       tempRoot: this._tempRoot,
       fallbackReason: fallbackNote,
+      knownFolders: getKnownFoldersDiagnostics(),
       paths: { ...this.PATHS },
     };
   }
@@ -176,4 +199,5 @@ module.exports = {
   getDirectoryManager,
   resetDirectoryManager,
   LOGICAL_DIRS,
+  mkdirSafe,
 };

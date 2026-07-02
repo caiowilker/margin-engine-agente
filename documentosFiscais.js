@@ -108,8 +108,20 @@ function salvarPdfPlaceholder(chave, texto) {
 }
 
 function lerArquivo(filePath) {
-  if (!filePath || !fs.existsSync(filePath)) return null;
-  return fs.readFileSync(filePath);
+  if (!filePath) return null;
+  const roots = [PATHS.xml, PATHS.pdf, PATHS.backup, PATHS.saida, PATHS.cancelamentos];
+  const resolved = path.resolve(filePath);
+  const ok = roots.some((root) => {
+    if (!root) return false;
+    const base = path.resolve(root);
+    return resolved === base || resolved.startsWith(base + path.sep);
+  });
+  if (!ok) {
+    log.warn({ filePath }, "Leitura fiscal bloqueada — path fora das pastas permitidas");
+    return null;
+  }
+  if (!fs.existsSync(resolved)) return null;
+  return fs.readFileSync(resolved);
 }
 
 function lerArquivoBase64(filePath) {
@@ -166,12 +178,16 @@ function processPendingBackups() {
   for (const line of lines) {
     try {
       const { file } = JSON.parse(line);
-      if (!file || !fs.existsSync(file)) continue;
+      if (!file || !fs.existsSync(file)) {
+        log.warn({ file }, "Backup pendente ignorado — arquivo fonte ausente");
+        continue;
+      }
       const base = path.basename(file);
       const dest = path.join(PATHS.backup, `${Date.now()}-${base}`);
       fs.copyFileSync(file, dest);
-    } catch (_) {
+    } catch (err) {
       remaining.push(line);
+      log.warn({ err: err.message }, "Falha ao reprocessar backup pendente");
     }
   }
   if (remaining.length === 0) {
@@ -181,9 +197,30 @@ function processPendingBackups() {
   }
 }
 
+const BACKUP_RETRY_MS = parseInt(process.env.BACKUP_RETRY_MS || "300000", 10);
+let backupRetryTimer = null;
+
+function iniciarBackupRetryScheduler() {
+  if (backupRetryTimer) return;
+  backupRetryTimer = setInterval(() => {
+    try {
+      processPendingBackups();
+    } catch (err) {
+      log.warn({ err: err.message }, "Scheduler backup pendente falhou");
+    }
+  }, BACKUP_RETRY_MS);
+  if (typeof backupRetryTimer.unref === "function") backupRetryTimer.unref();
+}
+
+function pararBackupRetryScheduler() {
+  if (backupRetryTimer) {
+    clearInterval(backupRetryTimer);
+    backupRetryTimer = null;
+  }
+}
+
 function backup(sourceFile) {
   try {
-    processPendingBackups();
     const check = fiscalStorage.checkDiskSpace(
       PATHS.backup,
       fiscalStorage.MIN_MB_BACKUP,
@@ -208,6 +245,7 @@ function backup(sourceFile) {
     fs.copyFileSync(sourceFile, dest);
     return dest;
   } catch (_) {
+    enqueueBackupRetry(sourceFile);
     return null;
   }
 }
@@ -300,10 +338,19 @@ function carregarXmlComProt(filePath, chave) {
   return { path: filePath, xml, prot };
 }
 
-/** Localiza XML da chave (flat ou aninhado ACBr: xml/CNPJ/NFe/AAAAMM/NFe/). */
+/** Localiza XML da chave (índice SQLite → flat ou aninhado ACBr). */
 function localizarXmlPorChave(chave) {
   const k = String(chave || "").replace(/\D/g, "");
   if (k.length !== 44) return null;
+
+  try {
+    const filaFiscal = require("./filaFiscal");
+    const doc = filaFiscal.buscarDocumentoPorChave(k);
+    if (doc?.xml_path && fs.existsSync(doc.xml_path)) {
+      const loaded = carregarXmlComProt(doc.xml_path, k);
+      if (loaded) return loaded;
+    }
+  } catch (_) {}
 
   const dirs = [];
   const cnpj = extrairCnpjDaChave(k);
@@ -532,10 +579,17 @@ function pastaModeloAcbr(modeloDocumento = "65") {
   return String(modeloDocumento) === "55" ? "NFe" : "NFCe";
 }
 
-/** Localiza PDF da chave (flat ou aninhado ACBr: pdf/CNPJ/NFe|NFCe/AAAAMM/...). */
+/** Localiza PDF da chave (índice SQLite → flat ou aninhado ACBr). */
 function localizarPdfPorChave(chave, modeloDocumento = "65") {
   const k = String(chave || "").replace(/\D/g, "");
   if (k.length !== 44) return null;
+
+  try {
+    const filaFiscal = require("./filaFiscal");
+    const doc = filaFiscal.buscarDocumentoPorChave(k);
+    if (doc?.pdf_path && isPdfValid(doc.pdf_path)) return doc.pdf_path;
+  } catch (_) {}
+
   const modelo = String(modeloDocumento || inferirModeloDaChave(k) || "65");
   const suffix = suffixPdfModelo(modelo);
 
@@ -640,4 +694,7 @@ module.exports = {
   extrairCnpjDaChave,
   xmlEstaAutorizado,
   resolverXmlParaImpressao,
+  iniciarBackupRetryScheduler,
+  pararBackupRetryScheduler,
+  processPendingBackups,
 };

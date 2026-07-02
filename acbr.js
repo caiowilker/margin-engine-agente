@@ -41,12 +41,11 @@ function setRuntimeEmissaoFiscal(valor) {
   runtimeEmissaoFiscal = !!valor;
 }
 
-/** NF-e modelo 55 — mesmo certificado/ambiente do NFC-e por padrão (ACBr Monitor). */
-const NFE_MODELO_55_ENABLED =
-  (process.env.ACBR_NFE_ENABLED || "true").toLowerCase() === "true";
-
+/** NF-e modelo 55 — relê env a cada consulta (config operacional pode alterar em runtime). */
 function isNfeModelo55Habilitado() {
-  return getEmissaoFiscalAtivo() && NFE_MODELO_55_ENABLED;
+  const habilitado =
+    (process.env.ACBR_NFE_ENABLED || "true").toLowerCase() === "true";
+  return getEmissaoFiscalAtivo() && habilitado;
 }
 // Protocolo TCP do ACBr Monitor: cada comando termina com CR+LF+'.'+CR+LF
 // https://acbr.sourceforge.io/ACBrMonitor/Apresentacao.html
@@ -121,13 +120,23 @@ function extrairPathPdfOk(resposta) {
   return m ? m[1].trim() : null;
 }
 
+function touchLibSessionIdleHooks(acquired) {
+  try {
+    const session = require("./fiscal/drivers/acbrLibSession");
+    if (acquired) session.suspendIdle();
+    else session.resumeIdle();
+  } catch (_) {}
+}
+
 function withAcbrLock(fn, label = "acbr") {
   const run = acbrLock.then(async () => {
     acbrBusyDepth++;
+    touchLibSessionIdleHooks(true);
     try {
       return await fn();
     } finally {
       acbrBusyDepth--;
+      touchLibSessionIdleHooks(false);
     }
   });
   acbrLock = run.catch(() => {});
@@ -1525,6 +1534,11 @@ async function enviarEventoFiscal(payload) {
 async function emitirNfce(payload) {
   if (!getEmissaoFiscalAtivo()) return { fiscal: false };
 
+  const { withEmissionLock } = require("./fiscal/fiscalEmissionLock");
+  return withEmissionLock(async () => emitirNfceCore(payload), "monitor-nfce");
+}
+
+async function emitirNfceCore(payload) {
   if (payload?.xml || payload?.xmlEpec || payload?.modoEpec) {
     const xml = payload.xml || payload.xmlEpec;
     if (!xml) throw new Error("XML EPEC ausente para retransmissao.");
@@ -1606,6 +1620,11 @@ async function emitirNfce(payload) {
 async function emitirNfe(payload) {
   if (!isNfeModelo55Habilitado()) return { fiscal: false };
 
+  const { withEmissionLock } = require("./fiscal/fiscalEmissionLock");
+  return withEmissionLock(async () => emitirNfeCore(payload), "monitor-nfe");
+}
+
+async function emitirNfeCore(payload) {
   const destinatario = validarPayloadNfe(payload);
   const empresa = await enriquecerEmpresa(payload.empresa || {});
   validarEmpresaFiscal(empresa);

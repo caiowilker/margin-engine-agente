@@ -74,15 +74,15 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
 <div class="wrap">
   <header>
     <div>
-      <h1>Centro de Operações — Agente Fiscal</h1>
-      <p class="sub">Margin Engine PDV · v${versao} · ${ts}</p>
+      <h1>Margin Engine — Diagnóstico</h1>
+      <p class="sub">Centro de operações · v${versao} · ${ts}</p>
     </div>
     <div id="statusBadge" class="badge badge-op">${escapeHtml(statusGeral)}</div>
   </header>
 
   <div class="token-bar">
-    <label for="agentToken" style="font-size:.82rem;color:var(--muted);white-space:nowrap">X-Agent-Token</label>
-    <input id="agentToken" type="password" placeholder="Token do PDV (salvo nesta sessão)" autocomplete="off"/>
+    <label for="agentToken" style="font-size:.82rem;color:var(--muted);white-space:nowrap">Código de acesso do caixa</label>
+    <input id="agentToken" type="password" placeholder="Informe o código exibido ao ativar o PDV" autocomplete="off"/>
     <button type="button" class="btn btn-secondary" id="btnSaveToken">Salvar</button>
     <button type="button" class="btn btn-info" id="btnRefreshAll">Atualizar tudo</button>
   </div>
@@ -93,8 +93,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     <button type="button" class="tab" data-tab="fiscal">Preflight NF-e/NFC-e</button>
     <button type="button" class="tab" data-tab="config">Configuração fiscal</button>
     <button type="button" class="tab" data-tab="impressora">Impressora</button>
-    <button type="button" class="tab" data-tab="logs">Logs fiscal</button>
-    <button type="button" class="tab" data-tab="apis">APIs JSON</button>
+    <button type="button" class="tab" data-tab="logs">Registro de eventos</button>
   </nav>
 
   <section id="panel-visao" class="panel active">
@@ -105,7 +104,9 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
         <button type="button" class="btn btn-primary" data-action="recovery">Forçar recovery SEFAZ</button>
         <button type="button" class="btn btn-secondary" data-action="retomar">Retomar fila</button>
         <button type="button" class="btn btn-warn" data-action="pausar">Pausar fila</button>
-        <button type="button" class="btn btn-danger" data-action="limpar">Cancelar emissões pendentes</button>
+        <button type="button" class="btn btn-danger" data-action="limpar">Cancelar pendentes</button>
+        <button type="button" class="btn btn-info" id="btnExportDiag">Exportar diagnóstico</button>
+        <button type="button" class="btn btn-secondary" id="btnOpenLogs">Abrir pasta de logs</button>
       </div>
       <div id="msgVisao" class="msg"></div>
     </div>
@@ -164,8 +165,8 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
           <input id="cfgUf" maxlength="2" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);width:80px"/>
         </label>
         <label style="display:grid;gap:4px;font-size:.82rem">
-          <span>Caminho certificado A1 (.pfx)</span>
-          <input id="cfgCertPath" placeholder="%ProgramData%\\MarginEngine\\cert\\cert.pfx" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text)"/>
+          <span>Certificado digital (arquivo A1)</span>
+          <input id="cfgCertPath" placeholder="Selecione ou informe o arquivo do certificado" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text)"/>
         </label>
         <label style="display:grid;gap:4px;font-size:.82rem">
           <span>Senha do certificado</span>
@@ -183,7 +184,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
         </div>
         <label style="display:flex;align-items:center;gap:8px;font-size:.82rem">
           <input id="cfgEmissao" type="checkbox"/>
-          <span>Emissão fiscal ativa (EMISSAO_FISCAL)</span>
+          <span>Emissão fiscal ativa neste caixa</span>
         </label>
         <div class="actions">
           <button type="submit" class="btn btn-primary">Salvar configuração</button>
@@ -219,36 +220,40 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
           </label>
         </div>
       </div>
-      <p class="sub" style="margin:8px 0">Logs do Margin Engine em <code style="color:var(--info)">%ProgramData%\\MarginEngine\\Logs\\</code></p>
+      <p class="sub" style="margin:8px 0">Logs do Margin Engine na pasta <code style="color:var(--info)" id="logsPathHint">Logs</code> dos dados locais.</p>
       <div id="logsMeta" style="font-size:.75rem;color:var(--muted);margin-bottom:8px">Carregando...</div>
       <pre id="logsBody" class="log-box">Carregando logs...</pre>
       <div id="msgLogs" class="msg"></div>
     </div>
   </section>
 
-  <section id="panel-apis" class="panel">
-    <div class="card">
-      <h3>Endpoints JSON (com token quando indicado)</h3>
-      <div class="links">
-        <a class="link-card" href="/diagnostico/painel"><strong>Painel HTML</strong><span>/diagnostico/painel</span></a>
-        <a class="link-card" href="/diagnostico/dashboard"><strong>Dashboard legado</strong><span>/diagnostico/dashboard</span></a>
-        <a class="link-card" href="/diagnostico/saude"><strong>Saúde</strong><span>/diagnostico/saude</span></a>
-        <a class="link-card" href="/diagnostico/alertas"><strong>Alertas</strong><span>/diagnostico/alertas</span></a>
-        <span class="link-card"><strong>Diagnóstico completo</strong><span>GET /diagnostico (token)</span></span>
-        <span class="link-card"><strong>Status PDV</strong><span>GET /status (token)</span></span>
-        <span class="link-card"><strong>Fiscal preflight</strong><span>GET /diagnostico/fiscal (token)</span></span>
-        <span class="link-card"><strong>Fila fiscal</strong><span>GET /fila/fiscal (token)</span></span>
-        <span class="link-card"><strong>Métricas</strong><span>GET /diagnostico/metricas (token)</span></span>
-        <a class="link-card" href="/diagnostico/logs/fiscal?lines=500"><strong>Logs fiscal</strong><span>GET /diagnostico/logs/fiscal?lines=500</span></a>
-      </div>
-    </div>
-  </section>
-
-  <footer>Atualização automática a cada 12s · Use o token do PDV para ações destrutivas</footer>
+  <footer>Atualização automática a cada 12s · Use o código de acesso do caixa para ações sensíveis</footer>
 </div>
 <script>
 (function(){
   var TOKEN_KEY = "me_agent_token";
+  function contemTermoTecnico(t){
+    return /acbr|dll|\.ini|json|stack|programdata|program files|127\.0\.0\.1|econnreset|erro interno/i.test(String(t||""));
+  }
+  function sanitizarLinhaLog(s){
+    var t = String(s||"").trim();
+    if (!t) return "";
+    if (contemTermoTecnico(t)) return sanitizarErroLinha(t);
+    if (/\\|\/[a-z]/i.test(t) && /users|home|programdata|margin-engine/i.test(t)) return sanitizarErroLinha(t);
+    return t.length > 180 ? t.slice(0, 177) + "…" : t;
+  }
+  function sanitizarErroLinha(s){
+    var t = String(s||"").trim();
+    if (!t || contemTermoTecnico(t)) return "Pendência fiscal — consulte Diagnóstico";
+    if (/timeout/i.test(t)) return "Tempo esgotado — tente novamente";
+    if (/sefaz|cstat|rejei/i.test(t)) return "SEFAZ não autorizou — aguarde e reenvie";
+    if (/ncm|cfop|cst/i.test(t)) return "Dados fiscais incompletos no cadastro";
+    if (/certificado/i.test(t)) return "Problema no certificado digital";
+    return t.length > 100 ? t.slice(0, 97) + "…" : t;
+  }
+  function textoOperador(err){
+    return sanitizarErroLinha(err) + " — Consulte Diagnóstico ou contate o suporte.";
+  }
   var tokenInput = document.getElementById("agentToken");
   var saved = sessionStorage.getItem(TOKEN_KEY);
   if (saved) tokenInput.value = saved;
@@ -301,7 +306,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
   async function fetchJson(url, opts){
     var r = await fetch(url, opts || {});
     var j = await r.json().catch(function(){ return {}; });
-    if (!r.ok) throw new Error(j.erro || j.message || ("HTTP "+r.status));
+    if (!r.ok) throw new Error(textoOperador(j.erro || j.problema || j.message || ("Falha na comunicação ("+r.status+")")));
     return j;
   }
 
@@ -323,17 +328,33 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
   }
 
   function renderVisao(a, m){
-    var sg = a.statusGeral || "OPERACIONAL";
+    var ent = a.enterprise || {};
+    var sg = ent.statusGeral || a.statusGeral || "ONLINE";
     var badge = document.getElementById("statusBadge");
     badge.textContent = sg;
-    badge.className = "badge " + (sg === "OPERACIONAL" ? "badge-op" : sg === "DEGRADADO" ? "badge-deg" : "badge-crit");
+    var badgeCls = "badge-op";
+    if (sg === "DEGRADADO" || sg === "RECUPERANDO" || sg === "ATUALIZANDO") badgeCls = "badge-deg";
+    else if (sg === "CONTINGÊNCIA" || sg === "CONTINGENCIA") badgeCls = "badge-deg";
+    else if (sg === "OFFLINE" || sg === "CRÍTICO" || sg === "CRITICO") badgeCls = "badge-crit";
+    badge.className = "badge " + badgeCls;
+
+    var fiscal = ent.fiscal || {};
+    var imp = ent.impressora || {};
+    var banco = ent.banco || {};
+    var svc = ent.servico || {};
+    var upd = ent.atualizador || {};
+    var logs = a.logsEnterprise || ent.logs || {};
+
     document.getElementById("gridVisao").innerHTML =
-      metricCard("Fila pendente", a.pendentes ?? 0) +
-      metricCard("Incertos", a.incertos ?? 0, "recovery automático") +
-      metricCard("Recuperando", a.recuperando ?? 0) +
-      metricCard("Emissor fiscal", a.acbr || "?", a.acbrAtualizadoEm || "") +
-      metricCard("Falhas 24h", a.falhasUltimas24h ?? 0) +
-      metricCard("Taxa sucesso", (a.metricas && a.metricas.taxaSucessoPercent != null ? a.metricas.taxaSucessoPercent + "%" : "—"));
+      metricCard("Driver fiscal", fiscal.driver || "—", fiscal.emissaoFiscal ? "Emissão ativa" : "Modo não fiscal") +
+      metricCard("Última autorização", fiscal.ultimaAutorizacao ? "OK" : "—", fiscal.ultimaAutorizacao || "") +
+      metricCard("Tempo médio", fiscal.tempoMedioMs != null ? Math.round(fiscal.tempoMedioMs) + " ms" : "—") +
+      metricCard("Impressora", imp.ok ? "Online" : "Verificar", imp.modelo || imp.porta || "") +
+      metricCard("Banco", banco.ok ? "OK" : "Erro", banco.tamanho ? Math.round(banco.tamanho/1024) + " KB" : "") +
+      metricCard("Serviço", svc.rodando ? ("PID " + svc.pid) : "—", svc.uptime || "") +
+      metricCard("Atualizador", upd.versaoDisponivel ? ("v" + upd.versaoDisponivel) : "Atualizado", upd.canal || "stable") +
+      metricCard("Fila pendente", (ent.fila && ent.fila.pendentes != null) ? ent.fila.pendentes : (a.pendentes ?? 0)) +
+      metricCard("Incertos", (ent.fila && ent.fila.incertos != null) ? ent.fila.incertos : (a.incertos ?? 0), "recovery automático");
     var rows = (a.ultimasEmissoes || []).map(function(e){
       return "<tr><td>"+(e.numeroVenda||"-")+"</td><td>"+chip(e.status)+"</td><td>"+(e.timestamp||"-")+"</td><td style='font-family:monospace;font-size:.72rem'>"+(e.chaveTruncada||"-")+"</td></tr>";
     }).join("");
@@ -351,7 +372,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
       metricCard("Worker", st.pausada ? "PAUSADO" : "ATIVO");
     var itens = st.itens || [];
     document.getElementById("tblFila").innerHTML = itens.map(function(j){
-      var err = (j.erro || "").slice(0, 120);
+      var err = sanitizarErroLinha(j.erro || "");
       return "<tr><td>"+j.id+"</td><td>"+j.tipo+"</td><td>"+(j.numero_venda||"-")+"</td><td>"+chip(j.status)+"</td><td>"+(j.tentativas||0)+"</td><td title='"+err.replace(/'/g,"")+"'>"+err+"</td><td>"+(j.criado_em||"-")+"</td></tr>";
     }).join("") || "<tr><td colspan='7'>Fila vazia</td></tr>";
   }
@@ -361,10 +382,11 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     var html = "";
     html += "<div class='preflight-item'><span>Emissão fiscal</span><strong>"+(f.emissaoFiscal ? "Ativa" : "Desativada")+"</strong></div>";
     html += "<div class='preflight-item'><span>Preflight OK</span><strong>"+(pf.ok ? "Sim" : "Não")+"</strong></div>";
-    if (pf.erro) html += "<div class='preflight-item'><span>Erro</span><strong style='color:var(--crit)'>"+pf.erro+"</strong></div>";
+    if (pf.erro) html += "<div class='preflight-item'><span>Problema</span><strong style='color:var(--crit)'>"+sanitizarErroLinha(pf.erro)+"</strong></div>";
     if (pf.checklist && pf.checklist.length){
       pf.checklist.forEach(function(c){
-        html += "<div class='preflight-item'><span>"+c.item+"</span><strong>"+(c.ok ? "✓" : "✗")+" "+(c.detalhe||"")+"</strong></div>";
+        var det = c.detalhe ? sanitizarErroLinha(c.detalhe) : "";
+        html += "<div class='preflight-item'><span>"+c.item+"</span><strong>"+(c.ok ? "✓" : "✗")+" "+det+"</strong></div>";
       });
     }
     if (pf.sefaz) html += "<div class='preflight-item'><span>SEFAZ</span><strong>cStat "+(pf.sefaz.cStat||"?")+" — "+(pf.sefaz.xMotivo||"")+"</strong></div>";
@@ -382,7 +404,8 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
   function renderFiscalConfig(cfg){
     document.getElementById("cfgAmbiente").value = cfg.ambienteSefaz || "homologacao";
     document.getElementById("cfgUf").value = cfg.uf || "MG";
-    document.getElementById("cfgCertPath").value = cfg.certificado && cfg.certificado.arquivo || "";
+    document.getElementById("cfgCertPath").value = cfg.certificado && cfg.certificado.arquivo ? "Certificado configurado" : "";
+    document.getElementById("cfgCertPath").dataset.fullPath = (cfg.certificado && cfg.certificado.arquivo) || "";
     document.getElementById("cfgCertSenha").value = "";
     document.getElementById("cfgIdCsc").value = (cfg.nfce && cfg.nfce.idCsc) || "000001";
     document.getElementById("cfgCsc").value = "";
@@ -393,8 +416,8 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     st.push("Modo: <strong>"+driverLabel+"</strong>");
     st.push("Ambiente: <strong>"+ambLabel+"</strong>");
     if (cfg.paths){
-      st.push("Motor: "+(cfg.paths.libExiste?"✓":"✗"));
-      st.push("Config: "+(cfg.paths.iniExiste?"✓":"✗"));
+      st.push("Motor fiscal: "+(cfg.paths.libExiste?"pronto":"pendente"));
+      st.push("Configuração: "+(cfg.paths.iniExiste?"carregada":"ausente"));
     }
     if (cfg.certificado){
       st.push("Cert: "+(cfg.certificado.arquivoExiste?"✓ encontrado":"✗ não encontrado")+(cfg.certificado.senhaConfigurada?" · senha OK":""));
@@ -407,7 +430,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
       var cfg = await loadFiscalConfig();
       renderFiscalConfig(cfg);
     } catch(e){
-      document.getElementById("configStatus").textContent = "Erro: "+e.message;
+      document.getElementById("configStatus").textContent = textoOperador(e.message);
     }
   }
 
@@ -418,15 +441,26 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
   function renderPrinterStatus(st){
     var lines = [];
     lines.push("Conectada: <strong>"+(st.conectada ? "Sim" : "Não")+"</strong>");
-    if (st.provider) lines.push("Provider: <strong>"+st.provider+"</strong>");
+    if (st.provider) lines.push("Driver: <strong>"+nomeProviderAmigavel(st.provider)+"</strong>");
     if (st.tipo) lines.push("Tipo: <strong>"+st.tipo+"</strong>");
     if (st.detectada) {
       var d = st.detectada;
-      var detLabel = typeof d === "string" ? d : (d.nome || (d.host ? d.host+":"+(d.porta||d.port||"9100") : "") || "—");
+      var detLabel = typeof d === "string" ? sanitizarErroLinha(d) : (d.nome || "Impressora detectada");
       lines.push("Detectada: <strong>"+detLabel+"</strong>");
     }
-    if (st.driver && st.driver.mode) lines.push("Modo emissor: <strong>"+st.driver.mode+"</strong>");
+    if (st.driver && st.driver.mode) {
+      var modo = st.driver.mode === "native" ? "integrado" : (st.driver.mode === "parity" ? "alternativo" : "padrão");
+      lines.push("Emissor: <strong>"+modo+"</strong>");
+    }
     document.getElementById("printerStatus").innerHTML = lines.join(" · ");
+  }
+
+  function nomeProviderAmigavel(p){
+    var s = String(p||"").toLowerCase();
+    if (!s || contemTermoTecnico(s)) return "Impressora configurada";
+    if (s.indexOf("pos") >= 0 || s.indexOf("escpos") >= 0) return "Impressora térmica";
+    if (s.indexOf("windows") >= 0) return "Impressora do Windows";
+    return "Impressora configurada";
   }
 
   async function refreshPrinterPanel(){
@@ -434,7 +468,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
       var st = await loadPrinterStatus();
       renderPrinterStatus(st);
     } catch(e){
-      document.getElementById("printerStatus").textContent = "Erro: "+e.message;
+      document.getElementById("printerStatus").textContent = textoOperador(e.message);
     }
   }
 
@@ -466,7 +500,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     var body = {
       ambienteSefaz: document.getElementById("cfgAmbiente").value,
       uf: document.getElementById("cfgUf").value,
-      certificadoArquivo: document.getElementById("cfgCertPath").value,
+      certificadoArquivo: document.getElementById("cfgCertPath").dataset.fullPath || document.getElementById("cfgCertPath").value,
       nfceIdCsc: document.getElementById("cfgIdCsc").value,
       emissaoFiscal: document.getElementById("cfgEmissao").checked
     };
@@ -478,12 +512,12 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     try {
       var r = await fetch("/config/fiscal", { method:"PUT", headers: headers(true), body: JSON.stringify(body) });
       var j = await r.json().catch(function(){ return {}; });
-      if (!r.ok) throw new Error(j.erro || ("HTTP "+r.status));
+      if (!r.ok) throw new Error(textoOperador(j.erro || j.problema || ("Falha na comunicação ("+r.status+")")));
       renderFiscalConfig(j.config || j);
       showMsg("msgConfig", "Configuração fiscal salva.", "ok");
       fiscalPreflightInvalidate();
     } catch(e){
-      showMsg("msgConfig", e.message, "err");
+      showMsg("msgConfig", textoOperador(e.message), "err");
     }
   };
 
@@ -494,14 +528,12 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
   async function refreshLogsPanel(){
     try {
       var data = await loadLogsFiscal();
-      var lines = data.lines || [];
-      document.getElementById("logsBody").textContent = lines.length ? lines.join("\\n") : "(sem linhas — emita uma nota para gerar rastro)";
-      var src = data.sources || {};
+      var lines = (data.lines || []).map(sanitizarLinhaLog).filter(Boolean);
+      document.getElementById("logsBody").textContent = lines.length ? lines.join("\\n") : "(sem eventos recentes — emita uma nota para gerar registro)";
       document.getElementById("logsMeta").textContent =
-        "Total: " + (data.total || lines.length) + " · trace: " + (src.trace || 0) +
-        " · emissor: " + (src.acbr || 0) + " · máx " + (data.maxLines || 500);
+        "Total: " + (data.total || lines.length) + " evento(s) · máx " + (data.maxLines || 500);
     } catch(e){
-      document.getElementById("logsBody").textContent = "Erro: " + e.message;
+      document.getElementById("logsBody").textContent = textoOperador(e.message);
       document.getElementById("logsMeta").textContent = "";
     }
   }
@@ -533,14 +565,43 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     try {
       var fiscal = await loadFiscal();
       renderPreflight(fiscal);
-    } catch(e){ document.getElementById("preflightBody").textContent = "Preflight: "+e.message; }
+    } catch(e){ document.getElementById("preflightBody").textContent = textoOperador(e.message); }
   }
 
   document.getElementById("btnRefreshAll").onclick = function(){
-  void refreshAll();
-  void refreshConfigPanel();
-  void refreshPrinterPanel();
+    void refreshAll();
+    void refreshConfigPanel();
     void refreshPrinterPanel();
+  };
+
+  document.getElementById("btnExportDiag").onclick = async function(){
+    try {
+      var r = await fetch("/diagnostico/pacote", { headers: headers(false) });
+      if (!r.ok) throw new Error("HTTP "+r.status);
+      var blob = await r.blob();
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "margin-engine-diagnostico.zip";
+      a.click();
+      showMsg("msgVisao", "Pacote de diagnóstico baixado.", "ok");
+    } catch(e){
+      showMsg("msgVisao", "Exportar: "+e.message+" (informe o token se necessário)", "err");
+    }
+  };
+
+  document.getElementById("btnOpenLogs").onclick = async function(){
+    try {
+      if (token()){
+        await fetchJson("/diagnostico/logs/abrir-pasta", { method:"POST", headers: headers(true), body: "{}" });
+        showMsg("msgVisao", "Pasta de logs aberta no explorador.", "ok");
+        return;
+      }
+      var a = await loadAlertas();
+      var pasta = (a.logsEnterprise && a.logsEnterprise.pastaLogs) || "pasta de logs do Margin Engine";
+      showMsg("msgVisao", "Pasta de logs: "+pasta, "info");
+    } catch(e){
+      showMsg("msgVisao", e.message, "err");
+    }
   };
 
   async function postAction(path, body){

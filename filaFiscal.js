@@ -113,11 +113,22 @@ function migrateSchema() {
      WHERE prioridade IS NULL OR prioridade = 5`,
   ).run();
   db.exec(`CREATE INDEX IF NOT EXISTS idx_fila_fiscal_chave ON fila_fiscal(chave_fiscal)`);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS agent_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `);
   sanitizarPayloadsLegados();
   backfillNumeroVendaColuna();
 }
 
 function sanitizarPayloadsLegados() {
+  const done = db
+    .prepare(`SELECT value FROM agent_meta WHERE key = 'payloads_legados_v1'`)
+    .get();
+  if (done?.value === "1") return;
+
   const rows = db.prepare(`SELECT id, payload FROM fila_fiscal`).all();
   for (const row of rows) {
     try {
@@ -131,6 +142,9 @@ function sanitizarPayloadsLegados() {
       );
     } catch (_) {}
   }
+  db.prepare(
+    `INSERT OR REPLACE INTO agent_meta (key, value) VALUES ('payloads_legados_v1', '1')`,
+  ).run();
 }
 
 function backfillNumeroVendaColuna() {
@@ -262,6 +276,16 @@ function enfileirar(tipo, payload, correlationId = null, numeroVenda = null) {
       .prepare(
         `SELECT id, correlation_id FROM fila_fiscal WHERE tipo = 'EMISSAO' AND correlation_id = ?
          AND status IN ('PENDENTE','PROCESSANDO','INCERTO','FALHA_TEMPORARIA') LIMIT 1`,
+      )
+      .get(correlationId);
+    if (dup) return { id: dup.id, deduplicado: true, correlationId: dup.correlation_id };
+  }
+
+  if (correlationId && tipo === "EPEC") {
+    const dup = db
+      .prepare(
+        `SELECT id, correlation_id FROM fila_fiscal WHERE tipo = 'EPEC' AND correlation_id = ?
+         AND status IN ('PENDENTE','PROCESSANDO','INCERTO','FALHA_TEMPORARIA','RECUPERANDO') LIMIT 1`,
       )
       .get(correlationId);
     if (dup) return { id: dup.id, deduplicado: true, correlationId: dup.correlation_id };
@@ -399,7 +423,7 @@ async function processarUm(opcoes = {}) {
   try {
     payload = JSON.parse(job.payload);
   } catch (e) {
-    marcar(job.id, STATUS.FALHA_PERMANENTE, "Payload JSON inválido");
+    marcar(job.id, STATUS.FALHA_PERMANENTE, "Dados do pedido fiscal inválidos");
     if (flag === "processandoFiscal") processandoFiscal = false;
     else processandoPdf = false;
     return true;
@@ -438,9 +462,15 @@ async function processarUm(opcoes = {}) {
       fiscalRetry.isPermanente(err) ||
       tentativas >= fiscalRetry.maxTentativas(err)
     ) {
-      log.warn(
-        { modulo: "fila_fiscal", tipo: job.tipo, tentativas, err: msg },
-        "Falha ao processar job fiscal",
+      log.error(
+        {
+          acao: job.tipo,
+          resultado: "FALHA_PERMANENTE",
+          correlationId: payload.correlationId || job.correlation_id,
+          numeroVenda: payload.numeroVenda || job.numero_venda,
+          err: msg,
+        },
+        "Falha permanente ao processar job fiscal",
       );
       const msgFinal =
         fiscalRetry.extrairCStat(err) === "999" &&
@@ -465,6 +495,15 @@ async function processarUm(opcoes = {}) {
             jobId: job.id,
           });
         } catch (_) {}
+        setImmediate(() => {
+          require("./fiscalService")
+            .notificarPendenciaFiscalFailSafe(
+              payload.numeroVenda || job.numero_venda,
+              payload.correlationId || job.correlation_id,
+              err,
+            )
+            .catch(() => {});
+        });
       }
     } else {
       log.warn(
@@ -526,7 +565,7 @@ function liberarJobsTravados(minutos = null) {
 
 function iniciarWorker(intervalMs = WORKER_MS) {
   if (workerTimer) return;
-  const tiposFiscal = ["EMISSAO", "CANCELAMENTO", "CALLBACK_BACKEND", "INUTILIZACAO", "EPEC"];
+  const tiposFiscal = ["EMISSAO", "CANCELAMENTO", "CALLBACK_BACKEND", "INUTILIZACAO", "EPEC", "EVENTO_FISCAL"];
   workerTimer = setInterval(async () => {
     try {
       liberarJobsTravados();
@@ -540,8 +579,9 @@ function iniciarWorker(intervalMs = WORKER_MS) {
   // Worker GERAR_PDF sempre ativo — handler ignora NFC-e 65 quando FISCAL_GERAR_PDF=false, mas processa NF-e 55.
   if (!pdfWorkerTimer) {
     pdfWorkerTimer = setInterval(async () => {
+      if (acbrOcupado()) return;
       let again = true;
-      while (again && !filaPausada) {
+      while (again && !filaPausada && !acbrOcupado()) {
         again = await processarUm({ apenasTipos: ["GERAR_PDF"], flag: "processandoPdf" });
       }
     }, PDF_WORKER_MS);
@@ -636,6 +676,15 @@ function contadoresAlertas() {
        ORDER BY datetime(atualizado_em) DESC LIMIT 1`,
     )
     .get();
+  const ultimaRejeicao = db
+    .prepare(
+      `SELECT correlation_id, numero_venda, status, atualizado_em, erro, resultado
+       FROM emissao_resultados
+       WHERE status IN ('FALHA_PERMANENTE','FALHA_TEMPORARIA','REJEITADA','INCERTO')
+         AND (erro IS NOT NULL OR status != 'INCERTO')
+       ORDER BY datetime(atualizado_em) DESC LIMIT 1`,
+    )
+    .get();
   const filaFiscalTotal =
     st.pendentes +
     st.processando +
@@ -660,7 +709,22 @@ function contadoresAlertas() {
     falhasUltimas24h,
     ultimaEmissao: ultimaEmissao || null,
     ultimaEmissaoSucesso: ultimaEmissaoSucesso || null,
+    ultimaRejeicao: ultimaRejeicao || null,
   };
+}
+
+function ultimoDocumentoXml() {
+  init();
+  return (
+    db
+      .prepare(
+        `SELECT chave, xml_path, pdf_path, criado_em, numero_venda
+         FROM documentos_fiscais
+         WHERE xml_path IS NOT NULL AND xml_path != ''
+         ORDER BY id DESC LIMIT 1`,
+      )
+      .get() || null
+  );
 }
 
 function listar(limit = 50, statusFilter = null) {
@@ -797,6 +861,7 @@ function consultarStatusEmissaoPorVenda(numeroVenda) {
 
 function consultarStatusEmissao(correlationId) {
   init();
+  const fiscalMotivo = require("./fiscal/fiscalMotivo");
   const row = db
     .prepare(`SELECT * FROM emissao_resultados WHERE correlation_id = ?`)
     .get(correlationId);
@@ -808,12 +873,12 @@ function consultarStatusEmissao(correlationId) {
       )
       .get(correlationId);
     if (job) {
-      return {
+      return fiscalMotivo.enriquecerStatusEmissao({
         correlationId,
         numeroVenda: job.numero_venda,
         status: job.status,
         erro: job.erro || null,
-      };
+      });
     }
     return { correlationId, status: "NAO_ENCONTRADO" };
   }
@@ -839,14 +904,14 @@ function consultarStatusEmissao(correlationId) {
       resultado = null;
     }
   }
-  return {
+  return fiscalMotivo.enriquecerStatusEmissao({
     correlationId: row.correlation_id,
     numeroVenda: row.numero_venda,
     status: statusFinal,
     resultado,
-    erro: erroFinal || null,
+    erro: erroFinal ? require("./runtime/mensagensOperador").sanitizarErroFila(erroFinal) || erroFinal : null,
     atualizadoEm: row.atualizado_em,
-  };
+  });
 }
 
 function aguardarConclusao(correlationId, timeoutMs = 120000) {
@@ -913,8 +978,9 @@ function dispararProcessamento() {
     }
   });
   setImmediate(async () => {
+    if (acbrOcupado()) return;
     let again = true;
-    while (again && !filaPausada) {
+    while (again && !filaPausada && !acbrOcupado()) {
       again = await processarUm({ apenasTipos: ["GERAR_PDF"], flag: "processandoPdf" });
     }
   });
@@ -1177,6 +1243,22 @@ function close() {
   }
 }
 
+function acbrOcupado() {
+  try {
+    const acbr = require("./acbr");
+    if (acbr.isAcbrBusy()) return true;
+  } catch (_) {}
+  try {
+    const emissionLock = require("./fiscal/fiscalEmissionLock");
+    if (emissionLock.isEmissionInProgress()) return true;
+  } catch (_) {}
+  return processandoFiscal;
+}
+
+function estaEmEmissao() {
+  return processandoFiscal;
+}
+
 function estaProcessando() {
   return processandoFiscal || processandoPdf;
 }
@@ -1218,6 +1300,7 @@ module.exports = {
   dispararProcessamento,
   aguardarJobsAtivos,
   contadoresAlertas,
+  ultimoDocumentoXml,
   listarJobsRecoveryProntos,
   agendarRetryConsulta,
   marcarFalhaConsultaTimeout,
@@ -1227,4 +1310,6 @@ module.exports = {
   liberarJobsTravados,
   close,
   estaProcessando,
+  estaEmEmissao,
+  acbrOcupado,
 };

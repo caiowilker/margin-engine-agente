@@ -50,20 +50,14 @@ function verificarManifestBoot() {
     manifestBootMotivo = "manifest.json ausente ou inválido";
     return { ok: false, motivo: manifestBootMotivo };
   }
-  for (const item of manifest.arquivos) {
-    if (!item.sha256 || String(item.sha256).trim() === "") {
-      manifestBootOk = false;
-      manifestBootMotivo = `sha256 vazio ou nulo: ${item.arquivo}`;
-      return { ok: false, motivo: manifestBootMotivo, arquivo: item.arquivo };
-    }
-    const fp = path.join(__dirname, item.arquivo);
-    if (!fs.existsSync(fp)) {
-      manifestBootOk = false;
-      manifestBootMotivo = `arquivo ausente: ${item.arquivo}`;
-      return { ok: false, motivo: manifestBootMotivo, arquivo: item.arquivo };
-    }
+  try {
+    validarManifest(manifest);
+    return { ok: true };
+  } catch (err) {
+    manifestBootOk = false;
+    manifestBootMotivo = err.message;
+    return { ok: false, motivo: manifestBootMotivo };
   }
-  return { ok: true };
 }
 
 function isManifestOk() {
@@ -88,6 +82,30 @@ function backupArquivos(arquivos) {
   }
   fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ arquivos }, null, 2));
   return dir;
+}
+
+function rollbackDisponivel() {
+  const root = backupDir();
+  if (!fs.existsSync(root)) return false;
+  return fs
+    .readdirSync(root)
+    .some((d) => fs.statSync(path.join(root, d)).isDirectory());
+}
+
+function ultimoBackupInfo() {
+  const root = backupDir();
+  if (!fs.existsSync(root)) return null;
+  const dirs = fs
+    .readdirSync(root)
+    .map((d) => path.join(root, d))
+    .filter((d) => fs.statSync(d).isDirectory())
+    .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+  if (!dirs.length) return null;
+  const st = fs.statSync(dirs[0]);
+  return {
+    quando: new Date(st.mtimeMs).toISOString(),
+    pasta: dirs[0],
+  };
 }
 
 function rollbackUltimo() {
@@ -152,6 +170,8 @@ module.exports = {
   calcularSha256,
   backupArquivos,
   rollbackUltimo,
+  rollbackDisponivel,
+  ultimoBackupInfo,
   aplicarPacote,
   MANIFEST_PATH,
 };

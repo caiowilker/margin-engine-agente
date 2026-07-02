@@ -129,7 +129,15 @@ const svc = new Service({
     "Agente local do Margin Engine — impressão, fila offline e serviços do PDV.",
   script: path.join(__dirname, "index.js"),
   nodeOptions: [],
-  env: [{ name: "NODE_ENV", value: "production" }],
+  env: [
+    { name: "NODE_ENV", value: "production" },
+    { name: "LOG_MODE", value: "PRODUCTION" },
+    { name: "LOG_PATCH_CONSOLE", value: "false" },
+    {
+      name: "MARGIN_ENGINE_AGENT_ROOT",
+      value: __dirname,
+    },
+  ],
   wait: 2,
   grow: 0.5,
   maxRestarts: 10,
@@ -137,6 +145,7 @@ const svc = new Service({
 });
 
 const uninstall = process.argv.includes("--uninstall");
+const noOpen = process.argv.includes("--no-open");
 
 svc.on("install", () => {
   svc.start();
@@ -144,16 +153,18 @@ svc.on("install", () => {
   console.log(`  PDV disponível em: ${AGENT_PUBLIC_BASE}`);
   console.log("  Acesse para ativar o terminal de caixa.\n");
 
-  setTimeout(() => {
-    const url = AGENT_PUBLIC_BASE;
-    const cmd =
-      process.platform === "win32"
-        ? `start ${url}`
-        : process.platform === "darwin"
-          ? `open ${url}`
-          : `xdg-open ${url}`;
-    exec(cmd);
-  }, 2000);
+  if (!noOpen) {
+    setTimeout(() => {
+      const url = AGENT_PUBLIC_BASE;
+      const cmd =
+        process.platform === "win32"
+          ? `start ${url}`
+          : process.platform === "darwin"
+            ? `open ${url}`
+            : `xdg-open ${url}`;
+      exec(cmd);
+    }, 2000);
+  }
 });
 
 svc.on("alreadyinstalled", () => {

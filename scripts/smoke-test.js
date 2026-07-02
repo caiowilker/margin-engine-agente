@@ -193,7 +193,8 @@ async function main() {
   if (
     r.status === 200 &&
     typeof r.raw === "string" &&
-    r.raw.includes("Centro de Operações")
+    r.raw.includes("Margin Engine") &&
+    r.raw.includes("Diagnóstico")
   ) {
     log("GET /diagnostico/painel", "HTML OK");
   } else {

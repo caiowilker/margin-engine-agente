@@ -9,6 +9,7 @@ const path = require("path");
 const { AsyncLocalStorage } = require("async_hooks");
 const { getDirectoryManager } = require("./directoryManager");
 const { sanitizeRecord } = require("./logSanitizer");
+const { sugerirParaErro } = require("./logSuggestions");
 const { afterAppend, getOrCreateState } = require("./logRotation");
 
 const LEVELS = {
@@ -142,6 +143,11 @@ class LoggingService {
       versao: process.env.AGENT_VERSION || null,
     };
     this._streams = new Map();
+    this._writeBuffers = new Map();
+    this._flushMs = parseInt(process.env.LOG_FLUSH_MS || "75", 10);
+    this._flushMaxLines = parseInt(process.env.LOG_FLUSH_MAX_LINES || "32", 10);
+    this._syncWrites =
+      process.env.LOG_SYNC === "true" || process.env.NODE_ENV === "test";
   }
 
   getRootLogger() {
@@ -231,6 +237,12 @@ class LoggingService {
       caixa: sanitized.caixa ?? ctx.caixa ?? ctx.pdvId ?? ctx.dispositivoId ?? null,
       usuario: sanitized.usuario ?? ctx.usuario ?? null,
       versao: ctx.versao ?? null,
+      driver:
+        sanitized.driver ??
+        bindings.driver ??
+        ctx.driver ??
+        ctx.driverFiscal ??
+        null,
       modulo: bindings.modulo || bindings.module || sanitized.modulo || "application",
       acao: sanitized.acao ?? sanitized.action ?? null,
       tempo: sanitized.tempo ?? sanitized.durationMs ?? sanitized.ms ?? null,
@@ -246,28 +258,138 @@ class LoggingService {
       record[k] = v;
     }
 
+    if (LEVELS[level] >= LEVELS.warn && (record.erro || record.message)) {
+      const sug = sugerirParaErro(record.erro || record.message);
+      record.causa = record.causa || sug.causa;
+      record.acaoRecomendada = record.acaoRecomendada || sug.acaoRecomendada;
+      record.sugestao =
+        record.sugestao ||
+        (record.causa && record.acaoRecomendada
+          ? `${record.causa} Ação recomendada: ${record.acaoRecomendada}`
+          : record.acaoRecomendada || record.causa);
+    }
+
     return record;
   }
 
   _appendToChannel(channel, line) {
     const fp = this.filePath(channel);
+    if (this._syncWrites) {
+      try {
+        fs.mkdirSync(path.dirname(fp), { recursive: true });
+        const bytes = Buffer.byteLength(line, "utf8");
+        fs.appendFileSync(fp, line, "utf8");
+        const state = getOrCreateState(fp);
+        afterAppend(fp, state, {
+          addedBytes: bytes,
+          addedLines: 1,
+          checkLines: false,
+          syncFromDisk: false,
+        });
+      } catch {
+        /* disco indisponível */
+      }
+      return;
+    }
+
     try {
       fs.mkdirSync(path.dirname(fp), { recursive: true });
-      fs.appendFileSync(fp, line, "utf8");
-      const state = getOrCreateState(fp);
-      afterAppend(fp, state);
     } catch {
-      /* disco indisponível — não interromper agente */
+      return;
+    }
+
+    let buf = this._writeBuffers.get(channel);
+    if (!buf) {
+      buf = { lines: [], bytes: 0, timer: null };
+      this._writeBuffers.set(channel, buf);
+    }
+    buf.lines.push(line);
+    buf.bytes += Buffer.byteLength(line, "utf8");
+
+    if (buf.lines.length >= this._flushMaxLines) {
+      this._flushChannel(channel);
+      return;
+    }
+    if (!buf.timer) {
+      buf.timer = setTimeout(() => this._flushChannel(channel), this._flushMs);
+      if (typeof buf.timer.unref === "function") buf.timer.unref();
+    }
+  }
+
+  _flushChannel(channel) {
+    const buf = this._writeBuffers.get(channel);
+    if (!buf || buf.lines.length === 0) {
+      if (buf) buf.timer = null;
+      return;
+    }
+    if (buf.timer) {
+      clearTimeout(buf.timer);
+      buf.timer = null;
+    }
+
+    const fp = this.filePath(channel);
+    const chunk = buf.lines.join("");
+    const lineCount = buf.lines.length;
+    const byteCount = buf.bytes;
+    buf.lines = [];
+    buf.bytes = 0;
+
+    fs.appendFile(fp, chunk, "utf8", (err) => {
+      if (err) return;
+      try {
+        const state = getOrCreateState(fp);
+        afterAppend(fp, state, {
+          addedBytes: byteCount,
+          addedLines: lineCount,
+          checkLines: false,
+          syncFromDisk: false,
+        });
+      } catch {
+        /* rotação indisponível */
+      }
+    });
+  }
+
+  flushSync() {
+    for (const channel of this._writeBuffers.keys()) {
+      const fp = this.filePath(channel);
+      const buf = this._writeBuffers.get(channel);
+      if (!buf || buf.lines.length === 0) continue;
+      if (buf.timer) {
+        clearTimeout(buf.timer);
+        buf.timer = null;
+      }
+      const chunk = buf.lines.join("");
+      const lineCount = buf.lines.length;
+      const byteCount = buf.bytes;
+      buf.lines = [];
+      buf.bytes = 0;
+      try {
+        fs.mkdirSync(path.dirname(fp), { recursive: true });
+        fs.appendFileSync(fp, chunk, "utf8");
+        const state = getOrCreateState(fp);
+        afterAppend(fp, state, {
+          addedBytes: byteCount,
+          addedLines: lineCount,
+          checkLines: false,
+          syncFromDisk: false,
+        });
+      } catch {
+        /* disco indisponível */
+      }
     }
   }
 
   _emitConsole(level, record) {
     const text = `[${record.timestamp}] ${record.level} [${record.modulo}] ${record.message}`;
     const out = originalConsole || console;
+    const extra = {};
+    if (record.causa) extra.causa = record.causa;
+    if (record.acaoRecomendada) extra.acaoRecomendada = record.acaoRecomendada;
     if (level === "error" || level === "fatal") {
-      out.error(text, record.erro ? { erro: record.erro } : "");
+      out.error(text, Object.keys(extra).length ? extra : record.erro ? { erro: record.erro } : "");
     } else if (level === "warn") {
-      out.warn(text);
+      out.warn(text, Object.keys(extra).length ? extra : "");
     } else {
       out.log(text);
     }

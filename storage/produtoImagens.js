@@ -10,7 +10,25 @@ const { writeFileAtomicSync } = require("../runtime/atomicWrite");
 const auditLog = require("../auditLog");
 const log = require("../logger").child({ modulo: "produto_imagens" });
 
+const SEGMENTO_ID = /^[a-zA-Z0-9_-]{1,64}$/;
 const MAX_BYTES = 10 * 1024 * 1024;
+
+function validarSegmentoId(valor, rotulo) {
+  const s = String(valor || "").trim();
+  if (!SEGMENTO_ID.test(s)) {
+    throw new Error(`${rotulo} inválido.`);
+  }
+  return s;
+}
+
+function assertDentroDoDiretorio(filePath, baseDir) {
+  const base = path.resolve(baseDir);
+  const resolved = path.resolve(filePath);
+  if (resolved !== base && !resolved.startsWith(base + path.sep)) {
+    throw new Error("Acesso ao arquivo negado.");
+  }
+  return resolved;
+}
 const MAX_DIM = 3000;
 const MEDIUM_WIDTH = 600;
 const THUMB_SIZE = 150;
@@ -27,12 +45,20 @@ function getSharp() {
 }
 
 function lerTenantId(fallback) {
+  const explicit =
+    fallback != null && String(fallback).trim() !== ""
+      ? String(fallback).trim()
+      : "";
+  if (explicit) return validarSegmentoId(explicit, "tenantId");
   try {
     const { lerConfig } = require("../credenciais");
     const cfg = lerConfig();
-    return String(cfg?.tenantId || fallback || process.env.TENANT_ID || "local").trim();
+    return validarSegmentoId(
+      String(cfg?.tenantId || process.env.TENANT_ID || "local").trim(),
+      "tenantId",
+    );
   } catch {
-    return String(fallback || process.env.TENANT_ID || "local").trim();
+    return validarSegmentoId(String(process.env.TENANT_ID || "local").trim(), "tenantId");
   }
 }
 
@@ -41,8 +67,10 @@ function relKey(tenantId, produtoId) {
 }
 
 function pathsFor(tenantId, produtoId) {
+  const tid = validarSegmentoId(tenantId, "tenantId");
+  const pid = validarSegmentoId(produtoId, "produtoId");
   const dm = getDirectoryManager();
-  const key = relKey(tenantId, produtoId);
+  const key = relKey(tid, pid);
   return {
     key,
     original: path.join(dm.dir("produtosOriginal"), key + ".webp"),
@@ -175,8 +203,7 @@ async function processarComSharp(buf, mime) {
  * @param {{ produtoId: string, buffer?: Buffer, base64?: string, nome?: string, usuario?: string, tenantId?: string, ip?: string }} opts
  */
 async function salvar(opts = {}) {
-  const produtoId = String(opts.produtoId || "").trim();
-  if (!produtoId) throw new Error("produtoId é obrigatório.");
+  const produtoId = validarSegmentoId(opts.produtoId, "produtoId");
 
   const tenantId = lerTenantId(opts.tenantId);
   const buf = opts.buffer || decodeInput(opts);
@@ -252,7 +279,7 @@ async function salvar(opts = {}) {
 
 function obterMeta(produtoId, tenantIdOpt) {
   const tenantId = lerTenantId(tenantIdOpt);
-  const paths = pathsFor(tenantId, produtoId);
+  const paths = pathsFor(tenantId, validarSegmentoId(produtoId, "produtoId"));
   const meta = lerMetaFile(paths.meta);
   if (!meta) return null;
   return meta;
@@ -260,20 +287,33 @@ function obterMeta(produtoId, tenantIdOpt) {
 
 function obterArquivo(produtoId, variant, tenantIdOpt) {
   const tenantId = lerTenantId(tenantIdOpt);
-  const paths = pathsFor(tenantId, produtoId);
+  const paths = pathsFor(tenantId, validarSegmentoId(produtoId, "produtoId"));
+  const v = String(variant || "").toLowerCase();
+  const dm = getDirectoryManager();
+  const rootMap = {
+    thumb: dm.dir("produtosThumb"),
+    medium: dm.dir("produtosMedium"),
+    original: dm.dir("produtosOriginal"),
+  };
   const map = {
     thumb: paths.thumb,
     medium: paths.medium,
     original: paths.original,
   };
-  const file = map[String(variant || "").toLowerCase()];
-  if (!file || !fs.existsSync(file)) return null;
-  return { file, mime: "image/webp" };
+  const file = map[v];
+  const root = rootMap[v];
+  if (!file || !root || !fs.existsSync(file)) return null;
+  assertDentroDoDiretorio(file, root);
+  const rel = path.relative(root, file);
+  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) {
+    throw new Error("Acesso ao arquivo negado.");
+  }
+  return { file: rel, mime: "image/webp", root };
 }
 
 function remover(produtoId, opts = {}) {
   const tenantId = lerTenantId(opts.tenantId);
-  const paths = pathsFor(tenantId, produtoId);
+  const paths = pathsFor(tenantId, validarSegmentoId(produtoId, "produtoId"));
   const meta = lerMetaFile(paths.meta);
   const removidos = [];
   for (const f of [paths.original, paths.medium, paths.thumb, paths.meta]) {

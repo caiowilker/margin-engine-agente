@@ -4,7 +4,7 @@
  */
 const fs = require("fs");
 const path = require("path");
-const { resolveStagingDir } = require("../../runtime/windowsEnv");
+const { resolveTempRoot, resolveStagingDir } = require("../../runtime/windowsEnv");
 const fiscalSecrets = require("../../fiscalSecrets");
 
 function isUncPath(p) {
@@ -337,14 +337,16 @@ function findStagedArtifact(runtime, chave, ext) {
   return null;
 }
 
+
 /** Diretórios de staging conhecidos (homolog / emissões anteriores). */
 function listKnownStagingRoots() {
+  const temp = resolveTempRoot();
   const roots = [
     process.env.ACBR_WIN_STAGING,
-    path.join(process.env.TEMP || "", "margin-acbrlib-prod-test"),
-    path.join(process.env.TEMP || "", "margin-acbrlib"),
-    path.join(process.env.LOCALAPPDATA || "", "Temp", "margin-acbrlib-prod-test"),
-    path.join(process.env.LOCALAPPDATA || "", "Temp", "margin-acbrlib"),
+    path.join(temp, "margin-acbrlib-prod-test"),
+    path.join(temp, "margin-acbrlib"),
+    resolveStagingDir("margin-acbrlib-prod-test"),
+    resolveStagingDir("margin-acbrlib"),
   ].filter(Boolean);
   return [...new Set(roots)];
 }

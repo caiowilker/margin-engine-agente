@@ -38,6 +38,7 @@ Assert-Path (Join-Path $Node "node.exe") "Copie Node.js portatil x64 para dist\n
 Assert-Path (Join-Path $App "acbrlib\lib\ACBrNFe64.dll") "DLL fiscal em dist\app\acbrlib\lib\"
 Assert-Path (Join-Path $App "posprinter\lib\ACBrPosPrinter64.dll") "DLL impressora em dist\app\posprinter\lib\"
 Assert-Path (Join-Path $App "print\printerBootstrap.js") "printerBootstrap ausente - rode sync:windows-build"
+Assert-Path (Join-Path $App "assets\margin-engine.ico") "Icone assets\margin-engine.ico - rode node scripts/build-installer-icon.js"
 Assert-Path $Iss "Execute sync - copia pdv-agente-installer.iss para esta pasta"
 
 $schemaCount = Count-Xsd (Join-Path $App "acbrlib\data\Schemas")
@@ -47,6 +48,10 @@ if ($schemaCount -lt 10) {
 Write-Host "[OK] Schemas XSD: $schemaCount arquivo(s)"
 
 $pkg = Get-Content (Join-Path $App "package.json") -Raw | ConvertFrom-Json
+$versionScript = Join-Path $App "scripts\sync-installer-version.js"
+if (Test-Path $versionScript) {
+    & node $versionScript $Iss
+}
 $issText = Get-Content $Iss -Raw
 $expectedDefine = '#define MyAppVersion "' + $pkg.version + '"'
 if ($issText -notmatch [regex]::Escape($expectedDefine)) {
@@ -101,17 +106,25 @@ if ($Compile) {
     Write-Host "==> Compilando instalador..."
     & $inno $Iss
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    $exe = Join-Path $OutputDir "PDV-Agente-Setup-$($pkg.version).exe"
+    $exe = Join-Path $OutputDir "Margin-Engine-Setup-$($pkg.version).exe"
+    if (-not (Test-Path $exe)) {
+        $legacy = Join-Path $OutputDir "PDV-Agente-Setup-$($pkg.version).exe"
+        if (Test-Path $legacy) { $exe = $legacy }
+    }
     if (Test-Path $exe) {
         Write-Host ""
         Write-Host "OK - $exe"
+        $signScript = Join-Path $Root "sign-installer.ps1"
+        if (Test-Path $signScript) {
+            & $signScript -ExePath $exe
+        }
     }
 } elseif ($inno) {
     Write-Host "  Compilar:"
     Write-Host "    .\prepare-build.ps1 -Compile"
     Write-Host "  ou:"
     Write-Host "    & `"$inno`" `"$Iss`""
-    Write-Host "  Saida: output\PDV-Agente-Setup-$($pkg.version).exe"
+    Write-Host "  Saida: output\Margin-Engine-Setup-$($pkg.version).exe"
 } else {
     Write-Host "  Inno Setup 6 nao encontrado - instale ou abra pdv-agente-installer.iss no IDE"
 }

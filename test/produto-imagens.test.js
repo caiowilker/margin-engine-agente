@@ -53,7 +53,10 @@ async function run() {
   assert.ok(fs.existsSync(pi.pathsFor("tenant-test", produtoId).thumb));
 
   const hit = pi.obterArquivo(produtoId, "thumb", "tenant-test");
-  assert.ok(hit && fs.existsSync(hit.file));
+  assert.ok(hit && fs.existsSync(path.join(hit.root, hit.file)));
+
+  assert.throws(() => pi.obterArquivo("../../../etc/passwd", "thumb", "tenant-test"));
+  assert.throws(() => pi.obterArquivo(produtoId, "thumb", "../evil"));
 
   const rem = pi.remover(produtoId, { tenantId: "tenant-test" });
   assert.ok(rem.ok);

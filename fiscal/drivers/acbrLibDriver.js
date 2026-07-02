@@ -19,9 +19,10 @@ const fiscalNumeracao = require("../../fiscalNumeracao");
 const { PATHS } = require("../../marginPaths");
 const acbrLibResposta = require("../../acbrLibResposta");
 const acbrLibRuntime = require("./acbrLibRuntime");
+const acbrLibSession = require("./acbrLibSession");
 const { validarPayloadNfe } = require("../../fiscalValidacaoNfe");
 const fiscalTrace = require("../../fiscalTraceLog");
-const fiscalDhEmiIni = require("../fiscalDhEmiIni");
+const fiscalEmissionLock = require("../fiscalEmissionLock");
 
 const AGENT_ROOT = path.resolve(__dirname, "../..");
 
@@ -153,7 +154,21 @@ function patchNumeracaoIniLib(ini, numeracao) {
   return lines.join("\n");
 }
 
+function resolveEmissaoTimeoutMs() {
+  const libMs = parseInt(process.env.ACBR_LIB_EMISSAO_TIMEOUT_MS || "", 10);
+  const filaMs = parseInt(process.env.FISCAL_EMISSAO_TIMEOUT_MS || "120000", 10);
+  if (Number.isFinite(libMs) && libMs > 0) return libMs;
+  return filaMs;
+}
+
 async function emitirNfceLib(payload) {
+  return fiscalEmissionLock.withEmissionLock(
+    () => emitirNfceLibCore(payload),
+    "acbr-lib-nfce",
+  );
+}
+
+async function emitirNfceLibCore(payload) {
   if (payload?.xml || payload?.xmlEpec || payload?.modoEpec) {
     return emitirEpecLib(payload);
   }
@@ -162,7 +177,10 @@ async function emitirNfceLib(payload) {
 
 async function emitirNfeLib(payload) {
   if (!acbr.isNfeModelo55Habilitado()) return { fiscal: false };
-  return emitirDocumentoLib(payload, "55");
+  return fiscalEmissionLock.withEmissionLock(
+    () => emitirDocumentoLib(payload, "55"),
+    "acbr-lib-nfe",
+  );
 }
 
 function resolverNumeracaoLib(payload, serie, modeloDf) {
@@ -287,35 +305,17 @@ async function emitirEpecLib(payload) {
  * Emissão nativa via ACBrLibNFeMT (koffi FFI → libacbrnfe64.so / ACBrNFe64.dll).
  */
 async function emitirViaNativeLib(iniPath, modelo, numeracao) {
-  const LibClass = loadAcbrLibNFeMT();
   const libPath = resolveLibPath();
   const iniConfig = resolveLibIniPath();
 
   if (!libPath) {
-    throw new Error("[ACBrLib] ACBR_LIB_PATH não configurado ou arquivo inexistente");
+    throw new Error("[ACBrLib] Biblioteca fiscal não configurada neste caixa");
   }
   if (!iniConfig) {
-    throw new Error(
-      "[ACBrLib] ACBR_LIB_INI não configurado. Copie templates/acbrlib.ini.template para data/acbrlib.ini",
-    );
+    throw new Error("[ACBrLib] Configuração fiscal local ausente — reinstale ou repare o Margin Engine");
   }
 
-  const iniVals = acbrLibRuntime.readIniValues(iniConfig);
-  const runtime = acbrLibRuntime.prepareNativeRuntime({
-    libPath,
-    iniConfigPath: iniConfig,
-    assets: {
-      lib: path.dirname(libPath),
-      schemas: iniVals.pathSchemas || path.join(AGENT_ROOT, "schemas", "NFe"),
-      cert: iniVals.certFile,
-      servicos: iniVals.servicos || path.join(AGENT_ROOT, "data", "ACBrNFeServicos.ini"),
-      notas: PATHS.xml,
-      log: PATHS.logs,
-      pdf: PATHS.pdf,
-    },
-    forceStaging: process.platform === "win32",
-  });
-
+  const runtime = buildNativeRuntime();
   const nativeIniPath = acbrLibRuntime.resolveNativeDocumentIniPath(iniPath, runtime);
 
   return acbr.withAcbrLock(async () => {
@@ -336,129 +336,125 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
         class: "ACBrLibNFeMT",
         staged: runtime.staged,
       },
-      "[ACBrLib] Emissão NATIVA — NFE_Inicializar",
+      "[ACBrLib] Emissão NATIVA — sessão compartilhada",
     );
 
-    return acbrLibRuntime.withNativeLibSession(runtime, async ({ libPath: libInst, iniConfig: iniInst }) => {
-      const inst = new LibClass(libInst, iniInst, libCryptKey());
-      try {
-        inst.inicializar();
-        log.info("[ACBrLib] NFE_Inicializar OK");
-
-        acbrLibRuntime.applyNativeRuntimeConfig(inst, runtime);
+    const LibClass = loadAcbrLibNFeMT();
+    try {
+      return await acbrLibRuntime.withNativeLibSession(runtime, async () => {
+        const session = await acbrLibSession.ensureSession(runtime, LibClass);
+        const inst = session.inst;
+        acbrLibSession.scheduleIdleFinalize();
 
         try {
-          inst.limparLista();
-        } catch (_) {
-          /* ignore */
-        }
-
-        inst.carregarINI(nativeIniPath);
-        log.info({ iniPath: nativeIniPath }, "[ACBrLib] NFE_CarregarINI OK");
-
-        acbrLibRuntime.reloadNativeCertAfterCarregarIni(inst, runtime);
-
-        inst.assinar();
-        log.info("[ACBrLib] NFE_Assinar OK");
-
-        inst.validar();
-        log.info("[ACBrLib] NFE_Validar OK");
-
-        const emissaoTimeoutMs = parseInt(
-          process.env.ACBR_LIB_EMISSAO_TIMEOUT_MS || "90000",
-          10,
-        );
-        const resposta = await Promise.race([
-          Promise.resolve().then(() => inst.enviar(1, false, true, false)),
-          new Promise((_, reject) =>
-            setTimeout(
-              () =>
-                reject(
-                  new Error(
-                    `[ACBrLib] NFE_Enviar timeout após ${emissaoTimeoutMs}ms — verifique certificado, SEFAZ MG e logs do agente`,
-                  ),
-                ),
-              emissaoTimeoutMs,
-            ),
-          ),
-        ]);
-        log.info(
-          { respostaLen: String(resposta || "").length, preview: String(resposta || "").slice(0, 300) },
-          "[ACBrLib] NFE_Enviar retorno",
-        );
-
-        const p0 = acbrLibResposta.parseRespostaLib(resposta);
-        let p = await acbr.enrichParsePosEmissaoAsync(p0, resposta);
-        acbr.assertAutorizada(p, resposta, modelo);
-        log.info(
-          { cStat: p.cStat, chave: p.chave, protocolo: p.protocolo, xMotivo: p.xMotivo },
-          "[ACBrLib] Resposta parseada (chave/protocolo SEFAZ)",
-        );
-
-        if (numeracao?.serie != null) {
           try {
-            fiscalNumeracao.sincronizarNumeroAutorizado(
-              numeracao.serie,
-              p.numero || numeracao.numero,
-              modelo,
-            );
-          } catch (syncErr) {
-            log.warn(
-              { err: syncErr.message },
-              "[ACBrLib] sincronizarNumeracao ignorada (sqlite indisponível)",
-            );
+            inst.limparLista();
+          } catch (_) {
+            /* ignore */
           }
-        }
 
-        const resultado = acbr.normalizarResultado(p, resposta, modelo);
-        const artifacts = persistNativeEmissaoOutputs(inst, runtime, p.chave, modelo);
-        fiscalTrace.copiarLogAcbrStagingParaCanonico(runtime);
-        fiscalTrace.trace("ACBrLib", "Emissão nativa concluída", {
-          chave: resultado.chave,
-          cStat: resultado.cStat,
-          xmlPath: artifacts.xmlPath,
-          pdfPath: artifacts.pdfPath,
-        });
-        log.info(
-          {
+          inst.carregarINI(nativeIniPath);
+          log.info({ iniPath: nativeIniPath }, "[ACBrLib] NFE_CarregarINI OK");
+
+          acbrLibRuntime.reloadNativeCertAfterCarregarIni(inst, runtime);
+
+          inst.assinar();
+          log.info("[ACBrLib] NFE_Assinar OK");
+
+          inst.validar();
+          log.info("[ACBrLib] NFE_Validar OK");
+
+          const emissaoTimeoutMs = resolveEmissaoTimeoutMs();
+          const resposta = await Promise.race([
+            Promise.resolve().then(() => inst.enviar(1, false, true, false)),
+            new Promise((_, reject) =>
+              setTimeout(
+                () =>
+                  reject(
+                    new Error(
+                      `[ACBrLib] NFE_Enviar timeout após ${emissaoTimeoutMs}ms — verifique certificado, SEFAZ e logs do agente`,
+                    ),
+                  ),
+                emissaoTimeoutMs,
+              ),
+            ),
+          ]);
+          log.info(
+            { respostaLen: String(resposta || "").length, preview: String(resposta || "").slice(0, 300) },
+            "[ACBrLib] NFE_Enviar retorno",
+          );
+
+          const p0 = acbrLibResposta.parseRespostaLib(resposta);
+          let p = await acbr.enrichParsePosEmissaoAsync(p0, resposta);
+          acbr.assertAutorizada(p, resposta, modelo);
+          log.info(
+            { cStat: p.cStat, chave: p.chave, protocolo: p.protocolo, xMotivo: p.xMotivo },
+            "[ACBrLib] Resposta parseada (chave/protocolo SEFAZ)",
+          );
+
+          if (numeracao?.serie != null) {
+            try {
+              fiscalNumeracao.sincronizarNumeroAutorizado(
+                numeracao.serie,
+                p.numero || numeracao.numero,
+                modelo,
+              );
+            } catch (syncErr) {
+              log.warn(
+                { err: syncErr.message },
+                "[ACBrLib] sincronizarNumeracao ignorada (sqlite indisponível)",
+              );
+            }
+          }
+
+          const resultado = acbr.normalizarResultado(p, resposta, modelo);
+          const artifacts = persistNativeEmissaoOutputs(inst, runtime, p.chave, modelo);
+          fiscalTrace.copiarLogAcbrStagingParaCanonico(runtime);
+          fiscalTrace.trace("ACBrLib", "Emissão nativa concluída", {
             chave: resultado.chave,
-            protocolo: resultado.protocolo,
             cStat: resultado.cStat,
             xmlPath: artifacts.xmlPath,
             pdfPath: artifacts.pdfPath,
+          });
+          log.info(
+            {
+              chave: resultado.chave,
+              protocolo: resultado.protocolo,
+              cStat: resultado.cStat,
+              xmlPath: artifacts.xmlPath,
+              pdfPath: artifacts.pdfPath,
+              native: true,
+            },
+            "[ACBrLib] Emissão NATIVA concluída",
+          );
+          return {
+            ...resultado,
             native: true,
-          },
-          "[ACBrLib] Emissão NATIVA concluída",
-        );
-        return {
-          ...resultado,
-          native: true,
-          xmlPath: artifacts.xmlPath,
-          pdfPath: artifacts.pdfPath,
-        };
-      } catch (err) {
-        let ultimo = "";
-        try {
-          ultimo = typeof inst.ultimoRetorno === "function" ? inst.ultimoRetorno() : "";
-        } catch (_) {
-          /* ignore */
+            xmlPath: artifacts.xmlPath,
+            pdfPath: artifacts.pdfPath,
+          };
+        } catch (err) {
+          let ultimo = "";
+          try {
+            ultimo = typeof inst.ultimoRetorno === "function" ? inst.ultimoRetorno() : "";
+          } catch (_) {
+            /* ignore */
+          }
+          fiscalTrace.copiarLogAcbrStagingParaCanonico(runtime);
+          fiscalTrace.error("ACBrLib", "Falha na emissão nativa", {
+            err: err.message,
+            ultimoRetorno: String(ultimo || "").slice(0, 500),
+          });
+          log.error({ err: err.message, ultimoRetorno: ultimo }, "[ACBrLib] Falha na emissão nativa");
+          if (acbrLibSession.shouldInvalidateOnError(err)) {
+            await acbrLibSession.invalidateNativeSession("emissao_error");
+          }
+          throw err;
         }
-        fiscalTrace.copiarLogAcbrStagingParaCanonico(runtime);
-        fiscalTrace.error("ACBrLib", "Falha na emissão nativa", {
-          err: err.message,
-          ultimoRetorno: String(ultimo || "").slice(0, 500),
-        });
-        log.error({ err: err.message, ultimoRetorno: ultimo }, "[ACBrLib] Falha na emissão nativa");
-        throw err;
-      } finally {
-        try {
-          inst.finalizar();
-          log.info("[ACBrLib] NFE_Finalizar OK");
-        } catch (_) {
-          /* ignore */
-        }
-      }
-    });
+      });
+    } catch (err) {
+      throw err;
+    }
   }, "acbr-lib-native");
 }
 
@@ -500,7 +496,7 @@ function buildNativeRuntime() {
     throw new Error("[ACBrLib] Biblioteca ou INI não configurados");
   }
   const iniVals = acbrLibRuntime.readIniValues(iniConfig);
-  return acbrLibRuntime.prepareNativeRuntime({
+  const runtime = acbrLibRuntime.prepareNativeRuntime({
     libPath,
     iniConfigPath: iniConfig,
     assets: {
@@ -514,39 +510,27 @@ function buildNativeRuntime() {
     },
     forceStaging: process.platform === "win32",
   });
+  return acbrLibSession.cacheRuntime(runtime);
 }
 
 async function withNativeLib(opName, fn) {
+  if (getIntegrationMode() !== "native") {
+    throw new Error(`[ACBrLib] ${opName} requer biblioteca nativa configurada`);
+  }
   const runtime = buildNativeRuntime();
   const LibClass = loadAcbrLibNFeMT();
   return acbr.withAcbrLock(async () => {
-    log.info({ opName }, "[ACBrLib] operação nativa");
-    return acbrLibRuntime.withNativeLibSession(runtime, async ({ libPath, iniConfig }) => {
-      const inst = new LibClass(libPath, iniConfig, libCryptKey());
+    log.info({ opName }, "[ACBrLib] operação nativa (sessão compartilhada)");
+    return acbrLibRuntime.withNativeLibSession(runtime, async () => {
       try {
-        inst.inicializar();
-        acbrLibRuntime.applyNativeRuntimeConfig(inst, runtime);
-        acbrLibRuntime.applyNativeCertConfig(inst, runtime);
-        return await fn(inst, runtime);
+        const session = await acbrLibSession.ensureSession(runtime, LibClass);
+        acbrLibSession.scheduleIdleFinalize();
+        return await fn(session.inst, runtime);
       } catch (err) {
-        let ultimo = "";
-        try {
-          ultimo = typeof inst.ultimoRetorno === "function" ? inst.ultimoRetorno() : "";
-        } catch (_) {
-          /* ignore */
-        }
-        if (ultimo) {
-          const e = new Error(`${err.message} | ultimoRetorno: ${ultimo}`);
-          e.cause = err;
-          throw e;
+        if (acbrLibSession.shouldInvalidateOnError(err)) {
+          await acbrLibSession.invalidateNativeSession("operation_error");
         }
         throw err;
-      } finally {
-        try {
-          inst.finalizar();
-        } catch (_) {
-          /* ignore */
-        }
       }
     });
   }, `acbr-lib-${opName}`);
@@ -922,9 +906,20 @@ async function enviarEventoFiscalLib(payload) {
   };
 }
 
-/** Próxima sessão nativa relê acbrlib.ini — invalida cache de staging se existir. */
-function refreshLibRuntimeConfig() {
-  return { refreshed: getIntegrationMode() === "native", mode: getIntegrationMode() };
+/** Invalida sessão nativa — próxima operação reinicializa a biblioteca. */
+async function refreshLibRuntimeConfig() {
+  return acbr.withAcbrLock(async () => {
+    await acbrLibSession.invalidateNativeSession("config_refresh");
+    acbrLibSession.invalidateRuntimeCache();
+    return { refreshed: getIntegrationMode() === "native", mode: getIntegrationMode() };
+  }, "config_refresh");
+}
+
+async function invalidateNativeSession(reason) {
+  return acbr.withAcbrLock(async () => {
+    await acbrLibSession.invalidateNativeSession(reason || "external");
+    acbrLibSession.invalidateRuntimeCache();
+  }, reason || "invalidate");
 }
 
 module.exports = Object.assign({}, acbr, {
@@ -944,6 +939,8 @@ module.exports = Object.assign({}, acbr, {
   inutilizarNfce: inutilizarNfceLib,
   enviarEventoFiscal: enviarEventoFiscalLib,
   refreshLibRuntimeConfig,
+  invalidateNativeSession,
+  getLibSessionStatus: () => acbrLibSession.getSessionStatus(),
   gerarPdfFiscal: gerarPdfFiscalLib,
   gerarPdfDanfce: (chave, xmlPath) => gerarPdfFiscalLib(chave, xmlPath, "65"),
   gerarPdfDanfe: (chave, xmlPath) => gerarPdfFiscalLib(chave, xmlPath, "55"),

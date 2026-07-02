@@ -18,6 +18,13 @@ echo "==> Build root: $BUILD_ROOT"
 echo "==> Gerando manifest.json (SHA-256)..."
 (cd "$AGENT_ROOT" && npm run manifest)
 
+echo "==> Sincronizando versão do instalador..."
+node "$AGENT_ROOT/scripts/sync-installer-version.js" "$BUILD_ROOT/pdv-agente-installer.iss" 2>/dev/null || \
+  node "$AGENT_ROOT/scripts/sync-installer-version.js"
+
+echo "==> Gerando ícone do instalador..."
+node "$AGENT_ROOT/scripts/build-installer-icon.js"
+
 RSYNC_EXCLUDES=(
   --exclude node_modules
   --exclude '/data'
@@ -40,12 +47,14 @@ rsync -a --delete "${RSYNC_EXCLUDES[@]}" "$AGENT_ROOT/" "$BUILD_ROOT/dist/app/"
 echo "==> Copiando scripts de build Windows"
 cp "$AGENT_ROOT/pdv-agente-installer.iss" "$BUILD_ROOT/pdv-agente-installer.iss"
 cp "$AGENT_ROOT/LICENSE.txt" "$BUILD_ROOT/LICENSE.txt"
-for f in prepare-build.ps1 compile-installer.ps1 validate-build.ps1 deploy-to-installed.ps1 LEIA-ME.md; do
+for f in prepare-build.ps1 compile-installer.ps1 validate-build.ps1 deploy-to-installed.ps1 sign-installer.ps1 LEIA-ME.md; do
   if [[ -f "$WIN_BUILD_SCRIPTS/$f" ]]; then
     cp "$WIN_BUILD_SCRIPTS/$f" "$BUILD_ROOT/$f"
   fi
 done
 cp "$AGENT_ROOT/docs/INSTALADOR-WINDOWS.md" "$BUILD_ROOT/LEIA-ME-INSTALADOR.md"
+mkdir -p "$BUILD_ROOT/assets"
+cp "$AGENT_ROOT/assets/margin-engine.ico" "$BUILD_ROOT/assets/margin-engine.ico"
 
 if [[ "$SYNC_FRONT" == "1" ]]; then
   if [[ "${FRONT_REBUILD:-1}" == "1" && -f "$AGENT_ROOT/scripts/build-frontend-dist.sh" ]]; then

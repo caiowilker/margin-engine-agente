@@ -13,7 +13,7 @@ C:\build\pdv-agente\
 ├── compile-installer.ps1        ← prepare + compila .exe
 ├── validate-build.ps1           ← só checagens (rápido)
 ├── LEIA-ME.md
-├── output\                      ← PDV-Agente-Setup-1.0.0.exe
+├── output\                      ← Margin-Engine-Setup-1.0.0.exe
 └── dist\
     ├── node\                    ← Node.js portátil x64
     └── app\                     ← cópia agente-local
@@ -77,9 +77,17 @@ cd C:\build\pdv-agente
 .\compile-installer.ps1
 ```
 
-Saída: `output\PDV-Agente-Setup-<versão>.exe`
+Saída: `output\Margin-Engine-Setup-<versão>.exe`
 
-### 6. Atualizar instalação existente (sem perder .env / data)
+### 7. Assinatura digital (produção, opcional)
+
+```powershell
+$env:MARGIN_SIGN_PFX = "C:\certs\margin-engine.pfx"
+$env:MARGIN_SIGN_PASSWORD = "***"
+.\sign-installer.ps1
+```
+
+### 8. Atualizar instalação existente (sem perder .env / data)
 
 PowerShell **como Administrador**:
 
@@ -101,11 +109,14 @@ Preserva: `.env`, `data\`, `acbrlib.ini`, `node_modules` da instalação.
 
 ## Checklist antes de distribuir
 
+- [ ] `npm run auditoria:hardening` (repo)
 - [ ] `validate-build.ps1` sem falhas
-- [ ] `prepare-build.ps1` — `predeploy` sem erros críticos
+- [ ] `prepare-build.ps1 -Compile` — instalador gerado
+- [ ] `sign-installer.ps1` (se certificado disponível)
 - [ ] Testar `.exe` em VM Windows limpa
+- [ ] `npm run homolog:agente:live` após instalação
 - [ ] Preflight NFC-e OK após certificado
-- [ ] Impressora detectada no painel `:9100/diagnostico/painel`
+- [ ] Impressora detectada no painel diagnóstico
 
 ## Referências no repo
 

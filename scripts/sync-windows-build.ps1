@@ -24,6 +24,20 @@ Push-Location $AgentRoot
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Pop-Location
 
+Write-Host "==> Sincronizando versão do instalador..."
+node (Join-Path $AgentRoot "scripts\sync-installer-version.js")
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+Write-Host "==> Gerando ícone do instalador..."
+node (Join-Path $AgentRoot "scripts\build-installer-icon.js")
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+Copy-Item -Force (Join-Path $AgentRoot "assets\margin-engine.ico") (Join-Path $BuildRoot "assets\margin-engine.ico") -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path (Join-Path $BuildRoot "assets") | Out-Null
+if (Test-Path (Join-Path $AgentRoot "assets\margin-engine.ico")) {
+  Copy-Item -Force (Join-Path $AgentRoot "assets\margin-engine.ico") (Join-Path $BuildRoot "assets\margin-engine.ico")
+}
+
 function Sync-Tree([string]$Source, [string]$Dest, [string[]]$ExcludeDirNames, [string[]]$ExcludeFileGlobs) {
     if (-not (Test-Path $Dest)) { New-Item -ItemType Directory -Force -Path $Dest | Out-Null }
     $args = @($Source, $Dest, "/MIR", "/NFL", "/NDL", "/NJH", "/NJS", "/NC", "/NS", "/NP")
@@ -46,7 +60,7 @@ Sync-Tree -Source $AgentRoot -Dest $AppDest -ExcludeDirNames $ExcludeDirs -Exclu
 Write-Host "==> Copiando scripts de build"
 Copy-Item -Force (Join-Path $AgentRoot "pdv-agente-installer.iss") (Join-Path $BuildRoot "pdv-agente-installer.iss")
 Copy-Item -Force (Join-Path $AgentRoot "LICENSE.txt") (Join-Path $BuildRoot "LICENSE.txt")
-foreach ($f in @("prepare-build.ps1", "compile-installer.ps1", "validate-build.ps1", "deploy-to-installed.ps1", "LEIA-ME.md")) {
+foreach ($f in @("prepare-build.ps1", "compile-installer.ps1", "validate-build.ps1", "deploy-to-installed.ps1", "sign-installer.ps1", "LEIA-ME.md")) {
     $src = Join-Path $WinScripts $f
     if (Test-Path $src) { Copy-Item -Force $src (Join-Path $BuildRoot $f) }
 }

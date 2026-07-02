@@ -4,7 +4,7 @@
 set -euo pipefail
 
 SRC="${SRC:-/mnt/c/build/pdv-agente/dist/app}"
-DEST="${DEST:-/mnt/c/Program Files/PDV Margin Engine/app}"
+DEST="${DEST:-/mnt/c/Program Files/Margin Engine/app}"
 TS="$(date +%Y%m%d-%H%M%S)"
 BACKUP_DIR="${DEST}/.backup-${TS}"
 

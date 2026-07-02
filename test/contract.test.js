@@ -271,21 +271,25 @@ async function run() {
     assert.strictEqual(bloqueadoComForcar, false);
   });
 
-  await test("configSync — aplica fiscalEnabled em runtime sem reiniciar", async () => {
-    acbr.setRuntimeEmissaoFiscal(false);
+  await test("configSync — emissão fiscal vem do agente local (SSOT)", async () => {
+    const authority = require("../fiscalConfigAuthority");
+    authority.resetAutoridadeLocal();
+    process.env.EMISSAO_FISCAL = "true";
+    acbr.setRuntimeEmissaoFiscal(true);
+    authority.marcarAutoridadeLocal(true);
     configSync.aplicarConfigRemota({
-      fiscalEnabled: true,
+      fiscalEnabled: false,
       configAtualizadaEm: "2026-01-01T00:00:00.000Z",
     });
     assert.strictEqual(acbr.EMISSAO_FISCAL, true);
-    const st = configSync.getStatus();
-    assert.strictEqual(st.fonte, "backend");
-    assert.ok(st.ultimaSincronizacaoOk);
+    assert.strictEqual(configSync.getStatus().fonte, "agente_local");
   });
 
-  await test("configSync — .env prevalece quando painel nunca salvou config", async () => {
+  await test("configSync — .env prevalece quando sem autoridade local", async () => {
+    const authority = require("../fiscalConfigAuthority");
+    authority.resetAutoridadeLocal();
     process.env.EMISSAO_FISCAL = "true";
-    acbr.setRuntimeEmissaoFiscal(false);
+    acbr.setRuntimeEmissaoFiscal(null);
     configSync.aplicarConfigRemota({ fiscalEnabled: false });
     assert.strictEqual(acbr.EMISSAO_FISCAL, true);
     assert.strictEqual(configSync.getStatus().fonte, "env");
@@ -366,7 +370,8 @@ async function run() {
     });
     const html = diagnosticoPainel.renderPainelHtml(payload);
     assert.ok(typeof html === "string" && html.includes("<!DOCTYPE html"), "HTML");
-    assert.ok(html.includes("Centro de Operações"), "título painel");
+    assert.ok(html.includes("Margin Engine"), "título painel");
+    assert.ok(html.includes("Diagnóstico"), "subtítulo painel");
     assert.ok(html.includes("Fila fiscal"), "aba fila");
   });
 

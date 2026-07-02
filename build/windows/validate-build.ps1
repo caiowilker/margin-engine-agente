@@ -16,6 +16,8 @@ $checks = @(
     @{ Path = "dist\app\acbrlib\data\Schemas"; Hint = "Pasta Schemas" },
     @{ Path = "dist\app\frontend-dist\index.html"; Hint = "PDV offline" },
     @{ Path = "dist\app\frontend-dist\api-backend.json"; Hint = "api-backend.json" },
+    @{ Path = "dist\app\assets\margin-engine.ico"; Hint = "Icone instalador" },
+    @{ Path = "sign-installer.ps1"; Hint = "Assinatura opcional" },
     @{ Path = "pdv-agente-installer.iss"; Hint = "Script Inno Setup" },
     @{ Path = "prepare-build.ps1"; Hint = "prepare-build.ps1" },
     @{ Path = "compile-installer.ps1"; Hint = "compile-installer.ps1" },

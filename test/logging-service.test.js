@@ -118,6 +118,43 @@ test("erro extrai stack", () => {
   assert.ok(last.stack);
 });
 
+test("erro enterprise inclui sugestão sem expor stack na API operador", () => {
+  resetLoggingService();
+  resetDirectoryManager();
+  initLogging({ versao: "2.0.0", patchConsole: false });
+  const log = getLoggingService().createLogger({ modulo: "fiscal_storage", driver: "acbr-lib" });
+  getLoggingService().setStaticContext({
+    tenant: "t1",
+    empresa: "Loja Teste",
+    caixa: "cx-01",
+    usuario: "maria",
+  });
+  log.error(
+    { acao: "emitir_nfce", resultado: "falha", tempo: 1200, err: new Error("Certificado A1 expirado") },
+    "Emissão rejeitada",
+  );
+  const lines = readLines(path.join(ROOT, "Logs", "fiscal.log"));
+  const last = JSON.parse(lines[lines.length - 1]);
+  assert.equal(last.tenant, "t1");
+  assert.equal(last.empresa, "Loja Teste");
+  assert.equal(last.caixa, "cx-01");
+  assert.equal(last.usuario, "maria");
+  assert.equal(last.driver, "acbr-lib");
+  assert.equal(last.acao, "emitir_nfce");
+  assert.equal(last.tempo, 1200);
+  assert.ok(last.causa);
+  assert.ok(last.acaoRecomendada);
+  assert.ok(last.sugestao);
+  assert.ok(last.stack);
+
+  const { paraOperador } = require("../runtime/logEnterprise");
+  const op = paraOperador(last);
+  assert.equal(op.stack, undefined);
+  assert.ok(op.comoResolver || op.problema);
+  assert.ok(!JSON.stringify(op).includes("stack"));
+  assert.doesNotMatch(JSON.stringify(op), /acbr-lib|dll/i);
+});
+
 test("contexto correlationId via runWithContext", () => {
   const log = getLoggingService().createLogger({ modulo: "fila" });
   getLoggingService().runWithContext({ correlationId: "corr-123", tenant: "t1" }, () => {

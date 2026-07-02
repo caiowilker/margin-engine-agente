@@ -1,5 +1,12 @@
 // Catálogo de configs operacionais (categoria A) — sincronizáveis via painel.
-// Credenciais ACBr e infra local (categoria B/C) não entram aqui.
+// Credenciais ACBr, emissão on/off, ambiente e UF são SSOT em fiscalLocalConfig (PUT /config/fiscal).
+
+/** Chaves gerenciadas apenas localmente — não sincronizar via operacional/backend. */
+const CHAVES_SSOT_LOCAL = new Set([
+  "emissaoFiscal",
+  "ambienteSefaz",
+  "nfeUf",
+]);
 
 /** @typedef {"boolean"|"number"|"string"} ConfigTipo */
 /** @typedef {"fiscal"|"disco"|"alertas"|"recovery"|"operacao"|"impressora"} ConfigGrupo */
@@ -49,25 +56,6 @@ const CATALOGO = {
     max: 999,
     grupo: "fiscal",
     label: "Série NFC-e (modelo 65)",
-  },
-  nfeUf: {
-    env: "NFE_UF",
-    tipo: "string",
-    default: "MG",
-    enum: [
-      "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT",
-      "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO",
-    ],
-    grupo: "fiscal",
-    label: "UF emitente (referência)",
-  },
-  ambienteSefaz: {
-    env: "AMBIENTE_SEFAZ",
-    tipo: "string",
-    default: "homologacao",
-    enum: ["homologacao", "producao"],
-    grupo: "fiscal",
-    label: "Ambiente SEFAZ (homologação ou produção)",
   },
   fiscalPreflightRapido: {
     env: "FISCAL_PREFLIGHT_RAPIDO",
@@ -568,6 +556,7 @@ function validarValor(chave, valor) {
 function aplicarNoProcessEnv(operacional) {
   const merged = mesclarComDefaults(operacional);
   for (const [k, v] of Object.entries(merged)) {
+    if (CHAVES_SSOT_LOCAL.has(k)) continue;
     const def = CATALOGO[k];
     if (!def) continue;
     process.env[def.env] =
@@ -581,7 +570,7 @@ function filtrarSomenteOverrides(operacional) {
   /** @type {Record<string, boolean|number|string>} */
   const out = {};
   for (const [k, v] of Object.entries(operacional)) {
-    if (!CATALOGO[k]) continue;
+    if (CHAVES_SSOT_LOCAL.has(k)) continue;
     const norm = validarValor(k, v);
     if (norm !== CATALOGO[k].default) out[k] = norm;
   }
@@ -590,6 +579,7 @@ function filtrarSomenteOverrides(operacional) {
 
 module.exports = {
   CATALOGO,
+  CHAVES_SSOT_LOCAL,
   lerEnvFallback,
   valoresPadraoCompletos,
   mesclarComDefaults,

@@ -68,6 +68,19 @@ test("file() resolve caminhos do agente", () => {
   assert.ok(cfg.includes("config.json"));
 });
 
+test("ensurePath nunca lança erro", () => {
+  const dm = getDirectoryManager();
+  const weird = path.join(ROOT, "nested", "deep", "path");
+  assert.doesNotThrow(() => dm.ensurePath(weird, "nested"));
+  assert.equal(dm.ensurePath(weird, "nested"), weird);
+});
+
+test("dir desconhecido resolve sob ROOT sem lançar", () => {
+  const dm = getDirectoryManager();
+  const p = dm.dir("pasta_custom");
+  assert.ok(p.includes("pasta_custom"));
+});
+
 test("diretório inexistente é recriado", () => {
   const dm = getDirectoryManager();
   const logs = dm.dir("logs");

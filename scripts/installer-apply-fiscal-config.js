@@ -16,10 +16,20 @@ if (!appDir || !configPath || !fs.existsSync(configPath)) {
 }
 
 const cfg = JSON.parse(fs.readFileSync(configPath, "utf8"));
-const marginRoot =
-  process.env.PROGRAMDATA && process.platform === "win32"
-    ? path.join(process.env.PROGRAMDATA, "MarginEngine")
-    : path.join(appDir, "data", "margin-engine");
+const { getDirectoryManager } = require(path.join(appDir, "runtime", "directoryManager"));
+const dm = getDirectoryManager();
+const paths = dm.PATHS;
+dm.ensureAll();
+const marginRoot = paths.root;
+
+const envPath = path.join(appDir, ".env");
+if (fs.existsSync(envPath)) {
+  const existing = fs.readFileSync(envPath, "utf8");
+  if (/^ACBR_DRIVER=/m.test(existing) && !process.env.INSTALLER_FORCE_FISCAL) {
+    console.log("[installer] Configuração fiscal existente preservada");
+    process.exit(0);
+  }
+}
 
 const acbrLibDir = path.join(appDir, "acbrlib");
 const acbrLibDll = path.join(acbrLibDir, "lib", "ACBrNFe64.dll");
@@ -29,7 +39,6 @@ const acbrSchemasRoot = path.join(acbrLibDir, "data", "Schemas");
 const acbrSchemasBundled = path.join(acbrSchemasRoot, "NFe");
 const acbrServicosBundled = path.join(acbrLibDir, "data", "config", "ACBrNFeServicos.ini");
 
-const envPath = path.join(appDir, ".env");
 const envExample = path.join(appDir, ".env.example");
 if (!fs.existsSync(envPath) && fs.existsSync(envExample)) {
   fs.copyFileSync(envExample, envPath);
@@ -246,4 +255,4 @@ for (const iniPath of iniTargets) {
   console.log("[installer] acbrlib.ini gravado:", iniPath);
 }
 
-console.log("[installer] Config fiscal ACBrLib 1.0 aplicada");
+console.log("[installer] Configuração fiscal padrão aplicada");

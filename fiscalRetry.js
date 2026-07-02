@@ -24,12 +24,18 @@ const MAX_TENTATIVAS_999 = parseInt(process.env.FISCAL_MAX_RETRY_999 || "2", 10)
 
 const TRANSIENTE_PATTERNS = [
   /timeout/i,
+  /timed out/i,
+  /tempo esgotado/i,
   /inacess[ií]vel/i,
   /ECONNRESET/i,
   /ECONNREFUSED/i,
+  /ENOTFOUND/i,
   /503/,
   /500/,
   /socket hang up/i,
+  /acbr.*offline|monitor.*offline/i,
+  /biblioteca.*n[aã]o/i,
+  /invalid handle|access violation/i,
 ];
 
 function extrairCStat(err) {
@@ -52,6 +58,9 @@ function isPermanente(err) {
   if (/csc.*inv[aá]lid/i.test(msg)) return true;
   if (/munic[ií]pio/i.test(msg)) return true;
   if (/dados fiscais incompletos/i.test(msg)) return true;
+  if (/\bncm\b/i.test(msg) && /inv[aá]lid|ausente|obrigat/i.test(msg)) return true;
+  if (/\bcfop\b/i.test(msg) && /inv[aá]lid|ausente|obrigat/i.test(msg)) return true;
+  if (/\bcst\b|\bcsosn\b/i.test(msg) && /inv[aá]lid|ausente|obrigat/i.test(msg)) return true;
   if (/not a valid time|n[aã]o [eé] um(a)? valor v[aá]lido.*time/i.test(msg)) return true;
   if (/dhEmi|dhSaiEnt|formato de data/i.test(msg) && /inv[aá]lid|valid time/i.test(msg)) return true;
   if (/c[oó]digo ibge/i.test(msg)) return true;
@@ -95,7 +104,7 @@ function maxTentativas(err) {
 function mensagem999Exaurido(tentativas) {
   return (
     `NFC-e rejeitada (cStat 999): SEFAZ indisponível ou bloqueio por excesso de tentativas. ` +
-    `Aguarde 30–60 min, reinicie o ACBr Monitor e tente uma venda. (${tentativas} tentativa(s))`
+    `Aguarde 30–60 min e tente uma nova venda. (${tentativas} tentativa(s))`
   );
 }
 
@@ -111,6 +120,12 @@ function enriquecerErro(err) {
   if (!err) return err;
   if (isPermanente(err)) err.permanente = true;
   if (isIncerto(err)) err.incerto = true;
+  try {
+    const meta = require("./fiscal/fiscalMotivo").classificarDeErro(err);
+    err.motivoFiscal = meta.motivoFiscal;
+    err.recuperavel = meta.recuperavel;
+    err.acaoSugerida = meta.acaoSugerida;
+  } catch (_) {}
   return err;
 }
 

@@ -1,23 +1,26 @@
 ; ============================================================
 ; Margin Engine — Instalador Enterprise (Inno Setup 6+)
 ;
-; Wizard: Bem-vindo → Licença → Diretório → Atalhos → Instalar → Finalizar
+; Assistente: Bem-vindo → Licença → Pasta → Instalação → Concluído
 ; Linguagem do produto: apenas "Margin Engine" (sem termos internos).
 ;
 ; Modos (mesmo executável):
 ;   Instalar   — padrão
-;   Reparar    — /MODE=repair
+;   Reparar    — /MODE=repair ou opção na tela de tarefas
 ;   Atualizar  — /MODE=update ou upgrade automático
 ;   Desinstalar — /MODE=uninstall
 ;
-; Build: npm run sync:windows-build → compile-installer.ps1
+; Build: npm run sync:windows-build → prepare-build.ps1 -Compile
 ; Saída: output\Margin-Engine-Setup-<versão>.exe
 ; ============================================================
 
 #define MyAppName "Margin Engine"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Margin Engine"
+#define MyAppCompany "Margin Engine"
 #define MyAppURL "https://marginengine.com.br"
+#define MyAppCopyright "Copyright (C) 2026 Margin Engine. Todos os direitos reservados."
+#define MyAppDescription "Agente local do Margin Engine para PDV, impressão e documentos fiscais."
 #define MyInstallDir "Margin Engine"
 #define MarginDataRoot "{commonappdata}\MarginEngine"
 #define MyAppId "B2E2B6B0-5F2A-4B6B-9D2C-1A2B3C4D5E6F"
@@ -31,6 +34,14 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
+AppCopyright={#MyAppCopyright}
+VersionInfoCompany={#MyAppCompany}
+VersionInfoDescription={#MyAppDescription}
+VersionInfoProductName={#MyAppName}
+VersionInfoProductVersion={#MyAppVersion}
+VersionInfoVersion={#MyAppVersion}
+VersionInfoCopyright={#MyAppCopyright}
+VersionInfoTextVersion={#MyAppVersion}
 DefaultDirName={autopf}\{#MyInstallDir}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=no
@@ -44,28 +55,34 @@ PrivilegesRequired=admin
 WizardStyle=modern
 LicenseFile=LICENSE.txt
 UninstallDisplayName={#MyAppName}
-SetupIconFile=compiler:SetupClassicIcon.ico
+SetupIconFile=assets\margin-engine.ico
+UninstallDisplayIcon={app}\app\assets\margin-engine.ico
 ChangesEnvironment=no
 MinVersion=10.0
+DisableDirPage=no
+DisableReadyPage=no
+ShowLanguageDialog=no
 
 [Languages]
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Criar atalho do Margin Engine na Área de Trabalho"; GroupDescription: "Atalhos:"; Flags: unchecked
-Name: "installservice"; Description: "Registrar e iniciar o Margin Engine como serviço Windows"; GroupDescription: "Serviço:"; Flags: checkedonce
-Name: "openpanel"; Description: "Abrir o painel local após a instalação (http://localhost:9100)"; GroupDescription: "Finalização:"; Flags: checkedonce
+Name: "repairmode"; Description: "Reparar instalação (serviço, atalhos, firewall e dependências)"; GroupDescription: "Manutenção:"; Flags: unchecked
 
 [Files]
 Source: "dist\node\*"; DestDir: "{app}\node"; Flags: recursesubdirs createallsubdirs
-Source: "dist\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "node_modules\*,data\*,daemon\*,frontend-dist\*,.env,homolog-acbrlib\*,test\*,.git\*,RESULTADO-*.md,*.log"
+Source: "dist\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "node_modules\*,data\*,daemon\*,frontend-dist\*,.env,homolog-acbrlib\*,test\*,.git\*,RESULTADO-*.md,*.log,*.db,*.db-shm,*.db-wal"
 Source: "dist\app\acbrlib\data\Schemas\*"; DestDir: "{app}\app\acbrlib\data\Schemas"; Flags: recursesubdirs createallsubdirs ignoreversion
-Source: "dist\app\acbrlib\data\config\ACBrNFeServicos.ini"; DestDir: "{app}\app\acbrlib\data\config"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "dist\app\acbrlib\data\config\ACBrNFeServicos.ini"; DestDir: "{app}\app\acbrlib\data\config"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist
+Source: "dist\app\acbrlib\data\config\acbrlib.ini"; DestDir: "{app}\app\acbrlib\data\config"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist
+Source: "dist\app\data\acbrlib.ini"; DestDir: "{app}\app\data"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist
 Source: "dist\app\.env.example"; DestDir: "{app}\app"; DestName: ".env.example"; Flags: ignoreversion
 Source: "dist\app\frontend-dist\*"; DestDir: "{app}\app\frontend-dist"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
 Source: "dist\app\docs\*"; DestDir: "{app}\app\docs"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
 Source: "dist\app\templates\*"; DestDir: "{app}\app\templates"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
 Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "assets\margin-engine.ico"; DestDir: "{app}\app\assets"; Flags: ignoreversion
 
 [Dirs]
 Name: "{app}\app\data"; Permissions: users-modify; Flags: uninsneveruninstall
@@ -80,21 +97,26 @@ Name: "{#MarginDataRoot}\Fiscal\PDF"; Permissions: users-modify; Flags: uninsnev
 Name: "{#MarginDataRoot}\Temp"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\Cache"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\Diagnostics"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\storage"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\storage\produtos"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\spool"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\impressao"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\fila"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\data"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\acbr"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\acbr\xml"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\acbr\pdf"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\acbr\logs"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\acbr\config"; Permissions: users-modify; Flags: uninsneveruninstall
-Name: "{#MarginDataRoot}\data"; Permissions: users-modify; Flags: uninsneveruninstall
-Name: "{#MarginDataRoot}\fila"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\acbr\ini"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\acbr\backup"; Permissions: users-modify; Flags: uninsneveruninstall
 
 [Icons]
-Name: "{group}\Margin Engine — Painel"; Filename: "http://localhost:9100/"
-Name: "{commondesktop}\Margin Engine"; Filename: "http://localhost:9100/"; Tasks: desktopicon
+Name: "{group}\Margin Engine"; Filename: "http://localhost:9100/"; IconFilename: "{app}\app\assets\margin-engine.ico"
+Name: "{commondesktop}\Margin Engine"; Filename: "http://localhost:9100/"; IconFilename: "{app}\app\assets\margin-engine.ico"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\node\node.exe"; Parameters: """{app}\app\scripts\installer-bootstrap.js"" ""{app}\app"" --mode={code:GetBootstrapMode}{code:GetBootstrapFlags} --npm={app}\node\npm.cmd"; WorkingDir: "{app}\app"; Flags: runhidden waituntilterminated; StatusMsg: "Configurando Margin Engine..."
-Filename: "{cmd}"; Parameters: "/c start http://localhost:9100"; Flags: postinstall nowait skipifsilent runhidden shellexec; Tasks: openpanel; Description: "Abrir painel do Margin Engine"
+Filename: "{app}\node\node.exe"; Parameters: """{app}\app\scripts\installer-bootstrap.js"" ""{app}\app"" --mode={code:GetBootstrapMode}{code:GetBootstrapFlags} --npm={app}\node\npm.cmd"; WorkingDir: "{app}\app"; Flags: runhidden waituntilterminated; StatusMsg: "Configurando Margin Engine (serviço, firewall e diagnóstico)..."
 
 [UninstallRun]
 Filename: "{app}\node\node.exe"; Parameters: """{app}\app\install-service.js"" --uninstall"; WorkingDir: "{app}\app"; Flags: runhidden waituntilterminated; RunOnceId: "RemoverServicoMarginEngine"
@@ -104,12 +126,13 @@ Type: filesandordirs; Name: "{app}\app\node_modules"
 Type: filesandordirs; Name: "{app}\app\daemon"
 
 [Messages]
-brazilianportuguese.WelcomeLabel2=Este assistente instala o **Margin Engine** no ponto de venda.%n%nO agente local conecta impressão, documentos fiscais e operação offline ao navegador do PDV.%n%nOs dados do caixa em ProgramData\MarginEngine **não são removidos** na desinstalação.%n%nPara reparar ou atualizar uma instalação existente, execute o mesmo instalador com /MODE=repair ou /MODE=update.
-brazilianportuguese.FinishedLabel=O Margin Engine foi instalado no computador.%n%nNa próxima tela você verá o resultado do diagnóstico rápido.%n%nAbra o painel em http://localhost:9100 para ativar o terminal.
+brazilianportuguese.WelcomeLabel2=Este assistente instala o **Margin Engine** no ponto de venda.%n%nO sistema conecta impressão, documentos fiscais e operação offline ao navegador do PDV.%n%nSe já existe uma instalação, seus dados (configurações, certificados, vendas e logs) serão preservados automaticamente.%n%nAo concluir, o serviço será instalado e iniciado — não é necessário abrir o Gerenciador de Serviços do Windows.
+brazilianportuguese.FinishedLabel=O Margin Engine foi instalado neste computador.%n%nO serviço local foi configurado, o firewall atualizado e o sistema deve abrir automaticamente no navegador.%n%nUse o atalho **Margin Engine** para acessar o painel e ativar o terminal de caixa.
 
 [Code]
 var
   BootstrapMode: String;
+  UninstallKeepData: Boolean;
 
 function GetModeParam: String;
 begin
@@ -153,6 +176,51 @@ begin
   end;
 end;
 
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if CurPageID = wpFinished then
+    Exit;
+  if CurPageID = wpSelectTasks then
+  begin
+    if IsTaskSelected('repairmode') then
+      BootstrapMode := 'repair';
+  end;
+end;
+
+function InitializeUninstall: Boolean;
+begin
+  Result := True;
+  UninstallKeepData := True;
+  if MsgBox(
+    'Deseja manter os dados do caixa?' + #13#10 + #13#10 +
+    'Inclui configurações, certificados, banco local, XML, backup, cache, imagens e logs.' + #13#10 + #13#10 +
+    '**Sim** — remove apenas o programa, o serviço e os atalhos.' + #13#10 +
+    '**Não** — apaga também a pasta de dados do Margin Engine.',
+    mbConfirmation, MB_YESNO or MB_DEFBUTTON1) = IDYES then
+    UninstallKeepData := True
+  else
+    UninstallKeepData := False;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  DataRoot: String;
+begin
+  if (CurUninstallStep = usPostUninstall) and (not UninstallKeepData) then
+  begin
+    DataRoot := ExpandConstant('{commonappdata}\MarginEngine');
+    if DirExists(DataRoot) then
+    begin
+      if MsgBox(
+        'Confirma apagar permanentemente os dados em:' + #13#10 + DataRoot + '?',
+        mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+      begin
+        DelTree(DataRoot, True, True, True);
+      end;
+    end;
+  end;
+end;
+
 function GetBootstrapMode(Param: String): String;
 begin
   Result := BootstrapMode;
@@ -160,11 +228,9 @@ end;
 
 function GetBootstrapFlags(Param: String): String;
 begin
-  Result := '';
-  if IsTaskSelected('installservice') then
-    Result := Result + ' --service';
-  if (BootstrapMode = 'install') or (BootstrapMode = 'update') then
-    Result := Result + ' --firewall';
+  Result := ' --service --firewall --open';
+  if IsTaskSelected('desktopicon') then
+    Result := Result + ' --desktop';
 end;
 
 function ReadDiagnosticReport: String;
@@ -213,11 +279,11 @@ var
   ModeLabel: String;
 begin
   if BootstrapMode = 'repair' then
-    ModeLabel := 'Reparar instalacao existente'
+    ModeLabel := 'Reparar instalação existente'
   else if BootstrapMode = 'update' then
-    ModeLabel := 'Atualizar Margin Engine'
+    ModeLabel := 'Atualizar Margin Engine (dados preservados)'
   else
-    ModeLabel := 'Instalacao nova';
+    ModeLabel := 'Instalação nova';
 
   Result := '';
   if MemoDirInfo <> '' then
@@ -227,7 +293,9 @@ begin
 
   Result := Result +
     'Modo: ' + ModeLabel + NewLine + NewLine +
-    'Produto: Margin Engine {#MyAppVersion}' + NewLine + NewLine +
-    'Dados: ' + ExpandConstant('{commonappdata}\MarginEngine') +
-    ' (preservados na desinstalacao)';
+    'Produto: Margin Engine {#MyAppVersion}' + NewLine +
+    'Editor: {#MyAppPublisher}' + NewLine + NewLine +
+    'Dados do caixa: ' + ExpandConstant('{commonappdata}\MarginEngine') +
+    ' (preservados na atualização e desinstalação padrão)' + NewLine + NewLine +
+    'Ao concluir: serviço instalado, firewall configurado, sistema aberto no navegador.';
 end;

@@ -82,6 +82,9 @@ function patchEnvContent(content, key, value) {
 
 function patchEnv(keys) {
   const { path: envPath, map } = lerEnvMap();
+  const driverAnterior = String(
+    process.env.ACBR_DRIVER || map.ACBR_DRIVER || "lib",
+  ).toLowerCase();
   let content = fs.existsSync(envPath)
     ? fs.readFileSync(envPath, "utf8")
     : "";
@@ -93,6 +96,20 @@ function patchEnv(keys) {
   }
   fs.mkdirSync(path.dirname(envPath), { recursive: true });
   fs.writeFileSync(envPath, content, "utf8");
+  if (keys.ACBR_DRIVER != null) {
+    const driverNovo = String(keys.ACBR_DRIVER).toLowerCase();
+    if (driverNovo !== driverAnterior) {
+      try {
+        require("./fiscal/factory").resetFiscalDriver();
+        log.info(
+          { de: driverAnterior, para: driverNovo },
+          "[FiscalLocalConfig] Driver fiscal alterado — cache invalidado (reinicie o agente para efetivar)",
+        );
+      } catch (_) {
+        /* testes isolados */
+      }
+    }
+  }
   return map;
 }
 
@@ -144,14 +161,20 @@ function upsertIniKey(raw, section, key, value) {
 
 function ensureIniFile(iniPath) {
   if (iniPath && fs.existsSync(iniPath)) return iniPath;
-  const template = path.join(AGENT_ROOT, "templates", "acbrlib.ini.template");
   const dest =
     iniPath ||
     path.join(AGENT_ROOT, "acbrlib", "data", "config", "acbrlib.ini");
   fs.mkdirSync(path.dirname(dest), { recursive: true });
-  if (fs.existsSync(template)) {
-    fs.copyFileSync(template, dest);
-  } else {
+  try {
+    const { gravarIni } = require("./runtime/acbrIniGenerator");
+    const env = lerEnvMap().map;
+    gravarIni(dest, {
+      ambiente: env.AMBIENTE_SEFAZ || process.env.AMBIENTE_SEFAZ || "homologacao",
+      uf: env.NFE_UF || process.env.NFE_UF || "MG",
+      cscId: env.NFE_CSC_ID || process.env.NFE_CSC_ID || "000001",
+    });
+  } catch (err) {
+    log.warn({ err: err.message }, "[FiscalLocalConfig] Fallback INI mínimo");
     fs.writeFileSync(
       dest,
       `[ACBrNFe]\nAmbiente=2\nModeloDF=65\n\n[Certificado]\nArquivo=\nSenha=\n\n[DFe]\nUF=MG\n\n[NFCe]\nIdCSC=\nCSC=\n`,
@@ -168,6 +191,20 @@ function resolverCaminhoAbsoluto(arquivo, baseDir) {
   if (!arquivo) return "";
   if (path.isAbsolute(arquivo)) return arquivo;
   return path.resolve(baseDir || AGENT_ROOT, arquivo);
+}
+
+function lerEmissaoFiscalRuntime() {
+  try {
+    const fiscalDriver = require("./fiscalDriver");
+    if (typeof fiscalDriver.EMISSAO_FISCAL === "boolean") {
+      return fiscalDriver.EMISSAO_FISCAL;
+    }
+  } catch (_) {
+    /* testes isolados */
+  }
+  return (
+    String(process.env.EMISSAO_FISCAL || "false").toLowerCase() === "true"
+  );
 }
 
 function ler() {
@@ -237,9 +274,14 @@ function ler() {
     process.env.NFE_UF ||
     "MG";
 
-  const emissaoFiscal =
-    String(env.EMISSAO_FISCAL || process.env.EMISSAO_FISCAL || "false")
-      .toLowerCase() === "true";
+  const emissaoFiscal = lerEmissaoFiscalRuntime();
+  const authority = (() => {
+    try {
+      return require("./fiscalConfigAuthority").obterStatus();
+    } catch (_) {
+      return { localAuthorityAt: null };
+    }
+  })();
 
   return {
     driver,
@@ -247,6 +289,7 @@ function ler() {
     tpAmb: ambienteToTpAmb(ambienteSefaz),
     uf,
     emissaoFiscal,
+    atualizadoEm: authority.localAuthorityAt || null,
     certificado: {
       arquivo: certArquivo,
       arquivoAbsoluto: certAbs,
@@ -273,7 +316,7 @@ function ler() {
   };
 }
 
-function salvar(updates) {
+async function salvar(updates) {
   if (!updates || typeof updates !== "object") {
     throw new Error("Payload inválido");
   }
@@ -338,6 +381,12 @@ function salvar(updates) {
 
   if (typeof updates.emissaoFiscal === "boolean") {
     envPatch.EMISSAO_FISCAL = updates.emissaoFiscal ? "true" : "false";
+    try {
+      const fiscalConfigAuthority = require("./fiscalConfigAuthority");
+      fiscalConfigAuthority.marcarAutoridadeLocal(updates.emissaoFiscal);
+    } catch (_) {
+      /* testes isolados */
+    }
   }
 
   fs.writeFileSync(iniPath, raw, "utf8");
@@ -369,10 +418,10 @@ function salvar(updates) {
   try {
     const fiscalDriver = require("./fiscalDriver");
     if (typeof fiscalDriver.refreshLibRuntimeConfig === "function") {
-      fiscalDriver.refreshLibRuntimeConfig();
+      await fiscalDriver.refreshLibRuntimeConfig();
     }
-  } catch (_) {
-    /* driver opcional em testes isolados */
+  } catch (err) {
+    log.warn({ err: err.message }, "[FiscalLocalConfig] Falha ao atualizar sessão Lib");
   }
 
   return ler();
@@ -385,6 +434,7 @@ function aplicarAmbiente(ambienteSefaz) {
 
 module.exports = {
   ler,
+  lerEmissaoFiscalRuntime,
   salvar,
   aplicarAmbiente,
   resolveLibIniPath,

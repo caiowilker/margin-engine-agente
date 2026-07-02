@@ -4,7 +4,7 @@
  * Instalar | Reparar | Atualizar — mesma base de scripts.
  *
  * Uso:
- *   node scripts/installer-bootstrap.js <appDir> --mode=install|repair|update [--service] [--firewall]
+ *   node scripts/installer-bootstrap.js <appDir> --mode=install|repair|update [--service] [--firewall] [--open] [--desktop]
  */
 const fs = require("fs");
 const path = require("path");
@@ -14,7 +14,9 @@ const appDir = path.resolve(process.argv[2] || path.join(__dirname, ".."));
 const args = process.argv.slice(3);
 const mode = (args.find((a) => a.startsWith("--mode=")) || "--mode=install").split("=")[1];
 const withService = args.includes("--service");
-const withFirewall = args.includes("--firewall") || mode === "install";
+const withFirewall = args.includes("--firewall") || mode === "install" || mode === "update";
+const withOpen = args.includes("--open");
+const withDesktop = args.includes("--desktop");
 const npmFromArg = args.find((a) => a.startsWith("--npm="));
 if (npmFromArg) {
   process.env.MARGIN_NPM = npmFromArg.slice("--npm=".length);
@@ -43,6 +45,17 @@ function run(cmd, opts = {}) {
 }
 
 function writeDefaultConfigs() {
+  if (mode === "update") {
+    log.info({ acao: "skip_default_config" }, "Atualização — configurações existentes preservadas");
+    return;
+  }
+
+  const envPath = path.join(appDir, ".env");
+  if (mode === "repair" && fs.existsSync(envPath)) {
+    log.info({ acao: "skip_default_config" }, "Reparo — .env existente preservado");
+    return;
+  }
+
   const tmp = path.join(require("os").tmpdir(), `margin-install-${Date.now()}`);
   fs.mkdirSync(tmp, { recursive: true });
 
@@ -168,11 +181,41 @@ function runPredeploy() {
 
 function registerService() {
   if (!withService) return;
-  run(`node "${path.join(appDir, "install-service.js")}"`, { inherit: true });
+  run(`node "${path.join(appDir, "install-service.js")}" --no-open`, { inherit: true });
 }
 
-function validatePrinters() {
-  log.info({ acao: "validate_printer" }, "Impressoras serão validadas após iniciar o serviço");
+function waitForOnline() {
+  if (!withService) return { ok: false, skipped: true };
+  try {
+    run(`node "${path.join(appDir, "scripts", "installer-wait-online.js")}" "${appDir}"`, {
+      inherit: true,
+    });
+    return { ok: true };
+  } catch {
+    log.warn({ acao: "wait_online" }, "Agente ainda não respondeu — verifique o serviço Windows");
+    return { ok: false };
+  }
+}
+
+function createShortcuts() {
+  if (process.platform !== "win32") return;
+  const flags = withDesktop ? " --desktop" : "";
+  try {
+    run(`node "${path.join(appDir, "scripts", "installer-shortcuts.js")}"${flags}`, { inherit: true });
+  } catch (err) {
+    log.warn({ err: err.message }, "Não foi possível criar todos os atalhos");
+  }
+}
+
+function openPanel() {
+  if (!withOpen || process.platform !== "win32") return;
+  const port = process.env.AGENT_PORT || process.env.PORT || "9100";
+  try {
+    run(`cmd /c start http://127.0.0.1:${port}/`, { stdio: "pipe" });
+    log.info({ acao: "open_panel", url: `http://127.0.0.1:${port}/` }, "Painel aberto no navegador");
+  } catch (err) {
+    log.warn({ err: err.message }, "Não foi possível abrir o navegador automaticamente");
+  }
 }
 
 async function runDiagnostic() {
@@ -212,8 +255,12 @@ async function main() {
     ensureFirewall();
   }
 
-  validatePrinters();
   registerService();
+  const online = waitForOnline();
+  createShortcuts();
+  if (online.ok) {
+    openPanel();
+  }
 
   const report = await runDiagnostic();
   log.info(
@@ -222,6 +269,7 @@ async function main() {
       modo: mode,
       ok: report.ok,
       issues: report.issues.length,
+      agentOnline: online.ok,
     },
     "Bootstrap concluído",
   );

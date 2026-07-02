@@ -50,9 +50,9 @@ const origEnvPath = fiscalLocalConfig.resolveAgentEnvPath;
 let passed = 0;
 let failed = 0;
 
-function test(name, fn) {
+async function test(name, fn) {
   try {
-    fn();
+    await fn();
     passed++;
     console.log(`  ✓ ${name}`);
   } catch (e) {
@@ -61,44 +61,51 @@ function test(name, fn) {
   }
 }
 
-test("ler retorna ambiente homologacao", () => {
-  const cfg = fiscalLocalConfig.ler();
-  assert.strictEqual(cfg.ambienteSefaz, "homologacao");
-  assert.strictEqual(cfg.tpAmb, "2");
-  assert.strictEqual(cfg.uf, "MG");
-  assert.strictEqual(cfg.certificado.senhaConfigurada, true);
-  assert.strictEqual(cfg.nfce.cscConfigurado, true);
-});
-
-test("salvar alterna para producao no INI e .env", () => {
-  fiscalLocalConfig.salvar({ ambienteSefaz: "producao" });
-  const raw = fs.readFileSync(INI, "utf8");
-  assert.match(raw, /Ambiente=1/);
-  assert.match(fs.readFileSync(ENV, "utf8"), /AMBIENTE_SEFAZ=producao/);
-  const cfg = fiscalLocalConfig.ler();
-  assert.strictEqual(cfg.ambienteSefaz, "producao");
-  assert.strictEqual(cfg.tpAmb, "1");
-});
-
-test("salvar certificado e senha no cofre fiscal", () => {
-  fiscalLocalConfig.salvar({
-    certificadoArquivo: "C:\\cert\\meu.pfx",
-    certificadoSenha: "novaSenha",
+async function run() {
+  await test("ler retorna ambiente homologacao", () => {
+    const cfg = fiscalLocalConfig.ler();
+    assert.strictEqual(cfg.ambienteSefaz, "homologacao");
+    assert.strictEqual(cfg.tpAmb, "2");
+    assert.strictEqual(cfg.uf, "MG");
+    assert.strictEqual(cfg.certificado.senhaConfigurada, true);
+    assert.strictEqual(cfg.nfce.cscConfigurado, true);
   });
-  const raw = fs.readFileSync(INI, "utf8");
-  assert.match(raw, /Arquivo=C:\\cert\\meu.pfx/);
-  assert.match(raw, /Senha=__VAULT__/);
-  const cfg = fiscalLocalConfig.ler();
-  assert.strictEqual(cfg.certificado.senhaConfigurada, true);
+
+  await test("salvar alterna para producao no INI e .env", async () => {
+    await fiscalLocalConfig.salvar({ ambienteSefaz: "producao" });
+    const raw = fs.readFileSync(INI, "utf8");
+    assert.match(raw, /Ambiente=1/);
+    assert.match(fs.readFileSync(ENV, "utf8"), /AMBIENTE_SEFAZ=producao/);
+    const cfg = fiscalLocalConfig.ler();
+    assert.strictEqual(cfg.ambienteSefaz, "producao");
+    assert.strictEqual(cfg.tpAmb, "1");
+  });
+
+  await test("salvar certificado e senha no cofre fiscal", async () => {
+    await fiscalLocalConfig.salvar({
+      certificadoArquivo: "C:\\cert\\meu.pfx",
+      certificadoSenha: "novaSenha",
+    });
+    const raw = fs.readFileSync(INI, "utf8");
+    assert.match(raw, /Arquivo=C:\\cert\\meu.pfx/);
+    assert.match(raw, /Senha=__VAULT__/);
+    const cfg = fiscalLocalConfig.ler();
+    assert.strictEqual(cfg.certificado.senhaConfigurada, true);
+  });
+
+  await test("ambienteToTpAmb", () => {
+    assert.strictEqual(fiscalLocalConfig.ambienteToTpAmb("producao"), "1");
+    assert.strictEqual(fiscalLocalConfig.ambienteToTpAmb("homologacao"), "2");
+  });
+
+  fiscalLocalConfig.resolveAgentEnvPath = origEnvPath;
+  delete process.env.FISCAL_LOCAL_ENV_OVERRIDE;
+
+  console.log(`\n${passed} passed, ${failed} failed`);
+  process.exit(failed > 0 ? 1 : 0);
+}
+
+run().catch((err) => {
+  console.error(err);
+  process.exit(1);
 });
-
-test("ambienteToTpAmb", () => {
-  assert.strictEqual(fiscalLocalConfig.ambienteToTpAmb("producao"), "1");
-  assert.strictEqual(fiscalLocalConfig.ambienteToTpAmb("homologacao"), "2");
-});
-
-fiscalLocalConfig.resolveAgentEnvPath = origEnvPath;
-delete process.env.FISCAL_LOCAL_ENV_OVERRIDE;
-
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed > 0 ? 1 : 0);

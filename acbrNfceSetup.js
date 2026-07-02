@@ -5,6 +5,7 @@ const path = require("path");
 const os = require("os");
 const fiscalDriver = require("./fiscalDriver");
 const log = require("./logger");
+const { getWindowsKnownFolder } = require("./runtime/windowsEnv");
 
 const NFE_UF = (process.env.NFE_UF || "MG").toUpperCase();
 const AMBIENTE = (process.env.AMBIENTE_SEFAZ || "homologacao").toLowerCase();
@@ -29,13 +30,14 @@ function candidatosServicosIni() {
   if (process.env.ACBR_NFE_SERVICOS_INI) {
     lista.push(process.env.ACBR_NFE_SERVICOS_INI);
   }
+  const pf = getWindowsKnownFolder("ProgramFiles");
+  const pfx86 = getWindowsKnownFolder("ProgramFilesX86");
   const bases = [
     process.env.ACBR_HOME,
     process.env.ACBrMonitorPath,
-    "C:\\ACBrMonitorPLUS",
-    "C:\\ACBrMonitor",
-    "C:\\Program Files\\ACBrMonitorPLUS",
-    "C:\\Program Files (x86)\\ACBrMonitorPLUS",
+    pf ? path.join(pf, "ACBrMonitorPLUS") : null,
+    pf ? path.join(pf, "ACBrMonitor") : null,
+    pfx86 ? path.join(pfx86, "ACBrMonitorPLUS") : null,
     path.join(os.homedir(), "ACBrMonitorPLUS"),
   ].filter(Boolean);
 

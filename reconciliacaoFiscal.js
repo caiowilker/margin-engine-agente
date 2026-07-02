@@ -12,6 +12,23 @@ const INTERVAL_MS = parseInt(
 );
 const RECOVERY_MS = parseInt(process.env.FISCAL_RECOVERY_MS || "30000", 10);
 
+let reconciliacaoTimer = null;
+let recoveryTimer = null;
+
+async function executarRecovery() {
+  if (!fiscalDriver.EMISSAO_FISCAL) return;
+  const acbr = require("./acbr");
+  if (acbr.isAcbrBusy() || filaFiscal.acbrOcupado()) {
+    log.debug("Recovery adiado — ACBr ou emissão em andamento");
+    return;
+  }
+  await fiscalRecuperacao.processarFilaRecovery(lerConfigRef).catch((err) =>
+    log.warn({ err: err.message }, "Recovery: falha fila consulta"),
+  );
+}
+
+let lerConfigRef = null;
+
 function httpRequest(url, options, body) {
   const http = require("http");
   const https = require("https");
@@ -76,19 +93,16 @@ async function recuperarDocumentoLocal(cfg, numeroVenda, correlationId) {
 }
 
 async function executarCiclo(lerConfigFn) {
-  const cfg = await lerConfigFn();
-  if (!cfg.backendUrl || !cfg.backendToken || !fiscalDriver.EMISSAO_FISCAL) {
-    if (fiscalDriver.EMISSAO_FISCAL) {
-      await fiscalRecuperacao.processarFilaRecovery(lerConfigFn).catch((err) =>
-        log.warn({ err: err.message }, "Recovery: falha fila consulta"),
-      );
-    }
+  lerConfigRef = lerConfigFn;
+  const acbr = require("./acbr");
+  if (acbr.isAcbrBusy() || filaFiscal.acbrOcupado()) {
+    log.debug("Reconciliação adiada — ACBr ou emissão em andamento");
     return;
   }
-
-  await fiscalRecuperacao.processarFilaRecovery(lerConfigFn).catch((err) =>
-    log.warn({ err: err.message }, "Recovery: falha fila consulta"),
-  );
+  const cfg = await lerConfigFn();
+  if (!cfg.backendUrl || !cfg.backendToken || !fiscalDriver.EMISSAO_FISCAL) {
+    return;
+  }
 
   await filaFiscal.reprocessarIncertos(lerConfigFn).catch((err) =>
     log.warn({ err: err.message }, "Reconciliação: falha reprocessar INCERTO"),
@@ -138,12 +152,31 @@ async function executarCiclo(lerConfigFn) {
 }
 
 function iniciar(lerConfigFn) {
-  setInterval(() => {
+  lerConfigRef = lerConfigFn;
+  if (reconciliacaoTimer) return;
+  reconciliacaoTimer = setInterval(() => {
     executarCiclo(lerConfigFn).catch((err) =>
       log.warn({ err: err.message }, "Reconciliação fiscal: erro no ciclo"),
     );
   }, INTERVAL_MS);
+  recoveryTimer = setInterval(() => {
+    executarRecovery().catch((err) =>
+      log.warn({ err: err.message }, "Recovery fiscal: erro no ciclo"),
+    );
+  }, RECOVERY_MS);
+  setTimeout(() => executarRecovery().catch(() => {}), 10000);
   setTimeout(() => executarCiclo(lerConfigFn).catch(() => {}), 15000);
 }
 
-module.exports = { iniciar, executarCiclo };
+function parar() {
+  if (reconciliacaoTimer) {
+    clearInterval(reconciliacaoTimer);
+    reconciliacaoTimer = null;
+  }
+  if (recoveryTimer) {
+    clearInterval(recoveryTimer);
+    recoveryTimer = null;
+  }
+}
+
+module.exports = { iniciar, parar, executarCiclo, executarRecovery };

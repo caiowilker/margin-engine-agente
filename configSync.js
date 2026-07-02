@@ -2,6 +2,7 @@
 const log = require("./logger").child({ modulo: "config_sync" });
 const runtimeConfig = require("./runtimeConfig");
 const catalog = require("./agentConfigCatalog");
+const fiscalConfigAuthority = require("./fiscalConfigAuthority");
 
 let pollIntervalMs = parseInt(
   process.env.CONFIG_POLL_INTERVAL_MS || "45000",
@@ -24,6 +25,7 @@ let estado = {
 let intervalHandle = null;
 let acbrRef = null;
 let lerConfigFnRef = null;
+let sincronizando = false;
 
 function obterEnvFallbackFiscal() {
   return (process.env.EMISSAO_FISCAL || "false").toLowerCase() === "true";
@@ -32,10 +34,12 @@ function obterEnvFallbackFiscal() {
 function getStatus() {
   const fiscalAtivo =
     estado.fiscalEnabled !== null ? estado.fiscalEnabled : obterEnvFallbackFiscal();
+  const authority = fiscalConfigAuthority.obterStatus();
   return {
     fiscalEnabled: fiscalAtivo,
     operacional: estado.operacional || runtimeConfig.getOperacional(),
-    fonte: estado.fonte,
+    fonte: authority.ativo ? "agente_local" : estado.fonte,
+    autoridadeLocal: authority,
     ultimaSincronizacaoOk: estado.ultimaSincronizacaoOk,
     ultimaTentativaEm: estado.ultimaTentativaEm,
     ultimoErro: estado.ultimoErro,
@@ -72,6 +76,25 @@ function limparOverrideFiscalParaEnv() {
   process.env.EMISSAO_FISCAL = estado.fiscalEnabled ? "true" : "false";
 }
 
+function obterEmissaoFiscalLocal() {
+  try {
+    const fiscalLocalConfig = require("./fiscalLocalConfig");
+    return fiscalLocalConfig.lerEmissaoFiscalRuntime();
+  } catch (_) {
+    return obterEnvFallbackFiscal();
+  }
+}
+
+function sincronizarEmissaoFiscalLocal() {
+  const authority = fiscalConfigAuthority.obterStatus();
+  const emissao = authority.ativo
+    ? authority.localEmissaoFiscal
+    : obterEmissaoFiscalLocal();
+  aplicarFiscalRuntime(emissao);
+  estado.fonte = authority.ativo ? "agente_local" : "env";
+  return emissao;
+}
+
 function painelConfigurouFiscal(cfg) {
   return cfg.configAtualizadaEm != null && cfg.configAtualizadaEm !== "";
 }
@@ -79,12 +102,14 @@ function painelConfigurouFiscal(cfg) {
 function aplicarConfigRemota(cfg) {
   if (!cfg || typeof cfg !== "object") return;
 
-  const anteriorFiscal = estado.fiscalEnabled;
-  if (typeof cfg.fiscalEnabled === "boolean") {
-    if (painelConfigurouFiscal(cfg)) {
-      aplicarFiscalRuntime(cfg.fiscalEnabled);
-    } else {
-      limparOverrideFiscalParaEnv();
+  sincronizarEmissaoFiscalLocal();
+  if (typeof cfg.fiscalEnabled === "boolean" && painelConfigurouFiscal(cfg)) {
+    const authority = fiscalConfigAuthority.obterStatus();
+    if (!authority.ativo && cfg.fiscalEnabled !== estado.fiscalEnabled) {
+      log.debug(
+        { backend: cfg.fiscalEnabled, local: estado.fiscalEnabled },
+        "[ConfigSync] fiscalEnabled do backend ignorado — SSOT no agente local",
+      );
     }
   }
 
@@ -112,54 +137,8 @@ function aplicarConfigRemota(cfg) {
 
   estado.configAtualizadaEm = cfg.configAtualizadaEm || null;
   estado.agenteSincronizadoEm = cfg.agenteSincronizadoEm || null;
-  estado.fonte = painelConfigurouFiscal(cfg) ? "backend" : "env";
   estado.ultimaSincronizacaoOk = new Date().toISOString();
   estado.ultimoErro = null;
-
-  if (typeof cfg.fiscalEnabled === "boolean") {
-    const fiscalAtivo = estado.fiscalEnabled;
-    if (painelConfigurouFiscal(cfg) && anteriorFiscal !== cfg.fiscalEnabled) {
-      log.info(`[ConfigSync] fiscalEnabled=${cfg.fiscalEnabled} (via painel)`);
-    } else if (
-      !painelConfigurouFiscal(cfg) &&
-      anteriorFiscal !== fiscalAtivo
-    ) {
-      log.info(
-        `[ConfigSync] fiscalEnabled=${fiscalAtivo} (via .env — painel ainda não configurou)`,
-      );
-    }
-  }
-}
-
-async function bootstrapFiscalNoBackend(backendUrl, backendToken, cfgRemoto) {
-  if (!backendUrl || !backendToken) return;
-  if (painelConfigurouFiscal(cfgRemoto)) return;
-
-  const envFiscal = obterEnvFallbackFiscal();
-  if (!envFiscal || cfgRemoto.fiscalEnabled === true) return;
-
-  const fetch = require("node-fetch");
-  try {
-    const resp = await fetch(`${backendUrl}/pdv/agente/config/bootstrap-fiscal`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${backendToken}`,
-      },
-      body: JSON.stringify({ fiscalEnabled: true }),
-    });
-    if (resp.ok) {
-      log.info("[ConfigSync] fiscalEnabled=true propagado ao backend (.env)");
-      const body = await resp.json().catch(() => ({}));
-      if (typeof body.fiscalEnabled === "boolean") {
-        cfgRemoto.fiscalEnabled = body.fiscalEnabled;
-      } else {
-        cfgRemoto.fiscalEnabled = true;
-      }
-    }
-  } catch (err) {
-    log.debug("[ConfigSync] bootstrap fiscal ignorado:", err.message);
-  }
 }
 
 async function enviarHeartbeat(backendUrl, backendToken) {
@@ -223,8 +202,11 @@ async function enviarAck(backendUrl, backendToken) {
 }
 
 async function sincronizar(lerConfigFn) {
-  estado.ultimaTentativaEm = new Date().toISOString();
-  const cfg = await lerConfigFn();
+  if (sincronizando) return getStatus();
+  sincronizando = true;
+  try {
+    estado.ultimaTentativaEm = new Date().toISOString();
+    const cfg = await lerConfigFn();
   const backendUrl = cfg.backendUrl || process.env.BACKEND_URL || "";
   const backendToken = cfg.backendToken || process.env.BACKEND_TOKEN || "";
 
@@ -250,7 +232,6 @@ async function sincronizar(lerConfigFn) {
       throw new Error(`HTTP ${resp.status}: ${txt.slice(0, 120)}`);
     }
     const remoto = await resp.json();
-    await bootstrapFiscalNoBackend(backendUrl, backendToken, remoto);
     aplicarConfigRemota(remoto);
     try {
       const ack = await enviarAck(backendUrl, backendToken);
@@ -271,11 +252,15 @@ async function sincronizar(lerConfigFn) {
     log.warn({ err: err.message }, "[ConfigSync] Falha ao sincronizar");
   }
   return getStatus();
+  } finally {
+    sincronizando = false;
+  }
 }
 
 function iniciar(lerConfigFn, acbr) {
   acbrRef = acbr;
   lerConfigFnRef = lerConfigFn;
+  sincronizarEmissaoFiscalLocal();
   if (intervalHandle) return;
   void sincronizar(lerConfigFn);
   intervalHandle = setInterval(() => {
@@ -299,5 +284,5 @@ module.exports = {
   sincronizar,
   getStatus,
   aplicarConfigRemota,
-  POLL_INTERVAL_MS: pollIntervalMs,
+  POLL_INTERVAL_MS: () => pollIntervalMs,
 };

@@ -109,19 +109,101 @@ function filaDbPath() {
   return process.env.DB_PATH || getDirectoryManager().file("agent", "fila.db");
 }
 
+let httpServer = null;
+let encerrando = false;
+const runtimeTimers = [];
+
+function trackInterval(fn, ms) {
+  const t = setInterval(fn, ms);
+  if (typeof t.unref === "function") t.unref();
+  runtimeTimers.push(t);
+  return t;
+}
+
+function pararRuntimeTimers() {
+  for (const t of runtimeTimers) clearInterval(t);
+  runtimeTimers.length = 0;
+}
+
+async function encerrarGracefully(signal, code = 0) {
+  if (encerrando) return;
+  encerrando = true;
+  console.log(`[Agente] Encerrando (${signal})...`);
+  auditLog.registrar("AGENTE_SHUTDOWN", { signal });
+  configSync.parar();
+  reconciliacaoFiscal.parar();
+
+  await new Promise((resolve) => {
+    if (!httpServer) return resolve();
+    httpServer.close(() => {
+      console.log("[Agente] HTTP server fechado — novas conexões recusadas");
+      resolve();
+    });
+  });
+
+  const waitJobs = await filaFiscal.aguardarJobsAtivos(30000);
+  if (!waitJobs.ok) {
+    console.error(
+      "[Agente] Timeout 30s aguardando jobs fiscais:",
+      JSON.stringify(waitJobs),
+    );
+    code = 1;
+  }
+
+  try {
+    filaFiscal.pararWorkers();
+    fiscalPurge.parar();
+    watchdog.parar();
+    pararRuntimeTimers();
+    try {
+      const { getLoggingService } = require("./runtime/loggingService");
+      getLoggingService().flushSync();
+    } catch (_) {}
+    try {
+      const docs = require("./documentosFiscais");
+      if (typeof docs.pararBackupRetryScheduler === "function") {
+        docs.pararBackupRetryScheduler();
+      }
+    } catch (_) {}
+    try {
+      const libDriver = require("./fiscal/drivers/acbrLibDriver");
+      if (typeof libDriver.invalidateNativeSession === "function") {
+        await libDriver.invalidateNativeSession("shutdown");
+      }
+    } catch (_) {}
+    filaFiscal.close();
+    fiscalMetrics.close();
+    auditLog.close();
+    if (db) db.close();
+  } catch (_) {}
+  process.exit(code);
+}
+
 function backupPreUpdateDir() {
   return getDirectoryManager().file("agent", "backup-pre-update");
 }
 
 // Cache em memória — evita chamar o cofre a cada request.
 let _configCache = null;
+let _configPublicCache = null;
+let _configPublicMtime = 0;
+
+function invalidarConfigPublicaCache() {
+  _configPublicCache = null;
+  _configPublicMtime = 0;
+}
 
 function lerConfigPublica() {
   try {
     const p = configPath();
-    if (fs.existsSync(p)) {
-      return JSON.parse(fs.readFileSync(p, "utf8"));
+    if (!fs.existsSync(p)) return {};
+    const st = fs.statSync(p);
+    if (_configPublicCache && st.mtimeMs === _configPublicMtime) {
+      return _configPublicCache;
     }
+    _configPublicCache = JSON.parse(fs.readFileSync(p, "utf8"));
+    _configPublicMtime = st.mtimeMs;
+    return _configPublicCache;
   } catch {}
   return {};
 }
@@ -132,6 +214,30 @@ function salvarConfigPublica(dados) {
   writeJsonAtomicSync(configPath(), seguro, {
     ensureDir: (dir) => getDirectoryManager().ensurePath(dir, "agentData"),
   });
+  _configPublicCache = { ...seguro };
+  try {
+    _configPublicMtime = fs.statSync(configPath()).mtimeMs;
+  } catch {
+    _configPublicMtime = Date.now();
+  }
+}
+
+function sincronizarContextoLog(cfg) {
+  try {
+    const { getLoggingService } = require("./runtime/loggingService");
+    const c = cfg || lerConfigSync();
+    let driver = null;
+    try {
+      const info = fiscalDriver.getDriverInfo?.();
+      driver = info?.provider || info?.mode || null;
+    } catch (_) {}
+    getLoggingService().setStaticContext({
+      tenant: c.tenantId || c.tenant || null,
+      empresa: c.empresaNome || c.empresa || c.pdvNome || null,
+      caixa: c.dispositivoId || c.pdvId || process.env.PDV_DISPOSITIVO_ID || null,
+      driver,
+    });
+  } catch (_) {}
 }
 
 /**
@@ -209,6 +315,7 @@ async function salvarConfig(cfg) {
 
   // 4. Invalida cache para forçar releitura na próxima lerConfig()
   _configCache = null;
+  invalidarConfigPublicaCache();
 }
 
 // ── Boot: carrega config completa (inclui cofre) ──────────────────────────────
@@ -217,6 +324,7 @@ let config = {};
 
 async function boot() {
   config = await lerConfig();
+  sincronizarContextoLog(config);
 
   if (config.backendUrl) process.env.BACKEND_URL = config.backendUrl;
   if (config.backendToken) process.env.BACKEND_TOKEN = config.backendToken;
@@ -230,6 +338,9 @@ async function boot() {
   fiscalMetrics.init();
   auditLog.init();
   try {
+    require("./fiscalConfigAuthority").carregarPersistido();
+  } catch (_) {}
+  try {
     fiscalStorage.integrityCheckBoot();
   } catch (err) {
     console.error("[Boot] Falha integrity_check:", err.message);
@@ -241,23 +352,36 @@ async function boot() {
   if (disco.degradado) {
     console.warn(`[Boot] Modo degradado — disco: ${disco.livreMb}MB livres`);
   }
-  const manifestCheck = manifestUpdater.verificarManifestBoot();
-  if (!manifestCheck.ok) {
-    console.error(
-      `[Boot] CRÍTICO: ${manifestCheck.motivo}. Auto-update bloqueado. Execute: npm run manifest`,
-    );
-  }
+  setImmediate(() => {
+    try {
+      const check = manifestUpdater.verificarManifestBoot();
+      if (!check.ok) {
+        console.error(
+          `[Boot] CRÍTICO: ${check.motivo}. Auto-update bloqueado. Execute: npm run manifest`,
+        );
+      }
+    } catch (err) {
+      console.error("[Boot] Verificação de manifest falhou:", err.message);
+    }
+  });
   filaFiscal.init();
   fiscalService.registrarHandlersFila(lerConfig);
+  registrarHandlerEpecFila();
 
   // HTTP na porta 9100 antes de recovery fiscal — evita agente "offline" durante
   // consultas SEFAZ/ACBr (ex.: cStat 104) e impede loop de crash no boot.
   iniciarServidor();
 
   filaFiscal.iniciarWorker();
-  watchdog.iniciar(reiniciarAcbrMonitor);
+  watchdog.iniciar(reiniciarEmissorFiscal);
   fiscalPurge.iniciar();
   reconciliacaoFiscal.iniciar(lerConfig);
+  try {
+    const docs = require("./documentosFiscais");
+    if (typeof docs.iniciarBackupRetryScheduler === "function") {
+      docs.iniciarBackupRetryScheduler();
+    }
+  } catch (_) {}
   fiscalAlertas.iniciarRelatorioAutomatico(fiscalRelatorio.gerarRelatorio);
 
   if (fiscalDriver.EMISSAO_FISCAL) {
@@ -310,7 +434,7 @@ async function boot() {
 async function reiniciarAcbrMonitor() {
   const exe = process.env.ACBR_MONITOR_EXE;
   if (!exe) {
-    console.warn("[Margin Engine] Monitor fiscal (fallback) não configurado — reinício automático desativado");
+    console.warn("[Margin Engine] Serviço auxiliar fiscal não configurado — reinício automático desativado");
     return;
   }
   const procName = process.env.ACBR_MONITOR_PROC || "ACBrMonitor.exe";
@@ -321,7 +445,25 @@ async function reiniciarAcbrMonitor() {
       }, 3000);
     });
   });
-  console.log("[Margin Engine] Monitor fiscal (fallback) reiniciado");
+  console.log("[Margin Engine] Serviço auxiliar fiscal reiniciado");
+}
+
+async function reiniciarEmissorFiscal() {
+  const driver = String(process.env.ACBR_DRIVER || "lib").toLowerCase();
+  if (driver === "lib" || driver === "acbr-lib") {
+    try {
+      const libDriver = require("./fiscal/drivers/acbrLibDriver");
+      if (typeof libDriver.invalidateNativeSession === "function") {
+        await libDriver.invalidateNativeSession("watchdog_restart");
+      }
+      await fiscalDriver.testar().catch(() => false);
+      console.log("[Margin Engine] Emissor fiscal integrado reinicializado");
+    } catch (err) {
+      console.warn("[Margin Engine] Falha ao reiniciar emissor integrado:", err.message);
+    }
+    return;
+  }
+  await reiniciarAcbrMonitor();
 }
 
 const AUTO_UPDATE =
@@ -447,6 +589,11 @@ function exigirLocalhost(req, res, next) {
   });
 }
 
+function exigirLocalhostOuToken(req, res, next) {
+  if (isLocalhost(req)) return next();
+  return exigirAgentToken(req, res, next);
+}
+
 function securityHeaders(req, res, next) {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
@@ -480,14 +627,17 @@ let updaterState = {
   ultimoErro: null,
 };
 
+const logUpdater = log.child({ modulo: "updater" });
+
 async function verificarAtualizacao() {
   if (!AUTO_UPDATE) return;
   if (!manifestUpdater.isManifestOk()) {
     updaterState.ultimoErro =
       manifestUpdater.getManifestBootMotivo() ||
       "manifest.json com SHA-256 incompleto";
-    console.error(
-      `[Updater] Auto-update recusado: ${updaterState.ultimoErro}. Execute: npm run manifest`,
+    logUpdater.error(
+      { acao: "verificar_atualizacao", resultado: "recusado", err: updaterState.ultimoErro },
+      "Auto-update recusado — manifest incompleto",
     );
     return;
   }
@@ -525,13 +675,17 @@ async function verificarAtualizacao() {
     }
   } catch (err) {
     updaterState.ultimoErro = err.message;
-    console.warn(`[Updater] Falha ao verificar atualização: ${err.message}`);
+    logUpdater.warn(
+      { acao: "verificar_atualizacao", resultado: "falha", err },
+      "Falha ao verificar atualização",
+    );
   }
 }
 
 async function aplicarAtualizacao(urlDownload, novaVersao, shaEsperado) {
   if (updaterState.atualizando) return;
   updaterState.atualizando = true;
+  const t0 = Date.now();
 
   const tmpDir = path.join(os.tmpdir(), `pdv-update-${Date.now()}`);
   const tmpZip = path.join(tmpDir, "update.zip");
@@ -595,26 +749,30 @@ async function aplicarAtualizacao(urlDownload, novaVersao, shaEsperado) {
     );
     updaterState.atualizando = false;
 
-    setTimeout(() => process.exit(0), 1500);
+    setTimeout(() => {
+      encerrarGracefully("AUTO_UPDATE", 0).catch(() => process.exit(0));
+    }, 1500);
   } catch (err) {
     updaterState.atualizando = false;
     updaterState.ultimoErro = err.message;
-    console.error(`[Updater] ✗ Falha ao aplicar atualização: ${err.message}`);
+    logUpdater.error(
+      {
+        acao: "aplicar_atualizacao",
+        resultado: "falha",
+        tempo: Date.now() - t0,
+        err,
+      },
+      "Falha ao aplicar atualização",
+    );
     try {
-      const backupDir = backupPreUpdateDir();
-      const jsFiles = [
-        "index.js",
-        "impressora.js",
-        "fiscalDriver.js",
-        "fila.js",
-        "credenciais.js",
-      ];
-      for (const f of jsFiles) {
-        const bak = path.join(backupDir, f + ".bak");
-        if (fs.existsSync(bak)) fs.copyFileSync(bak, path.join(__dirname, f));
-      }
-      console.warn("[Updater] Backup restaurado após falha.");
-    } catch {}
+      manifestUpdater.rollbackUltimo();
+      logUpdater.warn({ acao: "rollback", resultado: "ok" }, "Backup restaurado após falha");
+    } catch (rollbackErr) {
+      logUpdater.warn(
+        { acao: "rollback", resultado: "indisponivel", err: rollbackErr },
+        "Rollback indisponível",
+      );
+    }
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 }
@@ -690,6 +848,26 @@ function calcularSha256(filePath) {
 // ── ROTAS ─────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 
+let _diagImpressoraCache = { ok: null, info: null, at: 0 };
+
+function impressoraParaEnterprise() {
+  if (Date.now() - _diagImpressoraCache.at < 120_000) {
+    return {
+      ok: _diagImpressoraCache.ok,
+      info: _diagImpressoraCache.info,
+    };
+  }
+  try {
+    const factory = require("./print/factory");
+    return {
+      ok: null,
+      info: { driver: factory.getDriverInfo?.() || null, ultimaUsada: null },
+    };
+  } catch {
+    return { ok: null, info: null };
+  }
+}
+
 function coletarDadosAlertas() {
   const payload = diagnosticoDashboard.montarAlertasPayload({
     filaFiscal,
@@ -707,6 +885,39 @@ function coletarDadosAlertas() {
   } catch (_) {}
   payload.statusGeral = diagnosticoDashboard.calcularStatusGeral(payload);
   payload.configSync = configSync.getStatus();
+
+  try {
+    const diagnosticoEnterprise = require("./diagnosticoEnterprise");
+    const imp = impressoraParaEnterprise();
+    const logsEnterprise = diagnosticoEnterprise.lerUltimosLogsEnterprise(15);
+    const enterprise = diagnosticoEnterprise.coletarContextoEnterprise({
+      filaFiscal,
+      fiscalStorage,
+      acbr: fiscalDriver,
+      watchdog,
+      manifestUpdater,
+      versao: VERSAO_ATUAL,
+      configSync,
+      updater: {
+        ...updaterState,
+        rollbackDisponivel: manifestUpdater.rollbackDisponivel(),
+      },
+      db,
+      dbPath: filaDbPath(),
+      impressoraOk: imp.ok,
+      impressoraInfo: imp.info,
+      contingencia: lerContingencia(),
+      metricas: fiscalMetrics.snapshot?.(filaFiscal.status()) || null,
+      backup: diagnosticoEnterprise.coletarInfoBackup(),
+      logs: logsEnterprise,
+    });
+    payload.enterprise = enterprise;
+    payload.statusGeral = enterprise.statusGeral;
+    payload.logsEnterprise = logsEnterprise;
+  } catch (err) {
+    payload.enterpriseErro = err.message;
+  }
+
   return payload;
 }
 
@@ -744,17 +955,22 @@ function iniciarServidor() {
           null,
         tenant: cfg.tenantId || cfg.tenant || null,
         caixa: cfg.dispositivoId || cfg.pdvId || process.env.PDV_DISPOSITIVO_ID || null,
-        empresa: cfg.empresaNome || cfg.empresa || null,
+        empresa: cfg.empresaNome || cfg.empresa || cfg.pdvNome || null,
+        usuario:
+          req.headers["x-usuario"] ||
+          req.headers["x-operador"] ||
+          (req.body && (req.body.usuario || req.body.operador)) ||
+          null,
       },
       () => next(),
     );
   });
 
   const { criarApiProxy } = require("./apiProxy");
-  app.use("/api-proxy", privateNetworkHeaders, criarApiProxy({ lerConfigSync }));
+  app.use("/api-proxy", privateNetworkHeaders, exigirLocalhost, criarApiProxy({ lerConfigSync }));
 
   // ── Diagnóstico HTML (antes do SPA — evita 404 do frontend-dist) ───────────
-  app.get("/diagnostico/painel", privateNetworkHeaders, (req, res) => {
+  app.get("/diagnostico/painel", privateNetworkHeaders, exigirLocalhostOuToken, (req, res) => {
     const payload = coletarDadosAlertas();
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(diagnosticoPainel.renderPainelHtml(payload));
@@ -791,6 +1007,7 @@ function iniciarServidor() {
           ? fiscalDriver.testar().catch(() => false)
           : Promise.resolve(false),
       ]);
+      _diagImpressoraCache = { ok: impressoraOk, info: impressoraInfo, at: Date.now() };
 
       const { pendentes: filaOffline, falhas: filaFalhas } =
         await fila.contadores();
@@ -808,7 +1025,7 @@ function iniciarServidor() {
             .get();
           epecPendentes = row ? row.n : 0;
           dbOk = true;
-          const stat = fs.statSync(DB_PATH);
+          const stat = fs.statSync(filaDbPath());
           dbSize = stat.size;
         } catch {}
       }
@@ -887,7 +1104,7 @@ function iniciarServidor() {
         banco: {
           ok: dbOk,
           tamanho: dbSize,
-          path: DB_PATH,
+          path: filaDbPath(),
         },
 
         fila: {
@@ -919,6 +1136,45 @@ function iniciarServidor() {
           memUsedMb: Math.round(memUsed / 1024 / 1024),
           uptimeHuman: formatUptime(uptime),
         },
+
+        enterprise: (() => {
+          try {
+            const diagnosticoEnterprise = require("./diagnosticoEnterprise");
+            const logsEnterprise = diagnosticoEnterprise.lerUltimosLogsEnterprise(20);
+            return diagnosticoEnterprise.coletarContextoEnterprise({
+              filaFiscal,
+              fiscalStorage,
+              acbr: fiscalDriver,
+              watchdog,
+              manifestUpdater,
+              versao: VERSAO_ATUAL,
+              configSync,
+              updater: {
+                ...updaterState,
+                rollbackDisponivel: manifestUpdater.rollbackDisponivel(),
+              },
+              db,
+              dbPath: filaDbPath(),
+              impressoraOk: impressoraOk,
+              impressoraInfo,
+              contingencia,
+              metricas: fiscalMetrics.snapshot?.(filaFiscal.status()) || null,
+              backup: diagnosticoEnterprise.coletarInfoBackup(),
+              logs: logsEnterprise,
+            });
+          } catch {
+            return null;
+          }
+        })(),
+
+        logs: (() => {
+          try {
+            const diagnosticoEnterprise = require("./diagnosticoEnterprise");
+            return diagnosticoEnterprise.lerUltimosLogsEnterprise(20);
+          } catch {
+            return null;
+          }
+        })(),
       });
     },
   );
@@ -982,7 +1238,7 @@ function iniciarServidor() {
     if (acbrOcupado) {
       const mem = fiscalDriver.obterStatusMemoria(wd.degraded);
       return {
-        acbrOk: mem === "online" || mem === "degradado" || fiscalDriver.EMISSAO_FISCAL,
+        acbrOk: mem === "online" || mem === "degradado",
         acbrOcupado: true,
         fiscalProcessando: filaFiscal.estaProcessando(),
         acbrEstadoMemoria: mem,
@@ -1151,15 +1407,22 @@ function iniciarServidor() {
     },
   );
 
-  app.get("/config", privateNetworkHeaders, async (req, res) => {
+  app.get("/config", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    config = await lerConfig();
+    res.json({
+      ativado: config.ativado === true,
+      pdvNome: config.pdvNome || "",
+      emissaoFiscal: fiscalDriver.EMISSAO_FISCAL,
+    });
+  });
+
+  /** Pré-preenchimento da tela de ativação — somente localhost */
+  app.get("/config/ativacao", privateNetworkHeaders, exigirLocalhost, async (req, res) => {
     config = await lerConfig();
     res.json({
       ativado: config.ativado === true,
       pdvNome: config.pdvNome || "",
       backendUrl: config.backendUrl || "",
-      tenantId: config.tenantId || "",
-      dispositivoId: config.dispositivoId || null,
-      emissaoFiscal: fiscalDriver.EMISSAO_FISCAL,
     });
   });
 
@@ -1174,12 +1437,21 @@ function iniciarServidor() {
   });
 
   /** Grava config fiscal local (certificado, ambiente, CSC) — persiste acbrlib.ini + .env */
-  app.put("/config/fiscal", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+  app.put("/config/fiscal", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       const fiscalLocalConfig = require("./fiscalLocalConfig");
-      const saved = fiscalLocalConfig.salvar(req.body || {});
+      const saved = await fiscalLocalConfig.salvar(req.body || {});
       fiscalPreflight.invalidarCache();
-      res.json({ ok: true, config: saved });
+
+      let syncBackend = null;
+      if (typeof req.body?.emissaoFiscal === "boolean") {
+        const fiscalConfigAuthority = require("./fiscalConfigAuthority");
+        syncBackend = await fiscalConfigAuthority
+          .propagarEmissaoAoBackend(lerConfig, req.body.emissaoFiscal)
+          .catch((err) => ({ ok: false, reason: err.message }));
+      }
+
+      res.json({ ok: true, config: saved, syncBackend });
     } catch (e) {
       res.status(400).json({ erro: e.message || "Erro ao salvar config fiscal" });
     }
@@ -1278,6 +1550,7 @@ function iniciarServidor() {
       await salvarConfig(novoConfig);
       config = novoConfig;
       _configCache = novoConfig;
+      sincronizarContextoLog(novoConfig);
 
       fila.atualizarConfig(backendUrl, dados.token);
       void configSync.sincronizar(lerConfig).catch(() => {});
@@ -1822,7 +2095,7 @@ function iniciarServidor() {
     res.json(fiscalTraceLog.snapshot(lines));
   });
 
-  app.get("/diagnostico/alertas", privateNetworkHeaders, (req, res) => {
+  app.get("/diagnostico/alertas", privateNetworkHeaders, exigirLocalhostOuToken, (req, res) => {
     const payload = coletarDadosAlertas();
     const alertas = filaFiscal.contadoresAlertas();
     res.json({
@@ -1853,7 +2126,7 @@ function iniciarServidor() {
     res.redirect(302, "/diagnostico/painel");
   });
 
-  app.get("/diagnostico/dashboard/legado", privateNetworkHeaders, (req, res) => {
+  app.get("/diagnostico/dashboard/legado", privateNetworkHeaders, exigirLocalhostOuToken, (req, res) => {
     const payload = coletarDadosAlertas();
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(diagnosticoDashboard.renderDashboardHtml(payload));
@@ -1904,6 +2177,8 @@ function iniciarServidor() {
             ? fiscalDriver.getDriverInfo()
             : { provider: "monitor" };
         const alertasPayload = coletarDadosAlertas();
+        const diagnosticoEnterprise = require("./diagnosticoEnterprise");
+        const logsSuporte = diagnosticoEnterprise.lerUltimosLogsEnterprise(30);
         const pacote = {
           tipo: "margin-diagnostico-pacote",
           versao: VERSAO_ATUAL,
@@ -1940,6 +2215,7 @@ function iniciarServidor() {
           storage: fiscalStorage.verificarEspacoDisco(),
           updater: { ...updaterState, versaoAtual: VERSAO_ATUAL },
           manifestOk: manifestUpdater.isManifestOk(),
+          logs: logsSuporte,
         };
         const nome = `margin-diagnostico-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.json`;
         res.setHeader("Content-Disposition", `attachment; filename="${nome}"`);
@@ -1961,6 +2237,33 @@ function iniciarServidor() {
       timestamp: new Date().toISOString(),
     });
   });
+
+  app.post(
+    "/diagnostico/logs/abrir-pasta",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    (req, res) => {
+      try {
+        const diagnosticoEnterprise = require("./diagnosticoEnterprise");
+        const logs = diagnosticoEnterprise.lerUltimosLogsEnterprise(1);
+        const pasta = logs.pastaLogsReal;
+        if (!pasta || !fs.existsSync(pasta)) {
+          return res.status(404).json({ ok: false, erro: "Pasta de logs não encontrada." });
+        }
+        const { spawn } = require("child_process");
+        if (process.platform === "win32") {
+          spawn("explorer.exe", [pasta], { detached: true, stdio: "ignore" }).unref();
+        } else if (process.platform === "darwin") {
+          spawn("open", [pasta], { detached: true, stdio: "ignore" }).unref();
+        } else {
+          spawn("xdg-open", [pasta], { detached: true, stdio: "ignore" }).unref();
+        }
+        res.json({ ok: true, pasta: logs.pastaLogs, pastaReal: pasta });
+      } catch (err) {
+        res.status(500).json({ ok: false, erro: err.message });
+      }
+    },
+  );
 
   // ── Contingência ──────────────────────────────────────────────────────────────
   app.post("/contingencia/epec/salvar", exigirAgentToken, async (req, res) => {
@@ -2181,10 +2484,11 @@ function iniciarServidor() {
   });
 
   // ── Imagens de produtos (Storage / DirectoryManager) ───────────────────────
-  app.get("/storage/produtos/:produtoId/imagem/meta", privateNetworkHeaders, (req, res) => {
+  app.get("/storage/produtos/:produtoId/imagem/meta", privateNetworkHeaders, exigirAgentToken, (req, res) => {
     try {
       const produtoImagens = require("./storage/produtoImagens");
-      const meta = produtoImagens.obterMeta(req.params.produtoId, req.query.tenantId);
+      const cfg = lerConfigSync();
+      const meta = produtoImagens.obterMeta(req.params.produtoId, cfg.tenantId);
       if (!meta) return res.status(404).json({ erro: "Imagem não encontrada" });
       res.json(meta);
     } catch (e) {
@@ -2192,18 +2496,19 @@ function iniciarServidor() {
     }
   });
 
-  app.get("/storage/produtos/:produtoId/imagem/:variant", privateNetworkHeaders, (req, res) => {
+  app.get("/storage/produtos/:produtoId/imagem/:variant", privateNetworkHeaders, exigirAgentToken, (req, res) => {
     try {
       const variant = String(req.params.variant || "").toLowerCase();
       if (!["thumb", "medium", "original"].includes(variant)) {
         return res.status(400).json({ erro: "Variante inválida" });
       }
       const produtoImagens = require("./storage/produtoImagens");
-      const hit = produtoImagens.obterArquivo(req.params.produtoId, variant, req.query.tenantId);
+      const cfg = lerConfigSync();
+      const hit = produtoImagens.obterArquivo(req.params.produtoId, variant, cfg.tenantId);
       if (!hit) return res.status(404).json({ erro: "Arquivo não encontrado" });
       res.setHeader("Content-Type", hit.mime);
       res.setHeader("Cache-Control", "public, max-age=86400, immutable");
-      res.sendFile(hit.file);
+      res.sendFile(hit.file, { root: hit.root });
     } catch (e) {
       res.status(500).json({ erro: e.message });
     }
@@ -2320,10 +2625,12 @@ function iniciarServidor() {
   }
 
   // ── Error handler ─────────────────────────────────────────────────────────────
+  const { respostaErroOperador } = require("./runtime/mensagensOperador");
   app.use((err, req, res, _next) => {
     console.error("[Agente] Erro na rota:", err.message);
     if (!res.headersSent) {
-      res.status(500).json({ erro: err.message || "Erro interno do agente." });
+      const body = respostaErroOperador(err, 500);
+      res.status(500).json(body);
     }
   });
 
@@ -2333,14 +2640,14 @@ function iniciarServidor() {
   configSync.iniciar(lerConfig, fiscalDriver);
 
   const SYNC_INTERVAL = parseInt(process.env.SYNC_INTERVAL_MS || "30000", 10);
-  setInterval(() => {
+  trackInterval(() => {
     fila
       .sincronizar()
       .catch((err) =>
         console.warn("[Fila] Erro no sync automatico:", err.message),
       );
   }, SYNC_INTERVAL);
-  setInterval(
+  trackInterval(
     () => {
       tentarSincronizarEpecs().catch((err) =>
         console.warn("[EPEC] Erro no sync automatico:", err.message),
@@ -2350,47 +2657,8 @@ function iniciarServidor() {
   );
 
   if (AUTO_UPDATE) {
-    setInterval(() => verificarAtualizacao().catch(() => {}), 60 * 60 * 1000);
+    trackInterval(() => verificarAtualizacao().catch(() => {}), 60 * 60 * 1000);
     setTimeout(() => verificarAtualizacao().catch(() => {}), 2 * 60 * 1000);
-  }
-
-  let httpServer = null;
-  let encerrando = false;
-
-  async function encerrarGracefully(signal, code = 0) {
-    if (encerrando) return;
-    encerrando = true;
-    console.log(`[Agente] Encerrando (${signal})...`);
-    auditLog.registrar("AGENTE_SHUTDOWN", { signal });
-    configSync.parar();
-
-    await new Promise((resolve) => {
-      if (!httpServer) return resolve();
-      httpServer.close(() => {
-        console.log("[Agente] HTTP server fechado — novas conexões recusadas");
-        resolve();
-      });
-    });
-
-    const waitJobs = await filaFiscal.aguardarJobsAtivos(30000);
-    if (!waitJobs.ok) {
-      console.error(
-        "[Agente] Timeout 30s aguardando jobs fiscais:",
-        JSON.stringify(waitJobs),
-      );
-      code = 1;
-    }
-
-    try {
-      filaFiscal.pararWorkers();
-      fiscalPurge.parar();
-      watchdog.parar();
-      filaFiscal.close();
-      fiscalMetrics.close();
-      auditLog.close();
-      if (db) db.close();
-    } catch (_) {}
-    process.exit(code);
   }
 
   process.on("uncaughtException", (err) => {
@@ -2402,6 +2670,7 @@ function iniciarServidor() {
   });
   process.on("unhandledRejection", (err) => {
     console.error("[Agente] unhandledRejection:", err);
+    encerrarGracefully("unhandledRejection", 1).catch(() => process.exit(1));
   });
   process.on("SIGINT", () => {
     encerrarGracefully("SIGINT", 0).catch(() => process.exit(1));
@@ -2410,7 +2679,8 @@ function iniciarServidor() {
     encerrarGracefully("SIGTERM", 0).catch(() => process.exit(1));
   });
 
-  httpServer = app.listen(PORT, () => {
+  const BIND_HOST = process.env.AGENT_BIND_HOST || "127.0.0.1";
+  httpServer = app.listen(PORT, BIND_HOST, () => {
     try {
       require("./bootGuards").assertProductionGuards();
     } catch (e) {
@@ -2520,8 +2790,71 @@ async function encerrarContingenciaAutomatico(observacao) {
   console.log("[EPEC] ✅ Contingência ENCERRADA.");
 }
 
+async function verificarEncerrarContingenciaEpec() {
+  if (!db) return;
+  const restantes = db
+    .prepare("SELECT COUNT(*) as n FROM epec_pendentes WHERE status='PENDENTE'")
+    .get();
+  if (restantes.n === 0 && estadoContingencia.ativa) {
+    await encerrarContingenciaAutomatico("Todos os EPECs transmitidos.");
+  }
+}
+
+function registrarHandlerEpecFila() {
+  filaFiscal.registrarHandler("EPEC", async (payload) => {
+    try {
+      const resultado = await fiscalDriver.emitirNfce({
+        xml: payload.xml || payload.xmlEpec,
+        modoEpec: true,
+        numeroVenda: payload.numeroVenda,
+      });
+      if (!resultado?.chave) {
+        throw new Error("EPEC retransmitido sem chave na resposta");
+      }
+      if (db && payload.epecPendenteId) {
+        db.prepare("UPDATE epec_pendentes SET status='TRANSMITIDO' WHERE id=?").run(
+          payload.epecPendenteId,
+        );
+      }
+      const cfg = await lerConfig();
+      if (cfg.backendUrl && cfg.backendToken && payload.epecId) {
+        const fetch = require("node-fetch");
+        const patch = await fetch(
+          `${cfg.backendUrl}/pdv/contingencia/epec/${payload.epecId}/transmitido?chaveEpec=${encodeURIComponent(resultado.chave)}`,
+          {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${cfg.backendToken}` },
+          },
+        );
+        if (!patch.ok) {
+          console.warn(
+            `[EPEC] Backend PATCH transmitido falhou (${patch.status}) para ${payload.epecId}`,
+          );
+        }
+      }
+      log.info(
+        {
+          epecId: payload.epecId,
+          registroId: payload.epecPendenteId,
+          chave: resultado.chave,
+        },
+        "EPEC transmitido com sucesso",
+      );
+      await verificarEncerrarContingenciaEpec();
+    } catch (err) {
+      if (db && payload.epecPendenteId) {
+        db.prepare(
+          `UPDATE epec_pendentes SET tentativas=tentativas+1, ultimo_erro=?, status=CASE WHEN tentativas+1 >= 10 THEN 'FALHA_PERMANENTE' ELSE status END WHERE id=?`,
+        ).run(err.message, payload.epecPendenteId);
+      }
+      throw err;
+    }
+  });
+}
+
 async function tentarSincronizarEpecs() {
   if (!db) return;
+  if (filaFiscal.acbrOcupado()) return;
   const cfg = await lerConfig();
   if (cfg.backendUrl && cfg.backendToken) {
     try {
@@ -2540,53 +2873,22 @@ async function tentarSincronizarEpecs() {
     )
     .all();
   if (pendentes.length === 0) return;
-  console.log(`[EPEC] Tentando retransmitir ${pendentes.length} XML(s)...`);
+  console.log(`[EPEC] Enfileirando ${pendentes.length} XML(s) para retransmissão...`);
   for (const row of pendentes) {
-    try {
-      const resultado = await fiscalDriver.emitirNfce({
+    filaFiscal.enfileirar(
+      "EPEC",
+      {
+        epecPendenteId: row.id,
+        epecId: row.epec_id,
+        numeroVenda: row.numero_venda,
         xml: row.xml_epec,
         modoEpec: true,
-        numeroVenda: row.numero_venda,
-      });
-      if (resultado && resultado.chave) {
-        db.prepare(
-          "UPDATE epec_pendentes SET status='TRANSMITIDO' WHERE id=?",
-        ).run(row.id);
-        const cfg = await lerConfig();
-        if (cfg.backendUrl && cfg.backendToken && row.epec_id) {
-          const fetch = require("node-fetch");
-          const patch = await fetch(
-            `${cfg.backendUrl}/pdv/contingencia/epec/${row.epec_id}/transmitido?chaveEpec=${encodeURIComponent(resultado.chave)}`,
-            {
-              method: "PATCH",
-              headers: { Authorization: `Bearer ${cfg.backendToken}` },
-            },
-          );
-          if (!patch.ok) {
-            console.warn(
-              `[EPEC] Backend PATCH transmitido falhou (${patch.status}) para ${row.epec_id}`,
-            );
-          }
-        }
-        log.info({ epecId: row.epec_id, registroId: row.id }, "EPEC transmitido com sucesso");
-      }
-    } catch (err) {
-      if (
-        err.message?.includes("timeout") ||
-        err.message?.includes("inacessível")
-      ) {
-        break;
-      }
-      db.prepare(
-        `UPDATE epec_pendentes SET tentativas=tentativas+1, ultimo_erro=?, status=CASE WHEN tentativas+1 >= 10 THEN 'FALHA_PERMANENTE' ELSE status END WHERE id=?`,
-      ).run(err.message, row.id);
-    }
+      },
+      `epec-${row.id}`,
+      row.numero_venda,
+    );
   }
-  const restantes = db
-    .prepare("SELECT COUNT(*) as n FROM epec_pendentes WHERE status='PENDENTE'")
-    .get();
-  if (restantes.n === 0 && estadoContingencia.ativa)
-    await encerrarContingenciaAutomatico("Todos os EPECs transmitidos.");
+  filaFiscal.dispararProcessamento();
 }
 
 // ── Dispara tudo ──────────────────────────────────────────────────────────────

@@ -244,6 +244,35 @@ async function callbackBackend(cfg, numeroVenda, payload, correlationId) {
   return result;
 }
 
+/** Fail-safe PDV — mantém venda como PENDENTE_FISCAL no backend após falha recuperável/cadastro. */
+async function notificarPendenciaFiscalFailSafe(numeroVenda, correlationId, err) {
+  if (!_lerConfigFn || !numeroVenda) return;
+  if (fiscalRetry.isIncerto(err)) return;
+  const cfg = await _lerConfigFn();
+  if (!cfg?.backendUrl || !cfg?.backendToken) return;
+  const fiscalMotivo = require("./fiscal/fiscalMotivo");
+  const meta = fiscalMotivo.classificarDeErro(err);
+  const payload = {
+    correlationId,
+    statusFiscal: fiscalMotivo.statusFiscalFailSafe(err),
+    cStat: meta.cStat || fiscalRetry.extrairCStat(err),
+    xMotivo: err?.message || String(err),
+  };
+  const log = require("./logger").child({ modulo: "fiscal_fail_safe" });
+  try {
+    await callbackBackend(cfg, numeroVenda, payload, correlationId);
+    log.info(
+      { numeroVenda, correlationId, motivoFiscal: meta.motivoFiscal, recuperavel: meta.recuperavel },
+      "Fail-safe: venda mantida como pendência fiscal no backend",
+    );
+  } catch (cbErr) {
+    log.warn(
+      { err: cbErr.message, numeroVenda, correlationId },
+      "Fail-safe: falha ao notificar pendência fiscal",
+    );
+  }
+}
+
 async function persistirAposAutorizacao(cfg, numeroVenda, correlationId, resultado) {
   if (!isCStatAutorizado(resultado.cStat)) {
     const err = new Error(
@@ -1324,6 +1353,7 @@ module.exports = {
   enviarEventoCompleto,
   inutilizarCompleto,
   callbackBackend,
+  notificarPendenciaFiscalFailSafe,
   persistirDocumentosFiscais,
   registrarHandlersFila,
   PATHS,

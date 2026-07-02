@@ -10,7 +10,15 @@ function isTruthy(v) {
 }
 
 function isProducaoFiscal() {
-  const emissao = isTruthy(process.env.EMISSAO_FISCAL);
+  let emissao = isTruthy(process.env.EMISSAO_FISCAL);
+  try {
+    const acbr = require("./acbr");
+    if (typeof acbr.getEmissaoFiscalAtivo === "function") {
+      emissao = acbr.getEmissaoFiscalAtivo();
+    }
+  } catch (_) {
+    /* acbr opcional em testes isolados */
+  }
   const amb =
     String(process.env.AMBIENTE_SEFAZ || "").toLowerCase() === "producao" ||
     process.env.AMBIENTE_SEFAZ === "1";
