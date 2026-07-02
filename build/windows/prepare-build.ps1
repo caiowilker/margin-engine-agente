@@ -93,6 +93,13 @@ if (-not $SkipNpm) {
     }
 }
 
+@{
+    version = $pkg.version
+    builtAt = (Get-Date).ToUniversalTime().ToString("o")
+    installerAppId = "C7E3A1D2-4F5B-4E6A-9D0C-1B2A3C4D5E6F"
+    installDir = "Margin Engine"
+} | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $App "BUILD_STAMP.json")
+
 $inno = @(
     "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
     "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"

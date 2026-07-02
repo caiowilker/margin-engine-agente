@@ -29,14 +29,29 @@ process.env.NODE_ENV = "production";
 process.env.LOG_MODE = "PRODUCTION";
 process.env.LOG_PATCH_CONSOLE = "false";
 
-const { initLogging } = require(path.join(appDir, "runtime", "loggingService"));
-const log = initLogging({ patchConsole: false }).createLogger({
-  modulo: "install_bootstrap",
-  channel: "installer",
-});
+let log = null;
+
+function initBootstrapLog() {
+  if (log) return log;
+  try {
+    const { initLogging } = require(path.join(appDir, "runtime", "loggingService"));
+    log = initLogging({ patchConsole: false }).createLogger({
+      modulo: "install_bootstrap",
+      channel: "installer",
+    });
+  } catch {
+    log = {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      fatal: () => {},
+    };
+  }
+  return log;
+}
 
 function run(cmd, opts = {}) {
-  log.info({ acao: "exec", comando: cmd }, "Executando comando");
+  initBootstrapLog().info({ acao: "exec", comando: cmd }, "Executando comando");
   try {
     execSync(cmd, {
       cwd: appDir,
@@ -57,21 +72,22 @@ function writeBootstrapFailure(err) {
     "",
     String(err?.stack || err?.message || err),
   ].join("\n");
-  const targets = [];
+  const targets = [
+    path.join(appDir, "data", "install-bootstrap-error.txt"),
+    path.join(os.tmpdir(), "margin-install-bootstrap-error.txt"),
+  ];
   try {
     const { getDirectoryManager } = require(path.join(appDir, "runtime", "directoryManager"));
     const dm = getDirectoryManager();
     dm.ensureAll();
-    targets.push(path.join(dm.PATHS.diagnostics, "install-bootstrap-error.txt"));
+    targets.unshift(path.join(dm.PATHS.diagnostics, "install-bootstrap-error.txt"));
   } catch {
     /* ignore */
   }
-  targets.push(path.join(os.tmpdir(), "margin-install-bootstrap-error.txt"));
   for (const fp of targets) {
     try {
       fs.mkdirSync(path.dirname(fp), { recursive: true });
       fs.writeFileSync(fp, text, "utf8");
-      break;
     } catch {
       /* try next */
     }
@@ -91,13 +107,13 @@ function nativeDepsReady() {
 
 function writeDefaultConfigs() {
   if (mode === "update") {
-    log.info({ acao: "skip_default_config" }, "Atualização — configurações existentes preservadas");
+    initBootstrapLog().info({ acao: "skip_default_config" }, "Atualização — configurações existentes preservadas");
     return;
   }
 
   const envPath = path.join(appDir, ".env");
   if (mode === "repair" && fs.existsSync(envPath)) {
-    log.info({ acao: "skip_default_config" }, "Reparo — .env existente preservado");
+    initBootstrapLog().info({ acao: "skip_default_config" }, "Reparo — .env existente preservado");
     return;
   }
 
@@ -145,7 +161,7 @@ function ensureDirectories() {
   const { getDirectoryManager } = require(path.join(appDir, "runtime", "directoryManager"));
   const dm = getDirectoryManager();
   dm.ensureAll();
-  log.info({ acao: "ensure_dirs", root: dm.ROOT }, "Diretórios Margin Engine preparados");
+  initBootstrapLog().info({ acao: "ensure_dirs", root: dm.ROOT }, "Diretórios Margin Engine preparados");
   return dm;
 }
 
@@ -154,7 +170,7 @@ function ensureEnv() {
   const example = path.join(appDir, ".env.example");
   if (!fs.existsSync(envPath) && fs.existsSync(example)) {
     fs.copyFileSync(example, envPath);
-    log.info({ acao: "create_env" }, "Arquivo de configuração inicial criado");
+    initBootstrapLog().info({ acao: "create_env" }, "Arquivo de configuração inicial criado");
   }
 }
 
@@ -163,9 +179,9 @@ function ensureWindowsPermissions(dm) {
   const root = dm.ROOT;
   try {
     run(`icacls "${root}" /grant *S-1-5-32-545:(OI)(CI)M /T /C`, { stdio: "pipe" });
-    log.info({ acao: "permissions", diretorio: root }, "Permissões aplicadas");
+    initBootstrapLog().info({ acao: "permissions", diretorio: root }, "Permissões aplicadas");
   } catch (err) {
-    log.warn({ err: err.message }, "Não foi possível ajustar todas as permissões");
+    initBootstrapLog().warn({ err: err.message }, "Não foi possível ajustar todas as permissões");
   }
 }
 
@@ -178,9 +194,9 @@ function ensureFirewall() {
       `netsh advfirewall firewall add rule name="${ruleName}" dir=in action=allow protocol=TCP localport=${port}`,
       { stdio: "pipe" },
     );
-    log.info({ acao: "firewall", porta: port }, "Regra de firewall registrada");
+    initBootstrapLog().info({ acao: "firewall", porta: port }, "Regra de firewall registrada");
   } catch {
-    log.warn({ porta: port }, "Firewall não configurado (pode já existir ou política bloqueou)");
+    initBootstrapLog().warn({ porta: port }, "Firewall não configurado (pode já existir ou política bloqueou)");
   }
 }
 
@@ -198,11 +214,11 @@ function validateDependencies() {
 function npmInstallIfNeeded() {
   if (mode === "repair") return;
   if (nativeDepsReady()) {
-    log.info({ acao: "skip_npm_ci" }, "Dependências nativas já empacotadas no instalador");
+    initBootstrapLog().info({ acao: "skip_npm_ci" }, "Dependências nativas já empacotadas no instalador");
     return;
   }
   const npm = process.env.MARGIN_NPM || "npm";
-  log.info({ acao: "npm_ci" }, "Instalando dependências (primeira execução ou pacote sem node_modules)");
+  initBootstrapLog().info({ acao: "npm_ci" }, "Instalando dependências (primeira execução ou pacote sem node_modules)");
   run(`"${npm}" ci --omit=dev`, { inherit: true });
   run(`"${npm}" rebuild better-sqlite3`, { inherit: true });
 }
@@ -214,11 +230,11 @@ function stopAgentService() {
     if (!r.ok && !r.skipped) {
       throw new Error(r.error || `Serviço não parou (estado: ${r.state})`);
     }
-    log.info({ acao: "service_stop", ...r }, "Serviço Margin Engine parado para manutenção");
+    initBootstrapLog().info({ acao: "service_stop", ...r }, "Serviço Margin Engine parado para manutenção");
     return r;
   } catch (err) {
     if (process.platform !== "win32") return { ok: true, skipped: true };
-    log.error({ err: err.message }, "Não foi possível parar o serviço");
+    initBootstrapLog().error({ err: err.message }, "Não foi possível parar o serviço");
     return { ok: false, error: err.message };
   }
 }
@@ -232,13 +248,13 @@ function backupPreUpdate() {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const dest = path.join(backupDir, `manifest-${stamp}.json`);
   fs.copyFileSync(manifestPath, dest);
-  log.info({ acao: "backup_manifest", dest }, "Backup do manifest antes da atualização");
+  initBootstrapLog().info({ acao: "backup_manifest", dest }, "Backup do manifest antes da atualização");
   return dest;
 }
 
 function npmRepairSteps() {
   if (nativeDepsReady()) {
-    log.info({ acao: "skip_npm_repair" }, "node_modules presente — reparo sem npm ci");
+    initBootstrapLog().info({ acao: "skip_npm_repair" }, "node_modules presente — reparo sem npm ci");
     return;
   }
   const npm = process.env.MARGIN_NPM || "npm";
@@ -258,12 +274,17 @@ function validatePostUpdate() {
       if (ok === false) throw new Error("Integridade do manifest falhou");
     }
   } catch (err) {
-    log.warn({ err: err.message }, "Verificação de manifest reportou aviso");
+    initBootstrapLog().warn({ err: err.message }, "Verificação de manifest reportou aviso");
   }
   return true;
 }
 
 function generateManifest() {
+  const manifestScript = path.join(appDir, "scripts", "generate-manifest.js");
+  if (fs.existsSync(manifestScript)) {
+    run(`node "${manifestScript}"`, { inherit: true });
+    return;
+  }
   const npm = process.env.MARGIN_NPM || "npm";
   run(`"${npm}" run manifest`, { inherit: true });
 }
@@ -276,11 +297,11 @@ function startAgentService() {
     if (!r.ok && !r.skipped) {
       throw new Error(r.error || `Serviço não iniciou (estado: ${r.state})`);
     }
-    log.info({ acao: "service_start", ...r }, "Serviço Margin Engine reiniciado");
+    initBootstrapLog().info({ acao: "service_start", ...r }, "Serviço Margin Engine reiniciado");
     return r;
   } catch (err) {
     if (process.platform !== "win32") return { ok: true, skipped: true };
-    log.warn({ err: err.message }, "Não foi possível reiniciar o serviço automaticamente");
+    initBootstrapLog().warn({ err: err.message }, "Não foi possível reiniciar o serviço automaticamente");
     return { ok: false, error: err.message };
   }
 }
@@ -290,13 +311,22 @@ function runPredeploy() {
     const npm = process.env.MARGIN_NPM || "npm";
     run(`"${npm}" run predeploy`, { inherit: true });
   } catch (err) {
-    log.warn({ err: err.message }, "Pré-deploy reportou avisos");
+    initBootstrapLog().warn({ err: err.message }, "Pré-deploy reportou avisos");
   }
 }
 
 function registerService() {
-  if (!withService) return;
-  run(`node "${path.join(appDir, "install-service.js")}" --no-open`, { inherit: true });
+  if (!withService) return { ok: true, skipped: true };
+  try {
+    run(
+      `node "${path.join(appDir, "install-service.js")}" --no-open --from-installer`,
+      { inherit: true },
+    );
+    return { ok: true };
+  } catch (err) {
+    initBootstrapLog().warn({ err: err.message }, "Registro do serviço falhou — tente Reparar no instalador");
+    return { ok: false, error: err.message };
+  }
 }
 
 function waitForOnline() {
@@ -307,7 +337,7 @@ function waitForOnline() {
     });
     return { ok: true };
   } catch {
-    log.warn({ acao: "wait_online" }, "Agente ainda não respondeu — verifique o serviço Windows");
+    initBootstrapLog().warn({ acao: "wait_online" }, "Agente ainda não respondeu — verifique o serviço Windows");
     return { ok: false };
   }
 }
@@ -318,7 +348,7 @@ function createShortcuts() {
   try {
     run(`node "${path.join(appDir, "scripts", "installer-shortcuts.js")}"${flags}`, { inherit: true });
   } catch (err) {
-    log.warn({ err: err.message }, "Não foi possível criar todos os atalhos");
+    initBootstrapLog().warn({ err: err.message }, "Não foi possível criar todos os atalhos");
   }
 }
 
@@ -327,9 +357,9 @@ function openPanel() {
   const port = process.env.AGENT_PORT || process.env.PORT || "9100";
   try {
     run(`cmd /c start http://127.0.0.1:${port}/`, { stdio: "pipe" });
-    log.info({ acao: "open_panel", url: `http://127.0.0.1:${port}/` }, "Painel aberto no navegador");
+    initBootstrapLog().info({ acao: "open_panel", url: `http://127.0.0.1:${port}/` }, "Painel aberto no navegador");
   } catch (err) {
-    log.warn({ err: err.message }, "Não foi possível abrir o navegador automaticamente");
+    initBootstrapLog().warn({ err: err.message }, "Não foi possível abrir o navegador automaticamente");
   }
 }
 
@@ -344,11 +374,26 @@ async function runDiagnostic() {
   }
   const report = await diag();
   writeReports(report, dmRoot);
+  try {
+    const localReport = path.join(appDir, "data", "install-last-report.txt");
+    fs.mkdirSync(path.dirname(localReport), { recursive: true });
+    const lines = [
+      report.ok ? "Margin Engine — diagnóstico OK" : "Margin Engine — ATENÇÃO",
+      `Versão: ${report.version || "?"}`,
+      `Problemas: ${report.issues.length}`,
+    ];
+    for (const issue of report.issues) {
+      lines.push(`- [${issue.severity}] ${issue.message}`);
+    }
+    fs.writeFileSync(localReport, lines.join("\n"), "utf8");
+  } catch {
+    /* ignore */
+  }
   return report;
 }
 
 async function main() {
-  log.info({ acao: "bootstrap_start", modo: mode }, "Margin Engine — bootstrap do instalador");
+  initBootstrapLog().info({ acao: "bootstrap_start", modo: mode }, "Margin Engine — bootstrap do instalador");
 
   const needsServiceCycle = withService && (mode === "update" || mode === "repair");
   if (needsServiceCycle) {
@@ -383,7 +428,7 @@ async function main() {
     ensureFirewall();
   }
 
-  registerService();
+  const serviceResult = registerService();
   if (needsServiceCycle) {
     startAgentService();
   }
@@ -393,27 +438,43 @@ async function main() {
     openPanel();
   }
 
-  const report = await runDiagnostic();
-  log.info(
+  let report = { ok: true, issues: [] };
+  try {
+    report = await runDiagnostic();
+  } catch (err) {
+    initBootstrapLog().warn({ err: err.message }, "Diagnóstico pós-instalação falhou");
+    writeBootstrapFailure(err);
+  }
+
+  initBootstrapLog().info(
     {
       acao: "bootstrap_done",
       modo: mode,
       ok: report.ok,
       issues: report.issues.length,
       agentOnline: online.ok,
+      serviceOk: serviceResult.ok,
     },
     "Bootstrap concluído",
   );
 
-  process.exit(report.ok ? 0 : 2);
+  if (!serviceResult.ok && !nativeDepsReady()) {
+    process.exit(1);
+  }
+  process.exit(0);
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   writeBootstrapFailure(err);
   try {
-    log.fatal({ err, acao: "bootstrap_fail" }, err.message);
+    initBootstrapLog().fatal({ err, acao: "bootstrap_fail" }, err.message);
   } catch {
     /* logging pode falhar antes de diretórios */
+  }
+  try {
+    await runDiagnostic();
+  } catch {
+    /* ignore */
   }
   process.exit(1);
 });

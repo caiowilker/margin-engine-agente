@@ -23,7 +23,7 @@
 #define MyAppDescription "Agente local do Margin Engine para PDV, impressão e documentos fiscais."
 #define MyInstallDir "Margin Engine"
 #define MarginDataRoot "{commonappdata}\MarginEngine"
-#define MyAppId "B2E2B6B0-5F2A-4B6B-9D2C-1A2B3C4D5E6F"
+#define MyAppId "C7E3A1D2-4F5B-4E6A-9D0C-1B2A3C4D5E6F"
 
 [Setup]
 AppId={{{#MyAppId}}}
@@ -43,6 +43,7 @@ VersionInfoVersion={#MyAppVersion}
 VersionInfoCopyright={#MyAppCopyright}
 VersionInfoTextVersion={#MyAppVersion}
 DefaultDirName={autopf}\{#MyInstallDir}
+UsePreviousAppDir=no
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=no
 OutputDir=output
@@ -360,20 +361,51 @@ var
 begin
   Result := '';
   ReportPath := ExpandConstant('{#MarginDataRoot}\Diagnostics\install-last-report.txt');
-  if not FileExists(ReportPath) then
+  if FileExists(ReportPath) then
   begin
-    Result := 'Diagnóstico não gerado. Verifique os logs do instalador.';
-    Exit;
-  end;
-  if LoadStringsFromFile(ReportPath, Lines) then
-  begin
-    for I := 0 to GetArrayLength(Lines) - 1 do
+    if LoadStringsFromFile(ReportPath, Lines) then
     begin
-      if I > 0 then
-        Result := Result + #13#10;
-      Result := Result + Lines[I];
+      for I := 0 to GetArrayLength(Lines) - 1 do
+      begin
+        if I > 0 then
+          Result := Result + #13#10;
+        Result := Result + Lines[I];
+      end;
+      Exit;
     end;
   end;
+  ReportPath := ExpandConstant('{app}\app\data\install-bootstrap-error.txt');
+  if FileExists(ReportPath) then
+  begin
+    if LoadStringsFromFile(ReportPath, Lines) then
+    begin
+      Result := 'Configuração pós-instalação incompleta:' + #13#10;
+      for I := 0 to GetArrayLength(Lines) - 1 do
+      begin
+        if I > 0 then
+          Result := Result + #13#10;
+        Result := Result + Lines[I];
+      end;
+      Exit;
+    end;
+  end;
+  ReportPath := ExpandConstant('{app}\app\data\install-last-report.txt');
+  if FileExists(ReportPath) then
+  begin
+    if LoadStringsFromFile(ReportPath, Lines) then
+    begin
+      for I := 0 to GetArrayLength(Lines) - 1 do
+      begin
+        if I > 0 then
+          Result := Result + #13#10;
+        Result := Result + Lines[I];
+      end;
+      Exit;
+    end;
+  end;
+  Result := 'Diagnóstico não gerado. Verifique:' + #13#10 +
+    ExpandConstant('{#MarginDataRoot}\Diagnostics\install-bootstrap-error.txt') + #13#10 +
+    ExpandConstant('{app}\app\data\install-bootstrap-error.txt');
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

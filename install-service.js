@@ -40,7 +40,7 @@ if (nodeMajor < 18) {
 console.log(`✓ Node.js ${nodeVersion}`);
 
 // ── Verifica privilégios de admin no Windows ──────────────────────────────────
-if (process.platform === "win32") {
+if (process.platform === "win32" && !fromInstaller) {
   try {
     execSync("net session", { stdio: "ignore" });
     console.log("✓ Executando como Administrador");
@@ -146,6 +146,7 @@ const svc = new Service({
 
 const uninstall = process.argv.includes("--uninstall");
 const noOpen = process.argv.includes("--no-open");
+const fromInstaller = process.argv.includes("--from-installer");
 
 svc.on("install", () => {
   svc.start();
