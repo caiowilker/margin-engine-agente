@@ -1,26 +1,26 @@
 {
   "versao": "1.0.0",
-  "geradoEm": "2026-07-01T20:08:05.121Z",
+  "geradoEm": "2026-07-02T01:38:56.893Z",
   "arquivos": [
     {
       "arquivo": "index.js",
-      "sha256": "0fc029ae82676ef436a980adee297ec45b501627112b1d5482cbaf512b057560"
+      "sha256": "06d60ed485cae3dfb98844ca1775b78db675026294922ae8c2d112141a263c43"
     },
     {
       "arquivo": "acbr.js",
-      "sha256": "bcf925d1462c4f00b40c5d297a94911c558df9329d55cabc0aed32715d440d0d"
+      "sha256": "23fb1a65d48ee5b34f683e5c4226a444b982f74678842e83fa84f2c36a6887f9"
     },
     {
       "arquivo": "fila.js",
-      "sha256": "02cc3002ded2b4729366db8b5d59becc167fb7de3ad160b1927e8ce5f8e62401"
+      "sha256": "44c9a479ce3dd6e8be83a3fff9686f741a907c4f9637ead8bc3dc83840e86119"
     },
     {
       "arquivo": "filaFiscal.js",
-      "sha256": "797fa096329107776494f9bad07d39bf5aad5c609e1ad9eed1a00892f3c01507"
+      "sha256": "ac62a20a013faadc918c060ee1da7b66c63bcb1d54e8b200cba795d3f415b8c7"
     },
     {
       "arquivo": "fiscalService.js",
-      "sha256": "0bb38e1b1756548b6cac0127c06c13189bcc7613234e71f903c47e5ac39d6465"
+      "sha256": "d0639a7e7afcbd18f6cbd716e01e18e32bea358d93116e40043e8d1120e716d3"
     },
     {
       "arquivo": "fiscalMetrics.js",
@@ -44,7 +44,7 @@
     },
     {
       "arquivo": "fiscalStorage.js",
-      "sha256": "5231f90dc69287900b9c63f1db9fa7c4d5cb8b6cca06f7a79383b83082d9f61e"
+      "sha256": "c953d539056db6a7a59175310057211d2efff87dce73e02f422ef297b620b5f1"
     },
     {
       "arquivo": "auditLog.js",
@@ -52,7 +52,7 @@
     },
     {
       "arquivo": "fiscalRetry.js",
-      "sha256": "3de6fca84b1c623427c446708c86d2e845f6b7cbf98538cbed173e27d7aa0592"
+      "sha256": "a2569d79bb546a57422a18c025f3faf9cf324ef3b4d964908ed3af7e834f9549"
     },
     {
       "arquivo": "fiscalPreflight.js",
@@ -68,15 +68,15 @@
     },
     {
       "arquivo": "documentosFiscais.js",
-      "sha256": "26de811511744b6d66485b8e5976adc1fd85b6748a8d6cd363ccae5359c021f9"
+      "sha256": "70f57e4ee21a04ae2beb9fa16b350622296724c05aee3b18a47c7b4e77773029"
     },
     {
       "arquivo": "reconciliacaoFiscal.js",
-      "sha256": "ac5785a1f771086c7347a4a48af8e7535ac8072963a156e5ab48b417ae50e198"
+      "sha256": "c7e09882764df2e2ca7370c82e9a97c1fb9eef9d90eba692ec8f51fde41212c9"
     },
     {
       "arquivo": "watchdog.js",
-      "sha256": "cb45de460108e1f0085218dfaf42b38c1d667075f32b3d780711654d4deed180"
+      "sha256": "0aaae92f4a2f7f56a149cd588fd3dfa720d33f930c92b33e1f6ee0f009be0370"
     },
     {
       "arquivo": "impressora.js",
@@ -96,15 +96,15 @@
     },
     {
       "arquivo": "acbrNfceSetup.js",
-      "sha256": "2cd15fa2f6b04e42ef78b3134db8d8e562f4668213f79e9f8a40647bc8c96186"
+      "sha256": "0fae406ba636bbe1299262502fd19baa48ef10417bb0e0e9b83889c5f0f7da65"
     },
     {
       "arquivo": "manifestUpdater.js",
-      "sha256": "b755abf5bd1a83623977812fc020230fc5ec882131ba80e192c531184eeb4151"
+      "sha256": "9234cb82631e6871fe445db49e9b1fb2a4fff1bd0373bb27175f02da6c2eb914"
     },
     {
       "arquivo": "fiscalAlertas.js",
-      "sha256": "fc6db0f9650901f3ab7a6c22f86dda7881321be7d102c00f7f6a4da8df369193"
+      "sha256": "20bf5972dd798a5cc4e170b7a1b91c7c2c555bac3244d23a365eabdb8927bea7"
     },
     {
       "arquivo": "fiscalRelatorio.js",

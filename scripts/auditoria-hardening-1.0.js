@@ -12,6 +12,13 @@ const agentUrl = process.env.AGENTE_URL || "http://127.0.0.1:9100";
 
 const steps = [
   {
+    id: "T00",
+    nome: "Alinhamento de versão release (1.0.0)",
+    cmd: "node scripts/check-release-alignment.js",
+    cwd: appDir,
+    required: true,
+  },
+  {
     id: "T01",
     nome: "Testes unitários agente (npm test)",
     cmd: "npm test",

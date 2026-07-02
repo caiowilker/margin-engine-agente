@@ -6,14 +6,30 @@ e ao modo de contingência EPEC automático.
 
 ---
 
-## Instalação (Windows — recomendado)
+## Instalação (Windows — produção)
 
-**Basta executar o `setup.bat` como Administrador.**
+**Execute `Margin-Engine-Setup-1.0.0.exe` como Administrador** (instalação, atualização ou reparo).
+
+Fluxo de build do instalador: `build/windows/LEIA-ME.md` e `docs/INSTALADOR-WINDOWS.md`.
+
+O instalador enterprise:
+- Copia o agente, ACBrLib, schemas XSD, PDV offline (`frontend-dist`) e Node portátil
+- Executa bootstrap (`npm ci`, `rebuild better-sqlite3`, manifest, serviço Windows)
+- Preserva dados em `%ProgramData%\MarginEngine` em atualizações
+- Bloqueia downgrade de versão
+
+Após instalar, acesse `http://localhost:9100`, ative o terminal e configure fiscal/impressora no painel.
+
+---
+
+## Instalação rápida (desenvolvimento — legado)
+
+**`setup.bat` como Administrador** — apenas para dev/ambientes sem Inno Setup.
 
 > Se aparecer erro `'cho' não é reconhecido` ou `'PDV' não é reconhecido`, o arquivo
 > estava com codificação errada. Use o `setup.bat` atual (ele chama o `setup.ps1`).
 
-O instalador:
+O setup legado:
 - Detecta se o Node.js 18+ está instalado
 - Se não estiver → instala automaticamente via `winget` ou baixando o `.msi`
 - Roda `npm install` automaticamente

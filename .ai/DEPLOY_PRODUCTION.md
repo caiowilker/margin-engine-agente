@@ -1,7 +1,8 @@
-# Deploy Produção — Agente Local v5.4
+# Deploy Produção — Agente Local v1.0.0
 
 ## Checklist
 
+0. `npm run check:release-alignment` — versão alinhada agente ↔ backend ↔ instalador
 1. Preferir **`Margin-Engine-Setup-1.0.0.exe /MODE=update`** (preserva `%ProgramData%\MarginEngine`)
 2. Alternativa manual: copiar arquivos listados em `manifest.json` para `%ProgramFiles%\Margin Engine\app\`
 3. Copiar `manifest.json`

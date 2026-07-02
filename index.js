@@ -91,7 +91,7 @@ const AGENT_PUBLIC_BASE = (
   process.env.AGENT_PUBLIC_HOST || `http://127.0.0.1:${PORT}`
 ).replace(/\/$/, "");
 
-// ── Versão atual do agente (fonte: package.json — alinhada ao sync-from-agente.sh) ──
+// ── Versão atual do agente (fonte: package.json — alinhada ao instalador 1.0.0) ──
 const { version: VERSAO_ATUAL } = require("./package.json");
 
 // ── Config persistida ─────────────────────────────────────────────────────────

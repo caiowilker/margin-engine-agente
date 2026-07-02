@@ -15,6 +15,9 @@ mkdir -p "$BUILD_ROOT/dist/app" "$BUILD_ROOT/output"
 
 echo "==> Build root: $BUILD_ROOT"
 
+echo "==> Verificando alinhamento de versão release..."
+node "$AGENT_ROOT/scripts/check-release-alignment.js"
+
 echo "==> Gerando manifest.json (SHA-256)..."
 (cd "$AGENT_ROOT" && npm run manifest)
 

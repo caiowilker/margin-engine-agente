@@ -17,7 +17,8 @@
 | Fila fiscal + callback | 🟢 Produção |
 | Impressão (PrintJobService + hardening F13) | 🟢 Pipeline único certificado |
 | Contingência EPEC | 🟢 Automática F14/F16 |
-| Instalador Windows | 🟢 Stop/start + anti-downgrade |
+| Instalador Windows | 🟢 Stop/start + anti-downgrade + `check:release-alignment` |
+| Build Windows | 🟢 Pipeline documentado em `build/windows/LEIA-ME.md` |
 | Recovery SQLite degradado | 🟢 F15 |
 | Testes automatizados | 🟢 `npm test` verde |
 

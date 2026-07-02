@@ -40,7 +40,7 @@ Script: `scripts/installer-bootstrap.js`
 4. Valida dependências (Node, SQLite, manifest)
 5. `npm ci`, `rebuild better-sqlite3`, `manifest`, `predeploy`
 6. Regra de firewall na porta do agente (instalação/atualização)
-7. Registra serviço Windows (se marcado)
+7. Registra serviço Windows automaticamente
 8. Gera diagnóstico inicial em `Diagnostics/install-last-report.txt`
 
 ## Diagnóstico
@@ -55,6 +55,8 @@ Códigos de problema: `ME-001` … `ME-013` com mensagem e solução em linguage
 
 ```bash
 cd agente-local
+npm run check:release-alignment
+npm run auditoria:hardening
 npm run sync:windows-build    # WSL
 # ou .\scripts\sync-windows-build.ps1 no Windows
 

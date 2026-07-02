@@ -18,6 +18,10 @@ $WinScripts = Join-Path $AgentRoot "build\windows"
 New-Item -ItemType Directory -Force -Path $BuildRoot, $AppDest, (Join-Path $BuildRoot "output") | Out-Null
 
 Write-Host "==> Build root: $BuildRoot"
+Write-Host "==> Verificando alinhamento de versão release..."
+node (Join-Path $AgentRoot "scripts\check-release-alignment.js")
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 Write-Host "==> Gerando manifest.json..."
 Push-Location $AgentRoot
 & npm run manifest

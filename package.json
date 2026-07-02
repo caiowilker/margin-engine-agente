@@ -37,6 +37,7 @@
     "homolog:agente:live": "node scripts/homologacao-agente-1.0.js --live",
     "auditoria:hardening": "node scripts/auditoria-hardening-1.0.js",
     "auditoria:hardening:live": "node scripts/auditoria-hardening-1.0.js --live",
+    "check:release-alignment": "node scripts/check-release-alignment.js",
     "build:icon": "node scripts/build-installer-icon.js",
     "sync:installer-version": "node scripts/sync-installer-version.js",
     "homolog:acbrlib": "bash scripts/run-homolog-acbrlib-producao.sh"

@@ -27,7 +27,15 @@ C:\build\pdv-agente\
 
 ## Fluxo completo (recomendado)
 
-### 1. Sincronizar do repositório
+### 1. Pré-requisitos (repo)
+
+```bash
+cd agente-local
+npm run check:release-alignment
+npm run auditoria:hardening
+```
+
+### 2. Sincronizar do repositório
 
 **WSL** (na pasta `agente-local`):
 
@@ -49,27 +57,27 @@ Isso:
 - Copia `.iss` e scripts desta pasta
 - **Falha** se faltar XSDs ou DLLs críticas
 
-### 2. Node portátil (só na 1ª vez)
+### 3. Node portátil (só na 1ª vez)
 
 Se `dist\node\node.exe` não existir:
 
 - Extraia Node x64 LTS em `dist\node\`, ou
 - Use o `node.zip` já na pasta do build
 
-### 3. Validar
+### 4. Validar
 
 ```powershell
 cd C:\build\pdv-agente
 .\validate-build.ps1
 ```
 
-### 4. Preparar dependências nativas
+### 5. Preparar dependências nativas
 
 ```powershell
 .\prepare-build.ps1
 ```
 
-### 5. Gerar o instalador
+### 6. Gerar o instalador
 
 ```powershell
 .\prepare-build.ps1 -Compile
@@ -104,11 +112,12 @@ Preserva: `.env`, `data\`, `acbrlib.ini`, `node_modules` da instalação.
 | ACBrLib NFe + schemas XSD | Sim |
 | ACBr PosPrinter | Sim |
 | PDV offline (frontend-dist) | Sim |
-| Impressora | Auto-detect (porta vazia no wizard) |
-| Certificado / CSC | Só se marcar emissão fiscal no wizard |
+| Impressora | Auto-detect (configuração no painel :9100) |
+| Certificado / CSC | Painel do agente após instalação (não no wizard) |
 
 ## Checklist antes de distribuir
 
+- [ ] `npm run check:release-alignment`
 - [ ] `npm run auditoria:hardening` (repo)
 - [ ] `validate-build.ps1` sem falhas
 - [ ] `prepare-build.ps1 -Compile` — instalador gerado
