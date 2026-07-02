@@ -146,6 +146,56 @@ begin
     'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#MyAppId}_is1');
 end;
 
+{ CompareVersion não é built-in no Pascal Script — retorna -1/0/1 como ComparePackedVersion }
+function ExtractVersionPart(const S: String; PartIndex: Integer): Integer;
+var
+  I, DotCount: Integer;
+  Part: String;
+begin
+  I := 1;
+  DotCount := 0;
+  while I <= Length(S) do
+  begin
+    if (DotCount = PartIndex - 1) and (S[I] >= '0') and (S[I] <= '9') then
+      Break;
+    if S[I] = '.' then
+      Inc(DotCount);
+    Inc(I);
+  end;
+  Part := '';
+  while (I <= Length(S)) and (S[I] >= '0') and (S[I] <= '9') do
+  begin
+    Part := Part + S[I];
+    Inc(I);
+  end;
+  if Part = '' then
+    Result := 0
+  else
+    Result := StrToIntDef(Part, 0);
+end;
+
+function CompareVersion(const Version1, Version2: String): Integer;
+var
+  I, N1, N2: Integer;
+begin
+  for I := 1 to 4 do
+  begin
+    N1 := ExtractVersionPart(Version1, I);
+    N2 := ExtractVersionPart(Version2, I);
+    if N1 < N2 then
+    begin
+      Result := -1;
+      Exit;
+    end;
+    if N1 > N2 then
+    begin
+      Result := 1;
+      Exit;
+    end;
+  end;
+  Result := 0;
+end;
+
 function GetInstalledVersion: String;
 begin
   Result := '';
