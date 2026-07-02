@@ -86,6 +86,11 @@ if (-not $SkipNpm) {
         Write-Warning "predeploy reportou avisos - revise antes de distribuir o .exe"
     }
     Pop-Location
+} else {
+    $sqlite = Join-Path $App "node_modules\better-sqlite3\build\Release\better_sqlite3.node"
+    if (-not (Test-Path $sqlite)) {
+        Write-Error "node_modules nativo ausente — execute prepare-build.ps1 sem -SkipNpm antes de compilar"
+    }
 }
 
 $inno = @(

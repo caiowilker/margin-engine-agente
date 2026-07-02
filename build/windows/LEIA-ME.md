@@ -112,6 +112,7 @@ Preserva: `.env`, `data\`, `acbrlib.ini`, `node_modules` da instalação.
 | ACBrLib NFe + schemas XSD | Sim |
 | ACBr PosPrinter | Sim |
 | PDV offline (frontend-dist) | Sim |
+| node_modules (npm ci no build) | Sim — obrigatório em prepare-build.ps1 |
 | Impressora | Auto-detect (configuração no painel :9100) |
 | Certificado / CSC | Painel do agente após instalação (não no wizard) |
 

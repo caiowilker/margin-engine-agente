@@ -153,23 +153,27 @@ svc.on("install", () => {
   console.log(`  PDV disponível em: ${AGENT_PUBLIC_BASE}`);
   console.log("  Acesse para ativar o terminal de caixa.\n");
 
-  if (!noOpen) {
-    setTimeout(() => {
-      const url = AGENT_PUBLIC_BASE;
-      const cmd =
-        process.platform === "win32"
-          ? `start ${url}`
-          : process.platform === "darwin"
-            ? `open ${url}`
-            : `xdg-open ${url}`;
-      exec(cmd);
-    }, 2000);
+  if (noOpen) {
+    finishInstall(0);
+    return;
   }
+
+  setTimeout(() => {
+    const url = AGENT_PUBLIC_BASE;
+    const cmd =
+      process.platform === "win32"
+        ? `start ${url}`
+        : process.platform === "darwin"
+          ? `open ${url}`
+          : `xdg-open ${url}`;
+    exec(cmd);
+  }, 2000);
 });
 
 svc.on("alreadyinstalled", () => {
   console.log("\n⚠  Serviço já instalado. Reiniciando...");
   svc.start();
+  if (noOpen) finishInstall(0);
 });
 
 svc.on("uninstall", () => {
@@ -186,13 +190,26 @@ svc.on("stop", () => {
 
 svc.on("error", (e) => {
   console.error("✗ Erro no serviço:", e);
+  if (noOpen) finishInstall(1);
 });
 
 // ── Executar ──────────────────────────────────────────────────────────────────
+const INSTALL_TIMEOUT_MS = 120000;
+
+function finishInstall(code) {
+  setTimeout(() => process.exit(code), 300);
+}
+
 if (uninstall) {
   console.log("\nRemovendo serviço Margin Engine...");
   svc.uninstall();
 } else {
   console.log("\nInstalando serviço Margin Engine...");
+  if (noOpen) {
+    setTimeout(() => {
+      console.error("✗ Timeout ao instalar o serviço Windows (120s)");
+      process.exit(1);
+    }, INSTALL_TIMEOUT_MS);
+  }
   svc.install();
 }

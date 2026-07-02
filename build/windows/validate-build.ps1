@@ -16,6 +16,7 @@ $checks = @(
     @{ Path = "dist\app\acbrlib\data\Schemas"; Hint = "Pasta Schemas" },
     @{ Path = "dist\app\frontend-dist\index.html"; Hint = "PDV offline" },
     @{ Path = "dist\app\frontend-dist\api-backend.json"; Hint = "api-backend.json" },
+    @{ Path = "dist\app\node_modules\better-sqlite3\build\Release\better_sqlite3.node"; Hint = "better-sqlite3 nativo (rode prepare-build.ps1 sem -SkipNpm)" },
     @{ Path = "dist\app\assets\margin-engine.ico"; Hint = "Icone instalador" },
     @{ Path = "sign-installer.ps1"; Hint = "Assinatura opcional" },
     @{ Path = "pdv-agente-installer.iss"; Hint = "Script Inno Setup" },

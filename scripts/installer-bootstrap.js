@@ -8,6 +8,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 const { execSync } = require("child_process");
 
 const appDir = path.resolve(process.argv[2] || path.join(__dirname, ".."));
@@ -36,12 +37,56 @@ const log = initLogging({ patchConsole: false }).createLogger({
 
 function run(cmd, opts = {}) {
   log.info({ acao: "exec", comando: cmd }, "Executando comando");
-  execSync(cmd, {
-    cwd: appDir,
-    stdio: opts.inherit ? "inherit" : "pipe",
-    encoding: "utf8",
-    ...opts,
-  });
+  try {
+    execSync(cmd, {
+      cwd: appDir,
+      stdio: opts.inherit ? "inherit" : "pipe",
+      encoding: "utf8",
+      ...opts,
+    });
+  } catch (err) {
+    const detail = String(err.stderr || err.stdout || err.message || err);
+    throw new Error(`Comando falhou: ${cmd}\n${detail.slice(0, 2000)}`);
+  }
+}
+
+function writeBootstrapFailure(err) {
+  const text = [
+    new Date().toISOString(),
+    "Margin Engine — falha no bootstrap do instalador",
+    "",
+    String(err?.stack || err?.message || err),
+  ].join("\n");
+  const targets = [];
+  try {
+    const { getDirectoryManager } = require(path.join(appDir, "runtime", "directoryManager"));
+    const dm = getDirectoryManager();
+    dm.ensureAll();
+    targets.push(path.join(dm.PATHS.diagnostics, "install-bootstrap-error.txt"));
+  } catch {
+    /* ignore */
+  }
+  targets.push(path.join(os.tmpdir(), "margin-install-bootstrap-error.txt"));
+  for (const fp of targets) {
+    try {
+      fs.mkdirSync(path.dirname(fp), { recursive: true });
+      fs.writeFileSync(fp, text, "utf8");
+      break;
+    } catch {
+      /* try next */
+    }
+  }
+}
+
+function nativeDepsReady() {
+  const base = path.join(appDir, "node_modules");
+  if (!fs.existsSync(base)) return false;
+  const required = ["better-sqlite3", "node-windows", "express"];
+  for (const name of required) {
+    if (!fs.existsSync(path.join(base, name, "package.json"))) return false;
+  }
+  const sqliteBinding = path.join(base, "better-sqlite3", "build", "Release", "better_sqlite3.node");
+  return fs.existsSync(sqliteBinding);
 }
 
 function writeDefaultConfigs() {
@@ -152,7 +197,12 @@ function validateDependencies() {
 
 function npmInstallIfNeeded() {
   if (mode === "repair") return;
+  if (nativeDepsReady()) {
+    log.info({ acao: "skip_npm_ci" }, "Dependências nativas já empacotadas no instalador");
+    return;
+  }
   const npm = process.env.MARGIN_NPM || "npm";
+  log.info({ acao: "npm_ci" }, "Instalando dependências (primeira execução ou pacote sem node_modules)");
   run(`"${npm}" ci --omit=dev`, { inherit: true });
   run(`"${npm}" rebuild better-sqlite3`, { inherit: true });
 }
@@ -187,6 +237,10 @@ function backupPreUpdate() {
 }
 
 function npmRepairSteps() {
+  if (nativeDepsReady()) {
+    log.info({ acao: "skip_npm_repair" }, "node_modules presente — reparo sem npm ci");
+    return;
+  }
   const npm = process.env.MARGIN_NPM || "npm";
   run(`"${npm}" ci --omit=dev`, { inherit: true });
   run(`"${npm}" rebuild better-sqlite3`, { inherit: true });
@@ -355,6 +409,11 @@ async function main() {
 }
 
 main().catch((err) => {
-  log.fatal({ err, acao: "bootstrap_fail" }, err.message);
+  writeBootstrapFailure(err);
+  try {
+    log.fatal({ err, acao: "bootstrap_fail" }, err.message);
+  } catch {
+    /* logging pode falhar antes de diretórios */
+  }
   process.exit(1);
 });
