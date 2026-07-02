@@ -332,7 +332,7 @@ function registerService() {
 function waitForOnline() {
   if (!withService) return { ok: false, skipped: true };
   try {
-    run(`node "${path.join(appDir, "scripts", "installer-wait-online.js")}" "${appDir}"`, {
+    run(`node "${path.join(appDir, "scripts", "installer-wait-online.js")}" "${appDir}" --timeout=120000`, {
       inherit: true,
     });
     return { ok: true };
@@ -408,6 +408,14 @@ async function main() {
   }
 
   validateDependencies();
+  if (process.platform === "win32" && mode === "install") {
+    try {
+      const ctl = require(path.join(appDir, "scripts", "installer-service-control"));
+      ctl.removeLegacyServices(appDir);
+    } catch {
+      /* ignore */
+    }
+  }
   const dm = ensureDirectories();
   ensureEnv();
   ensureWindowsPermissions(dm);
@@ -429,6 +437,14 @@ async function main() {
   }
 
   const serviceResult = registerService();
+  if (serviceResult.ok) {
+    try {
+      const ctl = require(path.join(appDir, "scripts", "installer-service-control"));
+      ctl.startService();
+    } catch {
+      /* ignore */
+    }
+  }
   if (needsServiceCycle) {
     startAgentService();
   }

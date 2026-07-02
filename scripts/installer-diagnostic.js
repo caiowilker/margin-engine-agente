@@ -250,7 +250,7 @@ async function runDiagnostic() {
       "warning",
       "ME-012",
       `O agente Margin Engine não está respondendo na porta ${PORT}.`,
-      "Verifique se o serviço Windows está iniciado ou execute modo Reparar.",
+      "Inicie o serviço Windows «Margin Engine» (SCM: marginengine.exe). Legado: pdvmarginengine.exe. Ou execute Reparar no instalador.",
     );
   }
 

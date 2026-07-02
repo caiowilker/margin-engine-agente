@@ -24,6 +24,14 @@ const path = require("path");
 const fs = require("fs");
 const { execSync, exec } = require("child_process");
 
+const uninstall = process.argv.includes("--uninstall");
+const noOpen = process.argv.includes("--no-open");
+const fromInstaller = process.argv.includes("--from-installer");
+
+// Node portátil do instalador (..\node\node.exe) — obrigatório para o serviço Windows
+const bundledNode = path.resolve(__dirname, "..", "node", "node.exe");
+const serviceNode = fs.existsSync(bundledNode) ? bundledNode : process.execPath;
+
 // ── Banner ────────────────────────────────────────────────────────────────────
 console.log("\n╔══════════════════════════════════════════════╗");
 console.log("║   Margin Engine — Serviço do agente local    ║");
@@ -128,6 +136,7 @@ const svc = new Service({
   description:
     "Agente local do Margin Engine — impressão, fila offline e serviços do PDV.",
   script: path.join(__dirname, "index.js"),
+  execPath: serviceNode,
   nodeOptions: [],
   env: [
     { name: "NODE_ENV", value: "production" },
@@ -144,9 +153,7 @@ const svc = new Service({
   abortOnError: false,
 });
 
-const uninstall = process.argv.includes("--uninstall");
-const noOpen = process.argv.includes("--no-open");
-const fromInstaller = process.argv.includes("--from-installer");
+const { removeLegacyServices } = require("./scripts/installer-service-control");
 
 svc.on("install", () => {
   svc.start();
@@ -206,6 +213,8 @@ if (uninstall) {
   svc.uninstall();
 } else {
   console.log("\nInstalando serviço Margin Engine...");
+  console.log(`  Node do serviço: ${serviceNode}`);
+  removeLegacyServices(__dirname);
   if (noOpen) {
     setTimeout(() => {
       console.error("✗ Timeout ao instalar o serviço Windows (120s)");
