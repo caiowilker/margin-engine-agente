@@ -115,8 +115,28 @@ AMBIENTE_SEFAZ=homologacao
     fs.utimesSync(ENV, envMaisRecente / 1000, envMaisRecente / 1000);
     const reconciliado = fiscalLocalConfig.reconciliarEmissaoComEnv();
     assert.strictEqual(reconciliado, true);
-    assert.strictEqual(authority.obterStatus().ativo, false);
+    assert.strictEqual(authority.obterStatus().ativo, true);
+    assert.strictEqual(authority.obterStatus().localEmissaoFiscal, true);
     assert.strictEqual(process.env.EMISSAO_FISCAL, "true");
+  });
+
+  await test("reconciliarEmissaoComEnv alinha .env=true mesmo sem mtime mais recente", () => {
+    const authority = require("../fiscalConfigAuthority");
+    authority.resetAutoridadeLocal();
+    authority.marcarAutoridadeLocal(false);
+
+    fs.writeFileSync(
+      ENV,
+      `EMISSAO_FISCAL=true
+ACBR_DRIVER=lib
+AMBIENTE_SEFAZ=homologacao
+`,
+      "utf8",
+    );
+    const reconciliado = fiscalLocalConfig.reconciliarEmissaoComEnv();
+    assert.strictEqual(reconciliado, true);
+    assert.strictEqual(authority.obterStatus().localEmissaoFiscal, true);
+    assert.strictEqual(fiscalLocalConfig.lerEmissaoFiscalRuntime(), true);
   });
 
   await test("sincronizarSegredosDoEnv migra senha e CSC do .env para INI/cofre", async () => {

@@ -193,18 +193,40 @@ function resolverCaminhoAbsoluto(arquivo, baseDir) {
   return path.resolve(baseDir || AGENT_ROOT, arquivo);
 }
 
-function lerEmissaoFiscalRuntime() {
+function lerEmissaoFiscalDoEnv() {
+  const { map } = lerEnvMap();
+  return (
+    String(map.EMISSAO_FISCAL || process.env.EMISSAO_FISCAL || "false").toLowerCase() ===
+    "true"
+  );
+}
+
+function aplicarEmissaoFiscalRuntime(valor) {
+  const ativo = !!valor;
+  try {
+    require("./acbr").setRuntimeEmissaoFiscal(ativo);
+  } catch (_) {
+    /* testes isolados */
+  }
   try {
     const fiscalDriver = require("./fiscalDriver");
-    if (typeof fiscalDriver.EMISSAO_FISCAL === "boolean") {
-      return fiscalDriver.EMISSAO_FISCAL;
+    if (typeof fiscalDriver.setRuntimeEmissaoFiscal === "function") {
+      fiscalDriver.setRuntimeEmissaoFiscal(ativo);
     }
   } catch (_) {
     /* testes isolados */
   }
-  return (
-    String(process.env.EMISSAO_FISCAL || "false").toLowerCase() === "true"
-  );
+  process.env.EMISSAO_FISCAL = ativo ? "true" : "false";
+}
+
+function lerEmissaoFiscalRuntime() {
+  reconciliarEmissaoComEnv();
+  try {
+    return require("./acbr").getRuntimeEmissaoFiscal();
+  } catch (_) {
+    /* testes isolados */
+  }
+  return lerEmissaoFiscalDoEnv();
 }
 
 function ler() {
@@ -400,14 +422,7 @@ async function salvar(updates) {
   }
 
   if (typeof updates.emissaoFiscal === "boolean") {
-    try {
-      const fiscalDriver = require("./fiscalDriver");
-      if (typeof fiscalDriver.setRuntimeEmissaoFiscal === "function") {
-        fiscalDriver.setRuntimeEmissaoFiscal(updates.emissaoFiscal);
-      }
-    } catch (_) {
-      /* fiscalDriver pode não estar carregado em testes */
-    }
+    aplicarEmissaoFiscalRuntime(updates.emissaoFiscal);
   }
 
   log.info(
@@ -440,15 +455,25 @@ function reconciliarEmissaoComEnv() {
   const { path: envPath, map } = lerEnvMap();
   if (!envPath || !fs.existsSync(envPath)) return null;
 
-  const envEmissao =
-    String(map.EMISSAO_FISCAL || process.env.EMISSAO_FISCAL || "false").toLowerCase() ===
-    "true";
+  const envEmissao = lerEmissaoFiscalDoEnv();
 
   try {
     const fiscalConfigAuthority = require("./fiscalConfigAuthority");
     const authority = fiscalConfigAuthority.obterStatus();
     if (!authority.ativo || authority.localEmissaoFiscal === envEmissao) {
       return null;
+    }
+
+    // Instalador ou edição manual no .env com EMISSAO_FISCAL=true prevalece sobre
+    // autoridade local=false (ex.: operador salvou certificado com checkbox desmarcado).
+    if (envEmissao && !authority.localEmissaoFiscal) {
+      log.info(
+        { envEmissao, authority: authority.localEmissaoFiscal },
+        "[FiscalLocalConfig] .env=true — realinhando autoridade local e runtime",
+      );
+      fiscalConfigAuthority.marcarAutoridadeLocal(true);
+      aplicarEmissaoFiscalRuntime(true);
+      return true;
     }
 
     const envMtime = fs.statSync(envPath).mtimeMs;
@@ -459,8 +484,8 @@ function reconciliarEmissaoComEnv() {
       { envEmissao, authority: authority.localEmissaoFiscal },
       "[FiscalLocalConfig] .env mais recente que autoridade local — priorizando EMISSAO_FISCAL do .env",
     );
-    fiscalConfigAuthority.resetAutoridadeLocal();
-    process.env.EMISSAO_FISCAL = envEmissao ? "true" : "false";
+    fiscalConfigAuthority.marcarAutoridadeLocal(envEmissao);
+    aplicarEmissaoFiscalRuntime(envEmissao);
     return envEmissao;
   } catch (_) {
     return null;
@@ -545,7 +570,9 @@ function sincronizarSegredosDoEnv() {
 
 module.exports = {
   ler,
+  lerEmissaoFiscalDoEnv,
   lerEmissaoFiscalRuntime,
+  aplicarEmissaoFiscalRuntime,
   salvar,
   aplicarAmbiente,
   reconciliarEmissaoComEnv,

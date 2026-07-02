@@ -1469,13 +1469,14 @@ function iniciarServidor() {
 
       let syncBackend = null;
       if (typeof req.body?.emissaoFiscal === "boolean") {
+        configSync.sincronizarEmissaoFiscalLocal();
         const fiscalConfigAuthority = require("./fiscalConfigAuthority");
         syncBackend = await fiscalConfigAuthority
           .propagarEmissaoAoBackend(lerConfig, req.body.emissaoFiscal)
           .catch((err) => ({ ok: false, reason: err.message }));
       }
 
-      res.json({ ok: true, config: saved, syncBackend });
+      res.json({ ok: true, config: fiscalLocalConfig.ler(), syncBackend });
     } catch (e) {
       res.status(400).json({ erro: e.message || "Erro ao salvar config fiscal" });
     }

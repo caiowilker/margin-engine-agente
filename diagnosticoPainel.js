@@ -508,11 +508,9 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
       ambienteSefaz: document.getElementById("cfgAmbiente").value,
       uf: document.getElementById("cfgUf").value,
       certificadoArquivo: document.getElementById("cfgCertPath").dataset.fullPath || document.getElementById("cfgCertPath").value,
-      nfceIdCsc: document.getElementById("cfgIdCsc").value
+      nfceIdCsc: document.getElementById("cfgIdCsc").value,
+      emissaoFiscal: document.getElementById("cfgEmissao").checked
     };
-    if (emissaoFiscalTouched) {
-      body.emissaoFiscal = document.getElementById("cfgEmissao").checked;
-    }
     var senha = document.getElementById("cfgCertSenha").value;
     var csc = document.getElementById("cfgCsc").value;
     if (senha) body.certificadoSenha = senha;

@@ -89,17 +89,17 @@ function sincronizarEmissaoFiscalLocal() {
   try {
     const fiscalLocalConfig = require("./fiscalLocalConfig");
     fiscalLocalConfig.reconciliarEmissaoComEnv();
+    const emissao = fiscalLocalConfig.lerEmissaoFiscalRuntime();
+    aplicarFiscalRuntime(emissao);
+    const authority = fiscalConfigAuthority.obterStatus();
+    estado.fonte = authority.ativo ? "agente_local" : "env";
+    return emissao;
   } catch (_) {
-    /* testes isolados */
+    const emissao = obterEnvFallbackFiscal();
+    aplicarFiscalRuntime(emissao);
+    estado.fonte = "env";
+    return emissao;
   }
-
-  const authority = fiscalConfigAuthority.obterStatus();
-  const emissao = authority.ativo
-    ? authority.localEmissaoFiscal
-    : obterEmissaoFiscalLocal();
-  aplicarFiscalRuntime(emissao);
-  estado.fonte = authority.ativo ? "agente_local" : "env";
-  return emissao;
 }
 
 function painelConfigurouFiscal(cfg) {
@@ -291,5 +291,6 @@ module.exports = {
   sincronizar,
   getStatus,
   aplicarConfigRemota,
+  sincronizarEmissaoFiscalLocal,
   POLL_INTERVAL_MS: () => pollIntervalMs,
 };
