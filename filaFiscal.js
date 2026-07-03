@@ -364,8 +364,15 @@ function obterMetricasFila() {
 function avaliarLimitesFilaFiscal() {
   try {
     const fiscalAlertas = require("./fiscalAlertas");
+    const metricas = obterMetricasFila();
     if (typeof fiscalAlertas.verificarFila === "function") {
-      fiscalAlertas.verificarFila("fila_fiscal", obterMetricasFila());
+      fiscalAlertas.verificarFila("fila_fiscal", metricas);
+    }
+    if (typeof fiscalAlertas.verificarFilaPendenteSustentada === "function") {
+      fiscalAlertas.verificarFilaPendenteSustentada("fila_fiscal", metricas);
+    }
+    if (typeof fiscalAlertas.verificarTaxaCStat999 === "function") {
+      fiscalAlertas.verificarTaxaCStat999();
     }
   } catch (_) {}
 }
@@ -411,6 +418,17 @@ function marcarJob(id, status, erro = null) {
     erro,
     id,
   );
+}
+
+/**
+ * Adia um job de volta para PENDENTE com nova proxima_tentativa.
+ * Usado pelo rate-limit por UF para devolver o job à fila sem contar tentativa.
+ */
+function adiarJob(id, proximaIso, motivo) {
+  init();
+  db.prepare(
+    `UPDATE fila_fiscal SET status = 'PENDENTE', proxima_tentativa = ?, erro = ? WHERE id = ?`,
+  ).run(proximaIso, motivo || null, id);
 }
 
 function marcar(id, status, erro = null) {
@@ -490,6 +508,25 @@ async function processarUm(opcoes = {}) {
     await handler(payload, job);
     db.prepare(`UPDATE fila_fiscal SET status = 'CONCLUIDO' WHERE id = ?`).run(job.id);
   } catch (err) {
+    // Rate-limit por UF: o job foi adiado pelo handler com adiarJob(); apenas libera o flag.
+    // Não conta tentativa, não registra erro permanente/temporário.
+    if (err.rateLimitUf) {
+      log.info(
+        {
+          modulo: "fila_fiscal",
+          tipo: job.tipo,
+          jobId: job.id,
+          uf: err.uf,
+          aguardarMs: err.aguardarMs,
+        },
+        "Job adiado por rate-limit de UF SEFAZ — sem penalidade de tentativa",
+      );
+      if (flag === "processandoFiscal") processandoFiscal = false;
+      else processandoPdf = false;
+      avaliarLimitesFilaFiscal();
+      return true;
+    }
+
     fiscalRetry.enriquecerErro(err);
     const msg = err.message || String(err);
     const tentativas = job.tentativas + 1;
@@ -1362,6 +1399,7 @@ module.exports = {
   resetProximoRetryRecovery,
   listarUltimasEmissoes,
   liberarJobsTravados,
+  adiarJob,
   close,
   estaProcessando,
   estaEmEmissao,

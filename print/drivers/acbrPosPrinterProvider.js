@@ -132,22 +132,14 @@ module.exports = {
         } catch (_) {}
       }
       if (getIntegrationMode() === "native") {
+        // Usa leitura de status (POS_LerStatusImpressoraFormatado) sem imprimir.
+        // Evita avançar papel e contender a sessão ACBr durante emissão fiscal.
         try {
-          await imprimirTags("</zera><ce>OK</ce></corte_parcial>\n");
-          return true;
-        } catch (err) {
-          log.warn({ err: err.message }, "[ACBrPosPrinter] Teste ACBr falhou — tentando spooler");
-          const local = require("../printerLocalConfig").ler();
-          const porta = String(local?.porta || process.env.PRINTER_PORTA || "");
-          if (/^RAW:/i.test(porta) || det?.impressora?.metodo === "windows") {
-            const okNative = await native.testar(force);
-            if (okNative) return true;
-          }
-          try {
-            const status = await runtime.lerStatusFormatadoNative(2);
-            if (status?.ok) return true;
-          } catch (_) {}
-          return false;
+          const status = await runtime.lerStatusFormatadoNative(2);
+          return status?.ok === true;
+        } catch (_) {
+          // Sessão não inicializada ainda (DLL não carregada) — usa detecção
+          return !!det?.impressora;
         }
       }
       return native.testar(force);

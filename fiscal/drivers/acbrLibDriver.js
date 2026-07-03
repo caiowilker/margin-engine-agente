@@ -23,6 +23,7 @@ const acbrLibSession = require("./acbrLibSession");
 const { validarPayloadNfe } = require("../../fiscalValidacaoNfe");
 const fiscalTrace = require("../../fiscalTraceLog");
 const fiscalEmissionLock = require("../fiscalEmissionLock");
+const fiscalDhEmiIni = require("../fiscalDhEmiIni");
 
 const AGENT_ROOT = path.resolve(__dirname, "../..");
 

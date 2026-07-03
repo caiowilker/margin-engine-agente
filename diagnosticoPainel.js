@@ -55,6 +55,12 @@ th{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.
 .chip-warn{background:#713f12;color:#fde68a}
 .chip-crit{background:#7f1d1d;color:#fecaca}
 .chip-muted{background:#334155;color:#cbd5e1}
+.cstat-warn{color:var(--warn);font-weight:700}
+.cstat-crit{color:var(--crit);font-weight:700}
+.alert-banner{padding:10px 12px;border-radius:8px;font-size:.82rem;margin-bottom:12px;border:1px solid var(--border)}
+.alert-banner.ok{background:#14532d33;color:#86efac}
+.alert-banner.warn{background:#713f1233;color:#fde68a}
+.alert-banner.crit{background:#7f1d1d55;color:#fecaca}
 .log-box{background:#0a0f18;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:Consolas,"Courier New",monospace;font-size:.72rem;line-height:1.45;max-height:520px;overflow:auto;white-space:pre-wrap;word-break:break-word;color:#c8d6e8}
 .msg{margin-top:10px;padding:10px 12px;border-radius:8px;font-size:.82rem;display:none}
 .msg.show{display:block}
@@ -98,6 +104,12 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
 
   <section id="panel-visao" class="panel active">
     <div class="grid" id="gridVisao"></div>
+    <div id="alertasOperacionais"></div>
+    <div class="card" id="cardMetricasCStat">
+      <h3>Emissões por cStat (SEFAZ)</h3>
+      <p class="sub" style="margin:0 0 10px">Contagem acumulada de retornos SEFAZ por código de status.</p>
+      <div style="overflow-x:auto"><table><thead><tr><th>cStat</th><th>Emissões</th><th>Descrição</th></tr></thead><tbody id="tblCStat"></tbody></table></div>
+    </div>
     <div class="card">
       <h3>Ações rápidas</h3>
       <div class="actions">
@@ -282,6 +294,59 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     return '<div class="card"><h3>'+title+'</h3><div class="metric">'+value+'</div>'+(sub?'<div class="metric-sub">'+sub+'</div>':'')+'</div>';
   }
 
+  var CSTAT_LABELS = {
+    "100": "Autorizada",
+    "104": "Lote processado (aguardando)",
+    "999": "Erro genérico SEFAZ",
+    "539": "Duplicidade de NF-e",
+    "656": "Consumo indevido (rate limit)"
+  };
+
+  function labelCStat(cs){
+    return CSTAT_LABELS[cs] || (cs === "unknown" ? "Desconhecido" : "Rejeição / outro");
+  }
+
+  function renderAlertasOperacionais(a, m){
+    var el = document.getElementById("alertasOperacionais");
+    if (!el) return;
+    var ao = (a && a.alertasOperacionais) || {};
+    var th = ao.thresholds || {};
+    var c999 = ao.cStat999 || {};
+    var filas = ao.filasSustentadas || {};
+    var fiscalSust = filas.fila_fiscal && filas.fila_fiscal.alertado;
+    var offlineSust = filas.vendas_offline && filas.vendas_offline.alertado;
+    var c999Ativo = c999.ativo || (c999.contagem >= (th.cStat999RateMax || 5));
+    var html = "";
+    if (fiscalSust || offlineSust || c999Ativo){
+      html += '<div class="alert-banner crit"><strong>Alertas ativos</strong><ul style="margin:6px 0 0 18px;padding:0">';
+      if (fiscalSust) html += "<li>Fila fiscal pendente acima do limite por tempo sustentado</li>";
+      if (offlineSust) html += "<li>Fila offline pendente acima do limite por tempo sustentado</li>";
+      if (c999Ativo) html += "<li>Taxa cStat 999 elevada: "+(c999.contagem||"?")+" em "+(c999.janelaMinutos||th.cStat999WindowMin||10)+" min (limite "+(th.cStat999RateMax||5)+")</li>";
+      html += "</ul></div>";
+    } else {
+      html += '<div class="alert-banner ok">Nenhum alerta operacional ativo · thresholds: fila &gt; '+(th.filaPendenteThreshold||10)+" por "+(th.filaPendenteIdadeMin||15)+" min · cStat 999 &gt; "+(th.cStat999RateMax||5)+" / "+(th.cStat999WindowMin||10)+" min</div>";
+    }
+    el.innerHTML = html;
+  }
+
+  function renderCStatTable(a, m){
+    var porCStat = {};
+    if (m && m.metricas && m.metricas.contadores && m.metricas.contadores.emissoesPorCStat) {
+      porCStat = m.metricas.contadores.emissoesPorCStat;
+    } else if (a && a.metricas && a.metricas.emissoesPorCStat) {
+      porCStat = a.metricas.emissoesPorCStat;
+    } else if (a && a.metricasFiscais && a.metricasFiscais.emissoesPorCStat) {
+      porCStat = a.metricasFiscais.emissoesPorCStat;
+    }
+    var entries = Object.keys(porCStat).map(function(k){ return { cStat: k, n: porCStat[k] }; });
+    entries.sort(function(x,y){ return y.n - x.n; });
+    var rows = entries.map(function(e){
+      var cls = e.cStat === "999" ? "cstat-crit" : (e.cStat === "100" ? "" : "cstat-warn");
+      return "<tr><td class='"+cls+"'>"+e.cStat+"</td><td><strong>"+e.n+"</strong></td><td>"+labelCStat(e.cStat)+"</td></tr>";
+    }).join("");
+    document.getElementById("tblCStat").innerHTML = rows || "<tr><td colspan='3'>Nenhuma emissão registrada ainda</td></tr>";
+  }
+
   document.getElementById("btnSaveToken").onclick = function(){
     sessionStorage.setItem(TOKEN_KEY, token());
     showMsg("msgVisao", "Token salvo nesta sessão.", "ok");
@@ -343,18 +408,26 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     var banco = ent.banco || {};
     var svc = ent.servico || {};
     var upd = ent.atualizador || {};
-    var logs = a.logsEnterprise || ent.logs || {};
+    var met = (m && m.metricas) || {};
+    var taxaSucesso = met.taxaSucesso != null ? met.taxaSucesso + "%" : ((a.metricas && a.metricas.taxaSucessoPercent != null) ? a.metricas.taxaSucessoPercent + "%" : "—");
+    var throughput = met.throughputPorHora != null ? met.throughputPorHora + "/h" : "—";
+    var c999 = (a.metricas && a.metricas.cStat999Janela) || (met.cStat999Janela) || {};
+    var c999Txt = c999.contagem != null ? c999.contagem + " em " + (c999.janelaMinutos || 10) + " min" : "—";
 
     document.getElementById("gridVisao").innerHTML =
       metricCard("Driver fiscal", fiscal.driver || "—", fiscal.emissaoFiscal ? "Emissão ativa" : "Modo não fiscal") +
       metricCard("Última autorização", fiscal.ultimaAutorizacao ? "OK" : "—", fiscal.ultimaAutorizacao || "") +
       metricCard("Tempo médio", fiscal.tempoMedioMs != null ? Math.round(fiscal.tempoMedioMs) + " ms" : "—") +
+      metricCard("Taxa sucesso", taxaSucesso, "throughput " + throughput) +
+      metricCard("cStat 999 (janela)", c999Txt, "erros genéricos SEFAZ") +
       metricCard("Impressora", imp.ok ? "Online" : "Verificar", imp.modelo || imp.porta || "") +
       metricCard("Banco", banco.ok ? "OK" : "Erro", banco.tamanho ? Math.round(banco.tamanho/1024) + " KB" : "") +
       metricCard("Serviço", svc.rodando ? ("PID " + svc.pid) : "—", svc.uptime || "") +
       metricCard("Atualizador", upd.versaoDisponivel ? ("v" + upd.versaoDisponivel) : "Atualizado", upd.canal || "stable") +
       metricCard("Fila pendente", (ent.fila && ent.fila.pendentes != null) ? ent.fila.pendentes : (a.pendentes ?? 0)) +
       metricCard("Incertos", (ent.fila && ent.fila.incertos != null) ? ent.fila.incertos : (a.incertos ?? 0), "recovery automático");
+    renderAlertasOperacionais(a, m);
+    renderCStatTable(a, m);
     var rows = (a.ultimasEmissoes || []).map(function(e){
       return "<tr><td>"+(e.numeroVenda||"-")+"</td><td>"+chip(e.status)+"</td><td>"+(e.timestamp||"-")+"</td><td style='font-family:monospace;font-size:.72rem'>"+(e.chaveTruncada||"-")+"</td></tr>";
     }).join("");

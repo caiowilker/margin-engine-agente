@@ -281,6 +281,9 @@ function avaliarLimitesFila(snapshot) {
     if (typeof fiscalAlertas.verificarFila === "function") {
       fiscalAlertas.verificarFila("vendas_offline", snapshot);
     }
+    if (typeof fiscalAlertas.verificarFilaPendenteSustentada === "function") {
+      fiscalAlertas.verificarFilaPendenteSustentada("vendas_offline", snapshot);
+    }
   } catch (_) {}
 }
 

@@ -10,10 +10,39 @@ async function submit(op, args, opts = {}) {
   return printJobService.submitPrint(op, args, opts);
 }
 
+// Cache de resultado de probe para evitar N conexões simultâneas em polls concorrentes.
+const _probeCache = { result: null, at: 0 };
+const PROBE_CACHE_TTL_MS = parseInt(process.env.PRINTER_PROBE_TTL_MS || "5000", 10);
+
+/**
+ * Testa conectividade da impressora.
+ *
+ * Fonte de verdade unificada: se houve impressão bem-sucedida recentemente
+ * (via printJobService — o mesmo serviço que efetivamente imprime), retorna
+ * ok sem disparar um probe independente.  Só executa o probe ao vivo quando
+ * não há registro recente de impressão, e mesmo assim limita a frequência com
+ * um cache de PROBE_CACHE_TTL_MS (padrão 5 s) para não disparar N conexões
+ * simultâneas quando múltiplos clientes fazem poll ao mesmo tempo.
+ */
 async function testar(force = false) {
-  const factoryMod = factory;
-  const p = factoryMod.getPrintProvider();
-  return p.testar(force);
+  if (!force && printJobService.impressaoRecenteOk()) {
+    _probeCache.result = true;
+    _probeCache.at = Date.now();
+    return true;
+  }
+  if (!force && _probeCache.result !== null && Date.now() - _probeCache.at < PROBE_CACHE_TTL_MS) {
+    return _probeCache.result;
+  }
+  const result = await factory.getPrintProvider().testar(force).catch(() => false);
+  _probeCache.result = result;
+  _probeCache.at = Date.now();
+  return result;
+}
+
+/** Invalida o cache de probe — chamado quando a config da impressora muda. */
+function invalidateProbeCache() {
+  _probeCache.result = null;
+  _probeCache.at = 0;
 }
 
 async function getInfo(force = false) {
@@ -82,6 +111,10 @@ module.exports = {
   getProviderName: () => factory.getProviderName(),
   getRequestedProviderName: () => factory.getRequestedProviderName(),
   getDriverInfo: () => factory.getDriverInfo(),
-  resetPrintProvider: () => factory.resetPrintProvider(),
+  resetPrintProvider: () => {
+    invalidateProbeCache();
+    factory.resetPrintProvider();
+  },
+  invalidateProbeCache,
   printJobService,
 };

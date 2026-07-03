@@ -176,18 +176,56 @@ Quando o backend cai durante o pagamento:
 
 ### O que o técnico vê no dashboard
 
-Acesse **http://localhost:9100/diagnostico/dashboard** no navegador do caixa. A página atualiza a cada 10 segundos.
+Acesse **http://localhost:9100/diagnostico/painel** no navegador do caixa (redireciona de `/diagnostico/dashboard`). A página atualiza a cada 12 segundos.
 
 | Indicador | Significado |
 |-----------|-------------|
 | **statusGeral: ok** | Tudo normal — nenhuma ação necessária |
 | **statusGeral: atencao** | Algo merece olhar (fila crescendo, disco baixo, incertos) |
 | **statusGeral: critico** | Emissor fiscal offline, disco cheio ou muitos jobs falhos — ação imediata |
+| **Emissões por cStat** | Contagem acumulada de retornos SEFAZ por código (`100` = autorizada, `999` = erro genérico) |
+| **cStat 999 (janela)** | Quantidade de erros genéricos SEFAZ na janela configurável (padrão: 10 min) |
+| **Alertas operacionais** | Banner verde = OK; vermelho = fila sustentada ou taxa 999 acima do limite |
 | **Emissor fiscal** | Conexão com módulo fiscal (ACBrLib ou monitor fallback). Offline = documentos na fila |
 | **fila fiscal** | Jobs pendentes de emissão. Zero ou poucos = normal |
 | **incertos** | Emissões com resultado desconhecido (timeout SEFAZ). Recovery tenta resolver |
 | **manifestOk** | Integridade dos arquivos do agente |
 | **espacoDisco** | Espaço livre para XML/PDF. **critico** = risco de parar emissão |
+
+### Alertas automáticos (thresholds padrão)
+
+O agente registra alertas de **nível crítico** nos logs e envia **webhook** (se `WEBHOOK_ALERTAS_URL` estiver configurado) nos cenários abaixo.
+
+| Variável | Padrão | Descrição |
+|----------|--------|-----------|
+| `FILA_PENDENTE_ALERTA_THRESHOLD` | `10` | Quantidade mínima de itens pendentes para monitorar idade da fila |
+| `FILA_PENDENTE_IDADE_MIN` | `15` | Minutos com fila acima do threshold antes de disparar alerta |
+| `CSTAT_999_RATE_WINDOW_MIN` | `10` | Janela (minutos) para contar ocorrências de cStat 999 |
+| `CSTAT_999_RATE_MAX` | `5` | Máximo de cStat 999 na janela antes de alertar |
+| `ALERTA_MONITOR_INTERVAL_MS` | `60000` | Intervalo do monitor periódico (ms) |
+| `WEBHOOK_ALERTAS_URL` | *(vazio)* | URL POST JSON (Slack, Teams, n8n, etc.) |
+| `FISCAL_QUEUE_WARN_MAX` | `100` | Aviso imediato ao cruzar tamanho da fila fiscal |
+| `FISCAL_QUEUE_CRITICAL_MAX` | `300` | Crítico imediato ao cruzar tamanho da fila fiscal |
+
+**Como configurar**
+
+1. **Painel ERP** — grupo *alertas* em Configurações do Agente (sincroniza com o agente).
+2. **Arquivo `.env`** na pasta do agente — defina as variáveis acima e reinicie o serviço.
+3. **Webhook** — configure `WEBHOOK_ALERTAS_URL`; tipos enviados: `FILA_PENDENTE_SUSTENTADA`, `CSTAT_999_ELEVADO`, `FILA_CRESCENDO`, entre outros.
+
+Payload do webhook (exemplo):
+
+```json
+{
+  "tipo": "CSTAT_999_ELEVADO",
+  "mensagem": "Taxa cStat 999 elevada: 6 ocorrência(s) em 10 min (limite 5)",
+  "dados": { "cStat": "999", "contagem": 6, "janelaMinutos": 10, "limite": 5 },
+  "agente": "http://127.0.0.1:9100",
+  "timestamp": "2026-07-03T12:00:00.000Z"
+}
+```
+
+API JSON complementar: `GET /diagnostico/alertas` (localhost ou token) expõe `metricas.emissoesPorCStat` e `alertasOperacionais`.
 
 ### Quando ligar para o suporte vs. resolver sozinho
 

@@ -7,11 +7,23 @@ const ALERTA_INCERTOS_MAX = parseInt(process.env.ALERTA_INCERTOS_MAX || "5", 10)
 const RELATORIO_WEBHOOK_URL = process.env.RELATORIO_WEBHOOK_URL || "";
 const RELATORIO_HORARIO = process.env.RELATORIO_HORARIO || "23:59";
 
+const FILA_PENDENTE_ALERTA_THRESHOLD = parseInt(
+  process.env.FILA_PENDENTE_ALERTA_THRESHOLD || "10",
+  10,
+);
+const FILA_PENDENTE_IDADE_MIN = parseInt(process.env.FILA_PENDENTE_IDADE_MIN || "15", 10);
+const CSTAT_999_RATE_WINDOW_MIN = parseInt(process.env.CSTAT_999_RATE_WINDOW_MIN || "10", 10);
+const CSTAT_999_RATE_MAX = parseInt(process.env.CSTAT_999_RATE_MAX || "5", 10);
+const ALERTA_MONITOR_INTERVAL_MS = parseInt(process.env.ALERTA_MONITOR_INTERVAL_MS || "60000", 10);
+
 let ultimoAcbrStatus = null;
 let ultimoDiscoCritico = false;
 let alertasDispatchados = 0;
 let relatorioTimer = null;
+let monitorTimer = null;
 const estadoFilas = new Map();
+const estadoFilaSustentada = new Map();
+let estadoCStat999 = { alertado: false };
 
 function agenteUrl() {
   const port = process.env.AGENT_PORT || process.env.PORT || "9100";
@@ -64,6 +76,13 @@ async function enviarWebhook(tipo, mensagem, dados = {}) {
       }
     }
   });
+}
+
+function logCritico(tipo, mensagem, dados = {}) {
+  log.fatal({ tipo, ...dados }, mensagem);
+  try {
+    auditLog.registrar("ALERTA_CRITICO", { tipo, mensagem, ...dados });
+  } catch (_) {}
 }
 
 async function enviarRelatorioWebhook(relatorio) {
@@ -187,6 +206,131 @@ function verificarFila(nome, snapshot) {
   } catch (_) {}
 }
 
+function quantidadePendente(snapshot) {
+  if (!snapshot) return 0;
+  if (snapshot.pendentes != null && snapshot.total != null && snapshot.pendentes !== snapshot.total) {
+    return Number(snapshot.pendentes);
+  }
+  return Number(snapshot.pendentes ?? snapshot.total ?? 0);
+}
+
+function verificarFilaPendenteSustentada(nome, snapshot) {
+  if (!nome || !snapshot) return;
+  const qtd = quantidadePendente(snapshot);
+  const idade = Number(snapshot.oldestAgeMinutes ?? 0);
+  const condicao =
+    qtd > FILA_PENDENTE_ALERTA_THRESHOLD &&
+    idade >= FILA_PENDENTE_IDADE_MIN;
+  const anterior = estadoFilaSustentada.get(nome) || { alertado: false };
+
+  if (condicao) {
+    if (!anterior.alertado) {
+      const mensagem = `Fila ${nome}: ${qtd} pendente(s) há ${idade} min (limite ${FILA_PENDENTE_ALERTA_THRESHOLD} / ${FILA_PENDENTE_IDADE_MIN} min)`;
+      const dados = {
+        nome,
+        pendentes: qtd,
+        oldestAgeMinutes: idade,
+        limiteQuantidade: FILA_PENDENTE_ALERTA_THRESHOLD,
+        limiteMinutos: FILA_PENDENTE_IDADE_MIN,
+        detalhes: snapshot,
+      };
+      logCritico("FILA_PENDENTE_SUSTENTADA", mensagem, dados);
+      void enviarWebhook("FILA_PENDENTE_SUSTENTADA", mensagem, dados);
+    }
+    estadoFilaSustentada.set(nome, { alertado: true, desde: anterior.desde || Date.now() });
+  } else {
+    estadoFilaSustentada.set(nome, { alertado: false });
+  }
+}
+
+function verificarTaxaCStat999() {
+  let fiscalMetrics;
+  try {
+    fiscalMetrics = require("./fiscalMetrics");
+  } catch (_) {
+    return;
+  }
+  const contagem = fiscalMetrics.contarCStatNaJanela("999", CSTAT_999_RATE_WINDOW_MIN);
+  const condicao = contagem >= CSTAT_999_RATE_MAX;
+
+  if (condicao) {
+    if (!estadoCStat999.alertado) {
+      const mensagem = `Taxa cStat 999 elevada: ${contagem} ocorrência(s) em ${CSTAT_999_RATE_WINDOW_MIN} min (limite ${CSTAT_999_RATE_MAX})`;
+      const dados = {
+        cStat: "999",
+        contagem,
+        janelaMinutos: CSTAT_999_RATE_WINDOW_MIN,
+        limite: CSTAT_999_RATE_MAX,
+      };
+      logCritico("CSTAT_999_ELEVADO", mensagem, dados);
+      void enviarWebhook("CSTAT_999_ELEVADO", mensagem, dados);
+    }
+    estadoCStat999 = { alertado: true, contagem, desde: estadoCStat999.desde || Date.now() };
+  } else {
+    estadoCStat999 = { alertado: false, contagem };
+  }
+}
+
+function executarMonitoramento(deps = {}) {
+  try {
+    if (deps.filaFiscalMetricas) {
+      verificarFilaPendenteSustentada("fila_fiscal", deps.filaFiscalMetricas);
+    }
+    if (deps.filaOfflineMetricas) {
+      verificarFilaPendenteSustentada("vendas_offline", deps.filaOfflineMetricas);
+    }
+    verificarTaxaCStat999();
+  } catch (err) {
+    log.warn({ err: err.message }, "Monitoramento de alertas falhou");
+  }
+}
+
+function iniciarMonitorPeriodico(obterDepsFn) {
+  if (monitorTimer || process.env.NODE_ENV === "test") return;
+  const tick = () => {
+    try {
+      const deps = typeof obterDepsFn === "function" ? obterDepsFn() : {};
+      executarMonitoramento(deps);
+    } catch (err) {
+      log.warn({ err: err.message }, "Tick de monitoramento falhou");
+    }
+  };
+  monitorTimer = setInterval(tick, ALERTA_MONITOR_INTERVAL_MS);
+  tick();
+}
+
+function obterEstadoAlertas() {
+  const filasSustentadas = {};
+  for (const [nome, st] of estadoFilaSustentada.entries()) {
+    filasSustentadas[nome] = { ...st };
+  }
+  let cStat999 = { ...estadoCStat999 };
+  try {
+    const fiscalMetrics = require("./fiscalMetrics");
+    cStat999.contagem = fiscalMetrics.contarCStatNaJanela("999", CSTAT_999_RATE_WINDOW_MIN);
+    cStat999.janelaMinutos = CSTAT_999_RATE_WINDOW_MIN;
+    cStat999.limite = CSTAT_999_RATE_MAX;
+    cStat999.ativo = cStat999.contagem >= CSTAT_999_RATE_MAX;
+  } catch (_) {}
+  return {
+    filasSustentadas,
+    cStat999,
+    thresholds: obterConfigAlertas(),
+  };
+}
+
+function obterConfigAlertas() {
+  return {
+    filaPendenteThreshold: FILA_PENDENTE_ALERTA_THRESHOLD,
+    filaPendenteIdadeMin: FILA_PENDENTE_IDADE_MIN,
+    cStat999WindowMin: CSTAT_999_RATE_WINDOW_MIN,
+    cStat999RateMax: CSTAT_999_RATE_MAX,
+    alertaIncertosMax: ALERTA_INCERTOS_MAX,
+    monitorIntervalMs: ALERTA_MONITOR_INTERVAL_MS,
+    webhookConfigurado: !!WEBHOOK_URL,
+  };
+}
+
 function contarAlertasDispatchados() {
   return alertasDispatchados;
 }
@@ -210,12 +354,26 @@ function iniciarRelatorioAutomatico(gerarRelatorioFn) {
   tick();
 }
 
+function pararMonitorPeriodico() {
+  if (monitorTimer) {
+    clearInterval(monitorTimer);
+    monitorTimer = null;
+  }
+}
+
 module.exports = {
   alertarFalhaPermanente,
   verificarIncertos,
   onAcbrStatusChange,
   verificarDiscoCritico,
   verificarFila,
+  verificarFilaPendenteSustentada,
+  verificarTaxaCStat999,
+  executarMonitoramento,
+  iniciarMonitorPeriodico,
+  pararMonitorPeriodico,
+  obterEstadoAlertas,
+  obterConfigAlertas,
   contarAlertasDispatchados,
   enviarRelatorioWebhook,
   iniciarRelatorioAutomatico,

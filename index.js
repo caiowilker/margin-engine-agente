@@ -403,6 +403,17 @@ async function boot() {
     }
   } catch (_) {}
   fiscalAlertas.iniciarRelatorioAutomatico(fiscalRelatorio.gerarRelatorio);
+  fiscalAlertas.iniciarMonitorPeriodico(() => {
+    let filaOfflineMetricas = null;
+    try {
+      filaOfflineMetricas = fila.metricas?.() || null;
+    } catch (_) {}
+    const st = filaFiscal.status();
+    return {
+      filaFiscalMetricas: st.metricas || null,
+      filaOfflineMetricas,
+    };
+  });
 
   if (fiscalDriver.EMISSAO_FISCAL) {
     acbrNfceSetup.inicializar().then((r) => {
@@ -905,6 +916,18 @@ function coletarDadosAlertas() {
   } catch (_) {}
   payload.statusGeral = diagnosticoDashboard.calcularStatusGeral(payload);
   payload.configSync = configSync.getStatus();
+
+  try {
+    payload.alertasOperacionais = fiscalAlertas.obterEstadoAlertas();
+    const snap = fiscalMetrics.snapshot(filaFiscal.status());
+    payload.metricasFiscais = {
+      emissoesPorCStat: snap.contadores?.emissoesPorCStat || {},
+      rejeicoesPorCStat: snap.contadores?.rejeicoesPorCStat || {},
+      cStat999Janela: snap.cStat999Janela || null,
+      taxaSucesso: snap.taxaSucesso,
+      throughputPorHora: snap.throughputPorHora,
+    };
+  } catch (_) {}
 
   try {
     const diagnosticoEnterprise = require("./diagnosticoEnterprise");
@@ -2123,6 +2146,7 @@ function iniciarServidor() {
   app.get("/diagnostico/alertas", privateNetworkHeaders, exigirLocalhostOuToken, (req, res) => {
     const payload = coletarDadosAlertas();
     const alertas = filaFiscal.contadoresAlertas();
+    const snap = fiscalMetrics.snapshot(filaFiscal.status());
     res.json({
       filaFiscal: payload.filaFiscal,
       processando: payload.processando,
@@ -2138,7 +2162,12 @@ function iniciarServidor() {
       metricas: {
         emissoesHoje: fiscalMetrics.emissoesHoje(),
         taxaSucessoPercent: fiscalMetrics.taxaSucessoPercent(),
+        emissoesPorCStat: snap.contadores?.emissoesPorCStat || {},
+        rejeicoesPorCStat: snap.contadores?.rejeicoesPorCStat || {},
+        cStat999Janela: snap.cStat999Janela || null,
       },
+      alertasOperacionais: payload.alertasOperacionais || fiscalAlertas.obterEstadoAlertas(),
+      enterprise: payload.enterprise || null,
       versao: VERSAO_ATUAL,
       manifestOk: manifestUpdater.isManifestOk(),
       statusGeral: payload.statusGeral,

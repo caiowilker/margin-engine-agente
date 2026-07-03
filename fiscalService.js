@@ -10,6 +10,7 @@ const fiscalPreflight = require("./fiscalPreflight");
 const fiscalRetry = require("./fiscalRetry");
 const fiscalMetrics = require("./fiscalMetrics");
 const fiscalRateLimit = require("./fiscalRateLimit");
+const ufRateLimit = require("./fiscal/ufRateLimit");
 const fiscalRecuperacao = require("./fiscalRecuperacao");
 const fiscalStorage = require("./fiscalStorage");
 const fiscalNumeracao = require("./fiscalNumeracao");
@@ -545,6 +546,25 @@ async function emitirCompleto(cfg, body, job = null) {
   }
   fiscalRateLimit.registrarTentativa(cnpj);
 
+  // Rate-limit por UF (token-bucket) — adia o job se a UF estiver com burst esgotado
+  const uf = ufRateLimit.extrairUf(payload);
+  if (uf) {
+    const rlUf = ufRateLimit.consumir(uf);
+    if (!rlUf.ok) {
+      fiscalMetrics.registrarBloqueioUf(uf);
+      // Adia o job sem marcar como erro: agenda retry com jitter embutido
+      if (job) {
+        const proxima = new Date(Date.now() + rlUf.aguardarMs).toISOString();
+        filaFiscal.adiarJob(job.id, proxima, "rate-limit-uf");
+      }
+      const e = new Error(rlUf.motivo);
+      e.rateLimitUf = true;
+      e.aguardarMs = rlUf.aguardarMs;
+      e.uf = uf;
+      throw e;
+    }
+  }
+
   if (job && !payload._fiscalMeta?.numeroNfe) {
     const meta = reservarNumeracaoJob(payload, job);
     payload.numeroNfe = meta.numeroNfe;
@@ -566,6 +586,7 @@ async function emitirCompleto(cfg, body, job = null) {
     const fiscalDriverMs = Date.now() - tAcbr;
     fiscalMetrics.registrarEmissao(Date.now() - inicio, {
       ok: true,
+      cStat: resultado.cStat || "100",
       fiscalDriverMs,
       sefazMs: fiscalDriverMs,
     });

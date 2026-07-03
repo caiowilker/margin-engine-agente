@@ -9,7 +9,8 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
-const { execSync } = require("child_process");
+const { execSync, execFileSync } = require("child_process");
+const { resolveNpmFromArgs } = require("../runtime/shellUtils");
 
 const appDir = path.resolve(process.argv[2] || path.join(__dirname, ".."));
 const args = process.argv.slice(3);
@@ -18,9 +19,11 @@ const withService = args.includes("--service");
 const withFirewall = args.includes("--firewall") || mode === "install" || mode === "update";
 const withOpen = args.includes("--open");
 const withDesktop = args.includes("--desktop");
-const npmFromArg = args.find((a) => a.startsWith("--npm="));
-if (npmFromArg) {
-  process.env.MARGIN_NPM = npmFromArg.slice("--npm=".length);
+// resolveNpmFromArgs reconstrói o path mesmo quando passado sem aspas pelo Inno Setup
+// (ex: --npm=C:\Program + Files\nodejs\npm.cmd → "C:\Program Files\nodejs\npm.cmd")
+const npmPath = resolveNpmFromArgs(args);
+if (npmPath) {
+  process.env.MARGIN_NPM = npmPath;
 }
 
 process.chdir(appDir);
@@ -62,6 +65,34 @@ function run(cmd, opts = {}) {
   } catch (err) {
     const detail = String(err.stderr || err.stdout || err.message || err);
     throw new Error(`Comando falhou: ${cmd}\n${detail.slice(0, 2000)}`);
+  }
+}
+
+/**
+ * Resolve o executável npm: usa MARGIN_NPM se definido (com path completo), senão
+ * usa npm.cmd no Windows ou npm no Unix, ambos resolvidos pelo PATH.
+ */
+function resolveNpmExe() {
+  if (process.env.MARGIN_NPM) return process.env.MARGIN_NPM;
+  return process.platform === "win32" ? "npm.cmd" : "npm";
+}
+
+/**
+ * Executa npm via execFileSync (sem passar pelo shell) — path com espaços funciona
+ * corretamente pois o executável é passado como argumento separado ao SO.
+ */
+function runNpm(npmArgs, opts = {}) {
+  const npm = resolveNpmExe();
+  initBootstrapLog().info({ acao: "exec_npm", npm, args: npmArgs }, "Executando npm");
+  try {
+    execFileSync(npm, npmArgs, {
+      cwd: appDir,
+      stdio: opts.inherit ? "inherit" : "pipe",
+      encoding: "utf8",
+    });
+  } catch (err) {
+    const detail = String(err.stderr || err.stdout || err.message || err);
+    throw new Error(`npm ${npmArgs.join(" ")} falhou:\n${detail.slice(0, 2000)}`);
   }
 }
 
@@ -217,10 +248,9 @@ function npmInstallIfNeeded() {
     initBootstrapLog().info({ acao: "skip_npm_ci" }, "Dependências nativas já empacotadas no instalador");
     return;
   }
-  const npm = process.env.MARGIN_NPM || "npm";
   initBootstrapLog().info({ acao: "npm_ci" }, "Instalando dependências (primeira execução ou pacote sem node_modules)");
-  run(`"${npm}" ci --omit=dev`, { inherit: true });
-  run(`"${npm}" rebuild better-sqlite3`, { inherit: true });
+  runNpm(["ci", "--omit=dev"], { inherit: true });
+  runNpm(["rebuild", "better-sqlite3"], { inherit: true });
 }
 
 function stopAgentService() {
@@ -257,9 +287,8 @@ function npmRepairSteps() {
     initBootstrapLog().info({ acao: "skip_npm_repair" }, "node_modules presente — reparo sem npm ci");
     return;
   }
-  const npm = process.env.MARGIN_NPM || "npm";
-  run(`"${npm}" ci --omit=dev`, { inherit: true });
-  run(`"${npm}" rebuild better-sqlite3`, { inherit: true });
+  runNpm(["ci", "--omit=dev"], { inherit: true });
+  runNpm(["rebuild", "better-sqlite3"], { inherit: true });
 }
 
 function validatePostUpdate() {
@@ -285,8 +314,7 @@ function generateManifest() {
     run(`node "${manifestScript}"`, { inherit: true });
     return;
   }
-  const npm = process.env.MARGIN_NPM || "npm";
-  run(`"${npm}" run manifest`, { inherit: true });
+  runNpm(["run", "manifest"], { inherit: true });
 }
 
 function startAgentService() {
@@ -308,8 +336,7 @@ function startAgentService() {
 
 function runPredeploy() {
   try {
-    const npm = process.env.MARGIN_NPM || "npm";
-    run(`"${npm}" run predeploy`, { inherit: true });
+    runNpm(["run", "predeploy"], { inherit: true });
   } catch (err) {
     initBootstrapLog().warn({ err: err.message }, "Pré-deploy reportou avisos");
   }

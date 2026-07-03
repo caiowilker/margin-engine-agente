@@ -37,6 +37,25 @@ let singleton = null;
 let consolePatched = false;
 let originalConsole = null;
 
+// Suprime entradas warn/error idênticas (mesmo módulo + mensagem) dentro da
+// janela configurável, eliminando o loop de erros duplicados causado por polls
+// concorrentes de status da impressora ou de outros probes periódicos.
+const _recentLogKeys = new Map();
+
+function isRecentDuplicate(level, modulo, message) {
+  if (LEVELS[level] < LEVELS.warn) return false;
+  // Leitura dinâmica para permitir ajuste via env sem reiniciar o processo.
+  const windowMs = parseInt(process.env.LOG_DEDUP_WINDOW_MS || "1000", 10);
+  if (windowMs <= 0) return false;
+  const key = `${modulo}\x00${level}\x00${message}`;
+  const now = Date.now();
+  const last = _recentLogKeys.get(key);
+  if (last !== undefined && now - last < windowMs) return true;
+  if (_recentLogKeys.size > 500) _recentLogKeys.clear();
+  _recentLogKeys.set(key, now);
+  return false;
+}
+
 function resolveLogMode() {
   const explicit = String(process.env.LOG_MODE || "").toUpperCase();
   if (explicit === "DEBUG" || explicit === "PRODUCTION") return explicit;
@@ -191,6 +210,9 @@ class LoggingService {
     if (!levelNum || levelNum < this.minLevel) return;
 
     const record = this._buildRecord(level, bindings, args);
+
+    if (isRecentDuplicate(level, record.modulo, record.message)) return;
+
     const channel = resolveChannel({ ...bindings, ...record });
     const line = `${JSON.stringify(record)}\n`;
 
@@ -460,6 +482,7 @@ function resetLoggingService() {
     singleton.unpatchConsole();
   }
   singleton = null;
+  _recentLogKeys.clear();
 }
 
 function initLogging(options = {}) {

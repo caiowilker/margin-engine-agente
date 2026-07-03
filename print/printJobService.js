@@ -346,6 +346,33 @@ function observabilidade() {
   };
 }
 
+const RECENT_OK_WINDOW_MS = parseInt(
+  process.env.PRINTER_RECENT_OK_WINDOW_MS || "300000",
+  10,
+);
+
+/**
+ * Retorna true se houve impressão bem-sucedida nos últimos windowMs ms.
+ * Fonte de verdade unificada: status baseado no pipeline real de impressão,
+ * não num probe de conectividade paralelo que pode falhar independentemente.
+ */
+function impressaoRecenteOk(windowMs) {
+  const janela = windowMs ?? RECENT_OK_WINDOW_MS;
+  if (stats.ultimaImpressaoEm) {
+    const age = Date.now() - new Date(stats.ultimaImpressaoEm).getTime();
+    if (age < janela) return true;
+  }
+  try {
+    store.initDb();
+    const ultimo = store.ultimoJobImpresso();
+    if (ultimo?.impresso_em) {
+      const age = Date.now() - new Date(ultimo.impresso_em).getTime();
+      if (age < janela) return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
 module.exports = {
   cfg,
   iniciarWorker,
@@ -358,5 +385,6 @@ module.exports = {
   listarJobs: (opts) => store.listarJobs(opts).map(rowToJob),
   buscarJob: (id) => rowToJob(store.buscarJob(id)),
   observabilidade,
+  impressaoRecenteOk,
   STATUS,
 };

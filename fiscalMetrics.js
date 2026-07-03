@@ -8,6 +8,8 @@ const MAX_SAMPLES = parseInt(process.env.FISCAL_METRICS_SAMPLES || "2000", 10);
 
 let db = null;
 const memSamples = { emissionMs: [], acbrMs: [], sefazMs: [], callbackMs: [], pdfMs: [] };
+const CSTAT_999_WINDOW_MIN = parseInt(process.env.CSTAT_999_RATE_WINDOW_MIN || "10", 10);
+
 const counters = {
   enfileiradas: 0,
   autorizadas: 0,
@@ -18,6 +20,7 @@ const counters = {
   pdfGerados: 0,
   rateLimitBloqueios: 0,
   rejeicoesPorCStat: {},
+  emissoesPorCStat: {},
 };
 let ultimaAutorizacaoEm = null;
 
@@ -49,8 +52,13 @@ function init() {
   `);
   const rows = db.prepare(`SELECT chave, valor FROM metric_counters`).all();
   rows.forEach((r) => {
-    if (r.chave.startsWith("cStat:")) {
+    if (r.chave.startsWith("emit_cStat:")) {
+      counters.emissoesPorCStat[r.chave.slice(11)] = r.valor;
+    } else if (r.chave.startsWith("cStat:")) {
       counters.rejeicoesPorCStat[r.chave.slice(6)] = r.valor;
+      if (!counters.emissoesPorCStat[r.chave.slice(6)]) {
+        counters.emissoesPorCStat[r.chave.slice(6)] = r.valor;
+      }
     } else if (Object.prototype.hasOwnProperty.call(counters, r.chave)) {
       counters[r.chave] = r.valor;
     }
@@ -111,8 +119,22 @@ function registrarEnfileirada() {
   bumpCounter("enfileiradas");
 }
 
+function registrarCStat(cStat) {
+  const cs = String(cStat || "unknown");
+  counters.emissoesPorCStat[cs] = (counters.emissoesPorCStat[cs] || 0) + 1;
+  bumpCounter(`emit_cStat:${cs}`);
+}
+
 function registrarEmissao(durationMs, meta = {}) {
-  if (Number.isFinite(durationMs)) pushSample("emission", durationMs, meta);
+  const sampleMeta = { ...meta };
+  if (meta.cStat) {
+    sampleMeta.cStat = String(meta.cStat);
+  } else if (meta.ok) {
+    sampleMeta.cStat = "100";
+  } else if (meta.falha) {
+    sampleMeta.cStat = String(meta.cStat || "unknown");
+  }
+  if (Number.isFinite(durationMs)) pushSample("emission", durationMs, sampleMeta);
   if (Number.isFinite(meta.acbrMs)) pushSample("acbr", meta.acbrMs);
   if (Number.isFinite(meta.sefazMs)) pushSample("sefaz", meta.sefazMs);
   if (Number.isFinite(meta.callbackMs)) pushSample("callback", meta.callbackMs);
@@ -121,6 +143,7 @@ function registrarEmissao(durationMs, meta = {}) {
     counters.autorizadas++;
     bumpCounter("autorizadas");
     ultimaAutorizacaoEm = new Date().toISOString();
+    registrarCStat(meta.cStat || "100");
   }
   if (meta.recuperada) {
     counters.recuperadas++;
@@ -132,6 +155,7 @@ function registrarEmissao(durationMs, meta = {}) {
     const cs = String(meta.cStat || "unknown");
     counters.rejeicoesPorCStat[cs] = (counters.rejeicoesPorCStat[cs] || 0) + 1;
     bumpCounter(`cStat:${cs}`);
+    registrarCStat(cs);
   }
   if (meta.falhaTemporaria) {
     counters.falhasTemporarias++;
@@ -151,12 +175,36 @@ function registrarEmissao(durationMs, meta = {}) {
   }
 }
 
+function contarCStatNaJanela(cStat, minutos = CSTAT_999_WINDOW_MIN) {
+  init();
+  const cs = String(cStat);
+  const mins = Math.max(1, parseInt(minutos, 10) || CSTAT_999_WINDOW_MIN);
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) as n FROM metric_samples
+       WHERE tipo = 'emission'
+         AND json_extract(meta, '$.cStat') = ?
+         AND datetime(criado_em) >= datetime('now', '-' || ? || ' minutes')`,
+    )
+    .get(cs, mins);
+  return row?.n || 0;
+}
+
 function snapshot(filaStatus = {}) {
   init();
   const pendentes = filaStatus.pendentes || 0;
   const processando = filaStatus.processando || 0;
+  const cStat999Janela = contarCStatNaJanela("999", CSTAT_999_WINDOW_MIN);
   return {
-    contadores: { ...counters, rejeicoesPorCStat: { ...counters.rejeicoesPorCStat } },
+    contadores: {
+      ...counters,
+      rejeicoesPorCStat: { ...counters.rejeicoesPorCStat },
+      emissoesPorCStat: { ...counters.emissoesPorCStat },
+    },
+    cStat999Janela: {
+      janelaMinutos: CSTAT_999_WINDOW_MIN,
+      contagem: cStat999Janela,
+    },
     latenciaMs: {
       p50: percentileFromDb("emission", 50) ?? percentile(memSamples.emissionMs, 50),
       p95: percentileFromDb("emission", 95) ?? percentile(memSamples.emissionMs, 95),
@@ -214,6 +262,20 @@ function taxaSucessoPercent() {
   return Math.round((counters.autorizadas / total) * 1000) / 10;
 }
 
+/**
+ * Registra um bloqueio por rate-limit de UF (token-bucket).
+ * Distinto de `rateLimitBloqueios` (que é por CNPJ/min/hora).
+ *
+ * @param {string} uf - Sigla da UF bloqueada
+ */
+function registrarBloqueioUf(uf) {
+  const key = `rateLimitUf:${String(uf || "XX").toUpperCase()}`;
+  if (!counters.rateLimitUfBloqueios) counters.rateLimitUfBloqueios = {};
+  const u = String(uf || "XX").toUpperCase();
+  counters.rateLimitUfBloqueios[u] = (counters.rateLimitUfBloqueios[u] || 0) + 1;
+  bumpCounter(key);
+}
+
 function close() {
   if (db) {
     try {
@@ -232,9 +294,12 @@ module.exports = {
   init,
   registrarEnfileirada,
   registrarEmissao,
+  registrarBloqueioUf,
+  contarCStatNaJanela,
   snapshot,
   emissoesHoje,
   taxaSucessoPercent,
   getDb,
   close,
+  CSTAT_999_WINDOW_MIN,
 };
