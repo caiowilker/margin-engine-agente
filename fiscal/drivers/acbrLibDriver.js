@@ -232,35 +232,20 @@ async function emitirDocumentoLib(payload, modeloDf) {
       ? payload.serieNfe || fiscalNumeracao.SERIE_NFE_55
       : payload.serieNfe || fiscalNumeracao.SERIE_PADRAO;
 
-  let numeracao = resolverNumeracaoLib(payload, serie, modeloDf);
+  const numeracao = resolverNumeracaoLib(payload, serie, modeloDf);
   const prefix = modeloDf === "55" ? "nfe-lib" : "nfce-lib";
+  const ini = await montarIniLib(payload, numeracao, modeloDf, empresa);
+  const iniPath = path.join(
+    PATHS.ini,
+    `${prefix}-${payload.numeroVenda || Date.now()}-${numeracao.numero}.ini`,
+  );
+  fs.mkdirSync(path.dirname(iniPath), { recursive: true });
+  fs.writeFileSync(iniPath, ini, "utf8");
 
-  for (let tentativa = 0; tentativa < 2; tentativa++) {
-    const ini = await montarIniLib(payload, numeracao, modeloDf, empresa);
-    const iniPath = path.join(
-      PATHS.ini,
-      `${prefix}-${payload.numeroVenda || Date.now()}-${numeracao.numero}.ini`,
-    );
-    fs.mkdirSync(path.dirname(iniPath), { recursive: true });
-    fs.writeFileSync(iniPath, ini, "utf8");
-
-    try {
-      if (mode === "native") {
-        return await emitirViaNativeLib(iniPath, modeloDf, numeracao);
-      }
-      return await emitirViaParidade(iniPath, Number(modeloDf), numeracao);
-    } catch (err) {
-      if (String(err.cStat) === "539" && tentativa === 0) {
-        numeracao = {
-          ...fiscalNumeracao.reservarProximoNumero(serie, modeloDf),
-          cNf: CNF_PARIDADE,
-        };
-        continue;
-      }
-      throw err;
-    }
+  if (mode === "native") {
+    return await emitirViaNativeLib(iniPath, modeloDf, numeracao);
   }
-  throw new Error("[ACBrLib] Falha na emissão após retentativas");
+  return await emitirViaParidade(iniPath, Number(modeloDf), numeracao);
 }
 
 /**
@@ -796,12 +781,22 @@ async function consultarChaveLib(chave) {
     return acbr.consultarChave(chave);
   }
   const resposta = await withNativeLib("consultar", (inst) => inst.consultar(chave, true));
-  const p = acbr.parseResposta(resposta);
+  const p0 = acbrLibResposta.parseRespostaLib(resposta);
+  const p = await acbr.enrichParsePosEmissaoAsync(p0, resposta);
+  const cs = String(p.cStat || "");
   return {
     chave,
     cStat: p.cStat,
     xMotivo: p.xMotivo,
     protocolo: p.protocolo,
+    situacao:
+      cs === "100" || cs === "150"
+        ? "AUTORIZADA"
+        : cs === "101"
+          ? "CANCELADA"
+          : cs.startsWith("2")
+            ? "REJEITADA"
+            : "DESCONHECIDA",
     raw: resposta,
     native: true,
   };

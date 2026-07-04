@@ -475,6 +475,103 @@ async function finalizarEmissaoRecuperada(cfg, numeroVenda, correlationId, resul
   });
 }
 
+const MAX_BUMP_539 = parseInt(process.env.FISCAL_MAX_BUMP_539 || "5", 10);
+
+function enriquecerChaveConsulta539(err) {
+  if (!err.chaveConsulta) {
+    err.chaveConsulta =
+      fiscalRetry.extrairChaveMotivoDuplicidade(err.message) ||
+      fiscalRetry.extrairChaveMotivoDuplicidade(err.acbrRaw);
+  }
+  return err;
+}
+
+async function tentarRecuperar539ComBump(
+  cfg,
+  body,
+  job,
+  payload,
+  nfe55,
+  activeDriver,
+  inicio,
+  errInicial,
+) {
+  const { numeroVenda, correlationId } = body;
+  const modelo = nfe55 ? fiscalNumeracao.MODELO_NFE : fiscalNumeracao.MODELO_NFCE;
+  const serie =
+    payload.serieNfe ||
+    payload._fiscalMeta?.serieNfe ||
+    (nfe55 ? fiscalNumeracao.SERIE_NFE_55 : fiscalNumeracao.SERIE_PADRAO);
+
+  let err = errInicial;
+  for (let bump = 0; bump < MAX_BUMP_539 && fiscalRetry.extrairCStat(err) === "539"; bump++) {
+    enriquecerChaveConsulta539(err);
+    const rec = await fiscalRecuperacao.verificarAntesDeEmitir({
+      ...body,
+      chave: err.chaveConsulta,
+      chaveConsulta: err.chaveConsulta,
+      numeroNfe: payload.numeroNfe,
+      serieNfe: payload.serieNfe,
+    });
+    if (rec?.chave) {
+      fiscalMetrics.registrarEmissao(Date.now() - inicio, {
+        recuperada: true,
+        ok: true,
+        retry539: bump,
+      });
+      return finalizarEmissaoRecuperada(cfg, numeroVenda, correlationId, rec);
+    }
+
+    const nova = fiscalNumeracao.reservarProximoNumero(serie, modelo);
+    payload.numeroNfe = String(nova.numero);
+    payload.serieNfe = nova.serie;
+    payload._539Retried = true;
+    payload._fiscalMeta = {
+      ...(payload._fiscalMeta || {}),
+      numeroNfe: payload.numeroNfe,
+      serieNfe: payload.serieNfe,
+      modeloDocumento: modelo,
+    };
+    if (job) {
+      filaFiscal.atualizarPayload(job.id, {
+        numeroNfe: payload.numeroNfe,
+        serieNfe: payload.serieNfe,
+        _539Retried: true,
+        _fiscalMeta: payload._fiscalMeta,
+      });
+    }
+
+    try {
+      const tRetry = Date.now();
+      const resultado = nfe55
+        ? await activeDriver.emitirNfe(payload)
+        : await activeDriver.emitirNfce(payload);
+      fiscalMetrics.registrarEmissao(Date.now() - inicio, {
+        ok: true,
+        cStat: resultado.cStat || "100",
+        fiscalDriverMs: Date.now() - tRetry,
+        sefazMs: Date.now() - tRetry,
+        retry539: bump + 1,
+      });
+      if (job && resultado?.chave) {
+        filaFiscal.atualizarPayload(job.id, {
+          _fiscalMeta: {
+            ...(payload._fiscalMeta || {}),
+            chave: resultado.chave,
+            protocolo: resultado.protocolo,
+            numeroNfe: resultado.numero || payload.numeroNfe,
+            serieNfe: resultado.serie || payload.serieNfe,
+          },
+        });
+      }
+      return persistirDocumentosFiscais(cfg, numeroVenda, correlationId, resultado);
+    } catch (retryErr) {
+      err = retryErr;
+    }
+  }
+  return err;
+}
+
 function reservarNumeracaoJob(payload, job) {
   if (payload._fiscalMeta?.numeroNfe && payload._fiscalMeta?.serieNfe) {
     return payload._fiscalMeta;
@@ -602,11 +699,7 @@ async function emitirCompleto(cfg, body, job = null) {
       });
     }
   } catch (err) {
-    if (!err.chaveConsulta) {
-      err.chaveConsulta =
-        fiscalRetry.extrairChaveMotivoDuplicidade(err.message) ||
-        fiscalRetry.extrairChaveMotivoDuplicidade(err.acbrRaw);
-    }
+    enriquecerChaveConsulta539(err);
     const rec = await fiscalRecuperacao.verificarAntesDeEmitir({
       ...body,
       chave: err.chaveConsulta,
@@ -619,73 +712,22 @@ async function emitirCompleto(cfg, body, job = null) {
       return finalizarEmissaoRecuperada(cfg, numeroVenda, correlationId, rec);
     }
 
-    const cStatErro = fiscalRetry.extrairCStat(err);
-    if (cStatErro === "539" && !payload._539Retried) {
-      const modelo = nfe55 ? fiscalNumeracao.MODELO_NFE : fiscalNumeracao.MODELO_NFCE;
-      const serie =
-        payload.serieNfe ||
-        payload._fiscalMeta?.serieNfe ||
-        (nfe55 ? fiscalNumeracao.SERIE_NFE_55 : fiscalNumeracao.SERIE_PADRAO);
-      const nova = fiscalNumeracao.reservarProximoNumero(serie, modelo);
-      payload.numeroNfe = String(nova.numero);
-      payload.serieNfe = nova.serie;
-      payload._539Retried = true;
-      payload._fiscalMeta = {
-        ...(payload._fiscalMeta || {}),
-        numeroNfe: payload.numeroNfe,
-        serieNfe: payload.serieNfe,
-        modeloDocumento: modelo,
-      };
-      if (job) {
-        filaFiscal.atualizarPayload(job.id, {
-          numeroNfe: payload.numeroNfe,
-          serieNfe: payload.serieNfe,
-          _539Retried: true,
-          _fiscalMeta: payload._fiscalMeta,
-        });
+    if (fiscalRetry.extrairCStat(err) === "539") {
+      const out539 = await tentarRecuperar539ComBump(
+        cfg,
+        body,
+        job,
+        payload,
+        nfe55,
+        activeDriver,
+        inicio,
+        err,
+      );
+      if (out539?.chave) {
+        return out539;
       }
-      try {
-        const tRetry = Date.now();
-        resultado = nfe55
-          ? await activeDriver.emitirNfe(payload)
-          : await activeDriver.emitirNfce(payload);
-        fiscalMetrics.registrarEmissao(Date.now() - inicio, {
-          ok: true,
-          cStat: resultado.cStat || "100",
-          fiscalDriverMs: Date.now() - tRetry,
-          sefazMs: Date.now() - tRetry,
-          retry539: true,
-        });
-        if (job && resultado?.chave) {
-          filaFiscal.atualizarPayload(job.id, {
-            _fiscalMeta: {
-              ...(payload._fiscalMeta || {}),
-              chave: resultado.chave,
-              protocolo: resultado.protocolo,
-              numeroNfe: resultado.numero || payload.numeroNfe,
-              serieNfe: resultado.serie || payload.serieNfe,
-            },
-          });
-        }
-        return persistirDocumentosFiscais(cfg, numeroVenda, correlationId, resultado);
-      } catch (retryErr) {
-        if (!retryErr.chaveConsulta) {
-          retryErr.chaveConsulta =
-            fiscalRetry.extrairChaveMotivoDuplicidade(retryErr.message) ||
-            fiscalRetry.extrairChaveMotivoDuplicidade(retryErr.acbrRaw);
-        }
-        const recRetry = await fiscalRecuperacao.verificarAntesDeEmitir({
-          ...body,
-          chave: retryErr.chaveConsulta,
-          chaveConsulta: retryErr.chaveConsulta,
-          numeroNfe: payload.numeroNfe,
-          serieNfe: payload.serieNfe,
-        });
-        if (recRetry?.chave) {
-          fiscalMetrics.registrarEmissao(Date.now() - inicio, { recuperada: true, ok: true });
-          return finalizarEmissaoRecuperada(cfg, numeroVenda, correlationId, recRetry);
-        }
-        err = retryErr;
+      if (out539 && typeof out539 === "object" && out539.message) {
+        err = out539;
       }
     }
     if (err.incerto && job) {

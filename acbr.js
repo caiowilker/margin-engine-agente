@@ -1586,43 +1586,26 @@ async function emitirNfceCore(payload) {
         }
       : fiscalNumeracao.reservarProximoNumero(serie);
 
-  let iniPath;
-  let resultado;
-
-  for (let tentativa = 0; tentativa < 2; tentativa++) {
-    const fiscalIniPolicy = require("./fiscal/fiscalIniPolicy");
-    let iniBase;
-    if (payload.documentIni && String(payload.documentIni).trim()) {
-      iniBase = patchNumeracaoIni(payload.documentIni, numeracao);
-    } else {
-      fiscalIniPolicy.requireDocumentIniOrAllowLocal(payload, "NFC-e");
-      iniBase = montarIniNfce({ ...payload, empresa }, numeracao);
-    }
-    const ini = iniBase;
-    iniPath = path.join(
-      PATHS.ini,
-      `nfce-${payload.numeroVenda || Date.now()}-${numeracao.numero}.ini`,
-    );
-    fs.writeFileSync(iniPath, ini, "utf8");
-
-    try {
-      const { p, resposta } = await criarEnviarIni(iniPath);
-      fiscalNumeracao.sincronizarNumeroAutorizado(
-        numeracao.serie,
-        p.numero || numeracao.numero,
-      );
-      resultado = normalizarResultado(p, resposta);
-      break;
-    } catch (err) {
-      if (String(err.cStat) === "539" && tentativa === 0) {
-        numeracao = fiscalNumeracao.reservarProximoNumero(serie);
-        continue;
-      }
-      throw err;
-    }
+  const fiscalIniPolicy = require("./fiscal/fiscalIniPolicy");
+  let iniBase;
+  if (payload.documentIni && String(payload.documentIni).trim()) {
+    iniBase = patchNumeracaoIni(payload.documentIni, numeracao);
+  } else {
+    fiscalIniPolicy.requireDocumentIniOrAllowLocal(payload, "NFC-e");
+    iniBase = montarIniNfce({ ...payload, empresa }, numeracao);
   }
+  const iniPath = path.join(
+    PATHS.ini,
+    `nfce-${payload.numeroVenda || Date.now()}-${numeracao.numero}.ini`,
+  );
+  fs.writeFileSync(iniPath, iniBase, "utf8");
 
-  return resultado;
+  const { p, resposta } = await criarEnviarIni(iniPath);
+  fiscalNumeracao.sincronizarNumeroAutorizado(
+    numeracao.serie,
+    p.numero || numeracao.numero,
+  );
+  return normalizarResultado(p, resposta);
 }
 
 async function emitirNfe(payload) {
@@ -1653,44 +1636,27 @@ async function emitirNfeCore(payload) {
         }
       : fiscalNumeracao.reservarProximoNumero(serie, modeloNum);
 
-  let iniPath;
-  let resultado;
-
-  for (let tentativa = 0; tentativa < 2; tentativa++) {
-    const fiscalIniPolicy = require("./fiscal/fiscalIniPolicy");
-    let iniBase;
-    if (payload.documentIni && String(payload.documentIni).trim()) {
-      iniBase = patchNumeracaoIni(payload.documentIni, numeracao);
-    } else {
-      fiscalIniPolicy.requireDocumentIniOrAllowLocal(payload, "NF-e");
-      iniBase = montarIniNfe({ ...payload, empresa }, numeracao, destinatario);
-    }
-    const ini = iniBase;
-    iniPath = path.join(
-      PATHS.ini,
-      `nfe-${payload.numeroVenda || Date.now()}-${numeracao.numero}.ini`,
-    );
-    fs.writeFileSync(iniPath, ini, "utf8");
-
-    try {
-      const { p, resposta } = await criarEnviarIniModelo(iniPath, 55);
-      fiscalNumeracao.sincronizarNumeroAutorizado(
-        numeracao.serie,
-        p.numero || numeracao.numero,
-        modeloNum,
-      );
-      resultado = normalizarResultado(p, resposta, "55");
-      break;
-    } catch (err) {
-      if (String(err.cStat) === "539" && tentativa === 0) {
-        numeracao = fiscalNumeracao.reservarProximoNumero(serie, modeloNum);
-        continue;
-      }
-      throw err;
-    }
+  const fiscalIniPolicy = require("./fiscal/fiscalIniPolicy");
+  let iniBase;
+  if (payload.documentIni && String(payload.documentIni).trim()) {
+    iniBase = patchNumeracaoIni(payload.documentIni, numeracao);
+  } else {
+    fiscalIniPolicy.requireDocumentIniOrAllowLocal(payload, "NF-e");
+    iniBase = montarIniNfe({ ...payload, empresa }, numeracao, destinatario);
   }
+  const iniPath = path.join(
+    PATHS.ini,
+    `nfe-${payload.numeroVenda || Date.now()}-${numeracao.numero}.ini`,
+  );
+  fs.writeFileSync(iniPath, iniBase, "utf8");
 
-  return resultado;
+  const { p, resposta } = await criarEnviarIniModelo(iniPath, 55);
+  fiscalNumeracao.sincronizarNumeroAutorizado(
+    numeracao.serie,
+    p.numero || numeracao.numero,
+    modeloNum,
+  );
+  return normalizarResultado(p, resposta, "55");
 }
 
 function normalizarResultado(p, resposta, modeloDocumento = "65") {
