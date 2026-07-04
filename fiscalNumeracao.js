@@ -138,17 +138,36 @@ function sincronizarNumeroAutorizado(serie, numeroRetornado, modelo = MODELO_NFC
       .get(s, mod, disp);
     const atual = row?.ultimo_numero || 0;
     if (n <= atual) return;
-    conn
-      .prepare(
-        `INSERT INTO nfce_numeracao (serie, modelo, dispositivo_id, ultimo_numero, atualizado_em)
-         VALUES (?, ?, ?, ?, datetime('now'))
-         ON CONFLICT(serie, modelo, dispositivo_id) DO UPDATE SET
-           ultimo_numero = excluded.ultimo_numero,
-           atualizado_em = datetime('now')`,
-      )
-      .run(s, mod, disp, n);
+    definirUltimoNumeroInterno(conn, s, mod, disp, n);
   });
   sync();
+}
+
+/** Define ultimo_numero (sobe ou desce) — usado quando acbr/xml é fonte de verdade. */
+function definirUltimoNumero(serie, numero, modelo = MODELO_NFCE) {
+  const n = parseInt(String(numero || "").replace(/\D/g, ""), 10);
+  if (!Number.isFinite(n) || n < 0) return;
+  const conn = init();
+  if (!conn) return;
+  const s = normalizarSerie(serie);
+  const mod = String(modelo || MODELO_NFCE);
+  const disp = resolveDispositivoId();
+  const sync = conn.transaction(() => {
+    definirUltimoNumeroInterno(conn, s, mod, disp, n);
+  });
+  sync();
+}
+
+function definirUltimoNumeroInterno(conn, serie, modelo, dispositivoId, numero) {
+  conn
+    .prepare(
+      `INSERT INTO nfce_numeracao (serie, modelo, dispositivo_id, ultimo_numero, atualizado_em)
+       VALUES (?, ?, ?, ?, datetime('now'))
+       ON CONFLICT(serie, modelo, dispositivo_id) DO UPDATE SET
+         ultimo_numero = excluded.ultimo_numero,
+         atualizado_em = datetime('now')`,
+    )
+    .run(serie, modelo, dispositivoId, numero);
 }
 
 /**
@@ -181,11 +200,61 @@ function consultarUltimo(serie = SERIE_PADRAO, modelo = MODELO_NFCE) {
   return row?.ultimo_numero || 0;
 }
 
+/**
+ * Alinha contador local ao maior nNF com XML autorizado em acbr/xml (não usa backup).
+ * Backup é cópia de arquivos já salvos — não reflete numeração SEFAZ sozinha.
+ */
+function bootstrapDesdeXmlCanonicos(serie = SERIE_PADRAO, modelo = MODELO_NFCE) {
+  const fs = require("fs");
+  const path = require("path");
+  const { PATHS } = require("./marginPaths");
+  const fiscalRetry = require("./fiscalRetry");
+  const s = normalizarSerie(serie);
+  const xmlDir = PATHS?.xml;
+  if (!xmlDir || !fs.existsSync(xmlDir)) return 0;
+
+  let maxNum = 0;
+  const visit = (dir) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (_) {
+      return;
+    }
+    for (const ent of entries) {
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        visit(full);
+        continue;
+      }
+      if (!/procNFe\.xml$/i.test(ent.name)) continue;
+      const chave = ent.name.match(/^(\d{44})/)?.[1];
+      const parsed = chave ? fiscalRetry.extrairNumeroSerieDaChave(chave) : null;
+      if (!parsed?.numero) continue;
+      if (parsed.serie && normalizarSerie(parsed.serie) !== s) continue;
+      if (parsed.numero > maxNum) maxNum = parsed.numero;
+    }
+  };
+  visit(xmlDir);
+
+  if (maxNum > 0) {
+    const ultimo = consultarUltimo(s, modelo);
+    if (maxNum < ultimo) {
+      definirUltimoNumero(s, maxNum, modelo);
+    } else if (maxNum > ultimo) {
+      sincronizarNumeroAutorizado(s, maxNum, modelo);
+    }
+  }
+  return maxNum;
+}
+
 module.exports = {
   init,
   reservarProximoNumero,
   sincronizarNumeroAutorizado,
   sincronizarNumeroDuplicidade539,
+  bootstrapDesdeXmlCanonicos,
+  definirUltimoNumero,
   consultarUltimo,
   resolveDispositivoId,
   SERIE_PADRAO,

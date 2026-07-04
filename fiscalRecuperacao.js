@@ -116,6 +116,16 @@ async function consultarDocumentoAutorizado(meta = {}) {
     if (localXml?.xml) {
       const prot = localXml.prot || docs.extrairProtNFe(localXml.xml);
       if (prot.cStat === "100" || prot.cStat === "150") {
+        if (
+          modoDuplicidade539 &&
+          !podeRecuperarChaveParaVenda(chave, numeroVenda, correlationId)
+        ) {
+          log.info(
+            { chave, numeroVenda, xmlPath: localXml.path },
+            "539: XML local (backup/xml) é de outra venda — não recuperar",
+          );
+          return null;
+        }
         return {
           fiscal: true,
           chave,

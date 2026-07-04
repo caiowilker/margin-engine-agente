@@ -609,6 +609,17 @@ async function processarUm(opcoes = {}) {
           null,
           msg,
         );
+        if (/539|duplicidade de nf-?e/i.test(msg)) {
+          setImmediate(() => {
+            require("./fiscalService")
+              .notificarPendenciaFiscalFailSafe(
+                payload.numeroVenda || job.numero_venda,
+                payload.correlationId || job.correlation_id,
+                err,
+              )
+              .catch(() => {});
+          });
+        }
       }
     }
   }
@@ -881,14 +892,16 @@ function buscarDocumentoPorSerieNumero(serie, numero) {
     .get(String(serie), String(numero));
 }
 
-/** Maior nNF já persistido localmente para a série (evita reutilizar número ocupado). */
+/** Maior nNF autorizado (cStat 100/150) persistido localmente para a série. */
 function maiorNumeroNfeSerie(serie) {
   init();
   const row = db
     .prepare(
       `SELECT MAX(CAST(numero_nfe AS INTEGER)) AS maxNum
        FROM documentos_fiscais
-       WHERE serie_nfe = ? AND numero_nfe GLOB '[0-9]*'`,
+       WHERE serie_nfe = ?
+         AND numero_nfe GLOB '[0-9]*'
+         AND c_stat IN ('100', '150')`,
     )
     .get(String(serie));
   const n = parseInt(String(row?.maxNum || "0"), 10);

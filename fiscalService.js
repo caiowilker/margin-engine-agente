@@ -640,10 +640,14 @@ function reservarNumeracaoJob(payload, job) {
   const modelo = isNfe55 ? fiscalNumeracao.MODELO_NFE : fiscalNumeracao.MODELO_NFCE;
   const serie = payload.serieNfe
     || (isNfe55 ? fiscalNumeracao.SERIE_NFE_55 : fiscalNumeracao.SERIE_PADRAO);
-  const maxLocal = filaFiscal.maiorNumeroNfeSerie(serie);
-  const ultimo = fiscalNumeracao.consultarUltimo(serie, modelo);
-  if (maxLocal > ultimo) {
-    fiscalNumeracao.sincronizarNumeroAutorizado(serie, maxLocal, modelo);
+  // XML canônico (acbr/xml) é fonte de verdade; backup não entra na numeração.
+  const maxXml = fiscalNumeracao.bootstrapDesdeXmlCanonicos(serie, modelo);
+  if (maxXml === 0) {
+    const maxAutorizadoDb = filaFiscal.maiorNumeroNfeSerie(serie);
+    const ultimo = fiscalNumeracao.consultarUltimo(serie, modelo);
+    if (maxAutorizadoDb > ultimo) {
+      fiscalNumeracao.sincronizarNumeroAutorizado(serie, maxAutorizadoDb, modelo);
+    }
   }
   const res = fiscalNumeracao.reservarProximoNumero(serie, modelo);
   const meta = {
@@ -1368,6 +1372,18 @@ function registrarHandlersFila(lerConfigFn) {
           null,
           err.message,
         );
+      }
+      const cStatErro = fiscalRetry.extrairCStat(err);
+      if (
+        cStatErro === "539" ||
+        err.esgotouRecuperacao539 ||
+        fiscalRetry.isPermanente(err)
+      ) {
+        try {
+          await notificarPendenciaFiscalFailSafe(numeroVenda, correlationId, err);
+        } catch (_) {
+          /* callback best-effort */
+        }
       }
       const cnpj =
         payload.empresa?.cnpj || payload.cnpj || cfg.empresa?.cnpj || cfg.cnpj;
