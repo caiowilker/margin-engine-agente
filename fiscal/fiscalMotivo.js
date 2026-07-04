@@ -29,7 +29,7 @@ const ACOES = {
   OUTRO: "Consulte Diagnóstico → Fila fiscal ou reenvie depois.",
 };
 
-function classificarDeMensagem(msg) {
+function classificarDeMensagem(msg, err = null) {
   const e = String(msg || "").toLowerCase();
   if (/\bncm\b/.test(e) || e.includes("ncm inv") || e.includes("ncm ausente")) {
     return { motivoFiscal: "NCM", recuperavel: false };
@@ -57,6 +57,12 @@ function classificarDeMensagem(msg) {
     return { motivoFiscal: "NETWORK", recuperavel: true };
   }
   if (/sefaz|cstat|rejei[cç]/i.test(e)) {
+    if (/539|duplicidade de nf-?e/i.test(e)) {
+      return {
+        motivoFiscal: "SEFAZ",
+        recuperavel: !(err?.esgotouRecuperacao539 || err?.permanente),
+      };
+    }
     return { motivoFiscal: "SEFAZ", recuperavel: true };
   }
   if (/acbr|dll|ffi|driver|monitor|biblioteca|emiss[aã]o fiscal j[aá]/i.test(e)) {
@@ -70,7 +76,7 @@ function classificarDeErro(err) {
     return { motivoFiscal: "OUTRO", recuperavel: false, cStat: null };
   }
   const cStat = fiscalRetry.extrairCStat(err);
-  const base = classificarDeMensagem(err.message || String(err));
+  const base = classificarDeMensagem(err.message || String(err), err);
   let recuperavel = base.recuperavel;
   if (fiscalRetry.isIncerto(err)) recuperavel = true;
   else if (fiscalRetry.isTransient(err)) recuperavel = true;
@@ -105,6 +111,9 @@ function enriquecerStatusEmissao(st) {
 
 function statusFiscalFailSafe(err) {
   const meta = classificarDeErro(err);
+  if (err?.esgotouRecuperacao539 || (meta.cStat === "539" && err?.permanente)) {
+    return "ERRO_FISCAL";
+  }
   if (meta.recuperavel || ["NCM", "CFOP", "CST", "CERTIFICADO", "CONFIGURACAO", "DRIVER", "TIMEOUT", "NETWORK", "SEFAZ"].includes(meta.motivoFiscal)) {
     return "PENDENTE_FISCAL";
   }

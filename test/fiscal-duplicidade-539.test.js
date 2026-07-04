@@ -11,6 +11,20 @@ test("extrairChaveMotivoDuplicidade — formato SEFAZ [chNFe:…]", () => {
   );
 });
 
+test("extrairNumeroSerieDaChave — nNF da chave SEFAZ", () => {
+  const chave = "31260612343055000183650010000000091816823438";
+  const parsed = fiscalRetry.extrairNumeroSerieDaChave(chave);
+  assert.equal(parsed?.numero, 9);
+  assert.equal(parsed?.serie, "1");
+});
+
+test("isErroDuplicidade539 — detecta cStat e mensagem", () => {
+  assert.equal(fiscalRetry.isErroDuplicidade539("cStat 539 duplicidade"), true);
+  const err = new Error("NFC-e rejeitada (cStat 539)");
+  err.cStat = "539";
+  assert.equal(fiscalRetry.isErroDuplicidade539(err), true);
+});
+
 test("isPermanente — cStat 539 com duplicidade539 não é permanente imediato", () => {
   const err = new Error("NFC-e rejeitada (cStat 539): Duplicidade");
   err.cStat = "539";

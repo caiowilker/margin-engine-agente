@@ -151,6 +151,22 @@ function sincronizarNumeroAutorizado(serie, numeroRetornado, modelo = MODELO_NFC
   sync();
 }
 
+/**
+ * Após cStat 539, alinha o contador local ao nNF já registrado na SEFAZ (chave do erro).
+ * Evita reutilizar números ocupados com outra chave de acesso.
+ */
+function sincronizarNumeroDuplicidade539(chave, serie = SERIE_PADRAO, modelo = MODELO_NFCE) {
+  const fiscalRetry = require("./fiscalRetry");
+  const parsed = fiscalRetry.extrairNumeroSerieDaChave(chave);
+  if (!parsed?.numero) return null;
+  sincronizarNumeroAutorizado(
+    parsed.serie || serie,
+    parsed.numero,
+    modelo,
+  );
+  return parsed.numero;
+}
+
 function consultarUltimo(serie = SERIE_PADRAO, modelo = MODELO_NFCE) {
   const conn = init();
   if (!conn) return 0;
@@ -169,6 +185,7 @@ module.exports = {
   init,
   reservarProximoNumero,
   sincronizarNumeroAutorizado,
+  sincronizarNumeroDuplicidade539,
   consultarUltimo,
   resolveDispositivoId,
   SERIE_PADRAO,

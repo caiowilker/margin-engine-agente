@@ -475,7 +475,7 @@ async function finalizarEmissaoRecuperada(cfg, numeroVenda, correlationId, resul
   });
 }
 
-const MAX_BUMP_539 = parseInt(process.env.FISCAL_MAX_BUMP_539 || "5", 10);
+const MAX_BUMP_539 = parseInt(process.env.FISCAL_MAX_BUMP_539 || "10", 10);
 
 function enriquecerChaveConsulta539(err) {
   if (!err.chaveConsulta) {
@@ -483,6 +483,42 @@ function enriquecerChaveConsulta539(err) {
       fiscalRetry.extrairChaveMotivoDuplicidade(err.message) ||
       fiscalRetry.extrairChaveMotivoDuplicidade(err.acbrRaw);
   }
+  return err;
+}
+
+async function consultarRecuperacao539(body, payload, err) {
+  enriquecerChaveConsulta539(err);
+  if (!err.chaveConsulta) return null;
+  try {
+    return await fiscalRecuperacao.verificarAntesDeEmitir({
+      ...body,
+      chave: err.chaveConsulta,
+      chaveConsulta: err.chaveConsulta,
+      numeroNfe: payload.numeroNfe,
+      serieNfe: payload.serieNfe,
+    });
+  } catch (consultErr) {
+    fiscalTrace.warn("Recovery539", "Consulta SEFAZ falhou — segue bump de numeração", {
+      chave: err.chaveConsulta,
+      err: consultErr.message,
+    });
+    return null;
+  }
+}
+
+function finalizarErro539Esgotado(err, numeroVenda) {
+  enriquecerChaveConsulta539(err);
+  err.duplicidade539 = true;
+  err.permanente = true;
+  err.esgotouRecuperacao539 = true;
+  err.mensagemAcao =
+    "Duplicidade de numeração na SEFAZ — use Diagnóstico → Reprocessar fila ou inutilize a faixa ocupada em homologação.";
+  fiscalTrace.error("Recovery539", "Recuperação 539 esgotada", {
+    numeroVenda,
+    chave: err.chaveConsulta,
+    cStat: fiscalRetry.extrairCStat(err),
+    tentativas: MAX_BUMP_539,
+  });
   return err;
 }
 
@@ -506,20 +542,33 @@ async function tentarRecuperar539ComBump(
   let err = errInicial;
   for (let bump = 0; bump < MAX_BUMP_539 && fiscalRetry.extrairCStat(err) === "539"; bump++) {
     enriquecerChaveConsulta539(err);
-    const rec = await fiscalRecuperacao.verificarAntesDeEmitir({
-      ...body,
-      chave: err.chaveConsulta,
-      chaveConsulta: err.chaveConsulta,
-      numeroNfe: payload.numeroNfe,
-      serieNfe: payload.serieNfe,
-    });
+    const rec = await consultarRecuperacao539(body, payload, err);
     if (rec?.chave) {
+      fiscalTrace.trace("Recovery539", "Nota recuperada via consulta SEFAZ", {
+        numeroVenda,
+        chave: rec.chave,
+        bump,
+      });
       fiscalMetrics.registrarEmissao(Date.now() - inicio, {
         recuperada: true,
         ok: true,
         retry539: bump,
       });
       return finalizarEmissaoRecuperada(cfg, numeroVenda, correlationId, rec);
+    }
+
+    if (err.chaveConsulta) {
+      const ocupado = fiscalNumeracao.sincronizarNumeroDuplicidade539(
+        err.chaveConsulta,
+        serie,
+        modelo,
+      );
+      fiscalTrace.trace("Recovery539", "Numeração alinhada à chave duplicada", {
+        numeroVenda,
+        chave: err.chaveConsulta,
+        numeroOcupado: ocupado,
+        bump,
+      });
     }
 
     const nova = fiscalNumeracao.reservarProximoNumero(serie, modelo);
@@ -540,6 +589,12 @@ async function tentarRecuperar539ComBump(
         _fiscalMeta: payload._fiscalMeta,
       });
     }
+    fiscalTrace.trace("Recovery539", "Reemissão com novo número", {
+      numeroVenda,
+      numeroNfe: payload.numeroNfe,
+      bump: bump + 1,
+      max: MAX_BUMP_539,
+    });
 
     try {
       const tRetry = Date.now();
@@ -569,7 +624,7 @@ async function tentarRecuperar539ComBump(
       err = retryErr;
     }
   }
-  return err;
+  return finalizarErro539Esgotado(err, numeroVenda);
 }
 
 function reservarNumeracaoJob(payload, job) {
@@ -700,13 +755,12 @@ async function emitirCompleto(cfg, body, job = null) {
     }
   } catch (err) {
     enriquecerChaveConsulta539(err);
-    const rec = await fiscalRecuperacao.verificarAntesDeEmitir({
-      ...body,
-      chave: err.chaveConsulta,
-      chaveConsulta: err.chaveConsulta,
-      numeroNfe: payload.numeroNfe,
-      serieNfe: payload.serieNfe,
-    });
+    let rec = null;
+    try {
+      rec = await consultarRecuperacao539(body, payload, err);
+    } catch (_) {
+      rec = null;
+    }
     if (rec?.chave) {
       fiscalMetrics.registrarEmissao(Date.now() - inicio, { recuperada: true, ok: true });
       return finalizarEmissaoRecuperada(cfg, numeroVenda, correlationId, rec);
@@ -728,6 +782,9 @@ async function emitirCompleto(cfg, body, job = null) {
       }
       if (out539 && typeof out539 === "object" && out539.message) {
         err = out539;
+      }
+      if (err.esgotouRecuperacao539) {
+        await notificarPendenciaFiscalFailSafe(numeroVenda, correlationId, err);
       }
     }
     if (err.incerto && job) {

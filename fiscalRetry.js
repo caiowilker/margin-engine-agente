@@ -56,6 +56,32 @@ function extrairChaveMotivoDuplicidade(text) {
   );
 }
 
+/** Série e nNF a partir da chave de acesso (44 dígitos). */
+function extrairNumeroSerieDaChave(chave) {
+  const k = String(chave || "").replace(/\D/g, "");
+  if (k.length !== 44) return null;
+  const serie = parseInt(k.substring(22, 25), 10);
+  const numero = parseInt(k.substring(25, 34), 10);
+  if (!Number.isFinite(numero) || numero <= 0) return null;
+  return {
+    serie: Number.isFinite(serie) ? String(serie) : null,
+    numero,
+  };
+}
+
+function isErroDuplicidade539(errOrText) {
+  const cs =
+    typeof errOrText === "object"
+      ? extrairCStat(errOrText)
+      : String(errOrText || "").match(/cStat[=:\s]*(\d{3})/i)?.[1];
+  if (cs === "539" || cs === "204") return true;
+  const msg =
+    typeof errOrText === "object"
+      ? errOrText?.message || errOrText?.acbrRaw || ""
+      : String(errOrText || "");
+  return /539|duplicidade de nf-?e/i.test(msg);
+}
+
 function isPermanente(err) {
   const cStat = extrairCStat(err);
   if (cStat && REJEICAO_TRANSIENTE_CSTAT.has(cStat)) return false;
@@ -147,6 +173,8 @@ module.exports = {
   REJEICAO_TRANSIENTE_CSTAT,
   extrairCStat,
   extrairChaveMotivoDuplicidade,
+  extrairNumeroSerieDaChave,
+  isErroDuplicidade539,
   isPermanente,
   isIncerto,
   isTransient,
