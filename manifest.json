@@ -1,6 +1,6 @@
 {
   "versao": "1.0.0",
-  "geradoEm": "2026-07-04T02:00:00.988Z",
+  "geradoEm": "2026-07-04T02:23:43.259Z",
   "arquivos": [
     {
       "arquivo": "index.js",
@@ -16,11 +16,11 @@
     },
     {
       "arquivo": "filaFiscal.js",
-      "sha256": "ab7032811bb37d524ef8443123bf6f86c465fc9bb74415b50dc5a8577cec32c5"
+      "sha256": "48995085a431e01a80c629d179bc0aab8dffa9b1c38e76e8bed8a6293273c04b"
     },
     {
       "arquivo": "fiscalService.js",
-      "sha256": "2002030c531d4ef894f6a8225a0abde9d4600078c6b591a5740435fff602ba88"
+      "sha256": "4590f1162c98b02e5b7ead9664558da455877e1ad7d81984c64c601c46e4de7b"
     },
     {
       "arquivo": "fiscalMetrics.js",
