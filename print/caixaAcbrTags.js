@@ -54,14 +54,24 @@ function renderAberturaTags(payload = {}) {
   return lines.filter(Boolean).join("\n") + "\n";
 }
 
+function nomeEmpresaCaixa(empresa) {
+  const e = empresa || {};
+  return tx(
+    (e.nome || e.nomeFantasia || e.razaoSocial || "PDV").toUpperCase(),
+  );
+}
+
 function renderFechamentoTags(payload = {}) {
   const lines = ["</zera>", tagLogoHeader()];
-  lines.push(`<ce><n>${tx(payload.empresa?.nome || "PDV")}</n></ce>`);
+  lines.push(`<ce><n>${nomeEmpresaCaixa(payload.empresa)}</n></ce>`);
   if (payload.empresa?.cnpj) {
     lines.push(`CNPJ: ${toThermalDoc(payload.empresa.cnpj)}`);
   }
   const end = formatarLinhaEndereco(payload.empresa);
   if (end) lines.push(end.slice(0, COLS));
+  if (payload.empresa?.endereco && !end) {
+    lines.push(tx(String(payload.empresa.endereco)).slice(0, COLS));
+  }
   lines.push(
     sepEq(),
     "<ce><n>FECHAMENTO DE CAIXA</n></ce>",
@@ -76,16 +86,74 @@ function renderFechamentoTags(payload = {}) {
     const m = payload.minutosAberto % 60;
     lines.push(`Tempo   : ${h > 0 ? `${h}h ` : ""}${String(m).padStart(2, "0")}min`);
   }
+
+  lines.push(sepDash(), "<n>RESUMO DO DIA</n>");
+  lines.push(`Vendas      : ${payload.quantidadeVendas ?? 0}`);
+  lines.push(`Faturamento : ${fmtR$(payload.totalVendas)}`);
+  if (payload.totalLucro != null && Number(payload.totalLucro) !== 0) {
+    lines.push(`Lucro total : ${fmtR$(payload.totalLucro)}`);
+  }
+  if (payload.margemMedia != null && Number(payload.margemMedia) !== 0) {
+    lines.push(`Margem media: ${Number(payload.margemMedia).toFixed(1)}%`);
+  }
+
+  const formas = payload.resumoPorForma || {};
+  const formasOrdenadas = Object.entries(formas).sort(
+    ([, a], [, b]) => Number(b.total || 0) - Number(a.total || 0),
+  );
+  if (formasOrdenadas.length) {
+    lines.push(sepDash(), "<n>POR FORMA DE PAGAMENTO</n>");
+    for (const [forma, d] of formasOrdenadas) {
+      const label =
+        {
+          dinheiro: "Dinheiro",
+          pix: "PIX",
+          credito: "Credito",
+          debito: "Debito",
+          fiado: "Fiado",
+          voucher: "Voucher",
+          outros: "Outros",
+        }[forma] || forma;
+      const qtd =
+        d?.quantidade > 0 ? ` (${d.quantidade} venda(s))` : "";
+      lines.push(`${label}: ${fmtR$(d?.total)}${qtd}`);
+    }
+  }
+
   if (payload.totais && typeof payload.totais === "object") {
     lines.push(sepDash(), "<n>RESUMO</n>");
     for (const [k, v] of Object.entries(payload.totais)) {
       lines.push(`${tx(k)}: ${fmtR$(v)}`);
     }
   }
+
+  if (payload.valorAbertura != null || payload.valorContado != null) {
+    lines.push(sepDash(), "<n>CONFERENCIA DE CAIXA</n>");
+    lines.push(`Fundo abertura: ${fmtR$(payload.valorAbertura)}`);
+    lines.push(`Valor contado : ${fmtR$(payload.valorContado)}`);
+    const diff = Number(payload.diferenca ?? 0);
+    const diffStr =
+      Math.abs(diff) < 0.02
+        ? "OK — caixa confere"
+        : diff > 0
+          ? `Sobra: ${fmtR$(diff)}`
+          : `Falta: ${fmtR$(Math.abs(diff))}`;
+    lines.push(`Diferenca     : ${diffStr}`);
+  }
+
   if (payload.valorFechamento != null) {
     lines.push(sepDash(), `<n>Total   : ${fmtR$(payload.valorFechamento)}</n>`);
   }
-  lines.push(sepEq(), tagCorte());
+
+  if (payload.observacao) {
+    lines.push(sepDash(), `Obs: ${tx(payload.observacao)}`);
+  }
+
+  lines.push(
+    sepEq(),
+    `<ce>Caixa encerrado em ${payload.fechamentoEm || "-"}</ce>`,
+    tagCorte(),
+  );
   return lines.filter(Boolean).join("\n") + "\n";
 }
 

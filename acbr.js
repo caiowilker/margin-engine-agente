@@ -1455,6 +1455,19 @@ function assertAutorizada(p, resposta, modeloDF = 65) {
     err.incerto = true;
     err.permanente = false;
     err.sefazIntermitente = true;
+  } else if (cStat === "539" || cStat === "204") {
+    const fiscalRetry = require("./fiscalRetry");
+    const bruto = coalescerRespostaAcbr(resposta);
+    const chaveDup =
+      p.chave ||
+      err.chaveConsulta ||
+      fiscalRetry.extrairChaveMotivoDuplicidade(motivo) ||
+      fiscalRetry.extrairChaveMotivoDuplicidade(bruto);
+    if (chaveDup) err.chaveConsulta = chaveDup;
+    err.duplicidade539 = true;
+    err.permanente = false;
+    err.mensagemAcao =
+      "Duplicidade SEFAZ — consultando chave existente; se não autorizada, avança numeração.";
   } else {
     err.permanente = true;
   }
@@ -1601,12 +1614,7 @@ async function emitirNfceCore(payload) {
       resultado = normalizarResultado(p, resposta);
       break;
     } catch (err) {
-      if (
-        err.cStat === "539" &&
-        tentativa === 0 &&
-        !payload.numeroNfe &&
-        !payload._fiscalMeta?.numeroNfe
-      ) {
+      if (String(err.cStat) === "539" && tentativa === 0) {
         numeracao = fiscalNumeracao.reservarProximoNumero(serie);
         continue;
       }
@@ -1674,12 +1682,7 @@ async function emitirNfeCore(payload) {
       resultado = normalizarResultado(p, resposta, "55");
       break;
     } catch (err) {
-      if (
-        err.cStat === "539" &&
-        tentativa === 0 &&
-        !payload.numeroNfe &&
-        !payload._fiscalMeta?.numeroNfe
-      ) {
+      if (String(err.cStat) === "539" && tentativa === 0) {
         numeracao = fiscalNumeracao.reservarProximoNumero(serie, modeloNum);
         continue;
       }

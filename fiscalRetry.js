@@ -9,7 +9,7 @@ const REJEICAO_PERMANENTE_CSTAT = new Set([
   "281", // Certificado revogado
   "290", // Certificado com erro
   "301", // Uso denegado
-  "539", // Duplicidade (NFC-e)
+  // 539 — tratado via consulta + bump de numeração (não marcar permanente de imediato)
   "391", // Cartão crédito/débito sem dados de pagamento
   "869", // Valor do troco incorreto
   "685", // vTotTrib total difere do somatório dos itens
@@ -46,9 +46,22 @@ function extrairCStat(err) {
   return m ? m[1] : null;
 }
 
+/** Extrai chNFe de mensagens SEFAZ de duplicidade (539/204). */
+function extrairChaveMotivoDuplicidade(text) {
+  const s = String(text || "");
+  return (
+    s.match(/chNFe\s*[=:\[]\s*(\d{44})/i)?.[1] ||
+    s.match(/\[chNFe:(\d{44})\]/i)?.[1] ||
+    null
+  );
+}
+
 function isPermanente(err) {
   const cStat = extrairCStat(err);
   if (cStat && REJEICAO_TRANSIENTE_CSTAT.has(cStat)) return false;
+  if ((cStat === "539" || cStat === "204") && err?.duplicidade539 && err?.permanente === false) {
+    return false;
+  }
   if (err?.permanente) return true;
   if (cStat && REJEICAO_PERMANENTE_CSTAT.has(cStat)) {
     return true;
@@ -133,6 +146,7 @@ module.exports = {
   REJEICAO_PERMANENTE_CSTAT,
   REJEICAO_TRANSIENTE_CSTAT,
   extrairCStat,
+  extrairChaveMotivoDuplicidade,
   isPermanente,
   isIncerto,
   isTransient,

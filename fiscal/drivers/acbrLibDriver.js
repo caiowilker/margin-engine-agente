@@ -250,13 +250,11 @@ async function emitirDocumentoLib(payload, modeloDf) {
       }
       return await emitirViaParidade(iniPath, Number(modeloDf), numeracao);
     } catch (err) {
-      if (
-        String(err.cStat) === "539" &&
-        tentativa === 0 &&
-        !payload.numeroNfe &&
-        !payload._fiscalMeta?.numeroNfe
-      ) {
-        numeracao = { ...fiscalNumeracao.reservarProximoNumero(serie, modeloDf), cNf: CNF_PARIDADE };
+      if (String(err.cStat) === "539" && tentativa === 0) {
+        numeracao = {
+          ...fiscalNumeracao.reservarProximoNumero(serie, modeloDf),
+          cNf: CNF_PARIDADE,
+        };
         continue;
       }
       throw err;

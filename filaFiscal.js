@@ -1324,6 +1324,44 @@ function cancelarEmissaoPendente(motivo = "Cancelado manualmente") {
   return r.changes;
 }
 
+/** Reabre emissões FALHA_PERMANENTE por duplicidade (539) para nova tentativa com numeração fresca. */
+function reprocessarFalhasDuplicidade(opts = {}) {
+  init();
+  const numeroVenda = opts.numeroVenda ? String(opts.numeroVenda) : null;
+  const rows = db
+    .prepare(
+      `SELECT id, payload, correlation_id, numero_venda, erro FROM fila_fiscal
+       WHERE tipo = 'EMISSAO' AND status = 'FALHA_PERMANENTE'
+         AND (erro LIKE '%539%' OR erro LIKE '%Duplicidade%')
+         ${numeroVenda ? "AND numero_venda = ?" : ""}
+       ORDER BY id DESC`,
+    )
+    .all(...(numeroVenda ? [numeroVenda] : []));
+  let resetados = 0;
+  for (const row of rows) {
+    let payload = {};
+    try {
+      payload = JSON.parse(row.payload || "{}");
+    } catch (_) {}
+    delete payload.numeroNfe;
+    delete payload._539Retried;
+    if (payload._fiscalMeta) {
+      delete payload._fiscalMeta.numeroNfe;
+      delete payload._fiscalMeta.chave;
+    }
+    db.prepare(
+      `UPDATE fila_fiscal SET status = 'PENDENTE', tentativas = 0, erro = NULL,
+              proxima_tentativa = datetime('now'), payload = ? WHERE id = ?`,
+    ).run(JSON.stringify(payload), row.id);
+    if (row.correlation_id) {
+      salvarResultadoEmissao(row.correlation_id, row.numero_venda, "PENDENTE", null, null);
+    }
+    resetados++;
+  }
+  if (resetados) dispararProcessamento();
+  return { resetados };
+}
+
 function close() {
   pararWorkers();
   if (db) {
@@ -1385,6 +1423,7 @@ module.exports = {
   recuperarBoot,
   purgeAntigos,
   cancelarEmissaoPendente,
+  reprocessarFalhasDuplicidade,
   descartarJobsGerarPdfPendentes,
   marcarJob,
   buscarJobEmissaoPorVenda,

@@ -2035,12 +2035,18 @@ function iniciarServidor() {
   app.post("/fila/fiscal/reprocessar", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     filaFiscal.retomarFila();
     let recovery = null;
+    let falhas539 = null;
     if (req.body?.recoveryIncertos) {
       recovery = await fiscalRecuperacao.forcarRecoveryManual(lerConfig).catch((err) => ({
         erro: err.message,
       }));
     }
-    res.json({ ok: true, ...filaFiscal.status(), recovery });
+    if (req.body?.resetFalhas539 !== false) {
+      falhas539 = filaFiscal.reprocessarFalhasDuplicidade({
+        numeroVenda: req.body?.numeroVenda || null,
+      });
+    }
+    res.json({ ok: true, ...filaFiscal.status(), recovery, falhas539 });
   });
 
   app.post("/fila/fiscal/pausar", privateNetworkHeaders, exigirAgentToken, (req, res) => {

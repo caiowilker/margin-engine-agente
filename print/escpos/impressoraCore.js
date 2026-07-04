@@ -784,7 +784,7 @@ async function renderCupomConteudo(printer, payload) {
     printer.text(sepDash());
   }
 
-  // Nome da loja em negrito (sem size duplo — evita espaço excessivo no topo)
+  // Nome da loja em negrito + tamanho ampliado (paridade fechamento de caixa)
   const nomeEmpresa = tx(
     (
       empresa.nomeFantasia ||
@@ -792,7 +792,12 @@ async function renderCupomConteudo(printer, payload) {
       "ESTABELECIMENTO"
     ).toUpperCase(),
   );
-  printer.style("b").text(nomeEmpresa).style("normal");
+  printer
+    .style("b")
+    .size(1, 1)
+    .text(nomeEmpresa)
+    .style("normal")
+    .size(0, 0);
 
   if (empresa.razaoSocial && empresa.razaoSocial !== empresa.nomeFantasia)
     printer.text(tx(empresa.razaoSocial));
@@ -981,7 +986,11 @@ async function renderCupomConteudo(printer, payload) {
     if (qrConteudo && IMPRIMIR_QR_NFCE && isNfceModelo65(payload.chaveNfe)) {
       printer.text("Consulta via QR Code");
       await imprimirQrNfce(printer, qrConteudo);
-    } else if (IMPRIMIR_QR_NFCE && isNfceModelo65(payload.chaveNfe)) {
+    } else if (
+      IMPRIMIR_QR_NFCE &&
+      isNfceModelo65(payload.chaveNfe) &&
+      !payload.permitirSemQr
+    ) {
       throw new Error(
         "NFC-e autorizada sem URL de QR Code — aguarde sincronização do XML ou reimprima via DANFC-e",
       );
@@ -1029,7 +1038,16 @@ function renderFechamento(printer, payload) {
     .align("ct")
     .style("b")
     .size(1, 1)
-    .text(payload.empresa?.nome || "PDV")
+    .text(
+      tx(
+        (
+          payload.empresa?.nome ||
+          payload.empresa?.nomeFantasia ||
+          payload.empresa?.razaoSocial ||
+          "PDV"
+        ).toUpperCase(),
+      ),
+    )
     .style("normal")
     .size(0, 0);
 
@@ -1101,7 +1119,9 @@ function renderFechamento(printer, payload) {
         .text(
           label.padEnd(10) +
             fmt(d.total).padStart(10) +
-            (" " + d.quantidade + " venda(s)").padStart(12),
+            (d.quantidade > 0
+              ? (" " + d.quantidade + " venda(s)").padStart(12)
+              : "".padStart(12)),
         );
     });
 

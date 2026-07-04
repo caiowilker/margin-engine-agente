@@ -7,7 +7,7 @@ const { renderPaginaTeste } = require("../cupomAcbrTags");
 const { renderPayloadTags } = require("../renderPrint");
 const { normalizarCupomPayload } = require("../cupomValidate");
 const native = require("./nativeEscPosProvider");
-const caixaTags = require("./caixaAcbrTags");
+const caixaTags = require("../caixaAcbrTags");
 
 async function imprimirViaTags(renderFn, payload, fallbackNative) {
   const mode = getIntegrationMode();
