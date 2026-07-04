@@ -609,7 +609,7 @@ async function processarUm(opcoes = {}) {
           null,
           msg,
         );
-        if (/539|duplicidade de nf-?e/i.test(msg)) {
+        if (/539|204|duplicidade de nf-?e/i.test(msg)) {
           setImmediate(() => {
             require("./fiscalService")
               .notificarPendenciaFiscalFailSafe(

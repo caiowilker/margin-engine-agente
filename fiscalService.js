@@ -524,6 +524,22 @@ function finalizarErro539Esgotado(err, numeroVenda) {
   return err;
 }
 
+function alinharNumeroOcupadoDuplicidade(err, payload, serie, modelo) {
+  if (err.chaveConsulta) {
+    return fiscalNumeracao.sincronizarNumeroDuplicidade539(
+      err.chaveConsulta,
+      serie,
+      modelo,
+    );
+  }
+  const n = parseInt(String(payload.numeroNfe || payload._fiscalMeta?.numeroNfe || "").replace(/\D/g, ""), 10);
+  if (Number.isFinite(n) && n > 0) {
+    fiscalNumeracao.sincronizarNumeroAutorizado(serie, n, modelo);
+    return n;
+  }
+  return null;
+}
+
 async function tentarRecuperar539ComBump(
   cfg,
   body,
@@ -542,7 +558,13 @@ async function tentarRecuperar539ComBump(
     (nfe55 ? fiscalNumeracao.SERIE_NFE_55 : fiscalNumeracao.SERIE_PADRAO);
 
   let err = errInicial;
-  for (let bump = 0; bump < MAX_BUMP_539 && fiscalRetry.extrairCStat(err) === "539"; bump++) {
+  err.duplicidade539 = true;
+  err.permanente = false;
+  for (
+    let bump = 0;
+    bump < MAX_BUMP_539 && fiscalRetry.isErroDuplicidade539(err);
+    bump++
+  ) {
     enriquecerChaveConsulta539(err);
     const rec = await consultarRecuperacao539(body, payload, err);
     if (rec?.chave) {
@@ -559,16 +581,13 @@ async function tentarRecuperar539ComBump(
       return finalizarEmissaoRecuperada(cfg, numeroVenda, correlationId, rec);
     }
 
-    if (err.chaveConsulta) {
-      const ocupado = fiscalNumeracao.sincronizarNumeroDuplicidade539(
-        err.chaveConsulta,
-        serie,
-        modelo,
-      );
+    const ocupado = alinharNumeroOcupadoDuplicidade(err, payload, serie, modelo);
+    if (ocupado != null) {
       fiscalTrace.trace("Recovery539", "Numeração alinhada à chave duplicada", {
         numeroVenda,
-        chave: err.chaveConsulta,
+        chave: err.chaveConsulta || null,
         numeroOcupado: ocupado,
+        cStat: fiscalRetry.extrairCStat(err),
         bump,
       });
     }
@@ -777,7 +796,7 @@ async function emitirCompleto(cfg, body, job = null) {
       return finalizarEmissaoRecuperada(cfg, numeroVenda, correlationId, rec);
     }
 
-    if (fiscalRetry.extrairCStat(err) === "539") {
+    if (fiscalRetry.isErroDuplicidade539(err)) {
       const out539 = await tentarRecuperar539ComBump(
         cfg,
         body,
@@ -1375,7 +1394,7 @@ function registrarHandlersFila(lerConfigFn) {
       }
       const cStatErro = fiscalRetry.extrairCStat(err);
       if (
-        cStatErro === "539" ||
+        fiscalRetry.isErroDuplicidade539(err) ||
         err.esgotouRecuperacao539 ||
         fiscalRetry.isPermanente(err)
       ) {

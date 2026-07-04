@@ -21,6 +21,7 @@ test("extrairNumeroSerieDaChave — nNF da chave SEFAZ", () => {
 
 test("isErroDuplicidade539 — detecta cStat e mensagem", () => {
   assert.equal(fiscalRetry.isErroDuplicidade539("cStat 539 duplicidade"), true);
+  assert.equal(fiscalRetry.isErroDuplicidade539("cStat 204 Duplicidade de NF-e"), true);
   const err = new Error("NFC-e rejeitada (cStat 539)");
   err.cStat = "539";
   assert.equal(fiscalRetry.isErroDuplicidade539(err), true);
