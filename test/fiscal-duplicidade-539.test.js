@@ -1,6 +1,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const fiscalRetry = require("../fiscalRetry");
+const fiscalRecuperacao = require("../fiscalRecuperacao");
 
 test("extrairChaveMotivoDuplicidade — formato SEFAZ [chNFe:…]", () => {
   const msg =
@@ -23,6 +24,14 @@ test("isErroDuplicidade539 — detecta cStat e mensagem", () => {
   const err = new Error("NFC-e rejeitada (cStat 539)");
   err.cStat = "539";
   assert.equal(fiscalRetry.isErroDuplicidade539(err), true);
+});
+
+test("podeRecuperarChaveParaVenda — 539 não reutiliza nota de outra venda", () => {
+  const chave = "31260612343055000183650010000000091816823438";
+  assert.equal(
+    fiscalRecuperacao.podeRecuperarChaveParaVenda(chave, "PDV-NOVA"),
+    false,
+  );
 });
 
 test("isPermanente — cStat 539 com duplicidade539 não é permanente imediato", () => {

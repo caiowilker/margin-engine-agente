@@ -35,13 +35,56 @@ function jobIncertoPorLote104(job, payload = {}) {
   );
 }
 
+/**
+ * Em cStat 539, só recupera chave já vinculada à venda atual.
+ * Nota autorizada na SEFAZ mas de outra venda/data → avançar numeração (não reutilizar).
+ */
+function podeRecuperarChaveParaVenda(chave, numeroVenda, correlationId = null) {
+  const k = String(chave || "").replace(/\D/g, "");
+  const nv = String(numeroVenda || "").trim();
+  if (k.length !== 44 || !nv) return false;
+
+  const docChave = filaFiscal.buscarDocumentoPorChave(k);
+  if (docChave?.numero_venda && docChave.numero_venda !== nv) {
+    return false;
+  }
+  if (docChave?.numero_venda === nv) return true;
+
+  const docVenda = filaFiscal.buscarDocumentoPorVenda(nv);
+  if (docVenda?.chave && docVenda.chave !== k) return false;
+  if (docVenda?.chave === k) return true;
+
+  const resultado = filaFiscal.obterResultadoPorVenda(nv);
+  if (resultado?.resultado) {
+    try {
+      const parsed = JSON.parse(resultado.resultado);
+      if (parsed?.chave === k) return true;
+    } catch (_) {
+      /* ignore */
+    }
+  }
+  if (correlationId) {
+    const row = filaFiscal.obterResultadoEmissao(correlationId);
+    if (row?.resultado) {
+      try {
+        const parsed = JSON.parse(row.resultado);
+        if (parsed?.chave === k) return true;
+      } catch (_) {
+        /* ignore */
+      }
+    }
+  }
+
+  return false;
+}
+
 function fiscalDriverDisponivelMemoria() {
   if (!fiscalDriver.EMISSAO_FISCAL) return false;
   return fiscalDriver.obterStatusMemoria(false) !== "offline";
 }
 
 async function consultarDocumentoAutorizado(meta = {}) {
-  let { chave, serie, numeroNfe, numeroVenda, cnpj } = meta;
+  let { chave, serie, numeroNfe, numeroVenda, cnpj, correlationId, modoDuplicidade539 } = meta;
 
   if (!chave && numeroVenda) {
     const doc = filaFiscal.buscarDocumentoPorVenda(numeroVenda);
@@ -99,12 +142,32 @@ async function consultarDocumentoAutorizado(meta = {}) {
         cs === "100" ||
         cs === "150"
       ) {
+        if (
+          modoDuplicidade539 &&
+          !podeRecuperarChaveParaVenda(chave, numeroVenda, correlationId)
+        ) {
+          log.info(
+            { chave, numeroVenda },
+            "539: chave autorizada na SEFAZ pertence a outra venda — não recuperar",
+          );
+          return null;
+        }
         const rawTxt = coalescerRespostaAcbr(consulta.raw);
-        const localXml = docs.localizarXmlPorChave(chave);
-        const xmlAutorizado =
+        let localXml = docs.localizarXmlPorChave(chave);
+        let xmlAutorizado =
           localXml?.xml && docs.xmlEstaAutorizado(localXml.xml)
             ? localXml.xml
             : null;
+        if (!xmlAutorizado) {
+          const xmlConsulta = docs.extrairXmlDaResposta(consulta.raw);
+          if (xmlConsulta && docs.xmlEstaAutorizado(xmlConsulta)) {
+            xmlAutorizado = xmlConsulta;
+            const salvo = docs.salvarXmlAutorizado(chave, xmlConsulta);
+            if (salvo) {
+              localXml = { xml: xmlConsulta, path: salvo };
+            }
+          }
+        }
         return {
           fiscal: true,
           chave,
@@ -171,6 +234,8 @@ async function verificarAntesDeEmitir(payload) {
     serie: payload.serieNfe || payload._fiscalMeta?.serieNfe,
     numeroNfe: payload.numeroNfe || payload._fiscalMeta?.numeroNfe,
     numeroVenda: payload.numeroVenda,
+    correlationId: payload.correlationId,
+    modoDuplicidade539: payload.modoDuplicidade539 === true,
     cnpj:
       payload.empresa?.cnpj ||
       payload.cnpj ||
@@ -415,6 +480,7 @@ async function forcarRecoveryManual(lerConfigFn) {
 module.exports = {
   consultarDocumentoAutorizado,
   verificarAntesDeEmitir,
+  podeRecuperarChaveParaVenda,
   recuperarJob,
   tentarRecuperacaoConsulta,
   processarFilaRecovery,

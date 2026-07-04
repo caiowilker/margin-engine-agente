@@ -881,6 +881,20 @@ function buscarDocumentoPorSerieNumero(serie, numero) {
     .get(String(serie), String(numero));
 }
 
+/** Maior nNF já persistido localmente para a série (evita reutilizar número ocupado). */
+function maiorNumeroNfeSerie(serie) {
+  init();
+  const row = db
+    .prepare(
+      `SELECT MAX(CAST(numero_nfe AS INTEGER)) AS maxNum
+       FROM documentos_fiscais
+       WHERE serie_nfe = ? AND numero_nfe GLOB '[0-9]*'`,
+    )
+    .get(String(serie));
+  const n = parseInt(String(row?.maxNum || "0"), 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function salvarResultadoEmissao(correlationId, numeroVenda, status, resultado, erro) {
   init();
   db.prepare(
@@ -1410,6 +1424,7 @@ module.exports = {
   buscarDocumentoPorChave,
   buscarDocumentoPorVenda,
   buscarDocumentoPorSerieNumero,
+  maiorNumeroNfeSerie,
   salvarResultadoEmissao,
   obterResultadoEmissao,
   obterResultadoPorVenda,

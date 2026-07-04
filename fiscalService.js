@@ -496,6 +496,8 @@ async function consultarRecuperacao539(body, payload, err) {
       chaveConsulta: err.chaveConsulta,
       numeroNfe: payload.numeroNfe,
       serieNfe: payload.serieNfe,
+      correlationId: body.correlationId || payload.correlationId,
+      modoDuplicidade539: true,
     });
   } catch (consultErr) {
     fiscalTrace.warn("Recovery539", "Consulta SEFAZ falhou — segue bump de numeração", {
@@ -638,6 +640,11 @@ function reservarNumeracaoJob(payload, job) {
   const modelo = isNfe55 ? fiscalNumeracao.MODELO_NFE : fiscalNumeracao.MODELO_NFCE;
   const serie = payload.serieNfe
     || (isNfe55 ? fiscalNumeracao.SERIE_NFE_55 : fiscalNumeracao.SERIE_PADRAO);
+  const maxLocal = filaFiscal.maiorNumeroNfeSerie(serie);
+  const ultimo = fiscalNumeracao.consultarUltimo(serie, modelo);
+  if (maxLocal > ultimo) {
+    fiscalNumeracao.sincronizarNumeroAutorizado(serie, maxLocal, modelo);
+  }
   const res = fiscalNumeracao.reservarProximoNumero(serie, modelo);
   const meta = {
     numeroNfe: String(res.numero),
