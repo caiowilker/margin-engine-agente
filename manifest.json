@@ -1,6 +1,6 @@
 {
   "versao": "1.0.0",
-  "geradoEm": "2026-07-04T01:16:05.882Z",
+  "geradoEm": "2026-07-04T01:37:37.942Z",
   "arquivos": [
     {
       "arquivo": "index.js",
@@ -16,11 +16,11 @@
     },
     {
       "arquivo": "filaFiscal.js",
-      "sha256": "ba74251951649db41cbb906b825268fa38448a92d398b4132b7cd90bf5a18059"
+      "sha256": "ab7032811bb37d524ef8443123bf6f86c465fc9bb74415b50dc5a8577cec32c5"
     },
     {
       "arquivo": "fiscalService.js",
-      "sha256": "30aa2ee78eb7e4dbb4f8ed170a6a489153a13eb4656fd2964eb3413d9da3228e"
+      "sha256": "2002030c531d4ef894f6a8225a0abde9d4600078c6b591a5740435fff602ba88"
     },
     {
       "arquivo": "fiscalMetrics.js",
@@ -40,7 +40,7 @@
     },
     {
       "arquivo": "fiscalRecuperacao.js",
-      "sha256": "ecf1faec47f64e470a15057bf7026614a37904bc3f3ef7d0c23510c19cd91eef"
+      "sha256": "8308f2890d27938c97cc95a49c28a844987b557ae08491cfae9cabbc570d0131"
     },
     {
       "arquivo": "fiscalStorage.js",
@@ -60,7 +60,7 @@
     },
     {
       "arquivo": "fiscalNumeracao.js",
-      "sha256": "7ae54f9e7206da4b6d9502d71286bf4d47a047a7005c56ad6343a1fad0d66af0"
+      "sha256": "48e7ec42568bdfcb445e66ad2d19d702e43ef0b87f15e50bb62dcff5f819d19e"
     },
     {
       "arquivo": "fiscalValidacao.js",
