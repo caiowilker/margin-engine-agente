@@ -61,6 +61,16 @@ async function run() {
   assert.ok(obs.fila);
   assert.ok(obs.fila.total >= 2);
 
+  process.env.PRINTER_FALLBACK = "mock";
+  factory.resetPrintProvider();
+  const ps = require("../printerService");
+  ps.resetPrintProvider();
+  const mock = factory.getPrintProvider();
+  mock._clearJobs();
+  const r = await ps.imprimirTeste();
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(mock._jobs[0].tipo, "teste");
+
   cleanup();
   console.log("print-job-service.test.js — OK");
 }

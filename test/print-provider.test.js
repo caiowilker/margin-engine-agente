@@ -167,19 +167,6 @@ async function run() {
     assert.strictEqual(m._jobs[0].tipo, "teste");
   });
 
-  await testAsync("printerService imprimirTeste via mock", async () => {
-    process.env.PRINTER_PROVIDER = "mock";
-    process.env.PRINTER_FALLBACK = "mock";
-    factory.resetPrintProvider();
-    const ps = require("../printerService");
-    ps.resetPrintProvider();
-    const mock = factory.getPrintProvider();
-    mock._clearJobs();
-    const r = await ps.imprimirTeste();
-    assert.strictEqual(r.ok, true);
-    assert.strictEqual(mock._jobs[0].tipo, "teste");
-  });
-
   console.log(`\n${passed} passed, ${failed} failed\n`);
   process.exit(failed > 0 ? 1 : 0);
 }
