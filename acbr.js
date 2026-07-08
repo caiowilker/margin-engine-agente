@@ -1839,10 +1839,282 @@ async function imprimirDanfce(chave, xmlPath) {
   );
 }
 
+function extrairUfDaChave(chave) {
+  const k = String(chave || "").replace(/\D/g, "");
+  return k.length >= 2 ? k.substring(0, 2) : "35";
+}
+
+/** UF IBGE (2 dígitos) do destinatário — prioriza cadastro da empresa, não o emitente da chave. */
+function resolverUfIbgeDestinatario(ufHint, chaveFallback) {
+  const u = String(ufHint || "").trim();
+  if (/^\d{2}$/.test(u)) return u;
+  const cod = ibgeUfParaCodigo(u);
+  if (cod) return cod;
+  return extrairUfDaChave(chaveFallback);
+}
+
+function isCStatManifestacaoOk(cStat, raw) {
+  const cs = String(cStat || "");
+  if (isCStatEventoOk(cs)) return true;
+  if (cs === "573") return true;
+  const t = coalescerRespostaAcbr(raw).toUpperCase();
+  return t.includes("573") || /DUPLICIDADE.*EVENTO/i.test(t);
+}
+
+function montarIniManifestacaoCiencia(chave, cnpjDestinatario) {
+  const k = String(chave || "").replace(/\D/g, "");
+  const cnpj = String(cnpjDestinatario || "").replace(/\D/g, "");
+  if (k.length !== 44) {
+    throw new Error("Chave NF-e deve ter 44 dígitos para manifestação.");
+  }
+  if (cnpj.length !== 14) {
+    throw new Error("CNPJ do destinatário obrigatório para manifestação (14 dígitos).");
+  }
+  return [
+    "[EVENTO]",
+    "idLote=1",
+    "cOrgao=91",
+    `tpAmb=${resolverTpAmb()}`,
+    `CNPJ=${cnpj}`,
+    `chNFe=${k}`,
+    `dhEvento=${formatarDhEmi()}`,
+    "tpEvento=210210",
+    "nSeqEvento=1",
+    "verEvento=1.00",
+    "descEvento=Ciencia da Operacao",
+    "xJust=Ciencia da operacao registrada pelo destinatario",
+  ].join("\r\n");
+}
+
+async function distribuicaoDFePorChave(chave, cnpjDestinatario, ufAutor) {
+  if (!chave || String(chave).length !== 44) {
+    throw new Error("Chave NF-e deve ter 44 dígitos.");
+  }
+  const cnpj = String(cnpjDestinatario || "").replace(/\D/g, "");
+  if (cnpj.length !== 14) {
+    throw new Error("CNPJ do destinatário obrigatório para Distribuição DFe (14 dígitos).");
+  }
+  const cUF = resolverUfIbgeDestinatario(ufAutor, chave);
+  const resposta = await enviarNfeModelo(
+    `NFE.DistribuicaoDFePorChave(${cUF},${qAcbr(cnpj)},${qAcbr(chave)})`,
+    55,
+    ACBR_TIMEOUT_EMISSAO,
+  );
+  const docs = require("./documentosFiscais");
+  const xml = docs.extrairXmlDaResposta(resposta);
+  const p = parseResposta(resposta);
+  return {
+    chave,
+    cStat: p.cStat,
+    xMotivo: p.xMotivo,
+    xml,
+    fonteConsulta: "DISTRIBUICAO_DFE",
+    raw: resposta,
+  };
+}
+
+async function distribuicaoDFePorUltNsu(ultNsu, cnpjDestinatario, uf) {
+  const cUF = resolverUfIbgeDestinatario(uf, null);
+  const cnpj = String(cnpjDestinatario || "").replace(/\D/g, "");
+  if (cnpj.length !== 14) {
+    throw new Error("CNPJ do destinatário obrigatório para Distribuição DFe (14 dígitos).");
+  }
+  const nsu = String(ultNsu || "0").replace(/\D/g, "").padStart(15, "0");
+  const resposta = await enviarNfeModelo(
+    `NFE.DistribuicaoDFePorUltNSU(${cUF},${qAcbr(cnpj)},${qAcbr(nsu)})`,
+    55,
+    ACBR_TIMEOUT_EMISSAO,
+  );
+  const docs = require("./documentosFiscais");
+  const xmls = [];
+  const re = /<nfeProc[\s\S]*?<\/nfeProc>/gi;
+  let m;
+  while ((m = re.exec(resposta)) !== null) {
+    xmls.push(m[0]);
+  }
+  if (xmls.length === 0) {
+    const unico = docs.extrairXmlDaResposta(resposta);
+    if (unico) xmls.push(unico);
+  }
+  const p = parseResposta(resposta);
+  const ultNsuFinal =
+    resposta.match(/ultNSU\s*[=:]\s*(\d+)/i)?.[1] ||
+    resposta.match(/<ultNSU>(\d+)<\/ultNSU>/i)?.[1] ||
+    nsu;
+  const maxNsu =
+    resposta.match(/maxNSU\s*[=:]\s*(\d+)/i)?.[1] ||
+    resposta.match(/<maxNSU>(\d+)<\/maxNSU>/i)?.[1] ||
+    null;
+  return {
+    cStat: p.cStat,
+    xMotivo: p.xMotivo,
+    ultNsuInicial: nsu,
+    ultNsuFinal,
+    maxNsu,
+    xmls,
+    raw: resposta,
+  };
+}
+
+async function manifestarCienciaOperacao(chave, cnpjDestinatario) {
+  const cnpj = String(cnpjDestinatario || "").replace(/\D/g, "");
+  if (cnpj.length !== 14) {
+    throw new Error("CNPJ do destinatário obrigatório para manifestação (14 dígitos).");
+  }
+  const chaveNorm = String(chave || "").replace(/\D/g, "");
+  const documentIni = montarIniManifestacaoCiencia(chaveNorm, cnpj);
+  const iniPath = path.join(
+    PATHS.ini,
+    `manifesto-ciencia-${Date.now()}-${chaveNorm.slice(-8)}.ini`,
+  );
+  fs.writeFileSync(iniPath, documentIni, "utf8");
+  const { p, resposta } = await criarEnviarIniModelo(iniPath, 55, {
+    sincrono: true,
+    eventoFiscal: true,
+  });
+  const cStat = String(p.cStat || "");
+  const ok = isCStatManifestacaoOk(cStat, resposta);
+  if (!ok && !isCStatAutorizado(cStat) && !CSTAT_LOTE_OK.has(cStat)) {
+    assertAutorizada(p, resposta, 55);
+  }
+  return {
+    ok,
+    cStat: p.cStat,
+    protocolo: p.protocolo,
+    chave: p.chave || chaveNorm,
+    xMotivo: p.xMotivo,
+    raw: resposta,
+    tipoEvento: "210210",
+    modeloDocumento: "55",
+  };
+}
+
+async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor) {
+  if (!chave || String(chave).replace(/\D/g, "").length !== 44) {
+    throw new Error("Chave NF-e deve ter 44 dígitos.");
+  }
+  const chaveNorm = String(chave).replace(/\D/g, "");
+  const modelo = chaveNorm.substring(20, 22);
+  if (modelo !== "55") {
+    throw new Error("Consulta de entrada suporta apenas NF-e modelo 55.");
+  }
+
+  const cnpj = String(cnpjDestinatario || "").replace(/\D/g, "");
+  if (cnpj.length !== 14) {
+    return {
+      ok: false,
+      chave: chaveNorm,
+      situacao: "CONFIG_INCOMPLETA",
+      mensagem:
+        "CNPJ da empresa não configurado no agente — configure o certificado digital (A1/A3).",
+      fonteConsulta: null,
+      fallbackManual: true,
+    };
+  }
+  const uf = resolverUfIbgeDestinatario(ufAutor, chaveNorm);
+
+  let consulta;
+  try {
+    consulta = await consultarChave(chaveNorm);
+  } catch (err) {
+    consulta = { cStat: null, xMotivo: err.message, situacao: "ERRO_CONSULTA" };
+  }
+
+  const situacao = consulta.situacao || inferirSituacao(consulta.cStat, consulta.raw);
+  if (situacao === "CANCELADA") {
+    return {
+      ok: false,
+      chave: chaveNorm,
+      situacao,
+      cStat: consulta.cStat,
+      mensagem: "Nota cancelada na SEFAZ.",
+      fonteConsulta: "PORTAL_NACIONAL",
+    };
+  }
+  if (situacao === "DENEGADA") {
+    return {
+      ok: false,
+      chave: chaveNorm,
+      situacao,
+      cStat: consulta.cStat,
+      mensagem: "Nota denegada na SEFAZ.",
+      fonteConsulta: "PORTAL_NACIONAL",
+    };
+  }
+
+  const docs = require("./documentosFiscais");
+  let xml = consulta.raw ? docs.extrairXmlDaResposta(consulta.raw) : null;
+  let fonte = "PORTAL_NACIONAL";
+
+  async function tentarDistribuicao() {
+    const dist = await distribuicaoDFePorChave(chaveNorm, cnpj, uf);
+    return dist.xml && dist.xml.includes("<NFe") ? dist.xml : null;
+  }
+
+  if (!xml || !xml.includes("<NFe")) {
+    try {
+      xml = await tentarDistribuicao();
+      if (xml) fonte = "DISTRIBUICAO_DFE";
+    } catch (distErr) {
+      if (!consulta.cStat) {
+        return {
+          ok: false,
+          chave: chaveNorm,
+          situacao: "NAO_LOCALIZADA",
+          mensagem: distErr.message || "Nota não localizada na SEFAZ.",
+          fonteConsulta: "DISTRIBUICAO_DFE",
+          fallbackManual: true,
+        };
+      }
+    }
+  }
+
+  if (!xml || !xml.includes("<NFe")) {
+    try {
+      await manifestarCienciaOperacao(chaveNorm, cnpj);
+      xml = await tentarDistribuicao();
+      if (xml) fonte = "DISTRIBUICAO_DFE";
+    } catch {
+      /* ciência já registrada ou indisponível — tenta download mesmo assim */
+    }
+  }
+
+  if (!xml || !xml.includes("<NFe")) {
+    return {
+      ok: false,
+      chave: chaveNorm,
+      situacao: situacao === "DESCONHECIDA" ? "NAO_LOCALIZADA" : situacao,
+      cStat: consulta.cStat,
+      mensagem:
+        consulta.xMotivo ||
+        "XML não disponível — utilize entrada manual ou aguarde manifesto do destinatário.",
+      fonteConsulta: fonte,
+      fallbackManual: true,
+    };
+  }
+
+  return {
+    ok: true,
+    chave: chaveNorm,
+    situacao: situacao === "DESCONHECIDA" ? "AUTORIZADA" : situacao,
+    cStat: consulta.cStat,
+    mensagem: consulta.xMotivo || "XML obtido com sucesso.",
+    xml,
+    fonteConsulta: fonte,
+  };
+}
+
 module.exports = {
   testar,
   statusServico,
   consultarChave,
+  consultarChaveEntrada,
+  distribuicaoDFePorChave,
+  distribuicaoDFePorUltNsu,
+  manifestarCienciaOperacao,
+  montarIniManifestacaoCiencia,
+  resolverUfIbgeDestinatario,
+  isCStatManifestacaoOk,
   emitirNfce,
   emitirNfe,
   isNfeModelo55Habilitado,

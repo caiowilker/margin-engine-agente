@@ -1988,6 +1988,31 @@ function iniciarServidor() {
     }
   });
 
+  app.post("/acbr/nfe/entrada/consultar-chave", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    try {
+      const body = req.body || {};
+      const fiscalLocalConfig = require("./fiscalLocalConfig");
+      const snap = fiscalLocalConfig.lerSnapshot?.() || {};
+      const empresa = body.empresa || snap.empresa || {};
+      const chave = String(body.chaveAcesso || body.chave || "").replace(/\D/g, "");
+      const cnpj = String(empresa.cnpj || body.cnpj || "").replace(/\D/g, "");
+      const uf = String(empresa.uf || snap.uf || body.uf || "").trim();
+      const acbr = require("./acbr");
+      res.json(await acbr.consultarChaveEntrada(chave, cnpj, uf));
+    } catch (err) {
+      res.status(400).json({ ok: false, erro: err.message });
+    }
+  });
+
+  app.post("/acbr/nfe/manifesto/sincronizar", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    try {
+      const manifestoDestinatario = require("./manifestoDestinatario");
+      res.json(await manifestoDestinatario.executarSincronizacao(true));
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
+  });
+
   app.post("/acbr/nfce/inutilizar", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       const cfg = await lerConfig();
@@ -2774,6 +2799,14 @@ function iniciarServidor() {
     log.warn({ err: err.message }, "[Agente] Falha ao sincronizar segredos fiscais do .env");
   }
   configSync.iniciar(lerConfig, fiscalDriver);
+
+  try {
+    const manifestoDestinatario = require("./manifestoDestinatario");
+    manifestoDestinatario.configurar({ lerConfig });
+    manifestoDestinatario.iniciarAgendamento();
+  } catch (err) {
+    log.warn({ err: err.message }, "[Agente] Manifesto destinatário não iniciado");
+  }
 
   const SYNC_INTERVAL = parseInt(process.env.SYNC_INTERVAL_MS || "30000", 10);
   trackInterval(() => {
