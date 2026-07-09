@@ -530,7 +530,7 @@ const CATALOGO = {
     env: "PRINTER_CUT",
     tipo: "string",
     default: "partial",
-    enum: ["partial", "total"],
+    enum: ["partial", "total", "full", "none"],
     grupo: "impressora",
     label: "Tipo de corte de papel",
   },

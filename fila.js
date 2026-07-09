@@ -1,6 +1,7 @@
 // ============================================================
 // PDV Margin Engine — Modulo de Fila Offline com SQLite v3.3
 //
+// v3.4 — Recuperação ENVIANDO preso após crash + métricas enviando
 // v3.3 — Alinhamento com backend confirmado
 //   - processarLote: prioriza r.numeroVenda (campo exato do
 //     SyncResultadoItem { numeroVenda, status, erro } do backend)
@@ -159,6 +160,23 @@ function inicializar() {
   `);
 
   console.log(`[Fila SQLite] Banco iniciado em ${DB_PATH}`);
+  recuperarEnviandoPresos();
+}
+
+/** Após reinício do agente, vendas em ENVIANDO não têm request HTTP ativo — volta para PENDENTE. */
+function recuperarEnviandoPresos() {
+  if (!db) return 0;
+  const r = db
+    .prepare(
+      `UPDATE fila_vendas SET status = 'PENDENTE' WHERE status = 'ENVIANDO'`,
+    )
+    .run();
+  if (r.changes > 0) {
+    console.log(
+      `[Fila] Recuperadas ${r.changes} venda(s) presas em ENVIANDO após reinício do agente`,
+    );
+  }
+  return r.changes;
 }
 
 function enfileirar(payload) {
@@ -244,6 +262,7 @@ function metricas() {
       return {
         total: 0,
         pendentes: 0,
+        enviando: 0,
         falhas: 0,
         sincronizadas: 0,
         limiteAviso: OFFLINE_QUEUE_WARN,
@@ -257,6 +276,7 @@ function metricas() {
       SELECT
         COUNT(*) AS total,
         SUM(CASE WHEN status = 'PENDENTE' THEN 1 ELSE 0 END) AS pendentes,
+        SUM(CASE WHEN status = 'ENVIANDO' THEN 1 ELSE 0 END) AS enviando,
         SUM(CASE WHEN status = 'FALHA_PERMANENTE' THEN 1 ELSE 0 END) AS falhas,
         SUM(CASE WHEN status = 'SINCRONIZADO' THEN 1 ELSE 0 END) AS sincronizadas,
         MIN(CASE WHEN status = 'PENDENTE' THEN criado_em END) AS oldest_pendente
@@ -273,6 +293,7 @@ function metricas() {
     return {
       total: row?.total || 0,
       pendentes: row?.pendentes || 0,
+      enviando: row?.enviando || 0,
       falhas: row?.falhas || 0,
       sincronizadas: row?.sincronizadas || 0,
       limiteAviso: OFFLINE_QUEUE_WARN,
@@ -284,6 +305,7 @@ function metricas() {
     return {
       total: 0,
       pendentes: 0,
+      enviando: 0,
       falhas: 0,
       sincronizadas: 0,
       limiteAviso: OFFLINE_QUEUE_WARN,

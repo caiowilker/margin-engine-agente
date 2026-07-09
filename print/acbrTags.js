@@ -101,7 +101,7 @@ function tagSegundaViaBanner() {
 
 function tagCorte(tipo) {
   const cut = (tipo || process.env.PRINTER_CUT || "partial").toLowerCase();
-  return cut === "total" ? "</corte_total>" : "</corte_parcial>";
+  return cut === "total" || cut === "full" ? "</corte_total>" : "</corte_parcial>";
 }
 
 function tagFormato(linhas) {

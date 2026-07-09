@@ -117,6 +117,20 @@ const payload = {
     assert.ok(typeof m.limiteCritico === "number");
   });
 
+  await test("recuperarEnviandoPresos — reinício devolve ENVIANDO para PENDENTE", async () => {
+    const p = { ...payload, numeroVendaCliente: "PDV-TEST-ENVIANDO" };
+    await fila.registrarLocalFirst(p);
+    const db = require("better-sqlite3")(dbPath);
+    db.prepare(
+      "UPDATE fila_vendas SET status = 'ENVIANDO' WHERE numero_venda = ?",
+    ).run("PDV-TEST-ENVIANDO");
+    db.close();
+    fila.inicializar();
+    const row = fila.listar().find((x) => x.numero_venda === "PDV-TEST-ENVIANDO");
+    assert.ok(row);
+    assert.strictEqual(row.status, "PENDENTE");
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
 })();
