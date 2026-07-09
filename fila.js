@@ -159,6 +159,16 @@ function inicializar() {
       ON fila_vendas(numero_venda);
   `);
 
+  try {
+    db.prepare(
+      `ALTER TABLE fila_vendas ADD COLUMN numero_venda_backend TEXT`,
+    ).run();
+  } catch (err) {
+    if (!/duplicate column name/i.test(String(err?.message || ""))) {
+      throw err;
+    }
+  }
+
   console.log(`[Fila SQLite] Banco iniciado em ${DB_PATH}`);
   recuperarEnviandoPresos();
 }
@@ -214,6 +224,8 @@ function montarRespostaVenda(payload, opts = {}) {
   const emitirNfce = payload?.emitirNfce === true;
   return {
     numeroVenda: String(numero),
+    numeroVendaCliente: String(numero),
+    numeroVendaBackend: opts.numeroVendaBackend || null,
     emitidoEm: opts.emitidoEm || new Date().toISOString(),
     margem,
     lucro,
@@ -224,6 +236,15 @@ function montarRespostaVenda(payload, opts = {}) {
     origem: opts.origem || "local",
     syncPendente: opts.syncPendente === true,
   };
+}
+
+function atualizarNumeroVendaBackend(numeroVendaCliente, numeroVendaBackend) {
+  if (!db || !numeroVendaCliente || !numeroVendaBackend) return;
+  db.prepare(
+    `UPDATE fila_vendas
+     SET numero_venda_backend = ?
+     WHERE numero_venda = ?`,
+  ).run(String(numeroVendaBackend), String(numeroVendaCliente));
 }
 
 function marcarSincronizado(numeroVenda) {
@@ -336,6 +357,13 @@ function sincronizarVendaEmBackground(payload) {
   tentarBackend(payload)
     .then((r) => {
       if (r.ok) {
+        const numeroVendaBackend =
+          r?.dados?.numeroVenda && String(r.dados.numeroVenda).trim()
+            ? String(r.dados.numeroVenda).trim()
+            : null;
+        if (numeroVendaBackend) {
+          atualizarNumeroVendaBackend(numero, numeroVendaBackend);
+        }
         marcarSincronizado(numero);
         return;
       }
@@ -613,6 +641,14 @@ async function sincronizarInterno(url, token) {
         r.sucesso === true ||
         r.ok === true
       ) {
+        const numeroVendaBackend =
+          r.numeroVendaBackend ||
+          r.numeroVendaServidor ||
+          r.numeroVendaOficial ||
+          null;
+        if (numeroVendaBackend) {
+          atualizarNumeroVendaBackend(chave, numeroVendaBackend);
+        }
         marcarSincronizado.run(chave);
         sincronizadas++;
       } else {
@@ -683,7 +719,7 @@ function listar() {
     return db
       .prepare(
         `
-      SELECT id, numero_venda, status, tentativas, ultimo_erro, criado_em, sincronizado_em
+      SELECT id, numero_venda, numero_venda_backend, status, tentativas, ultimo_erro, criado_em, sincronizado_em
       FROM   fila_vendas
       ORDER  BY id DESC
       LIMIT  200
@@ -693,6 +729,22 @@ function listar() {
   } catch (err) {
     console.warn("[Fila] Erro ao listar fila:", err.message);
     return [];
+  }
+}
+
+function consultarVenda(numeroVendaCliente) {
+  try {
+    if (!db || !numeroVendaCliente) return null;
+    return db
+      .prepare(
+        `SELECT id, numero_venda, numero_venda_backend, status, tentativas, ultimo_erro, criado_em, sincronizado_em
+         FROM fila_vendas
+         WHERE numero_venda = ?`,
+      )
+      .get(String(numeroVendaCliente));
+  } catch (err) {
+    console.warn("[Fila] Erro ao consultar venda na fila:", err.message);
+    return null;
   }
 }
 
@@ -764,6 +816,7 @@ module.exports = {
   contadores,
   metricas,
   listar,
+  consultarVenda,
   resetarFalhas,
   statusAuth,
   purgeAntigos,

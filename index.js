@@ -2741,6 +2741,14 @@ function iniciarServidor() {
 
   app.get("/fila", exigirAgentToken, (req, res) => res.json(fila.listar()));
 
+  app.get("/fila/venda/:numero", exigirAgentToken, (req, res) => {
+    const row = fila.consultarVenda(String(req.params.numero || ""));
+    if (!row) {
+      return res.status(404).json({ erro: "Venda não encontrada na fila local." });
+    }
+    return res.json(row);
+  });
+
   app.post("/fila/sincronizar", exigirAgentToken, async (req, res) => {
     res.json(await fila.sincronizar());
   });

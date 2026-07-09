@@ -74,6 +74,8 @@ const payload = {
       syncPendente: true,
     });
     assert.strictEqual(r.numeroVenda, "PDV-TEST-LOCAL-1");
+    assert.strictEqual(r.numeroVendaCliente, "PDV-TEST-LOCAL-1");
+    assert.strictEqual(r.numeroVendaBackend, null);
     assert.strictEqual(r.origem, "local");
     assert.strictEqual(r.syncPendente, true);
     assert.strictEqual(r.precisaEmitirFiscal, true);
@@ -95,6 +97,17 @@ const payload = {
     const row = lista.find((x) => x.numero_venda === "PDV-TEST-LOCAL-2");
     assert.ok(row, "deveria estar na fila SQLite");
     assert.strictEqual(row.status, "PENDENTE");
+  });
+
+  await test("consultarVenda — expõe mapping do backend quando disponível", async () => {
+    const db = require("better-sqlite3")(dbPath);
+    db.prepare(
+      "UPDATE fila_vendas SET numero_venda_backend = ? WHERE numero_venda = ?",
+    ).run("PDV-BACKEND-42", "PDV-TEST-LOCAL-2");
+    db.close();
+    const row = fila.consultarVenda("PDV-TEST-LOCAL-2");
+    assert.ok(row);
+    assert.strictEqual(row.numero_venda_backend, "PDV-BACKEND-42");
   });
 
   await test("registrarLocalFirst — idempotente (INSERT OR IGNORE)", async () => {
