@@ -219,6 +219,25 @@ function marcarSincronizado(numeroVenda) {
   avaliarLimitesFila(metricas());
 }
 
+function marcarEnviando(numeroVenda) {
+  if (!db) return false;
+  const r = db
+    .prepare(
+      `UPDATE fila_vendas
+       SET status = 'ENVIANDO'
+       WHERE numero_venda = ? AND status = 'PENDENTE'`,
+    )
+    .run(String(numeroVenda));
+  return r.changes > 0;
+}
+
+function marcarPendente(numeroVenda) {
+  if (!db) return;
+  db.prepare(
+    `UPDATE fila_vendas SET status = 'PENDENTE' WHERE numero_venda = ? AND status = 'ENVIANDO'`,
+  ).run(String(numeroVenda));
+}
+
 function metricas() {
   try {
     if (!db) {
@@ -289,15 +308,20 @@ function avaliarLimitesFila(snapshot) {
 
 function sincronizarVendaEmBackground(payload) {
   const numero = extrairNumeroVenda(payload);
+  if (!marcarEnviando(numero)) {
+    return;
+  }
   tentarBackend(payload)
     .then((r) => {
       if (r.ok) {
         marcarSincronizado(numero);
         return;
       }
+      marcarPendente(numero);
       sincronizar().catch(() => {});
     })
     .catch(() => {
+      marcarPendente(numero);
       sincronizar().catch(() => {});
     });
 }
