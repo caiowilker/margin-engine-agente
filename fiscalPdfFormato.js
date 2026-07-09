@@ -3,6 +3,13 @@ const MARCA_DAGUA_MARGIN = "Margin Engine";
 
 /** @typedef {"termico"|"a4"} FormatoPdfNfce */
 
+/** ACBr [DANFENFCe] TipoRelatorioBobina: 0=Fortes bobina, 1=ESC/POS, 2=Fortes A4 (página 595pt). */
+const TIPO_RELATORIO_BOBINA_NFCE = {
+  FORTES: "0",
+  ESCPOS: "1",
+  FORTES_A4: "2",
+};
+
 /**
  * @param {string|undefined|null} raw
  * @param {string} modeloDocumento
@@ -64,31 +71,67 @@ function applyMarcaDaguaAcbrLib(inst) {
 }
 
 /**
+ * Parâmetros de layout NFC-e para ACBr (Lib INI e Monitor ConfigGravarValor).
+ * @param {FormatoPdfNfce} formatoPdf
+ */
+function nfceLayoutAcbrParams(formatoPdf) {
+  const a4 = formatoPdf === "a4";
+  return {
+    tipoRelatorioBobina: a4
+      ? TIPO_RELATORIO_BOBINA_NFCE.FORTES_A4
+      : TIPO_RELATORIO_BOBINA_NFCE.ESCPOS,
+    simplificado: a4 ? "0" : "1",
+    viaConsumidor: a4 ? "0" : "1",
+  };
+}
+
+/**
  * @param {{ configGravarValor: (sec: string, key: string, val: string) => void }} inst
  * @param {FormatoPdfNfce} formatoPdf
  */
 function applyNfcePdfFormatoAcbrLib(inst, formatoPdf) {
   applyMarcaDaguaAcbrLib(inst);
-  const termico = formatoPdf !== "a4";
+  const layout = nfceLayoutAcbrParams(formatoPdf);
   try {
     inst.configGravarValor("DANFE", "TipoDANFE", "4");
   } catch (_) {
     /* ignore */
   }
-  const simplificado = termico ? "1" : "0";
+  try {
+    inst.configGravarValor("DANFENFCe", "TipoRelatorioBobina", layout.tipoRelatorioBobina);
+  } catch (_) {
+    /* versões antigas da DLL */
+  }
   for (const key of ["Simplificado", "ModeloSimplificado", "ImprimirSimplificado"]) {
     try {
-      inst.configGravarValor("DANFE", key, simplificado);
+      inst.configGravarValor("DANFE", key, layout.simplificado);
       break;
     } catch (_) {
       /* próxima chave */
     }
   }
   try {
-    inst.configGravarValor("DANFE", "ViaConsumidor", "1");
+    inst.configGravarValor("DANFE", "ViaConsumidor", layout.viaConsumidor);
   } catch (_) {
     /* ignore */
   }
+}
+
+/**
+ * Comandos Monitor antes de ImprimirDANFEPDF para NFC-e (modelo 65).
+ * @param {FormatoPdfNfce} formatoPdf
+ * @returns {string[]}
+ */
+function nfceLayoutMonitorComandos(formatoPdf) {
+  const layout = nfceLayoutAcbrParams(formatoPdf);
+  return [
+    `NFE.ConfigGravarValor("DANFENFCe","TipoRelatorioBobina","${layout.tipoRelatorioBobina}")`,
+    `NFE.ConfigGravarValor("DANFE","Simplificado","${layout.simplificado}")`,
+    `NFE.ConfigGravarValor("DANFE","ViaConsumidor","${layout.viaConsumidor}")`,
+    'NFE.ConfigGravarValor("DANFE","Site","Margin Engine")',
+    'NFE.ConfigGravarValor("DANFE","MarcaDagua","Margin Engine")',
+    "NFE.ConfigGravar()",
+  ];
 }
 
 /**
@@ -99,13 +142,14 @@ function applyNfcePdfFormatoAcbrLib(inst, formatoPdf) {
 function paramsImprimirDanfePdfMonitor(modeloDocumento = "65", formatoPdf = "termico") {
   const modelo = String(modeloDocumento || "65");
   const formato = normalizarFormatoPdfNfce(formatoPdf, modelo);
-  const viaConsumidor = "1";
-  const simplificado =
-    modelo === "55" ? "0" : formato === "a4" ? "0" : "1";
+  const layout =
+    modelo === "55"
+      ? { simplificado: "0", viaConsumidor: "0" }
+      : nfceLayoutAcbrParams(formato);
   return {
     marcaDagua: MARCA_DAGUA_MARGIN,
-    viaConsumidor,
-    simplificado,
+    viaConsumidor: layout.viaConsumidor,
+    simplificado: layout.simplificado,
   };
 }
 
@@ -156,9 +200,12 @@ function applyDanfeLogoAcbrLib(inst, runtime, opts = {}) {
 
 module.exports = {
   MARCA_DAGUA_MARGIN,
+  TIPO_RELATORIO_BOBINA_NFCE,
   normalizarFormatoPdfNfce,
   suffixPdfModelo,
   destinoPdfCanonico,
+  nfceLayoutAcbrParams,
+  nfceLayoutMonitorComandos,
   applyMarcaDaguaAcbrLib,
   applyNfcePdfFormatoAcbrLib,
   deveAplicarLogoDanfe,

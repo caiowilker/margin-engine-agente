@@ -8,6 +8,8 @@ const {
   paramsImprimirDanfePdfMonitor,
   deveAplicarLogoDanfe,
   MARCA_DAGUA_MARGIN,
+  TIPO_RELATORIO_BOBINA_NFCE,
+  nfceLayoutAcbrParams,
 } = require("../fiscalPdfFormato");
 
 async function test(name, fn) {
@@ -62,8 +64,14 @@ async function main() {
         const termico = paramsImprimirDanfePdfMonitor("65", "termico");
         const a4 = paramsImprimirDanfePdfMonitor("65", "a4");
         assert.strictEqual(termico.simplificado, "1");
+        assert.strictEqual(termico.viaConsumidor, "1");
         assert.strictEqual(a4.simplificado, "0");
+        assert.strictEqual(a4.viaConsumidor, "0");
         assert.strictEqual(termico.marcaDagua, MARCA_DAGUA_MARGIN);
+        const layoutTermico = nfceLayoutAcbrParams("termico");
+        const layoutA4 = nfceLayoutAcbrParams("a4");
+        assert.strictEqual(layoutTermico.tipoRelatorioBobina, TIPO_RELATORIO_BOBINA_NFCE.ESCPOS);
+        assert.strictEqual(layoutA4.tipoRelatorioBobina, TIPO_RELATORIO_BOBINA_NFCE.FORTES_A4);
       },
     ],
     [
