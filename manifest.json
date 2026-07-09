@@ -1,10 +1,10 @@
 {
   "versao": "1.0.0",
-  "geradoEm": "2026-07-09T02:12:56.124Z",
+  "geradoEm": "2026-07-09T14:06:06.467Z",
   "arquivos": [
     {
       "arquivo": "index.js",
-      "sha256": "03b4c418bd396ed4978c09a41451294fd1991221e324f2354eba0030ace9ac30"
+      "sha256": "a979beb45c5c3def0d32f7553c289f4c459d91173a09e64787046f53fdbb1658"
     },
     {
       "arquivo": "acbr.js",
@@ -12,7 +12,7 @@
     },
     {
       "arquivo": "fila.js",
-      "sha256": "fc0a14618970f569388ac92d3fa952218d05db1b7b3f51cc01b92a909a4045a9"
+      "sha256": "1fc5ad0cd256d4205ae1e06ee7729ce90cb5ce5a7118c45275f10b2384cd6918"
     },
     {
       "arquivo": "filaFiscal.js",
