@@ -637,17 +637,90 @@ function lerEnvFallback(chave) {
 function valoresPadraoCompletos() {
   /** @type {Record<string, boolean|number|string>} */
   const out = {};
-  for (const [k, def] of Object.entries(CATALOGO)) {
+  for (const [k, def] of Object.entries(getCatalogoAtivo())) {
     out[k] = def.default;
   }
   return out;
 }
 
+/** Catálogo ativo — remoto quando disponível, bundled como fallback. */
+let catalogoAtivo = { ...CATALOGO };
+let catalogVersionRemota = null;
+
+function chaveToEnv(chave) {
+  return (
+    {
+      nfeSerie55: "NFE_SERIE_55",
+      cStat999RateWindowMin: "CSTAT_999_RATE_WINDOW_MIN",
+      cStat999RateMax: "CSTAT_999_RATE_MAX",
+      exibirImagensPdv: "PDV_EXIBIR_IMAGENS",
+    }[chave] ||
+    String(chave)
+      .replace(/([A-Z])/g, "_$1")
+      .replace(/^_/, "")
+      .toUpperCase()
+  );
+}
+
+function exportEnvContrato() {
+  const out = {};
+  for (const [chave, def] of Object.entries(CATALOGO)) {
+    out[chave] = def.env || chaveToEnv(chave);
+  }
+  return out;
+}
+
+function getCatalogoAtivo() {
+  return catalogoAtivo;
+}
+
+function getCatalogVersionRemota() {
+  return catalogVersionRemota;
+}
+
+/**
+ * Carrega catálogo do backend (GET /pdv/agente/config/catalog).
+ * Mantém bundled como base — chaves desconhecidas no bundle são adicionadas.
+ */
+function carregarCatalogoRemoto(payload) {
+  const defs = Array.isArray(payload) ? payload : payload?.defs;
+  const version = payload?.catalogVersion ?? null;
+  if (!defs || !Array.isArray(defs) || defs.length === 0) {
+    return { ok: false, motivo: "catalogo_vazio" };
+  }
+
+  const next = { ...CATALOGO };
+  for (const d of defs) {
+    if (!d || !d.chave) continue;
+    const existing = CATALOGO[d.chave] || {};
+    next[d.chave] = {
+      env: d.env || existing.env || chaveToEnv(d.chave),
+      tipo: d.tipo || existing.tipo || "string",
+      default: d.padrao !== undefined && d.padrao !== null ? d.padrao : existing.default,
+      grupo: d.grupo || existing.grupo || "operacao",
+      label: d.label || existing.label || d.chave,
+      min: d.min ?? existing.min,
+      max: d.max ?? existing.max,
+      enum: d.valoresPermitidos ?? existing.enum,
+    };
+  }
+  catalogoAtivo = next;
+  catalogVersionRemota = version;
+  return { ok: true, version, chaves: Object.keys(next).length };
+}
+
+function resetCatalogoBundled() {
+  catalogoAtivo = { ...CATALOGO };
+  catalogVersionRemota = null;
+}
+
 function mesclarComDefaults(operacional) {
+  const cat = getCatalogoAtivo();
+  /** @type {Record<string, boolean|number|string>} */
   const base = valoresPadraoCompletos();
   if (!operacional || typeof operacional !== "object") return base;
   for (const [k, v] of Object.entries(operacional)) {
-    if (CATALOGO[k] && v !== undefined && v !== null) {
+    if (cat[k] && v !== undefined && v !== null) {
       base[k] = validarValor(k, v);
     }
   }
@@ -655,7 +728,7 @@ function mesclarComDefaults(operacional) {
 }
 
 function validarValor(chave, valor) {
-  const def = CATALOGO[chave];
+  const def = getCatalogoAtivo()[chave];
   if (!def) throw new Error(`Config desconhecida: ${chave}`);
   if (def.tipo === "boolean") return !!valor;
   if (def.tipo === "number") {
@@ -681,9 +754,10 @@ function validarValor(chave, valor) {
 
 function aplicarNoProcessEnv(operacional) {
   const merged = mesclarComDefaults(operacional);
+  const cat = getCatalogoAtivo();
   for (const [k, v] of Object.entries(merged)) {
     if (CHAVES_SSOT_LOCAL.has(k)) continue;
-    const def = CATALOGO[k];
+    const def = cat[k];
     if (!def) continue;
     process.env[def.env] =
       def.tipo === "boolean" ? (v ? "true" : "false") : String(v);
@@ -693,12 +767,13 @@ function aplicarNoProcessEnv(operacional) {
 
 function filtrarSomenteOverrides(operacional) {
   if (!operacional || typeof operacional !== "object") return {};
+  const cat = getCatalogoAtivo();
   /** @type {Record<string, boolean|number|string>} */
   const out = {};
   for (const [k, v] of Object.entries(operacional)) {
     if (CHAVES_SSOT_LOCAL.has(k)) continue;
     const norm = validarValor(k, v);
-    if (norm !== CATALOGO[k].default) out[k] = norm;
+    if (norm !== cat[k].default) out[k] = norm;
   }
   return out;
 }
@@ -712,4 +787,10 @@ module.exports = {
   validarValor,
   aplicarNoProcessEnv,
   filtrarSomenteOverrides,
+  carregarCatalogoRemoto,
+  getCatalogoAtivo,
+  getCatalogVersionRemota,
+  resetCatalogoBundled,
+  chaveToEnv,
+  exportEnvContrato,
 };

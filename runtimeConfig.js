@@ -13,7 +13,7 @@ function getOperacional() {
   if (operacional) return { ...operacional };
   return catalog.mesclarComDefaults(
     Object.fromEntries(
-      Object.keys(catalog.CATALOGO).map((k) => [k, catalog.lerEnvFallback(k)]),
+      Object.keys(catalog.getCatalogoAtivo()).map((k) => [k, catalog.lerEnvFallback(k)]),
     ),
   );
 }
@@ -49,7 +49,7 @@ function manterUltimoConhecido() {
 function initFromEnv() {
   operacional = catalog.mesclarComDefaults(
     Object.fromEntries(
-      Object.keys(catalog.CATALOGO).map((k) => [k, catalog.lerEnvFallback(k)]),
+      Object.keys(catalog.getCatalogoAtivo()).map((k) => [k, catalog.lerEnvFallback(k)]),
     ),
   );
   fonte = "env";

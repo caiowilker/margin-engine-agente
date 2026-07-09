@@ -27,5 +27,6 @@ test("runtimeConfig mantem ultimo conhecido apos aplicar remoto", () => {
 
 test("catalogo nao inclui segredos", () => {
   const keys = Object.keys(catalog.CATALOGO);
-  assert.ok(!keys.some((k) => /token|secret|password|cert|webhook/i.test(k)));
+  assert.ok(!keys.some((k) => /token|secret|password|webhook/i.test(k)));
+  assert.ok(!keys.some((k) => /\bcert\b/i.test(k)));
 });

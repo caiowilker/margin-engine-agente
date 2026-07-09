@@ -1257,8 +1257,12 @@ async function enviarEventoCompleto(cfg, body) {
     modeloDocumento,
   });
   if (res.raw && (chave || chaveNfe)) {
-    const xml = require("./documentosFiscais").extrairXmlDaResposta(res.raw);
-    if (xml) docs.salvarXmlEvento(chave || chaveNfe, xml, tipoEvento || tipo);
+        const xml = require("./documentosFiscais").extrairXmlDaResposta(res.raw);
+        if (xml) {
+          const savedPath = docs.salvarXmlEvento(chave || chaveNfe, xml, tipoEvento || tipo);
+          body._xmlEvento = xml;
+          if (savedPath) body.xmlPath = savedPath;
+        }
   }
   if (cfg?.backendUrl && body.numeroVenda) {
     try {
@@ -1277,6 +1281,11 @@ async function enviarEventoCompleto(cfg, body) {
           cStat: res.cStat,
           xMotivo: res.xMotivo,
           tipoEvento: res.tipoEvento || tipoEvento || tipo,
+          cceId: body.cceId || null,
+          sequencia: body.sequencia ?? body.nSeqEvento ?? null,
+          correcao: body.correcao || body.xCorrecao || null,
+          xmlContent: body._xmlEvento || null,
+          xmlPath: body.xmlPath || null,
         }),
       );
     } catch {
@@ -1437,6 +1446,11 @@ function registrarHandlersFila(lerConfigFn) {
         cStat: payload.cStat,
         xMotivo: payload.xMotivo,
         tipoEvento: payload.tipoEvento || payload.tipo,
+        cceId: payload.cceId || null,
+        sequencia: payload.sequencia ?? payload.nSeqEvento ?? null,
+        correcao: payload.correcao || payload.xCorrecao || null,
+        xmlContent: payload.xmlContent || null,
+        xmlPath: payload.xmlPath || null,
       }),
     );
   });

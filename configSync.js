@@ -8,6 +8,10 @@ let pollIntervalMs = parseInt(
   process.env.CONFIG_POLL_INTERVAL_MS || "45000",
   10,
 );
+let heartbeatIntervalMs = parseInt(
+  process.env.HEARTBEAT_INTERVAL_MS || "60000",
+  10,
+);
 
 let estado = {
   fiscalEnabled: null,
@@ -23,6 +27,7 @@ let estado = {
 };
 
 let intervalHandle = null;
+let heartbeatHandle = null;
 let acbrRef = null;
 let lerConfigFnRef = null;
 let sincronizando = false;
@@ -58,6 +63,26 @@ function reagendarPoll() {
     );
   }, pollIntervalMs);
   log.info(`[ConfigSync] Intervalo de poll atualizado: ${pollIntervalMs}ms`);
+}
+
+function reagendarHeartbeat() {
+  if (!lerConfigFnRef) return;
+  if (heartbeatHandle) clearInterval(heartbeatHandle);
+  heartbeatHandle = setInterval(() => {
+    void enviarHeartbeatStandalone().catch((e) =>
+      log.debug({ err: e.message }, "[ConfigSync] heartbeat interval falhou"),
+    );
+  }, heartbeatIntervalMs);
+  log.info(`[ConfigSync] Heartbeat independente a cada ${heartbeatIntervalMs}ms`);
+}
+
+async function enviarHeartbeatStandalone() {
+  if (!lerConfigFnRef) return;
+  const cfg = await lerConfigFnRef();
+  const backendUrl = cfg.backendUrl || process.env.BACKEND_URL || "";
+  const backendToken = cfg.backendToken || process.env.BACKEND_TOKEN || "";
+  if (!backendUrl || !backendToken) return;
+  await enviarHeartbeat(backendUrl, backendToken);
 }
 
 function aplicarFiscalRuntime(valor) {
@@ -148,6 +173,32 @@ function aplicarConfigRemota(cfg) {
   estado.ultimoErro = null;
 }
 
+async function sincronizarCatalogo(backendUrl, backendToken) {
+  const fetch = require("node-fetch");
+  try {
+    const resp = await fetch(`${backendUrl}/pdv/agente/config/catalog`, {
+      headers: {
+        Authorization: `Bearer ${backendToken}`,
+        Accept: "application/json",
+      },
+    });
+    if (!resp.ok) {
+      log.debug({ status: resp.status }, "[ConfigSync] catálogo remoto indisponível");
+      return;
+    }
+    const payload = await resp.json();
+    const result = catalog.carregarCatalogoRemoto(payload);
+    if (result.ok) {
+      log.debug(
+        { version: result.version, chaves: result.chaves },
+        "[ConfigSync] Catálogo operacional sincronizado do backend",
+      );
+    }
+  } catch (err) {
+    log.debug({ err: err.message }, "[ConfigSync] Falha ao sincronizar catálogo");
+  }
+}
+
 async function enviarHeartbeat(backendUrl, backendToken) {
   const fetch = require("node-fetch");
   const fiscalTrace = require("./fiscalTraceLog");
@@ -173,6 +224,11 @@ async function enviarHeartbeat(backendUrl, backendToken) {
           pendentes: filaStatus.pendentes ?? 0,
           incerto: filaStatus.incerto ?? 0,
           processando: filaStatus.processando ?? 0,
+          recuperando: filaStatus.recuperando ?? 0,
+          falhasTemporarias: filaStatus.falhasTemporarias ?? 0,
+          falhas: filaStatus.falhas ?? 0,
+          concluidos: filaStatus.concluidos ?? 0,
+          pausada: filaStatus.pausada ? 1 : 0,
         },
       }),
     });
@@ -239,6 +295,7 @@ async function sincronizar(lerConfigFn) {
       throw new Error(`HTTP ${resp.status}: ${txt.slice(0, 120)}`);
     }
     const remoto = await resp.json();
+    await sincronizarCatalogo(backendUrl, backendToken);
     aplicarConfigRemota(remoto);
     try {
       const ack = await enviarAck(backendUrl, backendToken);
@@ -248,7 +305,6 @@ async function sincronizar(lerConfigFn) {
     } catch (ackErr) {
       log.warn("[ConfigSync] Config aplicada, ACK falhou:", ackErr.message);
     }
-    await enviarHeartbeat(backendUrl, backendToken);
   } catch (err) {
     estado.ultimoErro = err.message;
     runtimeConfig.manterUltimoConhecido();
@@ -268,20 +324,29 @@ function iniciar(lerConfigFn, acbr) {
   acbrRef = acbr;
   lerConfigFnRef = lerConfigFn;
   sincronizarEmissaoFiscalLocal();
-  if (intervalHandle) return;
-  void sincronizar(lerConfigFn);
-  intervalHandle = setInterval(() => {
-    void sincronizar(lerConfigFn).catch((e) =>
-      log.warn("[ConfigSync] Erro no poll:", e.message),
-    );
-  }, pollIntervalMs);
-  log.info(`[ConfigSync] Polling a cada ${pollIntervalMs}ms`);
+  if (!intervalHandle) {
+    void sincronizar(lerConfigFn);
+    intervalHandle = setInterval(() => {
+      void sincronizar(lerConfigFn).catch((e) =>
+        log.warn("[ConfigSync] Erro no poll:", e.message),
+      );
+    }, pollIntervalMs);
+    log.info(`[ConfigSync] Polling a cada ${pollIntervalMs}ms`);
+  }
+  if (!heartbeatHandle) {
+    void enviarHeartbeatStandalone().catch(() => {});
+    reagendarHeartbeat();
+  }
 }
 
 function parar() {
   if (intervalHandle) {
     clearInterval(intervalHandle);
     intervalHandle = null;
+  }
+  if (heartbeatHandle) {
+    clearInterval(heartbeatHandle);
+    heartbeatHandle = null;
   }
 }
 
