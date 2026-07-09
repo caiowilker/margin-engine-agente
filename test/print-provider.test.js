@@ -89,7 +89,22 @@ async function run() {
     assert.ok(tags.includes("</zera>"));
     assert.ok(tags.includes("<qrcode"));
     assert.ok(tags.includes("CUPOM FISCAL"));
+    assert.ok(tags.includes("Consulte em"));
     assert.ok(tags.includes("</corte"));
+  });
+
+  test("renderCupomTags — NFC-e sem QR não inclui tag qrcode", () => {
+    const tags = renderCupomTags({
+      emitidoEm: new Date().toISOString(),
+      numeroVenda: "V-NOQR",
+      total: 1,
+      empresa: { nomeFantasia: "LOJA" },
+      itens: [{ nome: "P", quantidade: 1, precoUnitario: 1, total: 1 }],
+      chaveNfe: "35260611222333000181650010000000301025012345",
+      origem: "offline",
+    });
+    assert.ok(!tags.includes("<qrcode"));
+    assert.ok(tags.includes("CUPOM FISCAL"));
   });
 
   test("renderCupomTags — desconto e pagamento misto", () => {

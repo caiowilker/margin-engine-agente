@@ -1505,6 +1505,40 @@ function iniciarServidor() {
     }
   });
 
+  app.get("/config/fiscal/logo", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    try {
+      const fiscalLogo = require("./fiscal/fiscalLogo");
+      res.json(fiscalLogo.ler());
+    } catch (e) {
+      res.status(500).json({ erro: e.message || "Erro ao ler logo DANFE" });
+    }
+  });
+
+  app.put("/config/fiscal/logo", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    try {
+      const fiscalLogo = require("./fiscal/fiscalLogo");
+      const body = req.body || {};
+      const saved = fiscalLogo.salvar({
+        base64: body.base64,
+        ativo: body.ativo,
+        origem: body.origem || "local",
+        sha256Remoto: body.sha256Remoto,
+      });
+      res.json({ ok: true, logo: saved });
+    } catch (e) {
+      res.status(400).json({ erro: e.message || "Erro ao salvar logo DANFE" });
+    }
+  });
+
+  app.delete("/config/fiscal/logo", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    try {
+      const fiscalLogo = require("./fiscal/fiscalLogo");
+      res.json({ ok: true, logo: fiscalLogo.remover() });
+    } catch (e) {
+      res.status(500).json({ erro: e.message || "Erro ao remover logo DANFE" });
+    }
+  });
+
   /** Config impressora local (ACBr PosPrinter + env) — leitura */
   app.get("/config/impressora", privateNetworkHeaders, (req, res) => {
     try {
@@ -1831,13 +1865,19 @@ function iniciarServidor() {
     privateNetworkHeaders,
     exigirAgentToken,
     async (req, res) => {
-      const { chave, numeroVenda } = req.query || {};
+      const { chave, numeroVenda, formato } = req.query || {};
       try {
         const doc = await fiscalService.obterPdfDocumento(
           chave ? String(chave) : null,
           numeroVenda ? String(numeroVenda) : null,
+          formato ? String(formato) : "termico",
         );
-        const suffix = doc.modeloDocumento === "55" ? "danfe" : "danfce";
+        const suffix =
+          doc.modeloDocumento === "55"
+            ? "danfe"
+            : doc.formatoPdf === "a4"
+              ? "danfce-a4"
+              : "danfce";
         const nome = `${doc.chave || numeroVenda || "documento"}-${suffix}.pdf`;
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
@@ -2031,11 +2071,13 @@ function iniciarServidor() {
   });
 
   app.post("/acbr/nfce/reimprimir", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
-    const { chave, numeroVenda } = req.body || {};
+    const body = req.body || {};
+    const { chave, numeroVenda, qrcodeNfe, qrcode } = body;
     try {
       const resultado = await fiscalService.reimprimirDanfceCompleto(
         chave,
         numeroVenda,
+        { qrcodeNfe, qrcode },
       );
       res.json(resultado);
     } catch (err) {

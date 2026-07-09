@@ -4,7 +4,7 @@
  */
 const { toThermalText, toThermalDoc } = require("../thermalText");
 const { normalizarCupomPayload, resolverQrCodeNfce } = require("./cupomValidate");
-const { isNfeModelo55 } = require("../documentosFiscais");
+const { isNfeModelo55, isNfceModelo65, portalConsultaDocumento } = require("../documentosFiscais");
 const {
   tagQrCode,
   tagBarcode,
@@ -108,7 +108,7 @@ function renderCupomTags(rawPayload) {
   const lines = [];
 
   lines.push("</zera>");
-  const logoHdr = tagLogoHeader();
+  const logoHdr = tagLogoHeader(payload);
   if (logoHdr) lines.push(logoHdr);
   if (payload.segundaVia || payload.reimpressao) lines.push(tagSegundaViaBanner());
   lines.push("<ce>");
@@ -239,12 +239,17 @@ function renderCupomTags(rawPayload) {
 
     const qr = resolverQrCodeNfce(payload);
     if (qr) {
+      lines.push(`Consulte em ${portalConsultaDocumento(payload.chaveNfe, qr)}`);
+    }
+    if (qr && isNfceModelo65(payload.chaveNfe)) {
       lines.push("</linha_simples>");
-      lines.push("<ce>Consulta NFC-e — QR Code</ce>");
+      lines.push("<ce>Consulta via QR Code</ce>");
       lines.push(tagQrCode(qr));
     }
     renderBarcodesPayload(payload).forEach((bc) => lines.push(bc));
-    lines.push("Consulte pela chave ou QR Code");
+    if (qr) {
+      lines.push("Consulte pela chave ou QR Code");
+    }
   } else {
     const extras = renderBarcodesPayload(payload);
     if (extras.length) {

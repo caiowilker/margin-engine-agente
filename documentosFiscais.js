@@ -148,10 +148,13 @@ function pareceDanfeA4(filePath) {
   return buf.length > 32000;
 }
 
-function pdfValidoParaModelo(filePath, modeloDocumento) {
+function pdfValidoParaModelo(filePath, modeloDocumento, formatoPdf = "termico") {
   if (!isPdfValid(filePath)) return false;
-  if (String(modeloDocumento || "65") === "55") return pareceDanfeA4(filePath);
-  return true;
+  const modelo = String(modeloDocumento || "65");
+  if (modelo === "55") return pareceDanfeA4(filePath);
+  const formato = String(formatoPdf || "termico").toLowerCase();
+  if (formato === "a4") return pareceDanfeA4(filePath);
+  return !pareceDanfeA4(filePath);
 }
 
 function backupQueuePath() {
@@ -571,8 +574,9 @@ function buscarArquivoPdfRecursivo(dir, chave, maxDepth = 6, depth = 0) {
   return null;
 }
 
-function suffixPdfModelo(modeloDocumento = "65") {
-  return String(modeloDocumento) === "55" ? "danfe" : "danfce";
+function suffixPdfModelo(modeloDocumento = "65", formatoPdf = "termico") {
+  const { suffixPdfModelo: suffixFmt } = require("./fiscalPdfFormato");
+  return suffixFmt(modeloDocumento, formatoPdf);
 }
 
 function pastaModeloAcbr(modeloDocumento = "65") {
@@ -580,21 +584,28 @@ function pastaModeloAcbr(modeloDocumento = "65") {
 }
 
 /** Localiza PDF da chave (índice SQLite → flat ou aninhado ACBr). */
-function localizarPdfPorChave(chave, modeloDocumento = "65") {
+function localizarPdfPorChave(chave, modeloDocumento = "65", formatoPdf = "termico") {
   const k = String(chave || "").replace(/\D/g, "");
   if (k.length !== 44) return null;
+
+  const modelo = String(modeloDocumento || inferirModeloDaChave(k) || "65");
+  const formato = String(formatoPdf || "termico").toLowerCase();
 
   try {
     const filaFiscal = require("./filaFiscal");
     const doc = filaFiscal.buscarDocumentoPorChave(k);
-    if (doc?.pdf_path && isPdfValid(doc.pdf_path)) return doc.pdf_path;
+    if (
+      doc?.pdf_path &&
+      pdfValidoParaModelo(doc.pdf_path, modelo, formato)
+    ) {
+      return doc.pdf_path;
+    }
   } catch (_) {}
 
-  const modelo = String(modeloDocumento || inferirModeloDaChave(k) || "65");
-  const suffix = suffixPdfModelo(modelo);
+  const suffix = suffixPdfModelo(modelo, formato);
 
   const flat = path.join(PATHS.pdf, `${k}-${suffix}.pdf`);
-  if (isPdfValid(flat)) return flat;
+  if (pdfValidoParaModelo(flat, modelo, formato)) return flat;
 
   const cnpj = extrairCnpjDaChave(k);
   const aamm = k.slice(2, 6);
@@ -619,10 +630,11 @@ function localizarPdfPorChave(chave, modeloDocumento = "65") {
       `${k}.pdf`,
       `${k}-danfe.pdf`,
       `${k}-danfce.pdf`,
+      `${k}-danfce-a4.pdf`,
     ];
     for (const nome of candidatos) {
       const full = path.join(dir, nome);
-      if (isPdfValid(full)) return full;
+      if (pdfValidoParaModelo(full, modelo, formato)) return full;
     }
     try {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -632,7 +644,7 @@ function localizarPdfPorChave(chave, modeloDocumento = "65") {
           e.name.toLowerCase().endsWith(".pdf") &&
           e.name.includes(k),
       );
-      if (match && isPdfValid(path.join(dir, match.name))) {
+      if (match && pdfValidoParaModelo(path.join(dir, match.name), modelo, formato)) {
         return path.join(dir, match.name);
       }
     } catch (_) {
@@ -642,7 +654,7 @@ function localizarPdfPorChave(chave, modeloDocumento = "65") {
 
   for (const raiz of [PATHS.pdf, PATHS.saida]) {
     const found = buscarArquivoPdfRecursivo(raiz, k);
-    if (found && isPdfValid(found)) return found;
+    if (found && pdfValidoParaModelo(found, modelo, formato)) return found;
   }
   return null;
 }
@@ -657,10 +669,13 @@ function inferirModeloDaChave(chave) {
 }
 
 /** Copia PDF encontrado para path canônico do agente. */
-function copiarPdfParaCanonico(chave, srcPath, modeloDocumento = "65") {
+function copiarPdfParaCanonico(chave, srcPath, modeloDocumento = "65", formatoPdf = "termico") {
   const k = String(chave || "").replace(/\D/g, "");
-  const dest = path.join(PATHS.pdf, `${k}-${suffixPdfModelo(modeloDocumento)}.pdf`);
-  if (!srcPath || !isPdfValid(srcPath)) return null;
+  const dest = path.join(
+    PATHS.pdf,
+    `${k}-${suffixPdfModelo(modeloDocumento, formatoPdf)}.pdf`,
+  );
+  if (!srcPath || !pdfValidoParaModelo(srcPath, modeloDocumento, formatoPdf)) return null;
   if (path.resolve(srcPath) !== path.resolve(dest)) {
     fs.copyFileSync(srcPath, dest);
   }

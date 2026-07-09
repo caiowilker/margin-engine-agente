@@ -760,6 +760,30 @@ function renderCupom(printer, payload) {
   return renderCupomConteudo(printer, payload);
 }
 
+async function imprimirLogoCupomEscpos(printer, payload) {
+  try {
+    const printerLogo = require("../printerLogo");
+    if (!printerLogo.deveExibirLogoCupom(payload)) return;
+    const info = printerLogo.ler();
+    if (!info.caminhoAbsoluto) return;
+    const image = await new Promise((resolve, reject) => {
+      escpos.Image.load(info.caminhoAbsoluto, (err, img) => {
+        if (err) reject(err);
+        else resolve(img);
+      });
+    });
+    await new Promise((resolve, reject) => {
+      printer.align("ct").image(image, "d24", (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    printer.feed(1);
+  } catch (_) {
+    /* logo opcional — cupom segue sem imagem */
+  }
+}
+
 async function renderCupomConteudo(printer, payload) {
   const empresa = payload.empresa || {};
   const itens = payload.itens || [];
@@ -778,6 +802,8 @@ async function renderCupomConteudo(printer, payload) {
 
   // ── 1. Cabeçalho — tudo centralizado ────────────────────────────────────────
   printer.font("a").align("ct");
+
+  await imprimirLogoCupomEscpos(printer, payload);
 
   if (payload.segundaVia || payload.reimpressao) {
     printer.style("b").text("*** SEGUNDA VIA ***").style("normal");
@@ -1031,11 +1057,16 @@ async function renderCupomConteudo(printer, payload) {
 }
 
 function renderFechamento(printer, payload) {
+  return renderFechamentoConteudo(printer, payload);
+}
+
+async function renderFechamentoConteudo(printer, payload) {
+  printer.font("a").align("ct");
+  await imprimirLogoCupomEscpos(printer, payload);
+
   const { sep: linha, fmt, direita } = helpers();
 
   printer
-    .font("a")
-    .align("ct")
     .style("b")
     .size(1, 1)
     .text(
@@ -1161,11 +1192,16 @@ function renderFechamento(printer, payload) {
 }
 
 function renderAbertura(printer, payload) {
+  return renderAberturaConteudo(printer, payload);
+}
+
+async function renderAberturaConteudo(printer, payload) {
   const { sep: linha, fmt } = helpers();
 
+  printer.font("a").align("ct");
+  await imprimirLogoCupomEscpos(printer, payload);
+
   printer
-    .font("a")
-    .align("ct")
     .style("b")
     .size(1, 1)
     .text("ABERTURA DE CAIXA")

@@ -163,10 +163,11 @@ async function gerarPdfParaModelo(chave, xmlPath, modeloDocumento) {
   return gerarPdfComXml(chave, xmlAutorizado, modelo);
 }
 
-async function gerarPdfComXml(chave, xmlPathAutorizado, modeloDocumento) {
+async function gerarPdfComXml(chave, xmlPathAutorizado, modeloDocumento, formatoPdf = "termico") {
   const modelo = String(modeloDocumento || "65");
+  const opts = { formatoPdf };
   if (modelo === "55") return fiscalDriver.gerarPdfDanfe(chave, xmlPathAutorizado);
-  return fiscalDriver.gerarPdfDanfce(chave, xmlPathAutorizado);
+  return fiscalDriver.gerarPdfDanfce(chave, xmlPathAutorizado, opts);
 }
 
 function deveGerarPdfSincrono(resultado) {
@@ -1038,13 +1039,17 @@ function extrairModeloJob(correlationId) {
   }
 }
 
-async function reimprimirDanfceCompleto(chave, numeroVenda) {
+async function reimprimirDanfceCompleto(chave, numeroVenda, opts = {}) {
   const doc =
     (chave && filaFiscal.buscarDocumentoPorChave(chave)) ||
     (numeroVenda && filaFiscal.buscarDocumentoPorVenda(numeroVenda));
   if (!doc) throw new Error("Documento fiscal não encontrado localmente");
   const chaveDoc = doc.chave || chave;
   const modelo = inferirModeloDocumento(doc, chaveDoc);
+  const qrInformado =
+    (opts.qrcodeNfe && String(opts.qrcodeNfe).trim()) ||
+    (opts.qrcode && String(opts.qrcode).trim()) ||
+    null;
   let pdfPath = doc.pdf_path;
   if (!docs.isPdfValid(pdfPath) && chaveDoc) {
     pdfPath = await gerarPdfParaModelo(chaveDoc, doc.xml_path, modelo);
@@ -1065,10 +1070,13 @@ async function reimprimirDanfceCompleto(chave, numeroVenda) {
   if (modelo === "65") {
     const printerService = require("./printerService");
     const { montarPayloadSegundaVia } = require("./print/segundaVia");
-    const payload = montarPayloadSegundaVia({
+    let payload = montarPayloadSegundaVia({
       chave: chaveDoc,
       numeroVenda: doc.numero_venda || numeroVenda,
     });
+    if (qrInformado && !require("./print/cupomValidate").resolverQrCodeNfce(payload)) {
+      payload = { ...payload, qrcodeNfe: qrInformado, qrcode: qrInformado };
+    }
     await printerService.imprimirSegundaVia(payload);
   } else if (modelo === "55") {
     const printerService = require("./printerService");
@@ -1089,7 +1097,8 @@ async function reimprimirDanfceCompleto(chave, numeroVenda) {
   };
 }
 
-async function obterPdfDocumento(chave, numeroVenda) {
+async function obterPdfDocumento(chave, numeroVenda, formatoPdf = "termico") {
+  const { normalizarFormatoPdfNfce } = require("./fiscalPdfFormato");
   const doc =
     (chave && filaFiscal.buscarDocumentoPorChave(chave)) ||
     (numeroVenda && filaFiscal.buscarDocumentoPorVenda(numeroVenda));
@@ -1098,6 +1107,7 @@ async function obterPdfDocumento(chave, numeroVenda) {
     throw new Error("Informe chave ou numeroVenda");
   }
   const modelo = inferirModeloDocumento(doc, chaveDoc);
+  const formato = normalizarFormatoPdfNfce(formatoPdf, modelo);
   let xmlAutorizado = null;
   try {
     xmlAutorizado = await garantirXmlAutorizado(chaveDoc, doc?.xml_path);
@@ -1109,25 +1119,28 @@ async function obterPdfDocumento(chave, numeroVenda) {
   }
 
   let pdfPath = doc?.pdf_path;
-  if (!docs.pdfValidoParaModelo(pdfPath, modelo) && chaveDoc) {
-    const encontrado = docs.localizarPdfPorChave(chaveDoc, modelo);
-    if (encontrado && docs.pdfValidoParaModelo(encontrado, modelo)) {
-      pdfPath = docs.copiarPdfParaCanonico(chaveDoc, encontrado, modelo);
+  if (!docs.pdfValidoParaModelo(pdfPath, modelo, formato) && chaveDoc) {
+    const encontrado = docs.localizarPdfPorChave(chaveDoc, modelo, formato);
+    if (encontrado && docs.pdfValidoParaModelo(encontrado, modelo, formato)) {
+      pdfPath = docs.copiarPdfParaCanonico(chaveDoc, encontrado, modelo, formato);
     }
   }
   const pdfDesatualizado =
-    docs.pdfValidoParaModelo(pdfPath, modelo) &&
+    docs.pdfValidoParaModelo(pdfPath, modelo, formato) &&
     xmlAutorizado &&
     doc?.xml_path &&
     doc.xml_path !== xmlAutorizado;
   const pdfFormatoIncorreto =
-    modelo === "55" && docs.isPdfValid(pdfPath) && !docs.pareceDanfeA4(pdfPath);
+    (modelo === "55" && docs.isPdfValid(pdfPath) && !docs.pareceDanfeA4(pdfPath)) ||
+    (modelo === "65" &&
+      docs.isPdfValid(pdfPath) &&
+      !docs.pdfValidoParaModelo(pdfPath, modelo, formato));
   if (
-    !docs.pdfValidoParaModelo(pdfPath, modelo) ||
+    !docs.pdfValidoParaModelo(pdfPath, modelo, formato) ||
     pdfDesatualizado ||
     pdfFormatoIncorreto
   ) {
-    pdfPath = await gerarPdfComXml(chaveDoc, xmlAutorizado, modelo);
+    pdfPath = await gerarPdfComXml(chaveDoc, xmlAutorizado, modelo, formato);
   }
 
   const nv = doc?.numero_venda || numeroVenda;
@@ -1170,7 +1183,7 @@ async function obterPdfDocumento(chave, numeroVenda) {
   if (!buffer || buffer.length < 128) {
     throw new Error("PDF inválido ou corrompido");
   }
-  return { pdfPath, buffer, modeloDocumento: modelo, chave: chaveDoc };
+  return { pdfPath, buffer, modeloDocumento: modelo, chave: chaveDoc, formatoPdf: formato };
 }
 
 /** XML autorizado para cupom / QR — disco local ou índice SQLite (sem nuvem). */

@@ -436,6 +436,8 @@ function applyNativeRuntimeConfig(inst, runtime) {
     ["NFe", "PathPDF", path.join("pdf")],
     ["DANFE", "PathPDF", path.join("pdf")],
     ["DANFE", "TipoDANFE", "1"],
+    ["DANFE", "Site", "Margin Engine"],
+    ["DANFE", "MarcaDagua", "Margin Engine"],
     ["NFe", "IdCSC", runtime.idCsc || "000001"],
     ["NFe", "CSC", runtime.csc || ""],
     ["NFCe", "IdCSC", runtime.idCsc || "000001"],

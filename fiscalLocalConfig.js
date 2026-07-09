@@ -335,6 +335,24 @@ function ler() {
         : tpAmbIni
           ? "ini"
           : "padrao",
+    logo: (() => {
+      try {
+        const fiscalLogo = require("./fiscal/fiscalLogo");
+        const l = fiscalLogo.ler();
+        return {
+          ativo: l.ativo,
+          existe: l.existe,
+          sha256: l.sha256,
+          sha256Remoto: l.sha256Remoto,
+          atualizadoEm: l.atualizadoEm,
+          sincronizadoEm: l.sincronizadoEm,
+          origem: l.origem,
+          extensao: l.extensao,
+        };
+      } catch (_) {
+        return { ativo: false, existe: false };
+      }
+    })(),
   };
 }
 

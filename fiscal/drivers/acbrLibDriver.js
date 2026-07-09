@@ -571,10 +571,9 @@ async function testarLibDetalhe() {
   };
 }
 
-function destinoPdfCanonico(chave, modeloDocumento) {
-  const modelo = String(modeloDocumento || "65");
-  const suffix = modelo === "55" ? "danfe" : "danfce";
-  return path.join(PATHS.pdf, `${chave}-${suffix}.pdf`);
+function destinoPdfCanonico(chave, modeloDocumento, formatoPdf = "termico") {
+  const { destinoPdfCanonico: destFmt } = require("../../fiscalPdfFormato");
+  return destFmt(chave, modeloDocumento, formatoPdf);
 }
 
 /** Persiste XML/PDF do staging nativo para PATHS do agente e gera DANFC-e via NFE_ImprimirPDF. */
@@ -610,12 +609,23 @@ function persistNativeEmissaoOutputs(inst, runtime, chave, modelo) {
   }
 
   const tipoDanfe = String(modelo || "65") === "55" ? "1" : "4";
+  const {
+    applyMarcaDaguaAcbrLib,
+    applyNfcePdfFormatoAcbrLib,
+    applyDanfeLogoAcbrLib,
+  } = require("../../fiscalPdfFormato");
   try {
     inst.configGravarValor("DANFE", "TipoDANFE", tipoDanfe);
   } catch (_) {
     /* versões antigas da DLL */
   }
-  acbrLibRuntime.applyDanfeLayoutConfig(inst, modelo);
+  if (String(modelo || "65") === "55") {
+    applyMarcaDaguaAcbrLib(inst);
+    acbrLibRuntime.applyDanfeLayoutConfig(inst, modelo);
+  } else {
+    applyNfcePdfFormatoAcbrLib(inst, "termico");
+  }
+  applyDanfeLogoAcbrLib(inst, runtime, { modelo, formatoPdf: "termico" });
   try {
     inst.imprimirPDF();
   } catch (pdfErr) {
@@ -704,32 +714,39 @@ function descobrirPdfGerado(chave, modeloDocumento, destino) {
   return null;
 }
 
-async function gerarPdfFiscalLib(chave, xmlPath, modeloDocumento = "65") {
+async function gerarPdfFiscalLib(chave, xmlPath, modeloDocumento = "65", opts = {}) {
   const mode = getIntegrationMode();
   const modelo = String(modeloDocumento || "65");
-  const destino = destinoPdfCanonico(chave, modelo);
+  const {
+    normalizarFormatoPdfNfce,
+    applyNfcePdfFormatoAcbrLib,
+    applyMarcaDaguaAcbrLib,
+    applyDanfeLogoAcbrLib,
+  } = require("../../fiscalPdfFormato");
+  const formatoPdf = normalizarFormatoPdfNfce(opts.formatoPdf, modelo);
+  const destino = destinoPdfCanonico(chave, modelo, formatoPdf);
   const docs = require("../../documentosFiscais");
 
-  const existente = docs.localizarPdfPorChave(chave, modelo);
-  if (existente && docs.pdfValidoParaModelo(existente, modelo)) {
+  const existente = docs.localizarPdfPorChave(chave, modelo, formatoPdf);
+  if (existente && docs.pdfValidoParaModelo(existente, modelo, formatoPdf)) {
     if (path.resolve(existente) !== path.resolve(destino)) {
       fs.copyFileSync(existente, destino);
     }
     return destino;
   }
-  if (fs.existsSync(destino) && docs.pdfValidoParaModelo(destino, modelo)) {
+  if (fs.existsSync(destino) && docs.pdfValidoParaModelo(destino, modelo, formatoPdf)) {
     return destino;
   }
 
   const stagedPdf = acbrLibRuntime.findStagedArtifactAnywhere(chave, ".pdf");
-  if (stagedPdf && docs.pdfValidoParaModelo(stagedPdf, modelo)) {
+  if (stagedPdf && docs.pdfValidoParaModelo(stagedPdf, modelo, formatoPdf)) {
     fs.mkdirSync(path.dirname(destino), { recursive: true });
     fs.copyFileSync(stagedPdf, destino);
     return destino;
   }
 
   if (mode !== "native") {
-    return acbr.gerarPdfFiscal(chave, xmlPath, modeloDocumento);
+    return acbr.gerarPdfFiscal(chave, xmlPath, modeloDocumento, opts);
   }
 
   const xmlAbs = resolveXmlPathForPdf(chave, xmlPath);
@@ -753,7 +770,13 @@ async function gerarPdfFiscalLib(chave, xmlPath, modeloDocumento = "65") {
     } catch (_) {
       /* versões antigas da DLL */
     }
-    acbrLibRuntime.applyDanfeLayoutConfig(inst, modelo);
+    if (modelo === "55") {
+      applyMarcaDaguaAcbrLib(inst);
+      acbrLibRuntime.applyDanfeLayoutConfig(inst, modelo);
+    } else {
+      applyNfcePdfFormatoAcbrLib(inst, formatoPdf);
+    }
+    applyDanfeLogoAcbrLib(inst, runtime, { modelo, formatoPdf });
     try {
       inst.imprimirPDF();
     } catch (_) {
@@ -765,7 +788,7 @@ async function gerarPdfFiscalLib(chave, xmlPath, modeloDocumento = "65") {
   const achado =
     descobrirPdfGerado(chave, modelo, destino) ||
     acbrLibRuntime.findStagedArtifactAnywhere(chave, ".pdf");
-  if (achado && docs.isPdfValid(achado)) {
+  if (achado && docs.pdfValidoParaModelo(achado, modelo, formatoPdf)) {
     if (path.resolve(achado) !== path.resolve(destino)) {
       fs.copyFileSync(achado, destino);
     }
@@ -936,7 +959,7 @@ module.exports = Object.assign({}, acbr, {
   invalidateNativeSession,
   getLibSessionStatus: () => acbrLibSession.getSessionStatus(),
   gerarPdfFiscal: gerarPdfFiscalLib,
-  gerarPdfDanfce: (chave, xmlPath) => gerarPdfFiscalLib(chave, xmlPath, "65"),
+  gerarPdfDanfce: (chave, xmlPath, opts) => gerarPdfFiscalLib(chave, xmlPath, "65", opts),
   gerarPdfDanfe: (chave, xmlPath) => gerarPdfFiscalLib(chave, xmlPath, "55"),
   warnIfSelectedAtBoot,
 });

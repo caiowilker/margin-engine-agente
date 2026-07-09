@@ -39,6 +39,7 @@ const LOGICAL_DIRS = [
   "produtosThumb",
   "produtosCache",
   "produtosTemp",
+  "assetsLogo",
 ];
 
 let singleton = null;
@@ -79,6 +80,7 @@ function buildPaths(dataRoot) {
     produtosThumb: path.join(produtos, "thumb"),
     produtosCache: path.join(produtos, "cache"),
     produtosTemp: path.join(produtos, "temp"),
+    assetsLogo: path.join(root, "assets", "logo"),
     acbr,
     acbrXml: path.join(acbr, "xml"),
     acbrPdf: path.join(acbr, "pdf"),

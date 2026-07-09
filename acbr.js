@@ -1734,12 +1734,17 @@ async function inutilizarNfce(params) {
   };
 }
 
-function suffixPdfModelo(modeloDocumento = "65") {
-  return String(modeloDocumento) === "55" ? "danfe" : "danfce";
+function suffixPdfModelo(modeloDocumento = "65", formatoPdf = "termico") {
+  const { suffixPdfModelo: suffixFmt } = require("./fiscalPdfFormato");
+  return suffixFmt(modeloDocumento, formatoPdf);
 }
 
-function destinoPdfFiscal(chave, modeloDocumento = "65") {
-  return path.join(PATHS.pdf, `${chave}-${suffixPdfModelo(modeloDocumento)}.pdf`);
+function destinoPdfFiscal(chave, modeloDocumento = "65", formatoPdf = "termico") {
+  const k = String(chave || "").replace(/\D/g, "");
+  return path.join(
+    PATHS.pdf,
+    `${k}-${suffixPdfModelo(modeloDocumento, formatoPdf)}.pdf`,
+  );
 }
 
 function inferirModeloDaChave(chave) {
@@ -1751,12 +1756,17 @@ function inferirModeloDaChave(chave) {
   return "65";
 }
 
-async function gerarPdfFiscal(chave, xmlPath, modeloDocumento = "65") {
+async function gerarPdfFiscal(chave, xmlPath, modeloDocumento = "65", opts = {}) {
   const modelo = String(modeloDocumento || "65");
-  const destino = destinoPdfFiscal(chave, modelo);
+  const {
+    normalizarFormatoPdfNfce,
+    paramsImprimirDanfePdfMonitor,
+  } = require("./fiscalPdfFormato");
+  const formatoPdf = normalizarFormatoPdfNfce(opts.formatoPdf, modelo);
+  const destino = destinoPdfFiscal(chave, modelo, formatoPdf);
   const docs = require("./documentosFiscais");
-  const existente = docs.localizarPdfPorChave(chave, modelo);
-  if (existente && docs.isPdfValid(existente)) {
+  const existente = docs.localizarPdfPorChave(chave, modelo, formatoPdf);
+  if (existente && docs.pdfValidoParaModelo(existente, modelo, formatoPdf)) {
     if (path.resolve(existente) !== path.resolve(destino)) {
       fs.copyFileSync(existente, destino);
     }
@@ -1770,14 +1780,30 @@ async function gerarPdfFiscal(chave, xmlPath, modeloDocumento = "65") {
           'NFE.ConfigGravarValor("DANFE","ImprimeCodigoEan","0")',
           'NFE.ConfigGravarValor("DANFENFe","ExibeEAN","0")',
           `NFE.ConfigGravarValor("DANFENFe","LarguraCodProd","${larguraCod}")`,
+          'NFE.ConfigGravarValor("DANFE","Site","Margin Engine")',
+          'NFE.ConfigGravarValor("DANFE","MarcaDagua","Margin Engine")',
           "NFE.ConfigGravar()",
         ]
-      : [];
-  // Somente ImprimirDANFEPDF — ImprimirDanfe envia à impressora física (reimpressão usa imprimirDanfce).
-  const comandos =
-    modelo === "55"
-      ? [...layoutDanfe, `NFE.ImprimirDANFEPDF(${qAcbr(xml)},,,"1","0")`]
-      : [`NFE.ImprimirDANFEPDF(${qAcbr(xml)},,,"1","1")`];
+      : [
+          'NFE.ConfigGravarValor("DANFE","Site","Margin Engine")',
+          'NFE.ConfigGravarValor("DANFE","MarcaDagua","Margin Engine")',
+          "NFE.ConfigGravar()",
+        ];
+  const pdfParams = paramsImprimirDanfePdfMonitor(modelo, formatoPdf);
+  const marca = qAcbr(pdfParams.marcaDagua);
+  const { deveAplicarLogoDanfe } = require("./fiscalPdfFormato");
+  const fiscalLogo = require("./fiscal/fiscalLogo");
+  const logoInfo = fiscalLogo.ler();
+  const logoCmds = [];
+  if (deveAplicarLogoDanfe(modelo, formatoPdf) && logoInfo.ativo && logoInfo.caminhoAbsoluto) {
+    const nfceFlag = modelo === "65" ? '"1"' : '""';
+    logoCmds.push(`NFe.SetLogomarca(${qAcbr(logoInfo.caminhoAbsoluto)},${nfceFlag})`);
+  }
+  const comandos = [
+    ...layoutDanfe,
+    ...logoCmds,
+    `NFE.ImprimirDANFEPDF(${qAcbr(xml)},,${marca},${pdfParams.viaConsumidor},${pdfParams.simplificado})`,
+  ];
 
   for (const cmd of comandos) {
     try {
@@ -1796,8 +1822,8 @@ async function gerarPdfFiscal(chave, xmlPath, modeloDocumento = "65") {
     }
   }
 
-  const achadoAninhado = docs.localizarPdfPorChave(chave, modelo);
-  if (achadoAninhado && docs.isPdfValid(achadoAninhado)) {
+  const achadoAninhado = docs.localizarPdfPorChave(chave, modelo, formatoPdf);
+  if (achadoAninhado && docs.pdfValidoParaModelo(achadoAninhado, modelo, formatoPdf)) {
     if (path.resolve(achadoAninhado) !== path.resolve(destino)) {
       fs.copyFileSync(achadoAninhado, destino);
     }
@@ -1823,8 +1849,8 @@ async function gerarPdfFiscal(chave, xmlPath, modeloDocumento = "65") {
   );
 }
 
-async function gerarPdfDanfce(chave, xmlPath) {
-  return gerarPdfFiscal(chave, xmlPath, "65");
+async function gerarPdfDanfce(chave, xmlPath, opts = {}) {
+  return gerarPdfFiscal(chave, xmlPath, "65", opts);
 }
 
 async function gerarPdfDanfe(chave, xmlPath) {

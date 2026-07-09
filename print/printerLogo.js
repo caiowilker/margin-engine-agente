@@ -139,6 +139,21 @@ function lerBuffer() {
   return buf;
 }
 
+/** Toggle do painel PDV ou env — padrão true (só imprime se BMP existir). */
+function exibirLogoCupomHabilitado(payload) {
+  if (payload && typeof payload.exibirLogo === "boolean") return payload.exibirLogo;
+  const env = process.env.PRINTER_LOGO_EXIBIR ?? process.env.IMPRESSAO_EXIBIR_LOGO;
+  if (env != null && String(env).toLowerCase() === "false") return false;
+  return true;
+}
+
+/** Logo BMP no cupom térmico (fiscal ou não fiscal) — opcional, nunca obrigatória. */
+function deveExibirLogoCupom(payload) {
+  if (!exibirLogoCupomHabilitado(payload)) return false;
+  const info = ler();
+  return !!(info.ativo && info.caminhoAbsoluto);
+}
+
 module.exports = {
   LOGO_DIR,
   LOGO_BMP,
@@ -146,4 +161,6 @@ module.exports = {
   remover,
   ler,
   isBmpBuffer,
+  exibirLogoCupomHabilitado,
+  deveExibirLogoCupom,
 };

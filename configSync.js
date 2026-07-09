@@ -171,6 +171,54 @@ function aplicarConfigRemota(cfg) {
   estado.agenteSincronizadoEm = cfg.agenteSincronizadoEm || null;
   estado.ultimaSincronizacaoOk = new Date().toISOString();
   estado.ultimoErro = null;
+  void sincronizarDanfeLogoRemoto(cfg).catch((err) =>
+    log.debug({ err: err.message }, "[ConfigSync] sync logo DANFE falhou"),
+  );
+}
+
+async function sincronizarDanfeLogoRemoto(cfg) {
+  if (!cfg || typeof cfg !== "object") return;
+  const backendUrl = cfg.backendUrl || process.env.BACKEND_URL || "";
+  const backendToken = cfg.backendToken || process.env.BACKEND_TOKEN || "";
+  if (!backendUrl || !backendToken) return;
+
+  const shaRemoto = cfg.danfeLogoSha256 || null;
+  const fiscalLogo = require("./fiscal/fiscalLogo");
+  const local = fiscalLogo.ler();
+
+  if (!shaRemoto) {
+    if (local.sha256Remoto && local.origem === "backend") {
+      fiscalLogo.remover();
+    }
+    return;
+  }
+
+  if (!fiscalLogo.precisaSincronizar(shaRemoto) && local.origem === "backend") {
+    return;
+  }
+
+  const fetch = require("node-fetch");
+  const resp = await fetch(`${backendUrl.replace(/\/$/, "")}/pdv/agente/fiscal/logo`, {
+    headers: {
+      Authorization: `Bearer ${backendToken}`,
+      Accept: "image/png, image/jpeg, */*",
+    },
+  });
+  if (resp.status === 404) {
+    if (local.origem === "backend") fiscalLogo.remover();
+    return;
+  }
+  if (!resp.ok) {
+    throw new Error(`Logo remoto HTTP ${resp.status}`);
+  }
+  const buf = Buffer.from(await resp.arrayBuffer());
+  fiscalLogo.salvar({
+    buffer: buf,
+    ativo: true,
+    origem: "backend",
+    sha256Remoto: shaRemoto,
+  });
+  log.info({ sha256: shaRemoto }, "[ConfigSync] Logo DANFE sincronizada do backend");
 }
 
 async function sincronizarCatalogo(backendUrl, backendToken) {

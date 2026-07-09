@@ -80,9 +80,10 @@ function tagLogoArquivo(filePath) {
   return tagBmp(filePath.replace(/\\/g, "/"));
 }
 
-function tagLogoHeader() {
+function tagLogoHeader(opts = {}) {
   try {
     const logo = require("./printerLogo");
+    if (!logo.deveExibirLogoCupom(opts)) return "";
     const info = logo.ler();
     if (!info.ativo || !info.caminhoAbsoluto) return "";
     if (info.modo === "kc") {

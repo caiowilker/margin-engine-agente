@@ -29,6 +29,7 @@ function getPaths() {
     spool: p.spool,
     impressao: p.impressao,
     temp: p.temp,
+    assetsLogo: p.assetsLogo,
   };
 }
 

@@ -132,5 +132,28 @@ test("printerLogo — aceita BMP header", () => {
   assert.ok(info.sha256);
 });
 
+test("printerLogo — sem BMP não exibe logo", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "logo-empty-"));
+  const logoDir = path.join(tmp, "printer");
+  fs.mkdirSync(logoDir, { recursive: true });
+  const prevData = path.join(__dirname, "..", "data", "printer");
+  const { tagLogoHeader } = require("../print/acbrTags");
+  printerLogo.remover();
+  assert.strictEqual(printerLogo.deveExibirLogoCupom({}), false);
+  assert.strictEqual(tagLogoHeader({}), "");
+});
+
+test("printerLogo — exibirLogo false no payload ignora BMP", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "logo-off-"));
+  process.env.PRINTER_LOCAL_ENV_OVERRIDE = path.join(tmp, ".env");
+  const bmp = Buffer.alloc(64);
+  bmp[0] = 0x42;
+  bmp[1] = 0x4d;
+  printerLogo.salvar({ base64: bmp.toString("base64"), ativo: true });
+  assert.strictEqual(printerLogo.deveExibirLogoCupom({ exibirLogo: false }), false);
+  const { tagLogoHeader } = require("../print/acbrTags");
+  assert.strictEqual(tagLogoHeader({ exibirLogo: false }), "");
+});
+
 console.log(`\nprint-extended: ${passed} passed, ${failed} failed\n`);
 process.exit(failed > 0 ? 1 : 0);
