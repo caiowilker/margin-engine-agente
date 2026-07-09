@@ -608,18 +608,17 @@ function persistNativeEmissaoOutputs(inst, runtime, chave, modelo) {
     });
   }
 
-  const tipoDanfe = String(modelo || "65") === "55" ? "1" : "4";
   const {
     applyMarcaDaguaAcbrLib,
     applyNfcePdfFormatoAcbrLib,
     applyDanfeLogoAcbrLib,
   } = require("../../fiscalPdfFormato");
-  try {
-    inst.configGravarValor("DANFE", "TipoDANFE", tipoDanfe);
-  } catch (_) {
-    /* versões antigas da DLL */
-  }
   if (String(modelo || "65") === "55") {
+    try {
+      inst.configGravarValor("DANFE", "TipoDANFE", "1");
+    } catch (_) {
+      /* versões antigas da DLL */
+    }
     applyMarcaDaguaAcbrLib(inst);
     acbrLibRuntime.applyDanfeLayoutConfig(inst, modelo);
   } else {
@@ -764,13 +763,12 @@ async function gerarPdfFiscalLib(chave, xmlPath, modeloDocumento = "65", opts = 
     inst.limparLista();
     inst.carregarXML(xmlRel);
     acbrLibRuntime.reloadNativeCertAfterCarregarIni(inst, runtime);
-    const tipoDanfe = modelo === "55" ? "1" : "4";
-    try {
-      inst.configGravarValor("DANFE", "TipoDANFE", tipoDanfe);
-    } catch (_) {
-      /* versões antigas da DLL */
-    }
     if (modelo === "55") {
+      try {
+        inst.configGravarValor("DANFE", "TipoDANFE", "1");
+      } catch (_) {
+        /* versões antigas da DLL */
+      }
       applyMarcaDaguaAcbrLib(inst);
       acbrLibRuntime.applyDanfeLayoutConfig(inst, modelo);
     } else {

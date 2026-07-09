@@ -10,6 +10,12 @@ const TIPO_RELATORIO_BOBINA_NFCE = {
   FORTES_A4: "2",
 };
 
+/** ACBr [DANFE] TipoDANFE: 1=Retrato A4 (tabelas completas), 4=NFC-e bobina/ESC. */
+const TIPO_DANFE_ACBR = {
+  RETRATO_A4: "1",
+  NFCE: "4",
+};
+
 /**
  * @param {string|undefined|null} raw
  * @param {string} modeloDocumento
@@ -71,17 +77,37 @@ function applyMarcaDaguaAcbrLib(inst) {
 }
 
 /**
+ * Grava config no ACBrLib ignorando chaves ausentes por versão da DLL.
+ * @param {{ configGravarValor: (sec: string, key: string, val: string) => void }} inst
+ */
+function configGravarSafe(inst, sets) {
+  for (const [sec, key, val] of sets) {
+    if (val == null) continue;
+    try {
+      inst.configGravarValor(sec, key, String(val));
+    } catch (_) {
+      /* opcional por versão da DLL */
+    }
+  }
+}
+
+/**
  * Parâmetros de layout NFC-e para ACBr (Lib INI e Monitor ConfigGravarValor).
+ * A4 pagamento: TipoDANFE=1 + TipoRelatorioBobina=2 (FortesA4) — tabelas completas 595pt.
  * @param {FormatoPdfNfce} formatoPdf
  */
 function nfceLayoutAcbrParams(formatoPdf) {
   const a4 = formatoPdf === "a4";
   return {
+    tipoDANFE: a4 ? TIPO_DANFE_ACBR.RETRATO_A4 : TIPO_DANFE_ACBR.NFCE,
     tipoRelatorioBobina: a4
       ? TIPO_RELATORIO_BOBINA_NFCE.FORTES_A4
       : TIPO_RELATORIO_BOBINA_NFCE.ESCPOS,
     simplificado: a4 ? "0" : "1",
     viaConsumidor: a4 ? "0" : "1",
+    formulario: "0",
+    impressora: a4 ? "" : null,
+    imprimeItens: "1",
   };
 }
 
@@ -92,28 +118,26 @@ function nfceLayoutAcbrParams(formatoPdf) {
 function applyNfcePdfFormatoAcbrLib(inst, formatoPdf) {
   applyMarcaDaguaAcbrLib(inst);
   const layout = nfceLayoutAcbrParams(formatoPdf);
-  try {
-    inst.configGravarValor("DANFE", "TipoDANFE", "4");
-  } catch (_) {
-    /* ignore */
-  }
-  try {
-    inst.configGravarValor("DANFENFCe", "TipoRelatorioBobina", layout.tipoRelatorioBobina);
-  } catch (_) {
-    /* versões antigas da DLL */
-  }
-  for (const key of ["Simplificado", "ModeloSimplificado", "ImprimirSimplificado"]) {
-    try {
-      inst.configGravarValor("DANFE", key, layout.simplificado);
-      break;
-    } catch (_) {
-      /* próxima chave */
-    }
-  }
-  try {
-    inst.configGravarValor("DANFE", "ViaConsumidor", layout.viaConsumidor);
-  } catch (_) {
-    /* ignore */
+  const a4 = formatoPdf === "a4";
+
+  configGravarSafe(inst, [
+    ["DANFE", "TipoDANFE", layout.tipoDANFE],
+    ["DANFE", "Formulario", layout.formulario],
+    ["DANFENFCe", "TipoRelatorioBobina", layout.tipoRelatorioBobina],
+    ["DANFENFCe", "ViaConsumidor", layout.viaConsumidor],
+    ["DANFENFCe", "ImprimeItens", layout.imprimeItens],
+    ["DANFE", "ViaConsumidor", layout.viaConsumidor],
+    ["DANFE", "Simplificado", layout.simplificado],
+    ["DANFE", "ModeloSimplificado", layout.simplificado],
+    ["DANFE", "ImprimirSimplificado", layout.simplificado],
+  ]);
+
+  if (a4) {
+    configGravarSafe(inst, [
+      ["DANFE", "Impressora", layout.impressora],
+      ["DANFE", "ImprimeCodigoEan", "1"],
+      ["DANFENFe", "ExibeEAN", "1"],
+    ]);
   }
 }
 
@@ -124,14 +148,24 @@ function applyNfcePdfFormatoAcbrLib(inst, formatoPdf) {
  */
 function nfceLayoutMonitorComandos(formatoPdf) {
   const layout = nfceLayoutAcbrParams(formatoPdf);
-  return [
+  const cmds = [
+    `NFE.ConfigGravarValor("DANFE","TipoDANFE","${layout.tipoDANFE}")`,
+    `NFE.ConfigGravarValor("DANFE","Formulario","${layout.formulario}")`,
     `NFE.ConfigGravarValor("DANFENFCe","TipoRelatorioBobina","${layout.tipoRelatorioBobina}")`,
+    `NFE.ConfigGravarValor("DANFENFCe","ViaConsumidor","${layout.viaConsumidor}")`,
+    `NFE.ConfigGravarValor("DANFENFCe","ImprimeItens","${layout.imprimeItens}")`,
     `NFE.ConfigGravarValor("DANFE","Simplificado","${layout.simplificado}")`,
     `NFE.ConfigGravarValor("DANFE","ViaConsumidor","${layout.viaConsumidor}")`,
     'NFE.ConfigGravarValor("DANFE","Site","Margin Engine")',
     'NFE.ConfigGravarValor("DANFE","MarcaDagua","Margin Engine")',
-    "NFE.ConfigGravar()",
   ];
+  if (formatoPdf === "a4") {
+    cmds.push('NFE.ConfigGravarValor("DANFE","Impressora","")');
+    cmds.push('NFE.ConfigGravarValor("DANFE","ImprimeCodigoEan","1")');
+    cmds.push('NFE.ConfigGravarValor("DANFENFe","ExibeEAN","1")');
+  }
+  cmds.push("NFE.ConfigGravar()");
+  return cmds;
 }
 
 /**
@@ -201,6 +235,7 @@ function applyDanfeLogoAcbrLib(inst, runtime, opts = {}) {
 module.exports = {
   MARCA_DAGUA_MARGIN,
   TIPO_RELATORIO_BOBINA_NFCE,
+  TIPO_DANFE_ACBR,
   normalizarFormatoPdfNfce,
   suffixPdfModelo,
   destinoPdfCanonico,

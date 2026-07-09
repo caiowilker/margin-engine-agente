@@ -9,6 +9,7 @@ const {
   deveAplicarLogoDanfe,
   MARCA_DAGUA_MARGIN,
   TIPO_RELATORIO_BOBINA_NFCE,
+  TIPO_DANFE_ACBR,
   nfceLayoutAcbrParams,
 } = require("../fiscalPdfFormato");
 
@@ -72,6 +73,10 @@ async function main() {
         const layoutA4 = nfceLayoutAcbrParams("a4");
         assert.strictEqual(layoutTermico.tipoRelatorioBobina, TIPO_RELATORIO_BOBINA_NFCE.ESCPOS);
         assert.strictEqual(layoutA4.tipoRelatorioBobina, TIPO_RELATORIO_BOBINA_NFCE.FORTES_A4);
+        assert.strictEqual(layoutTermico.tipoDANFE, TIPO_DANFE_ACBR.NFCE);
+        assert.strictEqual(layoutA4.tipoDANFE, TIPO_DANFE_ACBR.RETRATO_A4);
+        assert.strictEqual(layoutA4.formulario, "0");
+        assert.strictEqual(layoutA4.impressora, "");
       },
     ],
     [
