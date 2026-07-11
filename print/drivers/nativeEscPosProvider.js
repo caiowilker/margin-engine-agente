@@ -23,6 +23,7 @@ module.exports = {
   imprimirAbertura: (p) => core.imprimirAbertura(p),
   imprimirFechamento: (p) => core.imprimirFechamento(p),
   imprimirMovimentoCaixa: (p) => core.imprimirMovimentoCaixa(p),
+  imprimirPedido: (p) => core.imprimirPedido(p),
   abrirGaveta: () => core.abrirGaveta(),
   imprimirTeste: () => core.imprimirTeste(),
 };

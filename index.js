@@ -1783,6 +1783,47 @@ function iniciarServidor() {
     }
   });
 
+  app.post("/fiscal/nfse/emitir", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    const habilitado =
+      typeof fiscalDriver.isNfseHabilitado === "function"
+        ? fiscalDriver.isNfseHabilitado()
+        : false;
+    if (!habilitado) {
+      return res.status(503).json({
+        erro: "NFS-e desabilitada (NFSE_ENABLED ou EMISSAO_FISCAL)",
+      });
+    }
+    try {
+      const cfg = await lerConfig();
+      const correlationId =
+        req.headers["x-correlation-id"] || req.body.correlationId;
+      const sync =
+        req.query.sync === "1" ||
+        req.query.sync === "true" ||
+        req.headers["x-fiscal-sync"] === "1" ||
+        (process.env.FISCAL_EMITIR_SYNC || "false").toLowerCase() === "true";
+      const numeroRps = String(req.body.numeroRps || req.body.numeroVenda || "");
+      const resultado = await fiscalService.enfileirarEmissaoNfse(
+        cfg,
+        {
+          ...req.body,
+          correlationId,
+          numeroRps,
+          numeroVenda: numeroRps,
+        },
+        { sync },
+      );
+      res.json(resultado);
+    } catch (err) {
+      const status = err.permanente ? 400 : 500;
+      res.status(status).json({
+        erro: err.message,
+        camposFaltando: err.camposFaltando || undefined,
+        permanente: !!err.permanente,
+      });
+    }
+  });
+
   app.post("/fiscal/lib/emitir", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     req.body = { ...(req.body || {}), acbrDriver: "lib" };
     const forcarEmissao = req.body?.forcarEmissao === true;
@@ -1827,6 +1868,36 @@ function iniciarServidor() {
       res.json(resultado);
     } catch (err) {
       res.status(err.permanente ? 400 : 500).json({ erro: err.message });
+    }
+  });
+
+  app.post("/fiscal/lib/emitir-nfse", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    const habilitado =
+      typeof fiscalDriver.isNfseHabilitado === "function"
+        ? fiscalDriver.isNfseHabilitado()
+        : false;
+    if (!habilitado) {
+      return res.status(503).json({ erro: "NFS-e desabilitada" });
+    }
+    try {
+      const cfg = await lerConfig();
+      const correlationId = req.headers["x-correlation-id"] || req.body.correlationId;
+      const sync =
+        req.query.sync === "1" ||
+        req.query.sync === "true" ||
+        req.headers["x-fiscal-sync"] === "1";
+      const numeroRps = String(req.body.numeroRps || req.body.numeroVenda || "");
+      const resultado = await fiscalService.enfileirarEmissaoNfse(
+        cfg,
+        { ...req.body, correlationId, numeroRps, numeroVenda: numeroRps, acbrDriver: "lib" },
+        { sync },
+      );
+      res.json(resultado);
+    } catch (err) {
+      res.status(err.permanente ? 400 : 500).json({
+        erro: err.message,
+        camposFaltando: err.camposFaltando || undefined,
+      });
     }
   });
 
@@ -2536,6 +2607,28 @@ function iniciarServidor() {
       }
     },
   );
+
+  app.post("/impressora/pedido", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    try {
+      const resultado = await impressora.imprimirPedido(req.body);
+      if (resultado?.queued) {
+        return res.status(202).json({
+          ok: false,
+          fila: true,
+          mensagem: resultado.message,
+          jobId: resultado.jobId,
+          job: resultado.job ? { id: resultado.job.id } : undefined,
+        });
+      }
+      res.json({
+        ok: true,
+        jobId: resultado.jobId,
+        job: resultado.job ? { id: resultado.job.id } : undefined,
+      });
+    } catch (err) {
+      responderErroImpressao(res, err);
+    }
+  });
 
   app.post("/impressora/gaveta", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {

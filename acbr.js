@@ -47,6 +47,19 @@ function isNfeModelo55Habilitado() {
     (process.env.ACBR_NFE_ENABLED || "true").toLowerCase() === "true";
   return getEmissaoFiscalAtivo() && habilitado;
 }
+
+/** NFS-e modelo 99 — módulo paralelo (NFSE_ENABLED). */
+function isNfseHabilitado() {
+  const habilitado =
+    (process.env.NFSE_ENABLED || "true").toLowerCase() === "true";
+  return getEmissaoFiscalAtivo() && habilitado;
+}
+
+async function emitirNfse(payload) {
+  if (!isNfseHabilitado()) return { fiscal: false };
+  const nfseAcbr = require("./fiscal/nfse/nfseAcbr");
+  return nfseAcbr.emitirNfse(payload);
+}
 // Protocolo TCP do ACBr Monitor: cada comando termina com CR+LF+'.'+CR+LF
 // https://acbr.sourceforge.io/ACBrMonitor/Apresentacao.html
 const ACBR_TERMINADOR = "\r\n.\r\n";
@@ -2140,7 +2153,9 @@ module.exports = {
   isCStatManifestacaoOk,
   emitirNfce,
   emitirNfe,
+  emitirNfse,
   isNfeModelo55Habilitado,
+  isNfseHabilitado,
   montarIniNfe,
   criarEnviarIniModelo,
   enviarEventoFiscal,

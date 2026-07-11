@@ -16,6 +16,8 @@ const fiscalStorage = require("./fiscalStorage");
 const fiscalNumeracao = require("./fiscalNumeracao");
 const fiscalTrace = require("./fiscalTraceLog");
 const { validarPayloadNfe } = require("./fiscalValidacaoNfe");
+const { validarPayloadNfse } = require("./fiscal/nfse/nfseValidate");
+const { montarCallbackBackendNfse } = require("./fiscal/nfse/nfseCallback");
 const { PATHS } = require("./marginPaths");
 
 function inferirModeloDocumento(doc, chave) {
@@ -178,13 +180,14 @@ function deveGerarPdfSincrono(resultado) {
   return false;
 }
 
-function agendarCallbackBackend(cfg, numeroVenda, correlationId, callbackPayload) {
+function agendarCallbackBackend(cfg, numeroVenda, correlationId, callbackPayload, opts = {}) {
   filaFiscal.enfileirar(
     "CALLBACK_BACKEND",
     {
       numeroVenda,
       correlationId,
       callbackPayload,
+      nfse: !!opts.nfse,
     },
     correlationId,
     numeroVenda,
@@ -226,9 +229,12 @@ function httpRequest(url, options, body, timeoutMs = 15000) {
   });
 }
 
-async function callbackBackend(cfg, numeroVenda, payload, correlationId) {
+async function callbackBackend(cfg, numeroVenda, payload, correlationId, opts = {}) {
   const t0 = Date.now();
-  const url = `${cfg.backendUrl.replace(/\/$/, "")}/pdv/vendas/${encodeURIComponent(numeroVenda)}/fiscal/resultado`;
+  const base = cfg.backendUrl.replace(/\/$/, "");
+  const url = opts.nfse
+    ? `${base}/pdv/nfse/rps/${encodeURIComponent(numeroVenda)}/fiscal/resultado`
+    : `${base}/pdv/vendas/${encodeURIComponent(numeroVenda)}/fiscal/resultado`;
   const body = JSON.stringify(payload);
   const result = await httpRequest(
     url,
@@ -693,6 +699,14 @@ function isPayloadNfe55(payload) {
   );
 }
 
+function isPayloadNfse99(payload) {
+  return (
+    payload?.modeloDocumento === "99" ||
+    payload?.modelo === 99 ||
+    payload?.modelo === "99"
+  );
+}
+
 function resolverDriverFiscal(body) {
   const hint = body?.acbrDriver || body?._fiscalMeta?.acbrDriver;
   if (hint === "lib") {
@@ -707,6 +721,9 @@ function resolverDriverEmissao(body) {
 }
 
 async function emitirCompleto(cfg, body, job = null) {
+  if (isPayloadNfse99(body)) {
+    return emitirCompletoNfse(cfg, body, job);
+  }
   const activeDriver = resolverDriverEmissao(body);
   const { numeroVenda, correlationId, ...payload } = body;
   if (!numeroVenda) throw new Error("numeroVenda obrigatório");
@@ -866,6 +883,112 @@ async function emitirCompleto(cfg, body, job = null) {
   return persistirDocumentosFiscais(cfg, numeroVenda, correlationId, resultado);
 }
 
+async function emitirCompletoNfse(cfg, body, job = null) {
+  const activeDriver = resolverDriverEmissao(body);
+  const numeroRps = String(body.numeroRps || body.numeroVenda || "");
+  const correlationId = body.correlationId;
+  if (!numeroRps) throw new Error("numeroRps obrigatório");
+
+  const { numeroVenda: _nv, numeroRps: _nr, correlationId: _cid, ...payload } = body;
+
+  await fiscalPreflight.validarEmissao({ completo: false });
+
+  const cnpj =
+    payload.empresa?.cnpj || payload.cnpj || cfg.empresa?.cnpj || cfg.cnpj;
+  const rl = fiscalRateLimit.podeEmitir(cnpj);
+  if (!rl.ok) {
+    const e = new Error(rl.motivo);
+    e.rateLimit = true;
+    throw e;
+  }
+  fiscalRateLimit.registrarTentativa(cnpj);
+
+  const inicio = Date.now();
+  let resultado;
+  try {
+    if (typeof activeDriver.emitirNfse !== "function") {
+      throw new Error("Driver fiscal não suporta NFS-e neste agente");
+    }
+    resultado = await activeDriver.emitirNfse({ ...payload, numeroRps, correlationId });
+    fiscalMetrics.registrarEmissao(Date.now() - inicio, {
+      ok: true,
+      cStat: resultado.cStat || "100",
+      modelo: "99",
+    });
+  } catch (err) {
+    fiscalRateLimit.registrarFalha(cnpj, fiscalRetry.extrairCStat(err), 1);
+    fiscalMetrics.registrarEmissao(Date.now() - inicio, {
+      falha: true,
+      cStat: fiscalRetry.extrairCStat(err),
+      modelo: "99",
+    });
+    throw err;
+  }
+
+  if (!resultado || resultado.fiscal === false) {
+    const err = new Error(
+      "Emissão NFS-e desabilitada ou indisponível (NFSE_ENABLED / EMISSAO_FISCAL)",
+    );
+    err.permanente = true;
+    throw err;
+  }
+
+  return persistirDocumentosNfse(cfg, numeroRps, correlationId, resultado);
+}
+
+async function persistirDocumentosNfse(cfg, numeroRps, correlationId, resultado) {
+  if (!isCStatAutorizado(resultado.cStat)) {
+    const err = new Error(
+      `NFS-e aguardando confirmação (cStat ${resultado.cStat || "?"}): ${resultado.xMotivo || "processando"}`,
+    );
+    err.cStat = String(resultado.cStat || "104");
+    err.incerto = true;
+    err.permanente = false;
+    err.chaveConsulta = resultado.chave;
+    throw err;
+  }
+
+  fiscalStorage.exigirEspacoParaEscrita();
+  let xmlPath = null;
+  if (resultado.xml) {
+    xmlPath = docs.salvarXmlAutorizado(resultado.chave, resultado.xml);
+  } else if (resultado.xmlPath) {
+    xmlPath = resultado.xmlPath;
+  }
+  const xmlResolvido = await resolverXmlParaCallback(resultado.chave, xmlPath);
+  xmlPath = xmlResolvido.xmlPath || xmlPath;
+
+  filaFiscal.salvarDocumento({
+    chave: resultado.chave,
+    numeroVenda: numeroRps,
+    correlationId,
+    serieNfe: resultado.serie || resultado.serieRps,
+    numeroNfe: resultado.numero || resultado.numeroNfse,
+    cStat: resultado.cStat,
+    protocolo: resultado.protocolo,
+    xmlPath,
+    pdfPath: null,
+    tipo: "AUTORIZADA",
+    modeloDocumento: "99",
+  });
+
+  const callbackPayload = montarCallbackBackendNfse(
+    resultado,
+    correlationId,
+    xmlResolvido.xmlContent || resultado.xml || null,
+  );
+
+  agendarCallbackBackend(cfg, numeroRps, correlationId, callbackPayload, { nfse: true });
+  filaFiscal.dispararProcessamento();
+
+  return {
+    ...resultado,
+    xmlPath,
+    numeroRps,
+    modeloDocumento: "99",
+  };
+}
+
 async function enfileirarEmissao(cfg, body, opts = {}) {
   const correlationId = body.correlationId || crypto.randomUUID();
   const numeroVenda = body.numeroVenda;
@@ -952,6 +1075,33 @@ async function enfileirarEmissaoNfe(cfg, body, opts = {}) {
   return enfileirarEmissao(
     cfg,
     { ...body, modeloDocumento: "55", destinatario },
+    opts,
+  );
+}
+
+async function enfileirarEmissaoNfse(cfg, body, opts = {}) {
+  const habilitado =
+    typeof fiscalDriver.isNfseHabilitado === "function"
+      ? fiscalDriver.isNfseHabilitado()
+      : false;
+  if (!habilitado) {
+    const err = new Error(
+      "NFS-e desabilitada (NFSE_ENABLED ou EMISSAO_FISCAL)",
+    );
+    err.permanente = true;
+    throw err;
+  }
+  const validado = validarPayloadNfse(body);
+  const numeroRps = String(body.numeroRps || body.numeroVenda || "");
+  return enfileirarEmissao(
+    cfg,
+    {
+      ...body,
+      ...validado,
+      numeroRps,
+      numeroVenda: numeroRps,
+      modeloDocumento: "99",
+    },
     opts,
   );
 }
@@ -1379,6 +1529,7 @@ function registrarHandlersFila(lerConfigFn) {
       payload.numeroVenda,
       payload.callbackPayload,
       payload.correlationId,
+      { nfse: !!payload.nfse },
     );
   });
 
@@ -1604,6 +1755,7 @@ module.exports = {
   emitirCompleto,
   enfileirarEmissao,
   enfileirarEmissaoNfe,
+  enfileirarEmissaoNfse,
   consultarStatusEmissao,
   consultarStatusEmissaoPorVenda,
   sincronizarVendaFiscal,

@@ -1235,6 +1235,70 @@ async function renderAberturaConteudo(printer, payload) {
     .cut();
 }
 
+function renderPedido(printer, payload) {
+  const { sep: linha } = helpers();
+  const {
+    normalizarPedidoPayload,
+    labelPrintType,
+    labelEventType,
+    fmtQty,
+    fmtTotal,
+  } = require("../pedidoPrint");
+  const p = normalizarPedidoPayload(payload);
+  const cancelado = p.eventType === "ORDER_CANCELLED";
+
+  printer
+    .font("a")
+    .align("ct")
+    .style("b")
+    .size(1, 1)
+    .text(labelPrintType(p.printType))
+    .style("normal")
+    .size(0, 0)
+    .text(labelEventType(p.eventType));
+
+  if (cancelado) {
+    printer.style("b").text("*** CANCELADO ***").style("normal");
+  }
+
+  printer.text(linha()).align("lt");
+
+  if (p.orderNumber) printer.text("Pedido : " + tx(p.orderNumber));
+  if (p.tableCode) printer.text("Mesa   : " + tx(p.tableCode));
+  if (p.customerName) printer.text("Cliente: " + tx(p.customerName));
+  if (p.createdAt) printer.text("Data/Hr: " + tx(p.createdAt));
+  if (p.elapsedSeconds > 0) printer.text("Tempo  : " + p.elapsedSeconds + "s");
+  if (p.priority && p.priority !== "normal") {
+    printer.text("Prior. : " + tx(p.priority).toUpperCase());
+  }
+
+  printer.align("ct").text(linha()).align("lt").style("b").text("ITENS").style("normal");
+  printer.align("ct").text(linha()).align("lt");
+
+  if (!p.items.length) {
+    printer.text("(sem itens)");
+  } else {
+    for (const item of p.items) {
+      const qty = fmtQty(item.quantity, item.unit);
+      const nome = tx(item.name || item.code || "Item");
+      printer.text(qty + " x " + nome);
+      if (item.code && item.name) {
+        printer.text("  Cod: " + tx(item.code));
+      }
+    }
+  }
+
+  const totalFmt = fmtTotal(p.total);
+  if (totalFmt) {
+    printer.align("ct").text(linha()).align("lt").style("b").text("Total : " + totalFmt).style("normal");
+  }
+  if (p.notes) {
+    printer.text("Obs: " + tx(p.notes));
+  }
+
+  printer.align("ct").text(linha()).feed(3).cut();
+}
+
 function renderMovimentoCaixa(printer, payload) {
   const { sep: linha, fmt } = helpers();
   const tipoLabel = payload.tipo === "suprimento" ? "SUPRIMENTO" : "SANGRIA";
@@ -1349,6 +1413,16 @@ function imprimirMovimentoCaixa(payload) {
   return imprimirRender((printer) => renderMovimentoCaixa(printer, payload));
 }
 
+function imprimirPedido(payload) {
+  const { normalizarPedidoPayload } = require("../pedidoPrint");
+  const p = normalizarPedidoPayload(payload);
+  return imprimirRender((printer) => {
+    for (let i = 0; i < p.copies; i++) {
+      renderPedido(printer, p);
+    }
+  });
+}
+
 function abrirGaveta() {
   const buffer = Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa]);
   return comLockImpressao(() => enviarBuffer(buffer));
@@ -1365,4 +1439,5 @@ module.exports = {
   imprimirAbertura,
   imprimirFechamento,
   imprimirMovimentoCaixa,
+  imprimirPedido,
 };

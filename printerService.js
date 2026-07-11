@@ -107,6 +107,7 @@ module.exports = {
   imprimirAbertura: wrap("imprimirAbertura"),
   imprimirFechamento: wrap("imprimirFechamento"),
   imprimirMovimentoCaixa: wrap("imprimirMovimentoCaixa"),
+  imprimirPedido: wrap("imprimirPedido"),
   abrirGaveta: wrap("abrirGaveta"),
   getProviderName: () => factory.getProviderName(),
   getRequestedProviderName: () => factory.getRequestedProviderName(),

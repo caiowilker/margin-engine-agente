@@ -1,6 +1,6 @@
 # PROGRESS — Agente Local
 
-**Última atualização:** 2026-07-01  
+**Última atualização:** 2026-07-11  
 **Versão:** `1.0.0` — certificada com a plataforma
 
 > **Certificação:** [`../../margin-engine/.ai/certification/CERTIFICACAO_1.0.md`](../../margin-engine/.ai/certification/CERTIFICACAO_1.0.md)  
@@ -20,7 +20,9 @@
 | Instalador Windows | 🟢 Stop/start + anti-downgrade + `check:release-alignment` |
 | Build Windows | 🟢 Pipeline documentado em `build/windows/LEIA-ME.md` |
 | Recovery SQLite degradado | 🟢 F15 |
-| Testes automatizados | 🟢 `npm test` verde |
+| Testes automatizados | 🟢 `npm test` + `test:integration` verdes |
+| Order Engine / Print Station | 🟢 `POST /impressora/pedido` + `frontend-dist` alinhado |
+| NFS-e (modelo 99) | 🟢 Rotas `/fiscal/nfse/emitir`, callback `chaveNfe`+`chaveNfse`, 6 testes contrato |
 
 ---
 

@@ -50,6 +50,18 @@ function validarAntesEnfileirar(op, args) {
     return { ok: true, args: [payload] };
   }
 
+  if (op === "imprimirPedido") {
+    if (!payload || typeof payload !== "object") {
+      throw new Error("Payload de pedido inválido.");
+    }
+    const { normalizarPedidoPayload } = require("./pedidoPrint");
+    const normalizado = normalizarPedidoPayload(payload);
+    if (!normalizado.orderNumber && !normalizado.jobId) {
+      throw new Error("Pedido sem identificador (orderNumber ou jobId).");
+    }
+    return { ok: true, args: [normalizado] };
+  }
+
   if (typeof op !== "string" || !op) {
     throw new Error("Operação de impressão inválida.");
   }

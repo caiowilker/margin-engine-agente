@@ -50,6 +50,70 @@ Body: CupomFiscal + { numeroVenda, correlationId }
 
 ---
 
+### POST /fiscal/nfse/emitir
+
+**Consumidor:** `agenteService.emitirNfse()` (painel NFS-e no front)
+
+**Request:**
+
+```
+Headers: Content-Type: application/json, X-Agent-Token (se ativado), X-Correlation-Id
+Body: PayloadEmissaoNfse + { numeroRps, correlationId, modeloDocumento: "99" }
+  — documentIni (INI ABRASF montado no backend), tomador, servico, empresa
+  — numeroVenda espelha numeroRps para compatibilidade com fila fiscal
+```
+
+**Response 200 (assíncrono — padrão):**
+
+```json
+{
+  "fiscal": "pending",
+  "status": "PENDENTE",
+  "correlationId": "uuid",
+  "numeroVenda": "42",
+  "async": true,
+  "modeloDocumento": "99"
+}
+```
+
+**Response 503:** `{ "erro": "NFS-e desabilitada (NFSE_ENABLED ou EMISSAO_FISCAL)" }`
+
+**Response 400:** `{ "erro": "...", "camposFaltando": ["..."], "permanente": true }`
+
+**Callback backend:** `POST {backendUrl}/pdv/nfse/rps/{numeroRps}/fiscal/resultado`
+
+**Payload callback:** inclui `chaveNfe` e `numeroNfe` (contrato unificado com NFC-e) além de `chaveNfse`/`numeroNfse`; `statusFiscal`, `xmlContent`, `correlationId`, `modeloDocumento: "99"`.
+
+```json
+{
+  "correlationId": "uuid",
+  "chaveNfe": "...",
+  "numeroNfe": "...",
+  "chaveNfse": "...",
+  "numeroNfse": "...",
+  "serieRps": "1",
+  "protocolo": "...",
+  "cStat": "100",
+  "statusFiscal": "AUTORIZADA",
+  "xmlContent": "...",
+  "modeloDocumento": "99"
+}
+```
+
+**Status de compatibilidade:** ✓ (módulo paralelo — não altera NFC-e/NF-e)
+
+---
+
+### POST /fiscal/lib/emitir-nfse
+
+**Consumidor:** provider ACBrLib (quando `ACBR_DRIVER=lib`)
+
+**Request/Response:** idênticos a `POST /fiscal/nfse/emitir`, com `acbrDriver: "lib"` implícito.
+
+**Status de compatibilidade:** ✓
+
+---
+
 ### GET /fiscal/emissao/:correlationId
 
 **Consumidor:** `agenteService.consultarEmissaoFiscal()` / `acompanharEmissaoFiscal()`
@@ -295,6 +359,39 @@ Body: CupomFiscal + { numeroVenda, correlationId }
 **Response:** `{ "ok": true }`
 
 **Status:** ✓
+
+---
+
+### POST /impressora/pedido
+
+**Consumidor:** `agenteService.imprimirPedido()` via `usePrintStation` (Order Engine / Print Station)
+
+**Request:** `PrintJobPayload` (camelCase ou snake_case)
+
+```json
+{
+  "jobId": "uuid",
+  "printType": "cozinha",
+  "eventType": "ORDER_CREATED",
+  "orderNumber": "ORD-1",
+  "orderId": "uuid",
+  "tableCode": "M12",
+  "customerName": "Maria",
+  "total": 42.5,
+  "notes": null,
+  "priority": "normal",
+  "elapsedSeconds": 0,
+  "createdAt": "ISO8601",
+  "copies": 1,
+  "items": [{ "code": "1", "name": "Cafe", "quantity": 2, "unit": "un" }]
+}
+```
+
+**Response 200:** `{ "ok": true, "jobId": "…", "job": { "id": "…" } }`
+
+**Response 202 (fila):** `{ "ok": false, "fila": true, "jobId": "…", "job": { "id": "…" } }`
+
+**Status de compatibilidade:** ✓ (Sprint Order Engine — estação de impressão)
 
 ---
 

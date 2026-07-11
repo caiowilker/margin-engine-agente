@@ -176,6 +176,15 @@ async function emitirNfceLibCore(payload) {
   return emitirDocumentoLib(payload, "65");
 }
 
+async function emitirNfseLib(payload) {
+  if (!acbr.isNfseHabilitado()) return { fiscal: false };
+  const nfseAcbr = require("../nfse/nfseAcbr");
+  return fiscalEmissionLock.withEmissionLock(
+    () => nfseAcbr.emitirNfseCore(payload),
+    "lib-nfse",
+  );
+}
+
 async function emitirNfeLib(payload) {
   if (!acbr.isNfeModelo55Habilitado()) return { fiscal: false };
   return fiscalEmissionLock.withEmissionLock(
@@ -945,6 +954,8 @@ module.exports = Object.assign({}, acbr, {
   parseResposta: (resposta) => acbrLibResposta.parseRespostaLib(resposta),
   emitirNfce: emitirNfceLib,
   emitirNfe: emitirNfeLib,
+  emitirNfse: emitirNfseLib,
+  isNfseHabilitado: () => acbr.isNfseHabilitado(),
   emitirViaNativeLib,
   statusServico: statusServicoLib,
   testar: testarLib,

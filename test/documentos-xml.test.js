@@ -33,7 +33,10 @@ fs.writeFileSync(
 const pdfRoot = path.join(testDir, "acbr", "pdf");
 const pdfNested = path.join(pdfRoot, cnpj, "NFe", "202606", "NFe");
 fs.mkdirSync(pdfNested, { recursive: true });
-const pdfFake = Buffer.from("%PDF-1.4\n" + "x".repeat(200));
+const pdfFake = Buffer.concat([
+  Buffer.from("%PDF-1.4\n1 0 obj<</Type/Page/MediaBox[0 0 595 842]>>endobj\n"),
+  Buffer.alloc(35000, "x"),
+]);
 fs.writeFileSync(path.join(pdfNested, `${chave}-danfe.pdf`), pdfFake);
 
 process.env.MARGIN_ENGINE_ROOT = testDir;

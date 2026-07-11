@@ -8,6 +8,7 @@ const { renderPayloadTags } = require("../renderPrint");
 const { normalizarCupomPayload } = require("../cupomValidate");
 const native = require("./nativeEscPosProvider");
 const caixaTags = require("../caixaAcbrTags");
+const pedidoTags = require("../pedidoAcbrTags");
 
 async function imprimirViaTags(renderFn, payload, fallbackNative) {
   const mode = getIntegrationMode();
@@ -201,5 +202,7 @@ module.exports = {
     imprimirViaTags(caixaTags.renderFechamentoTags, p, native.imprimirFechamento),
   imprimirMovimentoCaixa: (p) =>
     imprimirViaTags(caixaTags.renderMovimentoCaixaTags, p, native.imprimirMovimentoCaixa),
+  imprimirPedido: (p) =>
+    imprimirViaTags(pedidoTags.renderPedidoTags, p, native.imprimirPedido),
   abrirGaveta,
 };

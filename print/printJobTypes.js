@@ -14,6 +14,7 @@ const TIPOS = Object.freeze({
   RECIBO: "recibo",
   RELATORIO: "relatorio",
   REIMPRESSAO: "reimpressao",
+  PEDIDO_COMANDA: "pedido_comanda",
   TESTE: "teste",
   GAVETA: "gaveta",
 });
@@ -42,6 +43,7 @@ const OP_TO_TIPO = Object.freeze({
     return TIPOS.MOVIMENTO_CAIXA;
   },
   imprimirTeste: () => TIPOS.TESTE,
+  imprimirPedido: (payload) => TIPOS.PEDIDO_COMANDA,
   abrirGaveta: () => TIPOS.GAVETA,
 });
 
@@ -57,12 +59,16 @@ function extrairMeta(payload = {}, opts = {}) {
       opts.documento ||
       payload?.chaveNfe ||
       payload?.chave ||
+      payload?.orderNumber ||
+      payload?.order_number ||
       payload?.numeroVenda ||
       payload?.numeroVendaCliente ||
       null,
     numeroVenda:
       payload?.numeroVenda ||
       payload?.numeroVendaCliente ||
+      payload?.orderNumber ||
+      payload?.order_number ||
       payload?.numero ||
       null,
     usuario: opts.usuario || payload?.operador || payload?.usuario || null,

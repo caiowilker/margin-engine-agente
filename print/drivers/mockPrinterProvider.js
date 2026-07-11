@@ -27,6 +27,7 @@ module.exports = {
   imprimirAbertura: async (payload) => record("abertura", payload),
   imprimirFechamento: async (payload) => record("fechamento", payload),
   imprimirMovimentoCaixa: async (payload) => record("movimento", payload),
+  imprimirPedido: async (payload) => record("pedido", payload),
   abrirGaveta: async () => record("gaveta", {}),
   imprimirTeste: async () => record("teste", { pagina: true }),
   _jobs: jobs,
