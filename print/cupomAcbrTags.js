@@ -4,7 +4,13 @@
  */
 const { toThermalText, toThermalDoc } = require("../thermalText");
 const { normalizarCupomPayload, resolverQrCodeNfce } = require("./cupomValidate");
-const { isNfceModelo65, portalConsultaDocumento, tituloCupomFiscal, tituloBlocoDocumentoFiscal, linhaNumeroSerieDocumento } = require("../documentosFiscais");
+const {
+  isNfceModelo65,
+  portalConsultaDocumento,
+  tituloCupomFiscal,
+  tituloBlocoDocumentoFiscal,
+  linhaNumeroSerieDocumento,
+} = require("../documentosFiscais");
 const {
   tagQrCode,
   tagBarcode,
@@ -12,10 +18,8 @@ const {
   tagSegundaViaBanner,
   tagCorte,
   tagBarcodesList,
-  tagNegrito,
-  tagNegritoExpandido,
-  tagResetFonte,
 } = require("./acbrTags");
+const { corpo, destaque, ceDestaque, linhaCorpo, ceCorpo } = require("./cupomContraste");
 
 const COLS = 48;
 
@@ -102,10 +106,6 @@ function renderBarcodesPayload(payload) {
  * @param {object} rawPayload
  * @returns {string}
  */
-function linhaForte(texto) {
-  return tagNegrito(texto);
-}
-
 function renderCupomTags(rawPayload) {
   const payload = normalizarCupomPayload(rawPayload);
   const empresa = payload.empresa || {};
@@ -115,51 +115,41 @@ function renderCupomTags(rawPayload) {
   const lines = [];
 
   lines.push("</zera>");
-  lines.push(tagResetFonte());
   const logoHdr = tagLogoHeader(payload);
   if (logoHdr) lines.push(logoHdr);
   if (payload.segundaVia || payload.reimpressao) lines.push(tagSegundaViaBanner());
+
   lines.push("<ce>");
-  lines.push(
-    tagNegritoExpandido(
-      tx((empresa.nomeFantasia || empresa.razaoSocial || "ESTABELECIMENTO").toUpperCase()),
-    ),
-  );
+  lines.push(`<e><n>${tx((empresa.nomeFantasia || empresa.razaoSocial || "ESTABELECIMENTO").toUpperCase())}</n></e>`);
   if (empresa.razaoSocial && empresa.razaoSocial !== empresa.nomeFantasia) {
-    lines.push(linhaForte(tx(empresa.razaoSocial)));
+    lines.push(corpo(tx(empresa.razaoSocial)));
   }
-  if (empresa.cnpj) lines.push(linhaForte(`CNPJ: ${toThermalDoc(empresa.cnpj)}`));
+  if (empresa.cnpj) lines.push(corpo(`CNPJ: ${toThermalDoc(empresa.cnpj)}`));
   const end = formatarLinhaEndereco(empresa);
-  if (end) lines.push(linhaForte(end.slice(0, COLS)));
+  if (end) lines.push(corpo(end.slice(0, COLS)));
   if (empresa.cidade) {
-    lines.push(
-      linhaForte(tx(`${empresa.cidade}${empresa.uf ? " - " + empresa.uf : ""}`).slice(0, COLS)),
-    );
+    lines.push(corpo(tx(`${empresa.cidade}${empresa.uf ? " - " + empresa.uf : ""}`).slice(0, COLS)));
   }
-  if (empresa.telefone) lines.push(linhaForte(`Tel: ${toThermalDoc(empresa.telefone)}`));
+  if (empresa.telefone) lines.push(corpo(`Tel: ${toThermalDoc(empresa.telefone)}`));
   lines.push("</ce>");
   lines.push("</linha_dupla>");
 
-  lines.push(
-    `<ce><n>${isFiscal ? tituloCupomFiscal(payload.chaveNfe) : "CUPOM NAO FISCAL"}</n></ce>`,
-  );
-  if (isOffline) lines.push("<ce><n>*** MODO OFFLINE ***</n></ce>");
+  lines.push(ceDestaque(isFiscal ? tituloCupomFiscal(payload.chaveNfe) : "CUPOM NAO FISCAL"));
+  if (isOffline) lines.push(ceDestaque("*** MODO OFFLINE ***"));
   lines.push(sepEq());
 
   const dt = new Date(payload.emitidoEm || Date.now());
-  lines.push(linhaForte(col2("Nro:", payload.numeroVenda || "")));
-  lines.push(
-    linhaForte(col2("Data:", `${dt.toLocaleDateString("pt-BR")} ${dt.toLocaleTimeString("pt-BR")}`)),
-  );
-  if (payload.operador) lines.push(linhaForte(col2("Operador:", tx(payload.operador))));
+  lines.push(corpo(col2("Nro:", payload.numeroVenda || "")));
+  lines.push(corpo(col2("Data:", `${dt.toLocaleDateString("pt-BR")} ${dt.toLocaleTimeString("pt-BR")}`)));
+  if (payload.operador) lines.push(corpo(col2("Operador:", tx(payload.operador))));
   if (payload.nomeCliente && payload.nomeCliente !== "Consumidor") {
-    lines.push(linhaForte(col2("Cliente:", tx(payload.nomeCliente).slice(0, 28))));
+    lines.push(corpo(col2("Cliente:", tx(payload.nomeCliente).slice(0, 28))));
   }
-  if (payload.cpfCliente) lines.push(linhaForte(col2("CPF:", toThermalDoc(payload.cpfCliente))));
-  if (payload.cnpjCliente) lines.push(linhaForte(col2("CNPJ:", toThermalDoc(payload.cnpjCliente))));
+  if (payload.cpfCliente) lines.push(corpo(col2("CPF:", toThermalDoc(payload.cpfCliente))));
+  if (payload.cnpjCliente) lines.push(corpo(col2("CNPJ:", toThermalDoc(payload.cnpjCliente))));
 
   lines.push(sepDash());
-  lines.push(linhaForte(padR("DESCRICAO", 26) + padL("UNIT", 8) + padL("TOTAL", 8)));
+  lines.push(linhaCorpo(padR("DESCRICAO", 26) + padL("UNIT", 8) + padL("TOTAL", 8)));
   lines.push(sepDash());
 
   itens.forEach((item, idx) => {
@@ -174,17 +164,15 @@ function renderCupomTags(rawPayload) {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
-    lines.push(
-      linhaForte(num + " " + padR(nome, 23) + padL(valUnit, 9) + padL(valTotal, 9)),
-    );
+    lines.push(corpo(num + " " + padR(nome, 23) + padL(valUnit, 9) + padL(valTotal, 9)));
     if (item.porPeso) {
       const kg = Number(item.quantidade).toLocaleString("pt-BR", {
         minimumFractionDigits: 3,
         maximumFractionDigits: 3,
       });
-      lines.push(linhaForte(`   ${kg} kg x ${fmtR$(item.precoUnitario)}/kg`));
+      lines.push(corpo(`   ${kg} kg x ${fmtR$(item.precoUnitario)}/kg`));
     } else if (Number(item.quantidade) > 1) {
-      lines.push(linhaForte(`   ${item.quantidade} un x ${fmtR$(item.precoUnitario)}`));
+      lines.push(corpo(`   ${item.quantidade} un x ${fmtR$(item.precoUnitario)}`));
     }
   });
 
@@ -216,40 +204,40 @@ function renderCupomTags(rawPayload) {
 
   lines.push(sepDash());
   if (desconto > 0) {
-    lines.push(linhaForte(col2("Subtotal:", fmtR$(subtotal))));
-    lines.push(`<n>${col2("Desconto:", "- " + fmtR$(desconto))}</n>`);
+    lines.push(corpo(col2("Subtotal:", fmtR$(subtotal))));
+    lines.push(destaque(col2("Desconto:", "- " + fmtR$(desconto))));
   }
   lines.push(sepEq());
-  lines.push(`<ce><n>TOTAL: ${fmtR$(totalFinal)}</n></ce>`);
+  lines.push(ceDestaque(`TOTAL: ${fmtR$(totalFinal)}`));
   lines.push(sepEq());
 
   for (const pg of pagamentos) {
     const label = LABEL_PGTO[pg.forma] || String(pg.forma || "").toUpperCase();
     const aplicado = Number(pg.valor || 0) - Number(pg.troco || 0);
-    if (label) lines.push(linhaForte(col2("Pagamento:", `${label} ${fmtR$(aplicado)}`)));
+    if (label) lines.push(corpo(col2("Pagamento:", `${label} ${fmtR$(aplicado)}`)));
     if (pg.forma === "pix" && pg.pixCopiaCola) {
       lines.push("</linha_simples>");
-      lines.push("<ce>PIX Copia e Cola</ce>");
+      lines.push(ceCorpo("PIX Copia e Cola"));
       lines.push(tagQrCode(String(pg.pixCopiaCola)));
     }
   }
 
   if (troco > 0) {
-    lines.push(linhaForte(col2("Recebido:", fmtR$(valorRecebido))));
+    lines.push(corpo(col2("Recebido:", fmtR$(valorRecebido))));
     lines.push(sepDash());
-    lines.push(`<ce><n>TROCO: ${fmtR$(troco)}</n></ce>`);
+    lines.push(ceDestaque(`TROCO: ${fmtR$(troco)}`));
     lines.push(sepDash());
   }
 
   const totalVols = itens.reduce((s, i) => s + Number(i.quantidade || 0), 0);
-  lines.push(linhaForte(col2("Volumes:", `${Math.round(totalVols)} item(ns)`)));
+  lines.push(corpo(col2("Volumes:", `${Math.round(totalVols)} item(ns)`)));
 
   if (isFiscal) {
     lines.push(sepDash());
-    lines.push(`<ce><n>${tituloBlocoDocumentoFiscal(payload.chaveNfe)}</n></ce>`);
+    lines.push(ceDestaque(tituloBlocoDocumentoFiscal(payload.chaveNfe)));
     if (payload.numeroNfe) {
       lines.push(
-        linhaForte(
+        corpo(
           linhaNumeroSerieDocumento(payload.chaveNfe, payload.numeroNfe, payload.serieNfe, {
             seriePadrao: "1",
           }),
@@ -257,23 +245,23 @@ function renderCupomTags(rawPayload) {
       );
     }
     if (payload.protocolo) {
-      lines.push(linhaForte(`Protocolo: ${String(payload.protocolo).slice(0, 30)}`));
+      lines.push(corpo(`Protocolo: ${String(payload.protocolo).slice(0, 30)}`));
     }
-    lines.push(linhaForte("Chave de acesso:"));
-    formatarChave(payload.chaveNfe).forEach((g) => lines.push(linhaForte(g)));
+    lines.push(corpo("Chave de acesso:"));
+    formatarChave(payload.chaveNfe).forEach((g) => lines.push(corpo(g)));
 
     const qr = resolverQrCodeNfce(payload);
     if (qr) {
-      lines.push(linhaForte(`Consulte em ${portalConsultaDocumento(payload.chaveNfe, qr)}`));
+      lines.push(corpo(`Consulte em ${portalConsultaDocumento(payload.chaveNfe, qr)}`));
     }
     if (qr && isNfceModelo65(payload.chaveNfe)) {
       lines.push("</linha_simples>");
-      lines.push(linhaForte("<ce>Consulta via QR Code</ce>"));
+      lines.push(ceCorpo("Consulta via QR Code"));
       lines.push(tagQrCode(qr));
     }
     renderBarcodesPayload(payload).forEach((bc) => lines.push(bc));
     if (qr) {
-      lines.push(linhaForte("Consulte pela chave ou QR Code"));
+      lines.push(corpo("Consulte pela chave ou QR Code"));
     }
   } else {
     const extras = renderBarcodesPayload(payload);
@@ -284,9 +272,9 @@ function renderCupomTags(rawPayload) {
   }
 
   lines.push("</linha_simples>");
-  lines.push(linhaForte("<ce>Obrigado pela preferencia!</ce>"));
-  lines.push(linhaForte("<ce>Volte sempre!</ce>"));
-  lines.push(linhaForte("<ce>PDV Margin Engine</ce>"));
+  lines.push(ceCorpo("Obrigado pela preferencia!"));
+  lines.push(ceCorpo("Volte sempre!"));
+  lines.push(ceCorpo("PDV Margin Engine"));
 
   lines.push(tagCorte());
 
@@ -303,19 +291,21 @@ function renderPaginaTeste() {
   } catch (_) {}
   const factory = require("./factory");
   const driver = factory.getDriverInfo?.() || {};
+  const { modoContraste } = require("./cupomContraste");
   return `</zera>
 </linha_dupla>
-${tagLogoHeader()}<ce><n>TESTE IMPRESSORA</n></ce>
+${tagLogoHeader()}${ceDestaque("TESTE IMPRESSORA")}
 <ce>Margin Engine v${versao}</ce>
 </linha_simples>
 Driver: ${driver.label || driver.provider || "PosPrinter"}
 Modelo: ${cfg.modelo}
 Porta: ${cfg.porta}
+Contraste: ${modoContraste()}
 Largura: ${cfg.colunas || 48} colunas
 ${logoLine}
 </linha_simples>
-Texto — Ç Ã Á É Ê Ó Ú ° R$ acentuação UTF-8
-<n>NEGRITO</n>  <e>EXPANDIDO</e>  <c>CONDENSADO</c>
+Texto corpo — Ç Ã Á É Ê Ó Ú ° R$ acentuação UTF-8
+${destaque("NEGRITO (destaque)")}  <e>EXPANDIDO</e>  <c>CONDENSADO</c>
 </linha_simples>
 <ce>QR Code NFC-e teste</ce>
 ${tagQrCode("https://marginengine.com.br/teste-impressora")}

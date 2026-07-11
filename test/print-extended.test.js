@@ -198,9 +198,71 @@ test("acbrPosPrinterErrors — mensagem -10", () => {
   assert.ok(err.message.includes("RAW:Elgin i9"));
 });
 
+test("cupomContraste — modelo 0 usa modo alto (corpo sem negrito)", () => {
+  const prev = process.env.PRINTER_MODEL;
+  process.env.PRINTER_MODEL = "0";
+  delete require.cache[require.resolve("../print/cupomContraste")];
+  const { modoContraste, corpo, destaque } = require("../print/cupomContraste");
+  assert.strictEqual(modoContraste(), "alto");
+  assert.strictEqual(corpo("linha"), "linha");
+  assert.strictEqual(destaque("x"), "<n>x</n>");
+  if (prev === undefined) delete process.env.PRINTER_MODEL;
+  else process.env.PRINTER_MODEL = prev;
+});
+
+test("renderCupomTags — corpo principal sem negrito simulado (contraste)", () => {
+  const { renderCupomTags } = require("../print/cupomAcbrTags");
+  const tags = renderCupomTags({
+    emitidoEm: new Date().toISOString(),
+    numeroVenda: "V-CONTRASTE",
+    total: 10,
+    empresa: { nomeFantasia: "LOJA" },
+    itens: [{ nome: "Item", quantidade: 1, precoUnitario: 10, total: 10 }],
+  });
+  assert.ok(tags.includes("Nro:"));
+  assert.ok(!tags.includes("<n>Nro:"));
+  assert.ok(tags.includes("<n>TOTAL:") || tags.includes("TOTAL:"));
+  assert.ok(!tags.includes("</fn>"));
+});
+
 test("printFiscalCoord — fiscalEmUso sem lock ativo", () => {
   const { fiscalEmUso } = require("../print/printFiscalCoordination");
   assert.strictEqual(fiscalEmUso(), false);
+});
+
+test("printerBootstrap — porta RAW configurada não exige detecção", () => {
+  const { portaEfetivaPrecisaDeteccao } = require("../print/printerBootstrap");
+  assert.strictEqual(portaEfetivaPrecisaDeteccao("RAW:POSPrinter POS80"), false);
+  assert.strictEqual(portaEfetivaPrecisaDeteccao(""), true);
+});
+
+test("documentosFiscais — resolverDocumentoFiscalLocal retorna null sem dados", () => {
+  const { resolverDocumentoFiscalLocal } = require("../documentosFiscais");
+  assert.strictEqual(resolverDocumentoFiscalLocal("00000000000000000000000000000000000000000000", "V-INEXISTENTE"), null);
+});
+
+test("acbrPosPrinterRuntime — buildRuntimeValues não usa USB no Windows com porta vazia", () => {
+  if (process.platform !== "win32") return;
+  const prevPorta = process.env.PRINTER_PORTA;
+  const prevName = process.env.PRINTER_NAME;
+  delete process.env.PRINTER_PORTA;
+  delete process.env.PRINTER_NAME;
+  const runtime = require("../print/acbrPosPrinterRuntime");
+  const iniPath = runtime.resolveIniPath();
+  const fs = require("fs");
+  const prevIni = fs.existsSync(iniPath) ? fs.readFileSync(iniPath, "utf8") : null;
+  if (fs.existsSync(iniPath)) fs.writeFileSync(iniPath, "[PosPrinter]\nPorta=\nModelo=0\n", "utf8");
+  try {
+    const vals = runtime.buildRuntimeValues();
+    assert.notStrictEqual(vals.PosPrinter.Porta, "USB");
+    assert.strictEqual(vals.PosPrinter.Porta, "");
+  } finally {
+    if (prevPorta === undefined) delete process.env.PRINTER_PORTA;
+    else process.env.PRINTER_PORTA = prevPorta;
+    if (prevName === undefined) delete process.env.PRINTER_NAME;
+    else process.env.PRINTER_NAME = prevName;
+    if (prevIni != null) fs.writeFileSync(iniPath, prevIni, "utf8");
+  }
 });
 
 console.log(`\nprint-extended: ${passed} passed, ${failed} failed\n`);

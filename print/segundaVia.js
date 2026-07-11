@@ -68,11 +68,15 @@ function montarPayloadSegundaVia(opts = {}) {
   const filaFiscal = require("../filaFiscal");
   filaFiscal.init?.();
 
-  let doc =
-    (opts.chave && filaFiscal.buscarDocumentoPorChave(String(opts.chave).replace(/\D/g, ""))) ||
-    null;
+  let doc = null;
+  if (opts.chave) {
+    doc = filaFiscal.buscarDocumentoPorChave(String(opts.chave).replace(/\D/g, ""));
+  }
   if (!doc && opts.numeroVenda) {
     doc = filaFiscal.buscarDocumentoPorVenda(opts.numeroVenda);
+  }
+  if (!doc) {
+    doc = require("../documentosFiscais").resolverDocumentoFiscalLocal(opts.chave, opts.numeroVenda);
   }
 
   let cupom = null;

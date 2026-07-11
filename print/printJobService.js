@@ -181,6 +181,11 @@ async function processarJobRow(row) {
       stats.retries += 1;
       try {
         require("./factory").resetPrintProvider();
+        if (/(-10)|porta|PRINTER_PORTA/i.test(String(err?.message || ""))) {
+          require("./printerBootstrap")
+            .garantirPortaImpressao({ force: tentativas >= 2 })
+            .catch(() => {});
+        }
       } catch (_) {}
       log.warn({ jobId: row.id, err: err.message, tentativas, delay }, "[PrintJob] Retry agendado");
       return { ok: false, retry: true, job: rowToJob(store.buscarJob(row.id)) };

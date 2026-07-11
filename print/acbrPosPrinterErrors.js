@@ -17,6 +17,11 @@ const DICAS = {
   [-5]: "Arquivo posprinter.ini ausente — reinicie o agente ou reinstale.",
 };
 
+function hintPortaNaoDefinida(ctx = {}) {
+  if (!/porta.*n[aã]o definida/i.test(String(ctx.ultimoMsg || ""))) return null;
+  return "A porta RAW não foi aplicada na sessão da impressora — use Detectar no painel :9100 e tente Imprimir teste.";
+}
+
 function formatAcbrPosError(fnName, ret, ultimoMsg, ctx = {}) {
   const code = Number(ret);
   const base = CODIGOS[code] || `Erro ACBr (${code})`;
@@ -27,7 +32,9 @@ function formatAcbrPosError(fnName, ret, ultimoMsg, ctx = {}) {
   }
   if (ctx.porta) parts.push(`Porta=${ctx.porta}`);
   if (ctx.modelo != null) parts.push(`Modelo=${ctx.modelo}`);
-  if (DICAS[code]) parts.push(DICAS[code]);
+  const hintPorta = hintPortaNaoDefinida({ ultimoMsg: detalhe });
+  if (hintPorta) parts.push(hintPorta);
+  else if (DICAS[code]) parts.push(DICAS[code]);
   const err = new Error(parts.join(" — "));
   err.acbrRet = code;
   return err;

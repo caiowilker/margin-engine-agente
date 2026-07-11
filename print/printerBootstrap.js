@@ -177,6 +177,35 @@ function resolverStatusExibicao(impressoraInfo) {
   };
 }
 
+/**
+ * Garante porta ACBr válida antes de qualquer impressão física.
+ * Tenta auto-detecção quando INI/.env estão vazios ou inválidos.
+ */
+async function garantirPortaImpressao(opts = {}) {
+  const { portaAcbrValida } = require("./printerModelMap");
+  const printerLocalConfig = require("./printerLocalConfig");
+
+  let cfg = printerLocalConfig.ler();
+  if (portaAcbrValida(cfg.porta)) {
+    return { ok: true, porta: cfg.porta, detectado: false };
+  }
+
+  const precisaDetectar = opts.forceDetect === true || opts.force === true || !portaAcbrValida(cfg.porta);
+  if (precisaDetectar && opts.skipDetect !== true) {
+    await autoDetectarESincronizar({ force: opts.force === true || opts.forceDetect === true });
+    cfg = printerLocalConfig.ler();
+    if (portaAcbrValida(cfg.porta)) {
+      return { ok: true, porta: cfg.porta, detectado: true };
+    }
+  }
+
+  const err = new Error(
+    "Porta da impressora não configurada — use Detectar no painel :9100 e depois Imprimir teste.",
+  );
+  err.code = "PRINTER_PORTA_INDEFINIDA";
+  throw err;
+}
+
 function noBoot(delayMs = 2500) {
   const tipo = String(process.env.PRINTER_PROVIDER || "acbr-posprinter").toLowerCase();
   if (!tipo.includes("acbr") && tipo !== "posprinter") return Promise.resolve();
@@ -202,6 +231,7 @@ module.exports = {
   portaEfetivaPrecisaDeteccao,
   precisaAutoDetectar,
   autoDetectarESincronizar,
+  garantirPortaImpressao,
   aplicarConfigInstalador,
   resolverStatusExibicao,
   noBoot,

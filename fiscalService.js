@@ -1191,63 +1191,109 @@ function extrairModeloJob(correlationId) {
 
 async function reimprimirDanfceCompleto(chave, numeroVenda, opts = {}) {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const log = require("./logger").child({ modulo: "reimprimir_danfce" });
+
+  function indexarDocumentoRecuperado(doc, chaveDoc, modelo) {
+    if (!doc?.xml_path || !chaveDoc) return;
+    try {
+      filaFiscal.salvarDocumento({
+        chave: chaveDoc,
+        numeroVenda: doc.numero_venda || numeroVenda,
+        correlationId: doc.correlation_id || null,
+        serieNfe: doc.serie_nfe,
+        numeroNfe: doc.numero_nfe,
+        cStat: doc.c_stat || "100",
+        protocolo: doc.protocolo,
+        xmlPath: doc.xml_path,
+        pdfPath: doc.pdf_path || null,
+        tipo: doc.tipo || "AUTORIZADA",
+        modeloDocumento: modelo,
+      });
+    } catch (idxErr) {
+      log.warn({ err: idxErr.message, chave: chaveDoc }, "[Reimprimir] Falha ao indexar documento recuperado");
+    }
+  }
+
+  async function imprimirTermicoComRetry(payload) {
+    const printerService = require("./printerService");
+    const max = parseInt(process.env.REIMPRIMIR_PRINT_RETRIES || "3", 10);
+    let lastErr;
+    for (let i = 0; i < max; i++) {
+      try {
+        await printerService.imprimirSegundaVia(payload);
+        return;
+      } catch (err) {
+        lastErr = err;
+        const msg = String(err?.message || "");
+        const retryavel = /(-10)|porta|PRINTER_PORTA|timeout|ocupad|offline/i.test(msg);
+        if (!retryavel || i >= max - 1) throw err;
+        await sleep(400 * (i + 1));
+        try {
+          await require("./print/printerBootstrap").garantirPortaImpressao({ force: i > 0 });
+          require("./print/factory").resetPrintProvider();
+        } catch (_) {}
+      }
+    }
+    throw lastErr;
+  }
+
   let doc = null;
   for (let i = 0; i < 8; i++) {
-    doc =
-      (chave && filaFiscal.buscarDocumentoPorChave(chave)) ||
-      (numeroVenda && filaFiscal.buscarDocumentoPorVenda(numeroVenda));
+    doc = docs.resolverDocumentoFiscalLocal(chave, numeroVenda);
     if (doc) break;
     if (i < 7) await sleep(400);
   }
   if (!doc) throw new Error("Documento fiscal não encontrado localmente");
   const chaveDoc = doc.chave || chave;
   const modelo = inferirModeloDocumento(doc, chaveDoc);
+  indexarDocumentoRecuperado(doc, chaveDoc, modelo);
+
   const qrInformado =
     (opts.qrcodeNfe && String(opts.qrcodeNfe).trim()) ||
     (opts.qrcode && String(opts.qrcode).trim()) ||
     null;
+
+  const { montarPayloadSegundaVia } = require("./print/segundaVia");
+  let payload = montarPayloadSegundaVia({
+    chave: chaveDoc,
+    numeroVenda: doc.numero_venda || numeroVenda,
+  });
+  if (qrInformado && !require("./print/cupomValidate").resolverQrCodeNfce(payload)) {
+    payload = { ...payload, qrcodeNfe: qrInformado, qrcode: qrInformado };
+  }
+  if (modelo === "55") {
+    payload = { ...payload, danfeTermico: true, layout: "danfe-termico" };
+  }
+  await imprimirTermicoComRetry(payload);
+
   let pdfPath = doc.pdf_path;
   if (!docs.isPdfValid(pdfPath) && chaveDoc) {
-    pdfPath = await gerarPdfParaModelo(chaveDoc, doc.xml_path, modelo);
-    filaFiscal.salvarDocumento({
-      chave: chaveDoc,
-      numeroVenda: doc.numero_venda || numeroVenda,
-      correlationId: doc.correlation_id,
-      serieNfe: doc.serie_nfe,
-      numeroNfe: doc.numero_nfe,
-      cStat: doc.c_stat,
-      protocolo: doc.protocolo,
-      xmlPath: doc.xml_path,
-      pdfPath,
-      tipo: doc.tipo || "AUTORIZADA",
-      modeloDocumento: modelo,
-    });
-  }
-  if (modelo === "65") {
-    const printerService = require("./printerService");
-    const { montarPayloadSegundaVia } = require("./print/segundaVia");
-    let payload = montarPayloadSegundaVia({
-      chave: chaveDoc,
-      numeroVenda: doc.numero_venda || numeroVenda,
-    });
-    if (qrInformado && !require("./print/cupomValidate").resolverQrCodeNfce(payload)) {
-      payload = { ...payload, qrcodeNfe: qrInformado, qrcode: qrInformado };
+    try {
+      pdfPath = await gerarPdfParaModelo(chaveDoc, doc.xml_path, modelo);
+      filaFiscal.salvarDocumento({
+        chave: chaveDoc,
+        numeroVenda: doc.numero_venda || numeroVenda,
+        correlationId: doc.correlation_id,
+        serieNfe: doc.serie_nfe,
+        numeroNfe: doc.numero_nfe,
+        cStat: doc.c_stat,
+        protocolo: doc.protocolo,
+        xmlPath: doc.xml_path,
+        pdfPath,
+        tipo: doc.tipo || "AUTORIZADA",
+        modeloDocumento: modelo,
+      });
+    } catch (pdfErr) {
+      log.warn(
+        { err: pdfErr.message, chave: chaveDoc, numeroVenda: doc.numero_venda || numeroVenda },
+        "[Reimprimir] Impressão térmica OK — PDF opcional indisponível",
+      );
     }
-    await printerService.imprimirSegundaVia(payload);
-  } else if (modelo === "55") {
-    const printerService = require("./printerService");
-    const { montarPayloadSegundaVia } = require("./print/segundaVia");
-    let payload = montarPayloadSegundaVia({
-      chave: chaveDoc,
-      numeroVenda: doc.numero_venda || numeroVenda,
-    });
-    payload = { ...payload, danfeTermico: true, layout: "danfe-termico" };
-    await printerService.imprimirSegundaVia(payload);
   }
   return {
     ok: true,
     chave: chaveDoc,
-    pdfPath,
+    pdfPath: pdfPath || null,
     tipo: modelo === "55" ? "danfe" : "danfce",
     modeloDocumento: modelo,
   };
@@ -1255,9 +1301,12 @@ async function reimprimirDanfceCompleto(chave, numeroVenda, opts = {}) {
 
 async function obterPdfDocumento(chave, numeroVenda, formatoPdf = "termico") {
   const { normalizarFormatoPdfNfce } = require("./fiscalPdfFormato");
-  const doc =
+  let doc =
     (chave && filaFiscal.buscarDocumentoPorChave(chave)) ||
     (numeroVenda && filaFiscal.buscarDocumentoPorVenda(numeroVenda));
+  if (!doc) {
+    doc = docs.resolverDocumentoFiscalLocal(chave, numeroVenda);
+  }
   const chaveDoc = doc?.chave || chave;
   if (!chaveDoc && !numeroVenda) {
     throw new Error("Informe chave ou numeroVenda");

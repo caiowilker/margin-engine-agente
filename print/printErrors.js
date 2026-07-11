@@ -26,6 +26,11 @@ function classifyPrintError(err) {
     out.fallbackSuggested = true;
     return out;
   }
+  if (err?.code === "PRINTER_PORTA_INDEFINIDA" || /porta da impressora n[aã]o configurada/i.test(msg)) {
+    out.retryable = true;
+    out.fallbackSuggested = true;
+    return out;
+  }
   return out;
 }
 

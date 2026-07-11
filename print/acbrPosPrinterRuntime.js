@@ -210,6 +210,49 @@ async function gravarConfigIni(libBundle, iniPath, values) {
   await promisify(libBundle.lib.POS_ConfigGravar.async.bind(libBundle.lib.POS_ConfigGravar), iniPath);
 }
 
+function syncIniFromSource(bundle, iniPath) {
+  if (!bundle?.staged || !iniPath) return;
+  const sourceIni = resolveIniPath();
+  if (!sourceIni || sourceIni === iniPath || !fs.existsSync(sourceIni)) return;
+  try {
+    copyFileEnsureDir(sourceIni, iniPath);
+  } catch (_) {
+    /* staging opcional */
+  }
+}
+
+function syncIniToSource(bundle, iniPath) {
+  if (!bundle?.staged || !iniPath || !fs.existsSync(iniPath)) return;
+  const sourceIni = resolveIniPath();
+  if (!sourceIni || sourceIni === iniPath) return;
+  try {
+    fs.mkdirSync(path.dirname(sourceIni), { recursive: true });
+    copyFileEnsureDir(iniPath, sourceIni);
+  } catch (_) {
+    /* best-effort */
+  }
+}
+
+async function ativarComConfig(bundle, iniForLib, iniPathDisk) {
+  const { portaAcbrValida } = require("./printerModelMap");
+  const values = buildRuntimeValues();
+  const porta = values.PosPrinter?.Porta || "";
+  if (!portaAcbrValida(porta)) {
+    throw formatAcbrPosError("Config", -10, "Porta não definida", {
+      porta: porta || "(vazio)",
+      modelo: values.PosPrinter?.Modelo,
+    });
+  }
+  await gravarConfigIni(bundle, iniForLib, values);
+  if (iniPathDisk) syncIniToSource(bundle, iniPathDisk);
+  try {
+    await promisify(bundle.lib.POS_Desativar.async.bind(bundle.lib.POS_Desativar));
+  } catch (_) {
+    /* primeira ativação */
+  }
+  await callPos(bundle, bundle.lib.POS_Ativar.async);
+}
+
 function defaultIniContent() {
   return `[Principal]
 TipoResposta=2
@@ -246,12 +289,26 @@ function buildRuntimeValues() {
   if (!portaAcbrValida(porta) && process.env.PRINTER_HOST) {
     porta = `TCP:${process.env.PRINTER_HOST}:${process.env.PRINTER_PORT || "9100"}`;
   }
-  if (!portaAcbrValida(porta)) porta = "USB";
+  if (!portaAcbrValida(porta)) {
+    const inferred = require("./printerModelMap").inferirPortaAcbr({
+      nomeWindows: process.env.PRINTER_NAME,
+    });
+    if (portaAcbrValida(inferred)) porta = inferred;
+  }
+  if (!portaAcbrValida(porta) && process.platform !== "win32") {
+    porta = "USB";
+  }
 
   const enc = local?.encoding || process.env.PRINTER_ENCODING || "850";
   const pageCode = enc === "UTF8" || enc === "utf8" ? "5" : enc === "1252" ? "6" : "2";
   const cut = local?.cut || process.env.PRINTER_CUT || "partial";
   const controlePorta = resolveControlePorta(porta);
+  const verificarImpressora =
+    process.env.PRINTER_VERIFICAR === "true"
+      ? "1"
+      : /^RAW:/i.test(porta)
+        ? "1"
+        : "0";
 
   const values = {
     PosPrinter: {
@@ -263,18 +320,20 @@ function buildRuntimeValues() {
       TraduzirTags: "1",
       ControlePorta: controlePorta,
       LinhasBuffer: process.env.PRINTER_BUFFER_LINES || "0",
-      VerificarImpressora: process.env.PRINTER_VERIFICAR === "true" ? "1" : "0",
+      VerificarImpressora: verificarImpressora,
       TipoCorte: cut === "partial" ? "1" : "0",
     },
   };
 
-  if (local?.baud) {
+  const serial = local?.serial || {};
+  const baud = serial.baud || local?.baud;
+  if (baud) {
     values.PosPrinter_Device = {
-      Baud: local.baud,
-      Parity: local.parity || "0",
-      Stop: local.stopBits || "0",
-      HandShake: local.handshake || "0",
-      TimeOut: local.timeout || "3",
+      Baud: baud,
+      Parity: serial.parity || local?.parity || "0",
+      Stop: serial.stopBits || local?.stopBits || "0",
+      HandShake: serial.handshake || local?.handshake || "0",
+      TimeOut: serial.timeout || local?.timeout || "3",
     };
   }
 
@@ -355,11 +414,11 @@ async function withPosPrinterSession(fn, opts = {}) {
         ? path.relative(bundle.root, iniPath)
         : iniPath;
 
+    syncIniFromSource(bundle, iniPath);
     await callPos(bundle, bundle.lib.POS_Inicializar.async, iniForLib, cryptKey);
-    await gravarConfigIni(bundle, iniForLib, buildRuntimeValues());
-    await callPos(bundle, bundle.lib.POS_Ativar.async);
+    await ativarComConfig(bundle, iniForLib, iniPath);
 
-    _activeSession = { bundle, configKey: key, cwdBefore, iniForLib };
+    _activeSession = { bundle, configKey: key, cwdBefore, iniForLib, iniPath };
     withPosPrinterSession._session = _activeSession;
   }
 
@@ -414,29 +473,48 @@ async function assertPortaLegivel(bundle) {
 }
 
 async function imprimirTagsNativeOnce(bundle, tags) {
+  const sess = withPosPrinterSession._session;
+  if (sess?.iniForLib) {
+    await ativarComConfig(bundle, sess.iniForLib, sess.iniPath);
+  }
   await assertPortaLegivel(bundle);
   await callPos(bundle, bundle.lib.POS_InicializarPos.async);
   await callPos(bundle, bundle.lib.POS_Imprimir.async, tags, true, true, false, 1);
   return { ok: true, native: true };
 }
 
-async function imprimirTagsNative(tags) {
-  const run = () =>
-    withPosPrinterSession(async (bundle) => imprimirTagsNativeOnce(bundle, tags), {
-      invalidateOnError: true,
-    });
+function erroPortaRecuperavel(err) {
+  const msg = String(err?.message || "");
+  return err?.acbrRet === -10 || /porta.*n[aã]o definida|PRINTER_PORTA_INDEFINIDA/i.test(msg);
+}
 
-  try {
-    return await run();
-  } catch (err) {
-    if (err.acbrRet !== -10) throw err;
-    await invalidatePosPrinterSession();
+async function imprimirTagsNative(tags) {
+  const maxTentativas = parseInt(process.env.ACBR_POS_PRINT_RETRIES || "3", 10);
+  let lastErr;
+
+  for (let attempt = 1; attempt <= maxTentativas; attempt++) {
     try {
-      const bootstrap = require("./printerBootstrap");
-      await bootstrap.autoDetectarESincronizar({ force: true });
-    } catch (_) {}
-    return run();
+      await require("./printerBootstrap").garantirPortaImpressao({
+        skipDetect: attempt === 1,
+        force: attempt > 1,
+      });
+      return await withPosPrinterSession(async (bundle) => imprimirTagsNativeOnce(bundle, tags), {
+        invalidateOnError: attempt < maxTentativas,
+      });
+    } catch (err) {
+      lastErr = err;
+      if (!erroPortaRecuperavel(err) || attempt >= maxTentativas) throw err;
+      await invalidatePosPrinterSession();
+      await new Promise((r) => setTimeout(r, 250 * attempt));
+      try {
+        await require("./printerBootstrap").autoDetectarESincronizar({ force: attempt >= 2 });
+      } catch (_) {}
+      try {
+        require("./factory").resetPrintProvider();
+      } catch (_) {}
+    }
   }
+  throw lastErr;
 }
 
 async function abrirGavetaNative() {

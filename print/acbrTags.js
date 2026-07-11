@@ -124,7 +124,7 @@ function tagNegritoExpandido(texto) {
   return `<e><n>${t}</n></e>`;
 }
 
-/** Restaura fonte normal após </zera> ou blocos formatados. */
+/** @deprecated Evitar após </zera> — pode deixar o cupom apagado em modelo 0 (ppTexto/RAW). */
 function tagResetFonte() {
   return "</fn>";
 }

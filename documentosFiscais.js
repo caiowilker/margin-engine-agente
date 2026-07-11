@@ -700,6 +700,54 @@ function copiarPdfParaCanonico(chave, srcPath, modeloDocumento = "65", formatoPd
   return dest;
 }
 
+/**
+ * Resolve documento fiscal local — SQLite, XML em disco (backup/flat) ou resultado de emissão.
+ */
+function resolverDocumentoFiscalLocal(chave, numeroVenda) {
+  const k = chave ? String(chave).replace(/\D/g, "") : null;
+  let filaFiscal = null;
+  try {
+    filaFiscal = require("./filaFiscal");
+    filaFiscal.init?.();
+  } catch (_) {}
+
+  if (filaFiscal) {
+    const doc =
+      (k && filaFiscal.buscarDocumentoPorChave(k)) ||
+      (numeroVenda && filaFiscal.buscarDocumentoPorVenda(numeroVenda));
+    if (doc) return doc;
+  }
+
+  if (k) {
+    const local = localizarXmlPorChave(k);
+    if (local?.path) {
+      const prot = local.prot || extrairProtNFe(local.xml || "");
+      return {
+        chave: k,
+        xml_path: local.path,
+        numero_venda: numeroVenda || null,
+        c_stat: prot?.cStat || "100",
+        protocolo: prot?.nProt || null,
+        tipo: "AUTORIZADA",
+      };
+    }
+  }
+
+  if (numeroVenda && filaFiscal) {
+    const res = filaFiscal.obterResultadoPorVenda(numeroVenda);
+    if (res?.resultado) {
+      try {
+        const parsed = JSON.parse(res.resultado);
+        if (parsed?.chave && parsed.chave !== k) {
+          return resolverDocumentoFiscalLocal(parsed.chave, numeroVenda);
+        }
+      } catch (_) {}
+    }
+  }
+
+  return null;
+}
+
 module.exports = {
   salvarXmlAutorizado,
   salvarXmlCancelamento,
@@ -731,6 +779,7 @@ module.exports = {
   extrairCnpjDaChave,
   xmlEstaAutorizado,
   resolverXmlParaImpressao,
+  resolverDocumentoFiscalLocal,
   iniciarBackupRetryScheduler,
   pararBackupRetryScheduler,
   processPendingBackups,

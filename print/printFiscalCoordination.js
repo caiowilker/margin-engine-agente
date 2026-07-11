@@ -23,15 +23,36 @@ async function aguardarFiscalLivre(maxMs = 120000) {
   return { aguardouMs: maxMs, timeout: true };
 }
 
+function precisaPortaAcbrNativa() {
+  try {
+    const factory = require("./factory");
+    if (factory.getProviderName() !== "acbr-posprinter") return false;
+    return require("./acbrPosPrinterRuntime").canLoadNativeLib();
+  } catch (_) {
+    return false;
+  }
+}
+
 async function prepararImpressaoAposFiscal() {
   const wait = await aguardarFiscalLivre();
-  if (process.platform !== "win32") return wait;
-  try {
-    const cfg = require("./printerLocalConfig").ler();
-    if (/^RAW:/i.test(String(cfg.porta || ""))) {
+  const acbrNativo = precisaPortaAcbrNativa();
+  if (process.platform === "win32" && acbrNativo) {
+    try {
       await require("./acbrPosPrinterRuntime").invalidatePosPrinterSession();
+      const cooldownMs = parseInt(process.env.PRINT_POS_COOLDOWN_MS || "400", 10);
+      if (cooldownMs > 0) {
+        await new Promise((r) => setTimeout(r, cooldownMs));
+      }
+    } catch (_) {}
+  }
+  if (acbrNativo) {
+    try {
+      await require("./printerBootstrap").garantirPortaImpressao({ skipDetect: true });
+    } catch (err) {
+      log.warn({ err: err.message }, "[PrintFiscalCoord] Porta inválida antes da impressão");
+      throw err;
     }
-  } catch (_) {}
+  }
   return wait;
 }
 

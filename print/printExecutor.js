@@ -91,7 +91,24 @@ async function executarProviderOp(provider, op, args, timeoutMs) {
 
 async function executarOp(op, args, timeoutMs) {
   await prepararImpressaoAposFiscal();
-  return withProvider((provider) => executarProviderOp(provider, op, args, timeoutMs));
+  try {
+    return await withProvider((provider) => executarProviderOp(provider, op, args, timeoutMs));
+  } catch (err) {
+    const msg = String(err?.message || "");
+    const portaOuAcbr = err?.acbrRet === -10 || /porta|PRINTER_PORTA_INDEFINIDA/i.test(msg);
+    if (!portaOuAcbr) throw err;
+    log.warn({ op, err: msg }, "[PrintExecutor] Falha de porta — re-detectando impressora");
+    try {
+      require("./factory").resetPrintProvider();
+      await require("./printerBootstrap").garantirPortaImpressao({ force: true });
+      return await withProvider(
+        (provider) => executarProviderOp(provider, op, args, timeoutMs),
+        { noFallback: false },
+      );
+    } catch (retryErr) {
+      throw retryErr;
+    }
+  }
 }
 
 module.exports = { executarOp, classifyPrintError };

@@ -5,7 +5,7 @@ const { classifyPrintError } = require("./printErrors");
 
 const MAPA = [
   {
-    teste: /falhou \(-10\)|erro de comunicação com a impressora|POS_Imprimir falhou/i,
+    teste: /falhou \(-10\)|erro de comunicação com a impressora|POS_Imprimir falhou|PRINTER_PORTA_INDEFINIDA|porta da impressora n[aã]o configurada/i,
     mensagem: "A impressora não aceitou o cupom (erro ACBr -10).",
     acao:
       "No painel :9100, clique Detectar impressora e depois Imprimir teste. Confira se o nome RAW está correto e se a impressora está ligada.",

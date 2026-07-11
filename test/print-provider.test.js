@@ -95,7 +95,8 @@ async function run() {
     assert.ok(tags.includes("NFC-e:"));
     assert.ok(!tags.includes("NF-e:"));
     assert.ok(tags.includes("<n>"));
-    assert.ok(tags.includes("</fn>"));
+    assert.ok(!tags.includes("</fn>"));
+    assert.ok(tags.includes("TOTAL:"));
     assert.ok(tags.includes("Consulte em"));
     assert.ok(tags.includes("</corte"));
   });
