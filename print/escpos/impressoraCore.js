@@ -787,7 +787,10 @@ async function imprimirLogoCupomEscpos(printer, payload) {
 async function renderCupomConteudo(printer, payload) {
   const empresa = payload.empresa || {};
   const itens = payload.itens || [];
-  const isFiscal = !!(payload.chaveNfe && payload.chaveNfe.trim());
+  const isFiscal =
+    !payload.naoFiscal &&
+    !payload.cupomSemFiscal &&
+    !!(payload.chaveNfe && String(payload.chaveNfe).trim());
   const isOffline = payload.origem === "offline";
   const isLocalSync = payload.origem === "local";
 
@@ -1005,8 +1008,12 @@ async function renderCupomConteudo(printer, payload) {
     }
     const gruposChave = formatarChaveNfe(payload.chaveNfe);
     if (gruposChave.length) {
-      printer.align("lt").text("Chave de acesso:");
-      gruposChave.forEach((g) => printer.text(g));
+      printer.align("ct").text("Chave de acesso");
+      if (gruposChave.length === 11) {
+        printer.text(gruposChave.join(" "));
+      } else {
+        gruposChave.forEach((g) => printer.text(g));
+      }
     }
     const qrConteudo = resolverQrCodeNfce(payload);
     printer

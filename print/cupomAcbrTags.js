@@ -12,7 +12,7 @@ const {
   linhaNumeroSerieDocumento,
 } = require("../documentosFiscais");
 const {
-  tagQrCode,
+  tagQrCodeSeguro,
   tagBarcode,
   tagLogoHeader,
   tagSegundaViaBanner,
@@ -110,7 +110,10 @@ function renderCupomTags(rawPayload) {
   const payload = normalizarCupomPayload(rawPayload);
   const empresa = payload.empresa || {};
   const itens = payload.itens || [];
-  const isFiscal = !!(payload.chaveNfe && String(payload.chaveNfe).trim());
+  const isFiscal =
+    !payload.naoFiscal &&
+    !payload.cupomSemFiscal &&
+    !!(payload.chaveNfe && String(payload.chaveNfe).trim());
   const isOffline = payload.origem === "offline" || payload.origem === "local";
   const lines = [];
 
@@ -135,6 +138,7 @@ function renderCupomTags(rawPayload) {
   lines.push("</linha_dupla>");
 
   lines.push(ceDestaque(isFiscal ? tituloCupomFiscal(payload.chaveNfe) : "CUPOM NAO FISCAL"));
+  if (payload.vendaCancelada) lines.push(ceDestaque("*** VENDA CANCELADA ***"));
   if (isOffline) lines.push(ceDestaque("*** MODO OFFLINE ***"));
   lines.push(sepEq());
 
@@ -218,7 +222,8 @@ function renderCupomTags(rawPayload) {
     if (pg.forma === "pix" && pg.pixCopiaCola) {
       lines.push("</linha_simples>");
       lines.push(ceCorpo("PIX Copia e Cola"));
-      lines.push(tagQrCode(String(pg.pixCopiaCola)));
+      lines.push(tagQrCodeSeguro(String(pg.pixCopiaCola)));
+      lines.push("</linha_simples>");
     }
   }
 
@@ -247,22 +252,27 @@ function renderCupomTags(rawPayload) {
     if (payload.protocolo) {
       lines.push(corpo(`Protocolo: ${String(payload.protocolo).slice(0, 30)}`));
     }
-    lines.push(corpo("Chave de acesso:"));
-    formatarChave(payload.chaveNfe).forEach((g) => lines.push(corpo(g)));
+    lines.push("</linha_simples>");
+    lines.push(ceCorpo("Chave de acesso"));
+    const gruposChave = formatarChave(payload.chaveNfe);
+    if (gruposChave.length === 11) {
+      lines.push(ceCorpo(gruposChave.join(" ")));
+    } else {
+      gruposChave.forEach((g) => lines.push(ceCorpo(g)));
+    }
 
     const qr = resolverQrCodeNfce(payload);
     if (qr) {
-      lines.push(corpo(`Consulte em ${portalConsultaDocumento(payload.chaveNfe, qr)}`));
+      lines.push(ceCorpo(`Consulte em ${portalConsultaDocumento(payload.chaveNfe, qr)}`));
     }
     if (qr && isNfceModelo65(payload.chaveNfe)) {
       lines.push("</linha_simples>");
       lines.push(ceCorpo("Consulta via QR Code"));
-      lines.push(tagQrCode(qr));
+      lines.push(tagQrCodeSeguro(qr));
+      lines.push("</linha_simples>");
+      lines.push(ceCorpo("Consulte pela chave ou QR Code"));
     }
     renderBarcodesPayload(payload).forEach((bc) => lines.push(bc));
-    if (qr) {
-      lines.push(corpo("Consulte pela chave ou QR Code"));
-    }
   } else {
     const extras = renderBarcodesPayload(payload);
     if (extras.length) {
@@ -308,10 +318,10 @@ Texto corpo — Ç Ã Á É Ê Ó Ú ° R$ acentuação UTF-8
 ${destaque("NEGRITO (destaque)")}  <e>EXPANDIDO</e>  <c>CONDENSADO</c>
 </linha_simples>
 <ce>QR Code NFC-e teste</ce>
-${tagQrCode("https://marginengine.com.br/teste-impressora")}
+${tagQrCodeSeguro("https://marginengine.com.br/teste-impressora")}
 </linha_simples>
 <ce>PIX Copia e Cola teste</ce>
-${tagQrCode("00020126580014br.gov.bcb.pix0136123e4567-e12b-12d1-a456-426655440000")}
+${tagQrCodeSeguro("00020126580014br.gov.bcb.pix0136123e4567-e12b-12d1-a456-426655440000")}
 </linha_simples>
 <ce>Codigos de barras</ce>
 ${tagBarcode("EAN13", "7894900011517") || ""}
@@ -327,6 +337,6 @@ module.exports = {
   renderCupomTags,
   renderPaginaTeste,
   renderBarcodesPayload,
-  tagQrCode,
+  tagQrCodeSeguro,
   COLS,
 };

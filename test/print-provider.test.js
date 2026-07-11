@@ -6,6 +6,7 @@ const assert = require("assert");
 const factory = require("../print/factory");
 const { assertPrinterProviderContract } = require("../print/contract");
 const { renderCupomTags, renderPaginaTeste } = require("../print/cupomAcbrTags");
+const { renderDanfeTermicoTags } = require("../print/danfeTermico");
 const { normalizarCupomPayload, validarCupomPayload } = require("../print/cupomValidate");
 const { classifyPrintError } = require("../print/printErrors");
 
@@ -99,6 +100,56 @@ async function run() {
     assert.ok(tags.includes("TOTAL:"));
     assert.ok(tags.includes("Consulte em"));
     assert.ok(tags.includes("</corte"));
+  });
+
+  test("renderDanfeTermicoTags — URL com pipe usa placeholder BMP", () => {
+    const qr =
+      "https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?p=abc|2|1";
+    const tags = renderDanfeTermicoTags({
+      numeroVenda: "V-DT",
+      total: 100,
+      chaveNfe: "31260712343055000183550010000000121000000016",
+      qrcodeNfe: qr,
+      empresa: { nomeFantasia: "LOJA" },
+    });
+    const { QR_BMP_PLACEHOLDER } = require("../print/qrCodeAcbrBmp");
+    assert.ok(tags.includes(QR_BMP_PLACEHOLDER));
+    assert.ok(!tags.includes("<qrcode"));
+  });
+
+  test("renderCupomTags — venda cancelada sem bloco fiscal", () => {
+    const tags = renderCupomTags({
+      emitidoEm: new Date().toISOString(),
+      numeroVenda: "V-CANC",
+      total: 10,
+      vendaCancelada: true,
+      naoFiscal: true,
+      empresa: { nomeFantasia: "LOJA" },
+      itens: [{ nome: "P", quantidade: 1, precoUnitario: 10, total: 10 }],
+      segundaVia: true,
+    });
+    assert.ok(tags.includes("VENDA CANCELADA"));
+    assert.ok(tags.includes("CUPOM NAO FISCAL"));
+    assert.ok(!tags.includes("DOCUMENTO FISCAL"));
+  });
+
+  test("renderCupomTags — NFC-e com URL oficial usa placeholder BMP (pipes quebram ACBr)", () => {
+    const qrComPipe =
+      "https://portalsped.fazenda.mg.gov.br/portalnfce/sistema/qrcode.xhtml?p=31250612343055000183650010000000031287563639|2|1|1|12.50|abc|000001";
+    const tags = renderCupomTags({
+      emitidoEm: new Date().toISOString(),
+      numeroVenda: "V-QR",
+      total: 10,
+      empresa: { nomeFantasia: "LOJA" },
+      itens: [{ nome: "P", quantidade: 1, precoUnitario: 10, total: 10 }],
+      chaveNfe: "35260611222333000181650010000000301025012345",
+      qrcodeNfe: qrComPipe,
+    });
+    const { QR_BMP_PLACEHOLDER } = require("../print/qrCodeAcbrBmp");
+    assert.ok(tags.includes(QR_BMP_PLACEHOLDER));
+    assert.ok(!tags.includes("<qrcode"));
+    assert.ok(tags.includes("Chave de acesso"));
+    assert.ok(tags.includes("<ce>"));
   });
 
   test("renderCupomTags — NFC-e sem QR não inclui tag qrcode", () => {

@@ -3,13 +3,14 @@
  */
 const { toThermalText, toThermalDoc } = require("../thermalText");
 const {
-  tagQrCode,
+  tagQrCodeSeguro,
   tagBarcode,
   tagLogoHeader,
   tagSegundaViaBanner,
   tagCorte,
   tagBarcodesList,
 } = require("./acbrTags");
+const { ceCorpo } = require("./cupomContraste");
 const { resolverQrCodeNfce } = require("./cupomValidate");
 
 const COLS = 48;
@@ -81,8 +82,11 @@ function renderDanfeTermicoTags(payload) {
 
   const chave = String(payload.chaveNfe || payload.chave || "").replace(/\D/g, "");
   if (chave.length === 44) {
-    lines.push("Chave de acesso:");
-    for (let i = 0; i < 44; i += 4) lines.push(chave.slice(i, i + 4));
+    lines.push("</linha_simples>");
+    lines.push(ceCorpo("Chave de acesso"));
+    const grupos = [];
+    for (let i = 0; i < 44; i += 4) grupos.push(chave.slice(i, i + 4));
+    lines.push(ceCorpo(grupos.join(" ")));
     const bc = tagBarcode("CODE128", chave, { altura: 40, largura: 2, exibeCodigo: false });
     if (bc) lines.push(bc);
   }
@@ -90,8 +94,9 @@ function renderDanfeTermicoTags(payload) {
   const qr = resolverQrCodeNfce(payload);
   if (qr) {
     lines.push("</linha_simples>");
-    lines.push("<ce>Consulta NF-e — QR Code</ce>");
-    lines.push(tagQrCode(qr));
+    lines.push(ceCorpo("Consulta NF-e — QR Code"));
+    lines.push(tagQrCodeSeguro(qr));
+    lines.push("</linha_simples>");
   }
 
   const extras = tagBarcodesList(payload.barcodes);

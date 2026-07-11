@@ -236,6 +236,28 @@ test("printerBootstrap — porta RAW configurada não exige detecção", () => {
   assert.strictEqual(portaEfetivaPrecisaDeteccao(""), true);
 });
 
+test("qrCodeAcbrBmp — URL com pipe usa placeholder e gera BMP", async () => {
+  const {
+    qrPrecisaBmp,
+    tagQrBmpPlaceholder,
+    resolverQrBmpPlaceholders,
+    QR_BMP_PLACEHOLDER,
+  } = require("../print/qrCodeAcbrBmp");
+  const url =
+    "https://portalsped.fazenda.mg.gov.br/portalnfce/sistema/qrcode.xhtml?p=abc|2|1|1|10|hash|1";
+  assert.strictEqual(qrPrecisaBmp(url), true);
+  assert.strictEqual(tagQrBmpPlaceholder(), QR_BMP_PLACEHOLDER);
+  const resolvido = await resolverQrBmpPlaceholders(
+    `pix\n${QR_BMP_PLACEHOLDER}\nnfce\n${QR_BMP_PLACEHOLDER}`,
+    {
+      qrcodeNfe: url,
+      pagamentos: [{ forma: "pix", valor: 10, pixCopiaCola: url }],
+    },
+  );
+  assert.ok(!resolvido.includes(QR_BMP_PLACEHOLDER));
+  assert.ok(resolvido.includes("<bmp>"));
+});
+
 test("documentosFiscais — resolverDocumentoFiscalLocal retorna null sem dados", () => {
   const { resolverDocumentoFiscalLocal } = require("../documentosFiscais");
   assert.strictEqual(resolverDocumentoFiscalLocal("00000000000000000000000000000000000000000000", "V-INEXISTENTE"), null);

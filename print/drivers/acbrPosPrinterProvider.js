@@ -76,7 +76,9 @@ async function imprimirPayloadTags(payload) {
   if (mode === "parity") {
     return native.imprimirCupom(normalizado);
   }
-  const tags = renderPayloadTags(normalizado);
+  const { resolverQrBmpPlaceholders } = require("../qrCodeAcbrBmp");
+  let tags = renderPayloadTags(normalizado);
+  tags = await resolverQrBmpPlaceholders(tags, normalizado);
   const t0 = Date.now();
   const res = await imprimirTags(tags);
   return {

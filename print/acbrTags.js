@@ -32,6 +32,17 @@ function tagQrCode(content, opts = {}) {
   return `<qrcode Tipo='${tipo}' ErrorLevel='${errLevel}' ModuleSize='${moduleSize}' Margem='${margem}'>${String(content)}</qrcode>`;
 }
 
+/**
+ * QR NFC-e seguro para POS_Imprimir — URLs com "|" usam placeholder BMP (ver qrCodeAcbrBmp.js).
+ */
+function tagQrCodeSeguro(content, opts = {}) {
+  const c = String(content || "").trim();
+  if (!c) return "";
+  const { qrPrecisaBmp, tagQrBmpPlaceholder } = require("./qrCodeAcbrBmp");
+  if (qrPrecisaBmp(c)) return tagQrBmpPlaceholder();
+  return tagQrCode(c, opts);
+}
+
 function tagBarcode(tipo, code, opts = {}) {
   const t = String(tipo || "CODE128").toUpperCase();
   if (!BARCODE_TIPOS[t]) {
@@ -132,6 +143,7 @@ function tagResetFonte() {
 module.exports = {
   BARCODE_TIPOS,
   tagQrCode,
+  tagQrCodeSeguro,
   tagBarcode,
   tagBarcodeFromSpec,
   tagBarcodesList,
