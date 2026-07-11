@@ -55,7 +55,7 @@ const IMPRIMIR_QR_NFCE_SIZE = Math.min(
   Math.max(3, parseInt(process.env.IMPRIMIR_QR_NFCE_SIZE || "6", 10) || 6),
 );
 
-const { portalConsultaDocumento, isNfceModelo65, isNfeModelo55 } = require("../../documentosFiscais");
+const { portalConsultaDocumento, isNfceModelo65, tituloCupomFiscal, tituloBlocoDocumentoFiscal, linhaNumeroSerieDocumento } = require("../../documentosFiscais");
 const { normalizarCupomPayload, resolverQrCodeNfce, deveRelaxarQr } = require("../cupomValidate");
 
 let cacheDescoberta = null;
@@ -842,7 +842,7 @@ async function renderCupomConteudo(printer, payload) {
   // ── 2. Título do cupom — centralizado entre separadores duplos ──────────────
   printer.align("lt").text(sepEq());
   printer.align("ct").style("b");
-  printer.text(isFiscal ? "CUPOM FISCAL NFC-e" : "CUPOM NAO FISCAL");
+  printer.text(isFiscal ? tituloCupomFiscal(payload.chaveNfe) : "CUPOM NAO FISCAL");
   printer.style("normal");
   printer.align("lt").text(sepEq());
 
@@ -985,17 +985,21 @@ async function renderCupomConteudo(printer, payload) {
   // ── 6. NFC-e ─────────────────────────────────────────────────────────────────
   if (isFiscal) {
     printer.text(sepDash());
-    const tituloFiscal = isNfeModelo55(payload.chaveNfe)
-      ? "DOCUMENTO FISCAL NF-e"
-      : "DOCUMENTO FISCAL NFC-e";
+    const tituloFiscal = tituloBlocoDocumentoFiscal(payload.chaveNfe);
     printer
       .align("ct")
       .style("b")
       .text(tituloFiscal)
       .style("normal")
+      .align("ct")
+      .style("b")
       .text(
-        `NF-e: ${payload.numeroNfe || ""}  Serie: ${payload.serieNfe || "001"}`,
-      );
+        linhaNumeroSerieDocumento(payload.chaveNfe, payload.numeroNfe, payload.serieNfe, {
+          seriePadrao: "001",
+        }),
+      )
+      .style("normal")
+      .align("lt");
     if (payload.protocolo) {
       printer.text(`Protocolo: ${String(payload.protocolo).slice(0, 30)}`);
     }

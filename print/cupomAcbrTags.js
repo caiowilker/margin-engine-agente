@@ -4,7 +4,7 @@
  */
 const { toThermalText, toThermalDoc } = require("../thermalText");
 const { normalizarCupomPayload, resolverQrCodeNfce } = require("./cupomValidate");
-const { isNfeModelo55, isNfceModelo65, portalConsultaDocumento } = require("../documentosFiscais");
+const { isNfceModelo65, portalConsultaDocumento, tituloCupomFiscal, tituloBlocoDocumentoFiscal, linhaNumeroSerieDocumento } = require("../documentosFiscais");
 const {
   tagQrCode,
   tagBarcode,
@@ -12,6 +12,9 @@ const {
   tagSegundaViaBanner,
   tagCorte,
   tagBarcodesList,
+  tagNegrito,
+  tagNegritoExpandido,
+  tagResetFonte,
 } = require("./acbrTags");
 
 const COLS = 48;
@@ -99,6 +102,10 @@ function renderBarcodesPayload(payload) {
  * @param {object} rawPayload
  * @returns {string}
  */
+function linhaForte(texto) {
+  return tagNegrito(texto);
+}
+
 function renderCupomTags(rawPayload) {
   const payload = normalizarCupomPayload(rawPayload);
   const empresa = payload.empresa || {};
@@ -108,42 +115,51 @@ function renderCupomTags(rawPayload) {
   const lines = [];
 
   lines.push("</zera>");
+  lines.push(tagResetFonte());
   const logoHdr = tagLogoHeader(payload);
   if (logoHdr) lines.push(logoHdr);
   if (payload.segundaVia || payload.reimpressao) lines.push(tagSegundaViaBanner());
   lines.push("<ce>");
   lines.push(
-    `<n>${tx((empresa.nomeFantasia || empresa.razaoSocial || "ESTABELECIMENTO").toUpperCase())}</n>`,
+    tagNegritoExpandido(
+      tx((empresa.nomeFantasia || empresa.razaoSocial || "ESTABELECIMENTO").toUpperCase()),
+    ),
   );
   if (empresa.razaoSocial && empresa.razaoSocial !== empresa.nomeFantasia) {
-    lines.push(tx(empresa.razaoSocial));
+    lines.push(linhaForte(tx(empresa.razaoSocial)));
   }
-  if (empresa.cnpj) lines.push(`CNPJ: ${toThermalDoc(empresa.cnpj)}`);
+  if (empresa.cnpj) lines.push(linhaForte(`CNPJ: ${toThermalDoc(empresa.cnpj)}`));
   const end = formatarLinhaEndereco(empresa);
-  if (end) lines.push(end.slice(0, COLS));
+  if (end) lines.push(linhaForte(end.slice(0, COLS)));
   if (empresa.cidade) {
-    lines.push(tx(`${empresa.cidade}${empresa.uf ? " - " + empresa.uf : ""}`).slice(0, COLS));
+    lines.push(
+      linhaForte(tx(`${empresa.cidade}${empresa.uf ? " - " + empresa.uf : ""}`).slice(0, COLS)),
+    );
   }
-  if (empresa.telefone) lines.push(`Tel: ${toThermalDoc(empresa.telefone)}`);
+  if (empresa.telefone) lines.push(linhaForte(`Tel: ${toThermalDoc(empresa.telefone)}`));
   lines.push("</ce>");
   lines.push("</linha_dupla>");
 
-  lines.push(`<ce><n>${isFiscal ? "CUPOM FISCAL NFC-e" : "CUPOM NAO FISCAL"}</n></ce>`);
-  if (isOffline) lines.push("<ce>*** MODO OFFLINE ***</ce>");
+  lines.push(
+    `<ce><n>${isFiscal ? tituloCupomFiscal(payload.chaveNfe) : "CUPOM NAO FISCAL"}</n></ce>`,
+  );
+  if (isOffline) lines.push("<ce><n>*** MODO OFFLINE ***</n></ce>");
   lines.push(sepEq());
 
   const dt = new Date(payload.emitidoEm || Date.now());
-  lines.push(col2("Nro:", payload.numeroVenda || ""));
-  lines.push(col2("Data:", `${dt.toLocaleDateString("pt-BR")} ${dt.toLocaleTimeString("pt-BR")}`));
-  if (payload.operador) lines.push(col2("Operador:", tx(payload.operador)));
+  lines.push(linhaForte(col2("Nro:", payload.numeroVenda || "")));
+  lines.push(
+    linhaForte(col2("Data:", `${dt.toLocaleDateString("pt-BR")} ${dt.toLocaleTimeString("pt-BR")}`)),
+  );
+  if (payload.operador) lines.push(linhaForte(col2("Operador:", tx(payload.operador))));
   if (payload.nomeCliente && payload.nomeCliente !== "Consumidor") {
-    lines.push(col2("Cliente:", tx(payload.nomeCliente).slice(0, 28)));
+    lines.push(linhaForte(col2("Cliente:", tx(payload.nomeCliente).slice(0, 28))));
   }
-  if (payload.cpfCliente) lines.push(col2("CPF:", toThermalDoc(payload.cpfCliente)));
-  if (payload.cnpjCliente) lines.push(col2("CNPJ:", toThermalDoc(payload.cnpjCliente)));
+  if (payload.cpfCliente) lines.push(linhaForte(col2("CPF:", toThermalDoc(payload.cpfCliente))));
+  if (payload.cnpjCliente) lines.push(linhaForte(col2("CNPJ:", toThermalDoc(payload.cnpjCliente))));
 
   lines.push(sepDash());
-  lines.push(padR("DESCRICAO", 26) + padL("UNIT", 8) + padL("TOTAL", 8));
+  lines.push(linhaForte(padR("DESCRICAO", 26) + padL("UNIT", 8) + padL("TOTAL", 8)));
   lines.push(sepDash());
 
   itens.forEach((item, idx) => {
@@ -158,15 +174,17 @@ function renderCupomTags(rawPayload) {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
-    lines.push(num + " " + padR(nome, 23) + padL(valUnit, 9) + padL(valTotal, 9));
+    lines.push(
+      linhaForte(num + " " + padR(nome, 23) + padL(valUnit, 9) + padL(valTotal, 9)),
+    );
     if (item.porPeso) {
       const kg = Number(item.quantidade).toLocaleString("pt-BR", {
         minimumFractionDigits: 3,
         maximumFractionDigits: 3,
       });
-      lines.push(`   ${kg} kg x ${fmtR$(item.precoUnitario)}/kg`);
+      lines.push(linhaForte(`   ${kg} kg x ${fmtR$(item.precoUnitario)}/kg`));
     } else if (Number(item.quantidade) > 1) {
-      lines.push(`   ${item.quantidade} un x ${fmtR$(item.precoUnitario)}`);
+      lines.push(linhaForte(`   ${item.quantidade} un x ${fmtR$(item.precoUnitario)}`));
     }
   });
 
@@ -198,7 +216,7 @@ function renderCupomTags(rawPayload) {
 
   lines.push(sepDash());
   if (desconto > 0) {
-    lines.push(col2("Subtotal:", fmtR$(subtotal)));
+    lines.push(linhaForte(col2("Subtotal:", fmtR$(subtotal))));
     lines.push(`<n>${col2("Desconto:", "- " + fmtR$(desconto))}</n>`);
   }
   lines.push(sepEq());
@@ -208,7 +226,7 @@ function renderCupomTags(rawPayload) {
   for (const pg of pagamentos) {
     const label = LABEL_PGTO[pg.forma] || String(pg.forma || "").toUpperCase();
     const aplicado = Number(pg.valor || 0) - Number(pg.troco || 0);
-    if (label) lines.push(col2("Pagamento:", `${label} ${fmtR$(aplicado)}`));
+    if (label) lines.push(linhaForte(col2("Pagamento:", `${label} ${fmtR$(aplicado)}`)));
     if (pg.forma === "pix" && pg.pixCopiaCola) {
       lines.push("</linha_simples>");
       lines.push("<ce>PIX Copia e Cola</ce>");
@@ -217,38 +235,45 @@ function renderCupomTags(rawPayload) {
   }
 
   if (troco > 0) {
-    lines.push(col2("Recebido:", fmtR$(valorRecebido)));
+    lines.push(linhaForte(col2("Recebido:", fmtR$(valorRecebido))));
     lines.push(sepDash());
     lines.push(`<ce><n>TROCO: ${fmtR$(troco)}</n></ce>`);
     lines.push(sepDash());
   }
 
   const totalVols = itens.reduce((s, i) => s + Number(i.quantidade || 0), 0);
-  lines.push(col2("Volumes:", `${Math.round(totalVols)} item(ns)`));
+  lines.push(linhaForte(col2("Volumes:", `${Math.round(totalVols)} item(ns)`)));
 
   if (isFiscal) {
     lines.push(sepDash());
-    const titulo = isNfeModelo55(payload.chaveNfe) ? "DOCUMENTO FISCAL NF-e" : "DOCUMENTO FISCAL NFC-e";
-    lines.push(`<ce><n>${titulo}</n></ce>`);
+    lines.push(`<ce><n>${tituloBlocoDocumentoFiscal(payload.chaveNfe)}</n></ce>`);
     if (payload.numeroNfe) {
-      lines.push(`NF-e: ${payload.numeroNfe}  Serie: ${payload.serieNfe || "1"}`);
+      lines.push(
+        linhaForte(
+          linhaNumeroSerieDocumento(payload.chaveNfe, payload.numeroNfe, payload.serieNfe, {
+            seriePadrao: "1",
+          }),
+        ),
+      );
     }
-    if (payload.protocolo) lines.push(`Protocolo: ${String(payload.protocolo).slice(0, 30)}`);
-    lines.push("Chave de acesso:");
-    formatarChave(payload.chaveNfe).forEach((g) => lines.push(g));
+    if (payload.protocolo) {
+      lines.push(linhaForte(`Protocolo: ${String(payload.protocolo).slice(0, 30)}`));
+    }
+    lines.push(linhaForte("Chave de acesso:"));
+    formatarChave(payload.chaveNfe).forEach((g) => lines.push(linhaForte(g)));
 
     const qr = resolverQrCodeNfce(payload);
     if (qr) {
-      lines.push(`Consulte em ${portalConsultaDocumento(payload.chaveNfe, qr)}`);
+      lines.push(linhaForte(`Consulte em ${portalConsultaDocumento(payload.chaveNfe, qr)}`));
     }
     if (qr && isNfceModelo65(payload.chaveNfe)) {
       lines.push("</linha_simples>");
-      lines.push("<ce>Consulta via QR Code</ce>");
+      lines.push(linhaForte("<ce>Consulta via QR Code</ce>"));
       lines.push(tagQrCode(qr));
     }
     renderBarcodesPayload(payload).forEach((bc) => lines.push(bc));
     if (qr) {
-      lines.push("Consulte pela chave ou QR Code");
+      lines.push(linhaForte("Consulte pela chave ou QR Code"));
     }
   } else {
     const extras = renderBarcodesPayload(payload);
@@ -259,9 +284,9 @@ function renderCupomTags(rawPayload) {
   }
 
   lines.push("</linha_simples>");
-  lines.push("<ce>Obrigado pela preferencia!</ce>");
-  lines.push("<ce>Volte sempre!</ce>");
-  lines.push("<ce>PDV Margin Engine</ce>");
+  lines.push(linhaForte("<ce>Obrigado pela preferencia!</ce>"));
+  lines.push(linhaForte("<ce>Volte sempre!</ce>"));
+  lines.push(linhaForte("<ce>PDV Margin Engine</ce>"));
 
   lines.push(tagCorte());
 

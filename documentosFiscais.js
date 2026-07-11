@@ -668,6 +668,24 @@ function inferirModeloDaChave(chave) {
   return "65";
 }
 
+/** Sigla exibida no cupom térmico — NFC-e (65) ou NF-e (55). */
+function siglaModeloDocumento(chave) {
+  return isNfeModelo55(chave) ? "NF-e" : "NFC-e";
+}
+
+function tituloCupomFiscal(chave) {
+  return `CUPOM FISCAL ${siglaModeloDocumento(chave)}`;
+}
+
+function tituloBlocoDocumentoFiscal(chave) {
+  return `DOCUMENTO FISCAL ${siglaModeloDocumento(chave)}`;
+}
+
+function linhaNumeroSerieDocumento(chave, numeroNfe, serieNfe, opts = {}) {
+  const seriePadrao = opts.seriePadrao || (isNfeModelo55(chave) ? "1" : "001");
+  return `${siglaModeloDocumento(chave)}: ${numeroNfe || ""}  Serie: ${serieNfe || seriePadrao}`;
+}
+
 /** Copia PDF encontrado para path canônico do agente. */
 function copiarPdfParaCanonico(chave, srcPath, modeloDocumento = "65", formatoPdf = "termico") {
   const k = String(chave || "").replace(/\D/g, "");
@@ -700,6 +718,10 @@ module.exports = {
   portalConsultaDocumento,
   isNfceModelo65,
   isNfeModelo55,
+  siglaModeloDocumento,
+  tituloCupomFiscal,
+  tituloBlocoDocumentoFiscal,
+  linhaNumeroSerieDocumento,
   extrairProtNFe,
   extrairChaveDoXml,
   localizarXmlPorChave,

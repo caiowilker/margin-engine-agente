@@ -84,11 +84,18 @@ async function run() {
       empresa: { nomeFantasia: "LOJA TESTE", cnpj: "11222333000181" },
       itens: [{ nome: "Produto", quantidade: 1, precoUnitario: 10.5, total: 10.5 }],
       chaveNfe: "35260611222333000181650010000000301025012345",
+      numeroNfe: "30",
+      serieNfe: "1",
       qrcodeNfe: "https://example.com/qr",
     });
     assert.ok(tags.includes("</zera>"));
     assert.ok(tags.includes("<qrcode"));
-    assert.ok(tags.includes("CUPOM FISCAL"));
+    assert.ok(tags.includes("CUPOM FISCAL NFC-e"));
+    assert.ok(tags.includes("DOCUMENTO FISCAL NFC-e"));
+    assert.ok(tags.includes("NFC-e:"));
+    assert.ok(!tags.includes("NF-e:"));
+    assert.ok(tags.includes("<n>"));
+    assert.ok(tags.includes("</fn>"));
     assert.ok(tags.includes("Consulte em"));
     assert.ok(tags.includes("</corte"));
   });

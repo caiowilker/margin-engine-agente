@@ -109,6 +109,26 @@ function tagFormato(linhas) {
   return Array.isArray(linhas) ? linhas.filter(Boolean).join("\n") + "\n" : String(linhas || "");
 }
 
+/** Negrito — melhora legibilidade em térmicas (evita cupom “apagado”). */
+function tagNegrito(texto) {
+  const t = String(texto ?? "");
+  if (!t) return "";
+  if (/<\/?n>/i.test(t)) return t;
+  return `<n>${t}</n>`;
+}
+
+/** Negrito + expandido — cabeçalho da loja (paridade com ESC/POS size 1,1). */
+function tagNegritoExpandido(texto) {
+  const t = String(texto ?? "");
+  if (!t) return "";
+  return `<e><n>${t}</n></e>`;
+}
+
+/** Restaura fonte normal após </zera> ou blocos formatados. */
+function tagResetFonte() {
+  return "</fn>";
+}
+
 module.exports = {
   BARCODE_TIPOS,
   tagQrCode,
@@ -122,4 +142,7 @@ module.exports = {
   tagSegundaViaBanner,
   tagCorte,
   tagFormato,
+  tagNegrito,
+  tagNegritoExpandido,
+  tagResetFonte,
 };
