@@ -1,7 +1,7 @@
 /**
  * Validação pré-enfileiramento — etapa obrigatória do pipeline de impressão.
  */
-const { normalizarCupomPayload } = require("./cupomValidate");
+const { normalizarCupomPayload, deveRelaxarQr } = require("./cupomValidate");
 
 const OPS_CAIXA = new Set([
   "imprimirAbertura",
@@ -20,21 +20,20 @@ function validarAntesEnfileirar(op, args) {
     if (!payload || typeof payload !== "object") {
       throw new Error("Dados insuficientes para segunda via.");
     }
-    return { ok: true, args };
+    const normalizado = normalizarCupomPayload(
+      { ...payload, segundaVia: true, reimpressao: true },
+      { relaxQr: true },
+    );
+    return { ok: true, args: [normalizado] };
   }
 
   if (op === "imprimirCupom") {
     if (!payload || typeof payload !== "object") {
       throw new Error("Payload de cupom inválido.");
     }
-    const relaxQr =
-      payload.permitirSemQr === true ||
-      payload.origem === "contingencia" ||
-      payload.origem === "offline" ||
-      payload.somenteDanfeTermico === true ||
-      payload.danfeTermico === true;
-    if (relaxQr) {
-      return { ok: true, args: [payload] };
+    if (deveRelaxarQr(payload)) {
+      const normalizado = normalizarCupomPayload(payload);
+      return { ok: true, args: [normalizado] };
     }
     const normalizado = normalizarCupomPayload(payload);
     return { ok: true, args: [normalizado] };

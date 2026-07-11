@@ -15,6 +15,8 @@ const {
 } = require("../print/acbrTags");
 const { renderDanfeTermicoTags } = require("../print/danfeTermico");
 const { marcarSegundaVia, montarPayloadSegundaVia } = require("../print/segundaVia");
+const { normalizarCupomPayload } = require("../print/cupomValidate");
+const { validarAntesEnfileirar } = require("../print/printValidate");
 const { renderPayloadTags, escolherRenderizador } = require("../print/renderPrint");
 const printerLogo = require("../print/printerLogo");
 
@@ -153,6 +155,25 @@ test("printerLogo — exibirLogo false no payload ignora BMP", () => {
   assert.strictEqual(printerLogo.deveExibirLogoCupom({ exibirLogo: false }), false);
   const { tagLogoHeader } = require("../print/acbrTags");
   assert.strictEqual(tagLogoHeader({ exibirLogo: false }), "");
+});
+
+test("cupomValidate — segunda via sem QR não bloqueia impressão", () => {
+  const chave = "35260611222333000181550010000000301025012345";
+  const p = normalizarCupomPayload(
+    { chaveNfe: chave, numeroVenda: "V1", segundaVia: true },
+    { relaxQr: true },
+  );
+  assert.strictEqual(p.chaveNfe, chave);
+  const enq = validarAntesEnfileirar("imprimirSegundaVia", [p]);
+  assert.ok(enq.args[0].segundaVia);
+});
+
+test("cupomValidate — cupom não fiscal sem chave", () => {
+  const p = normalizarCupomPayload(
+    { numeroVenda: "V2", cupomSemFiscal: true, total: 10 },
+    { relaxQr: true },
+  );
+  assert.strictEqual(p.numeroVenda, "V2");
 });
 
 console.log(`\nprint-extended: ${passed} passed, ${failed} failed\n`);

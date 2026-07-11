@@ -180,6 +180,30 @@ function ultimoJobErro() {
   );
 }
 
+/** Jobs presos em ENVIANDO após crash/restart voltam para a fila. */
+function recuperarJobsEnviandoPresos(maxAgeMs = 120000) {
+  const d = initDb();
+  const limite = new Date(Date.now() - maxAgeMs).toISOString();
+  const rows = d
+    .prepare(
+      `SELECT id FROM print_jobs
+       WHERE status = 'ENVIANDO' AND atualizado_em < ?`,
+    )
+    .all(limite);
+  if (!rows.length) return 0;
+  const upd = d.prepare(
+    `UPDATE print_jobs
+     SET status = 'PENDENTE', proxima_tentativa_em = NULL, atualizado_em = ?
+     WHERE id = ?`,
+  );
+  const now = nowIso();
+  for (const row of rows) {
+    upd.run(now, row.id);
+    registrarEvento(row.id, "RECUPERADO", "ENVIANDO preso após reinício");
+  }
+  return rows.length;
+}
+
 function tempoMedioMs() {
   const row = initDb()
     .prepare(
@@ -253,6 +277,7 @@ module.exports = {
   contadores,
   ultimoJobImpresso,
   ultimoJobErro,
+  recuperarJobsEnviandoPresos,
   tempoMedioMs,
   tempoMaximoMs,
   metricasPorTipo,

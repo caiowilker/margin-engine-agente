@@ -5,7 +5,7 @@ const log = require("../../logger").child({ modulo: "acbr_posprinter" });
 const runtime = require("../acbrPosPrinterRuntime");
 const { renderPaginaTeste } = require("../cupomAcbrTags");
 const { renderPayloadTags } = require("../renderPrint");
-const { normalizarCupomPayload } = require("../cupomValidate");
+const { normalizarCupomPayload, deveRelaxarQr } = require("../cupomValidate");
 const native = require("./nativeEscPosProvider");
 const caixaTags = require("../caixaAcbrTags");
 const pedidoTags = require("../pedidoAcbrTags");
@@ -69,7 +69,9 @@ async function imprimirTags(tags) {
 }
 
 async function imprimirPayloadTags(payload) {
-  const normalizado = normalizarCupomPayload(payload);
+  const normalizado = normalizarCupomPayload(payload, {
+    relaxQr: deveRelaxarQr(payload),
+  });
   const mode = getIntegrationMode();
   if (mode === "parity") {
     return native.imprimirCupom(normalizado);

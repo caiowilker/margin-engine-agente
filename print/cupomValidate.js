@@ -21,6 +21,23 @@ function resolverQrCodeNfce(payload) {
   return null;
 }
 
+function deveRelaxarQr(payload, opts = {}) {
+  if (!payload || typeof payload !== "object") return false;
+  return (
+    opts.relaxQr === true ||
+    payload.permitirSemQr === true ||
+    payload.cupomSemFiscal === true ||
+    payload.naoFiscal === true ||
+    payload.segundaVia === true ||
+    payload.reimpressao === true ||
+    payload.origem === "contingencia" ||
+    payload.origem === "offline" ||
+    payload.origem === "local" ||
+    payload.somenteDanfeTermico === true ||
+    payload.danfeTermico === true
+  );
+}
+
 function validarCupomPayload(payload, opts = {}) {
   if (!payload || typeof payload !== "object") {
     throw new Error("Payload de cupom inválido");
@@ -28,13 +45,7 @@ function validarCupomPayload(payload, opts = {}) {
   const imprimirQr =
     (process.env.IMPRIMIR_QR_NFCE ?? "true").toLowerCase() !== "false";
   const qrcodeNfe = resolverQrCodeNfce(payload);
-  const relaxQr =
-    opts.relaxQr === true ||
-    payload.permitirSemQr === true ||
-    payload.origem === "contingencia" ||
-    payload.origem === "offline" ||
-    payload.somenteDanfeTermico === true ||
-    payload.danfeTermico === true;
+  const relaxQr = deveRelaxarQr(payload, opts);
   if (
     payload?.chaveNfe &&
     isNfceModelo65(payload.chaveNfe) &&
@@ -51,8 +62,15 @@ function validarCupomPayload(payload, opts = {}) {
   return qrcodeNfe;
 }
 
-function normalizarCupomPayload(payload) {
-  const qrcodeNfe = validarCupomPayload(payload);
+function normalizarCupomPayload(payload, opts = {}) {
+  if (deveRelaxarQr(payload, opts)) {
+    const qrcodeNfe = resolverQrCodeNfce(payload);
+    if (qrcodeNfe) {
+      return { ...payload, qrcodeNfe, qrcode: qrcodeNfe };
+    }
+    return payload;
+  }
+  const qrcodeNfe = validarCupomPayload(payload, opts);
   if (qrcodeNfe) {
     return { ...payload, qrcodeNfe, qrcode: qrcodeNfe };
   }
@@ -61,6 +79,7 @@ function normalizarCupomPayload(payload) {
 
 module.exports = {
   resolverQrCodeNfce,
+  deveRelaxarQr,
   validarCupomPayload,
   normalizarCupomPayload,
 };

@@ -211,7 +211,7 @@ LogNivel=4
 
 [PosPrinter]
 Modelo=0
-Porta=RAW:
+Porta=USB
 PaginaDeCodigo=2
 ColunasFonteNormal=48
 CortaPapel=1
@@ -231,17 +231,16 @@ function buildRuntimeValues() {
     process.env.PRINTER_PORTA ||
     process.env.PRINTER_PATH ||
     "";
-  const hostRede = (process.env.PRINTER_HOST || "").trim();
-  if (hostRede && (!porta || /^USB$/i.test(porta))) {
-    porta = `TCP:${hostRede}:${process.env.PRINTER_PORT || "9100"}`;
+  const { portaAcbrValida, normalizarPortaAcbr } = require("./printerModelMap");
+  if (!portaAcbrValida(porta) && process.env.PRINTER_NAME) {
+    porta = normalizarPortaAcbr(`RAW:${process.env.PRINTER_NAME}`, {
+      nomeWindows: process.env.PRINTER_NAME,
+    });
   }
-  if (!porta && hostRede) {
-    porta = `TCP:${hostRede}:${process.env.PRINTER_PORT || "9100"}`;
+  if (!portaAcbrValida(porta) && process.env.PRINTER_HOST) {
+    porta = `TCP:${process.env.PRINTER_HOST}:${process.env.PRINTER_PORT || "9100"}`;
   }
-  if (!porta && process.env.PRINTER_NAME) {
-    porta = `RAW:${process.env.PRINTER_NAME}`;
-  }
-  if (!porta) porta = "USB";
+  if (!portaAcbrValida(porta)) porta = "USB";
 
   const enc = local?.encoding || process.env.PRINTER_ENCODING || "850";
   const pageCode = enc === "UTF8" || enc === "utf8" ? "5" : enc === "1252" ? "6" : "2";

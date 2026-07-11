@@ -56,7 +56,7 @@ const IMPRIMIR_QR_NFCE_SIZE = Math.min(
 );
 
 const { portalConsultaDocumento, isNfceModelo65, isNfeModelo55 } = require("../../documentosFiscais");
-const { normalizarCupomPayload, resolverQrCodeNfce } = require("../cupomValidate");
+const { normalizarCupomPayload, resolverQrCodeNfce, deveRelaxarQr } = require("../cupomValidate");
 
 let cacheDescoberta = null;
 let cacheDescobertaEm = 0;
@@ -1379,7 +1379,9 @@ function listar() {
 }
 
 function imprimirCupom(payload) {
-  const normalizado = normalizarCupomPayload(payload);
+  const normalizado = normalizarCupomPayload(payload, {
+    relaxQr: deveRelaxarQr(payload),
+  });
   return imprimirRender((printer) => renderCupom(printer, normalizado));
 }
 

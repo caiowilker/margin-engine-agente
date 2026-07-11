@@ -39,6 +39,15 @@ function parsePortaTcp(porta) {
   return { host: m[1], port: Number(m[2]) };
 }
 
+/** Porta ACBr utilizável para impressão física (evita RAW: vazio herdado de INI padrão). */
+function portaAcbrValida(porta) {
+  const p = String(porta || "").trim();
+  if (!p || /^USB$/i.test(p)) return false;
+  if (/^RAW:\s*$/i.test(p)) return false;
+  if (/^RAW:$/i.test(p)) return false;
+  return true;
+}
+
 /**
  * Normaliza porta para ACBr PosPrinter: TCP:ip:porta | RAW:nome | USB | COMn
  */
@@ -96,4 +105,5 @@ module.exports = {
   inferirPortaAcbr,
   normalizarPortaAcbr,
   parsePortaTcp,
+  portaAcbrValida,
 };

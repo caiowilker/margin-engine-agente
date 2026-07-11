@@ -247,6 +247,23 @@ function agendarWorker() {
 function iniciarWorker() {
   store.initDb();
   try {
+    const recuperados = store.recuperarJobsEnviandoPresos();
+    if (recuperados > 0) {
+      log.warn({ recuperados }, "[PrintJob] Jobs ENVIANDO recuperados após reinício");
+    }
+  } catch (err) {
+    log.warn({ err: err.message }, "[PrintJob] Falha ao recuperar jobs ENVIANDO");
+  }
+  try {
+    const { portaAcbrValida } = require("./printerModelMap");
+    const cfg = require("./printerLocalConfig").ler();
+    if (!portaAcbrValida(cfg.porta)) {
+      require("./printerBootstrap")
+        .autoDetectarESincronizar({ force: false })
+        .catch(() => {});
+    }
+  } catch (_) {}
+  try {
     store.purgeAntigos(cfg().retentionDias);
   } catch (_) {}
   if (process.env.PRINT_JOB_WORKER === "false") return;
