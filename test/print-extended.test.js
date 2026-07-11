@@ -176,5 +176,32 @@ test("cupomValidate — cupom não fiscal sem chave", () => {
   assert.strictEqual(p.numeroVenda, "V2");
 });
 
+test("printerModelMap — ControlePorta RAW no Windows", () => {
+  const { resolveControlePorta } = require("../print/printerModelMap");
+  const prev = process.env.PRINTER_CONTROLE_PORTA;
+  delete process.env.PRINTER_CONTROLE_PORTA;
+  assert.strictEqual(resolveControlePorta("RAW:Elgin i9"), "0");
+  assert.strictEqual(resolveControlePorta("TCP:192.168.1.10:9100"), "1");
+  process.env.PRINTER_CONTROLE_PORTA = "1";
+  assert.strictEqual(resolveControlePorta("RAW:X"), "1");
+  if (prev === undefined) delete process.env.PRINTER_CONTROLE_PORTA;
+  else process.env.PRINTER_CONTROLE_PORTA = prev;
+});
+
+test("acbrPosPrinterErrors — mensagem -10", () => {
+  const { formatAcbrPosError } = require("../print/acbrPosPrinterErrors");
+  const err = formatAcbrPosError("POS_Imprimir", -10, "Falha ao abrir porta", {
+    porta: "RAW:Elgin i9",
+  });
+  assert.strictEqual(err.acbrRet, -10);
+  assert.ok(err.message.includes("(-10)"));
+  assert.ok(err.message.includes("RAW:Elgin i9"));
+});
+
+test("printFiscalCoord — fiscalEmUso sem lock ativo", () => {
+  const { fiscalEmUso } = require("../print/printFiscalCoordination");
+  assert.strictEqual(fiscalEmUso(), false);
+});
+
 console.log(`\nprint-extended: ${passed} passed, ${failed} failed\n`);
 process.exit(failed > 0 ? 1 : 0);

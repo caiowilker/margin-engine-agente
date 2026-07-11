@@ -1190,9 +1190,15 @@ function extrairModeloJob(correlationId) {
 }
 
 async function reimprimirDanfceCompleto(chave, numeroVenda, opts = {}) {
-  const doc =
-    (chave && filaFiscal.buscarDocumentoPorChave(chave)) ||
-    (numeroVenda && filaFiscal.buscarDocumentoPorVenda(numeroVenda));
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  let doc = null;
+  for (let i = 0; i < 8; i++) {
+    doc =
+      (chave && filaFiscal.buscarDocumentoPorChave(chave)) ||
+      (numeroVenda && filaFiscal.buscarDocumentoPorVenda(numeroVenda));
+    if (doc) break;
+    if (i < 7) await sleep(400);
+  }
   if (!doc) throw new Error("Documento fiscal não encontrado localmente");
   const chaveDoc = doc.chave || chave;
   const modelo = inferirModeloDocumento(doc, chaveDoc);

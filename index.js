@@ -2578,8 +2578,16 @@ function iniciarServidor() {
 
   app.post("/impressora/abertura", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
-      await impressora.imprimirAbertura(req.body);
-      res.json({ ok: true });
+      const resultado = await impressora.imprimirAbertura(req.body);
+      if (resultado?.queued) {
+        return res.status(202).json({
+          ok: false,
+          fila: true,
+          mensagem: resultado.message,
+          jobId: resultado.jobId,
+        });
+      }
+      res.json({ ok: true, jobId: resultado?.jobId || null });
     } catch (err) {
       responderErroImpressao(res, err);
     }

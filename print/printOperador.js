@@ -5,6 +5,17 @@ const { classifyPrintError } = require("./printErrors");
 
 const MAPA = [
   {
+    teste: /falhou \(-10\)|erro de comunicação com a impressora|POS_Imprimir falhou/i,
+    mensagem: "A impressora não aceitou o cupom (erro ACBr -10).",
+    acao:
+      "No painel :9100, clique Detectar impressora e depois Imprimir teste. Confira se o nome RAW está correto e se a impressora está ligada.",
+  },
+  {
+    teste: /POS_PodeLerDaPorta|não foi possível abrir a porta/i,
+    mensagem: "Não foi possível abrir a porta da impressora.",
+    acao: "Use Detectar no painel ou configure a porta como RAW:Nome exato da impressora no Windows.",
+  },
+  {
     teste: /sem papel|pouco papel|tampa/i,
     mensagem: "Impressora sem papel ou com tampa aberta.",
     acao: "Reponha o papel, feche a tampa e tente imprimir novamente.",

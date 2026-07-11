@@ -6,6 +6,8 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { resolveStagingDir } = require("../runtime/windowsEnv");
+const { formatAcbrPosError } = require("./acbrPosPrinterErrors");
+const { resolveControlePorta } = require("./printerModelMap");
 
 const AGENT_ROOT = path.resolve(__dirname, "..");
 
@@ -166,9 +168,11 @@ async function readStringOut(libBundle, fn, ...args) {
   const ret = await promisify(fn.bind(libBundle.lib), ...args, buf, tam);
   if (ret !== 0) {
     const msg = await ultimoRetorno(libBundle);
-    const err = new Error(`${fn.name || "POS"} falhou (${ret}): ${msg || ret}`);
-    err.acbrRet = ret;
-    throw err;
+    const values = buildRuntimeValues();
+    throw formatAcbrPosError(fn.name || "POS", ret, msg, {
+      porta: values.PosPrinter?.Porta,
+      modelo: values.PosPrinter?.Modelo,
+    });
   }
   const text = trimBuf(buf);
   if (text) return text;
@@ -179,9 +183,11 @@ async function callPos(libBundle, fn, ...args) {
   const ret = await promisify(fn.bind(libBundle.lib), ...args);
   if (ret !== 0) {
     const msg = await ultimoRetorno(libBundle);
-    const err = new Error(`${fn.name || "POS"} falhou (${ret}): ${msg || ret}`);
-    err.acbrRet = ret;
-    throw err;
+    const values = buildRuntimeValues();
+    throw formatAcbrPosError(fn.name || "POS", ret, msg, {
+      porta: values.PosPrinter?.Porta,
+      modelo: values.PosPrinter?.Modelo,
+    });
   }
   return ret;
 }
@@ -216,7 +222,7 @@ PaginaDeCodigo=2
 ColunasFonteNormal=48
 CortaPapel=1
 TraduzirTags=1
-ControlePorta=1
+ControlePorta=0
 `;
 }
 
@@ -245,6 +251,7 @@ function buildRuntimeValues() {
   const enc = local?.encoding || process.env.PRINTER_ENCODING || "850";
   const pageCode = enc === "UTF8" || enc === "utf8" ? "5" : enc === "1252" ? "6" : "2";
   const cut = local?.cut || process.env.PRINTER_CUT || "partial";
+  const controlePorta = resolveControlePorta(porta);
 
   const values = {
     PosPrinter: {
@@ -254,7 +261,7 @@ function buildRuntimeValues() {
       ColunasFonteNormal: local?.colunas || process.env.PRINTER_COLUNAS || "48",
       CortaPapel: cut === "total" ? "0" : "1",
       TraduzirTags: "1",
-      ControlePorta: "1",
+      ControlePorta: controlePorta,
       LinhasBuffer: process.env.PRINTER_BUFFER_LINES || "0",
       VerificarImpressora: process.env.PRINTER_VERIFICAR === "true" ? "1" : "0",
       TipoCorte: cut === "partial" ? "1" : "0",
@@ -298,6 +305,12 @@ async function withPosPrinterSession(fn, opts = {}) {
     if (withPosPrinterSession._session === sess) {
       withPosPrinterSession._session = null;
     }
+  }
+
+  function sessaoCurtaRaw() {
+    if (process.env.ACBR_POS_SESSION_PER_JOB === "false") return false;
+    const porta = buildRuntimeValues().PosPrinter?.Porta || "";
+    return /^RAW:/i.test(porta);
   }
 
   function scheduleIdle(sess) {
@@ -372,18 +385,58 @@ async function withPosPrinterSession(fn, opts = {}) {
     throw err;
   } finally {
     withPosPrinterSession._refCount = Math.max(0, (withPosPrinterSession._refCount || 1) - 1);
-    if (withPosPrinterSession._session) {
-      scheduleIdle(withPosPrinterSession._session);
+    const sess = withPosPrinterSession._session;
+    if (sess) {
+      if (sessaoCurtaRaw() && withPosPrinterSession._refCount <= 0) {
+        if (_idleTimer) {
+          clearTimeout(_idleTimer);
+          withPosPrinterSession._idleTimer = null;
+        }
+        teardownSession(sess).catch(() => {});
+      } else {
+        scheduleIdle(sess);
+      }
     }
   }
 }
 
-async function imprimirTagsNative(tags) {
-  return withPosPrinterSession(async (bundle) => {
-    await callPos(bundle, bundle.lib.POS_InicializarPos.async);
-    await callPos(bundle, bundle.lib.POS_Imprimir.async, tags, true, true, false, 1);
-    return { ok: true, native: true };
+async function assertPortaLegivel(bundle) {
+  const porta = buildRuntimeValues().PosPrinter?.Porta || "";
+  if (/^RAW:/i.test(porta) || !bundle?.lib?.POS_PodeLerDaPorta?.async) return;
+  const ret = await promisify(bundle.lib.POS_PodeLerDaPorta.async.bind(bundle.lib.POS_PodeLerDaPorta));
+  if (ret === 0) return;
+  const msg = await ultimoRetorno(bundle);
+  const values = buildRuntimeValues();
+  throw formatAcbrPosError("POS_PodeLerDaPorta", ret, msg, {
+    porta: values.PosPrinter?.Porta,
+    modelo: values.PosPrinter?.Modelo,
   });
+}
+
+async function imprimirTagsNativeOnce(bundle, tags) {
+  await assertPortaLegivel(bundle);
+  await callPos(bundle, bundle.lib.POS_InicializarPos.async);
+  await callPos(bundle, bundle.lib.POS_Imprimir.async, tags, true, true, false, 1);
+  return { ok: true, native: true };
+}
+
+async function imprimirTagsNative(tags) {
+  const run = () =>
+    withPosPrinterSession(async (bundle) => imprimirTagsNativeOnce(bundle, tags), {
+      invalidateOnError: true,
+    });
+
+  try {
+    return await run();
+  } catch (err) {
+    if (err.acbrRet !== -10) throw err;
+    await invalidatePosPrinterSession();
+    try {
+      const bootstrap = require("./printerBootstrap");
+      await bootstrap.autoDetectarESincronizar({ force: true });
+    } catch (_) {}
+    return run();
+  }
 }
 
 async function abrirGavetaNative() {

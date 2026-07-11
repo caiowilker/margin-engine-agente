@@ -4,6 +4,7 @@
 const log = require("../logger").child({ modulo: "print_executor" });
 const factory = require("./factory");
 const { classifyPrintError } = require("./printErrors");
+const { prepararImpressaoAposFiscal } = require("./printFiscalCoordination");
 
 async function withProvider(fn, opts = {}) {
   const primary = factory.getPrintProvider();
@@ -89,6 +90,7 @@ async function executarProviderOp(provider, op, args, timeoutMs) {
 }
 
 async function executarOp(op, args, timeoutMs) {
+  await prepararImpressaoAposFiscal();
   return withProvider((provider) => executarProviderOp(provider, op, args, timeoutMs));
 }
 

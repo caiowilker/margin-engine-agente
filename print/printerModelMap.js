@@ -74,6 +74,19 @@ function normalizarPortaAcbr(porta, opts = {}) {
   return p;
 }
 
+/**
+ * ControlePorta no ACBr: em RAW (spooler Windows) usar 0 evita -10 genérico na impressão.
+ * COM/TCP mantém 1. Override: PRINTER_CONTROLE_PORTA=0|1
+ */
+function resolveControlePorta(porta) {
+  const explicit = process.env.PRINTER_CONTROLE_PORTA;
+  if (explicit === "0" || explicit === "false") return "0";
+  if (explicit === "1" || explicit === "true") return "1";
+  const p = String(porta || "").trim();
+  if (/^RAW:/i.test(p)) return "0";
+  return "1";
+}
+
 function inferirPortaAcbr(opts = {}) {
   if (process.env.PRINTER_PORTA) {
     return normalizarPortaAcbr(process.env.PRINTER_PORTA, opts);
@@ -106,4 +119,5 @@ module.exports = {
   normalizarPortaAcbr,
   parsePortaTcp,
   portaAcbrValida,
+  resolveControlePorta,
 };

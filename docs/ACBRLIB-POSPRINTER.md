@@ -81,6 +81,8 @@ Métodos de configuração seguem o padrão ACBrLib: `POS_ConfigLer`, `POS_Confi
 | ColunasFonteNormal | Colunas modo normal |
 | CortaPapel | `1` = cortar ao usar tag `</corte>` |
 | TraduzirTags | `1` = decodificar tags ACBr |
+| ControlePorta | `1` = controle exclusivo da porta; **`0` recomendado para `RAW:` no Windows** (evita erro -10) |
+| VerificarImpressora | `1` = checar impressora antes de imprimir (útil em RAW) |
 
 ### [PosPrinter_QRCode] / [PosPrinter_Barras] / [PosPrinter_Logo] / [PosPrinter_Gaveta]
 

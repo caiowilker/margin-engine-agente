@@ -21,6 +21,11 @@ function classifyPrintError(err) {
     out.permanente = false;
     return out;
   }
+  if (err?.acbrRet === -10 || /\(-10\)/.test(msg)) {
+    out.retryable = true;
+    out.fallbackSuggested = true;
+    return out;
+  }
   return out;
 }
 

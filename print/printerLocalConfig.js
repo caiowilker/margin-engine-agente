@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const log = require("../logger").child({ modulo: "printer_local_config" });
 const runtime = require("./acbrPosPrinterRuntime");
-const { inferirModeloAcbr, inferirPortaAcbr, normalizarPortaAcbr, parsePortaTcp } = require("./printerModelMap");
+const { inferirModeloAcbr, inferirPortaAcbr, normalizarPortaAcbr, parsePortaTcp, resolveControlePorta } = require("./printerModelMap");
 
 const AGENT_ROOT = path.resolve(__dirname, "..");
 
@@ -103,8 +103,8 @@ CortaPapel=${vals.cut === "total" ? "0" : "1"}
 TraduzirTags=1
 IgnorarTags=0
 LinhasBuffer=${process.env.PRINTER_BUFFER_LINES || "0"}
-ControlePorta=1
-VerificarImpressora=0
+ControlePorta=${resolveControlePorta(vals.porta)}
+VerificarImpressora=${/^RAW:/i.test(String(vals.porta || "")) ? "1" : "0"}
 GavetaSinalInvertido=${process.env.PRINTER_DRAWER_INVERTED === "true" ? "1" : "0"}
 GavetaTempoON=${process.env.PRINTER_DRAWER_ON_MS || "120"}
 GavetaTempoOFF=${process.env.PRINTER_DRAWER_OFF_MS || "240"}
