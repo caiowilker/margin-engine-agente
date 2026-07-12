@@ -4,6 +4,26 @@ Todas as mudanças relevantes do Agente Local Margin Engine são documentadas ne
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
+## [Unreleased]
+
+## [1.0.1] - 2026-07-12
+
+### Adicionado
+
+- **AUTO_UPDATE cobre `frontend-dist/`** — manifest com SHA-256, backup, rollback e validação para agente + PWA.
+- `scripts/package-update-zip.js` (`npm run package:update`) — empacota `dist/update.zip` para `PDV_AGENTE_URL_DOWNLOAD`.
+- Contrato HTTP front↔agente (`apiContract.js`, `apiContractVersion`) e telemetria de versão no heartbeat.
+- Testes: `manifest-updater-front`, `updater-remote-check`, `api-contract`, `heartbeat-version`.
+
+### Alterado
+
+- `manifestUpdater.js` — suporte a subpastas `frontend-dist/` no apply/rollback.
+- `scripts/sync-windows-build.sh` — manifest gerado após sync do front.
+
+### Corrigido
+
+- Impressão automática no checkout (via `frontend-dist` neste release) — fluxo fiscal/não fiscal sólido com `cupomModo: SEMPRE`.
+
 ## [1.0.0] - 2026-06-19
 
 Primeira versão apta para produção comercial, consolidando cinco fases de hardening fiscal e operacional.

@@ -333,17 +333,22 @@ async function run() {
   });
 
   await test("GET /diagnostico/saude — contrato mínimo", async () => {
+    const { lerFrontBuildId } = require("../frontVersion");
+    const { API_CONTRACT_VERSION } = require("../apiContract");
     const json = {
       ok: true,
       versao: "1.0.0",
+      frontVersion: lerFrontBuildId() || null,
+      apiContractVersion: API_CONTRACT_VERSION,
       uptime: process.uptime(),
       manifestOk: manifestUpdater.isManifestOk(),
       fiscal: filaFiscal.status(),
       timestamp: new Date().toISOString(),
     };
-    assertKeys(json, ["ok", "versao", "uptime", "manifestOk", "fiscal", "timestamp"], "saude");
+    assertKeys(json, ["ok", "versao", "frontVersion", "apiContractVersion", "uptime", "manifestOk", "fiscal", "timestamp"], "saude");
     assert.strictEqual(json.ok, true);
     assertType(json.uptime, "number", "uptime");
+    assertType(json.apiContractVersion, "number", "apiContractVersion");
   });
 
   await test("POST /diagnostico/recovery — jobsReprocessados number", async () => {

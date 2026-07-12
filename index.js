@@ -656,59 +656,36 @@ let updaterState = {
   changelog: null,
   atualizando: false,
   ultimoErro: null,
+  pendingUrlDownload: null,
+  pendingSha256: null,
 };
 
 const logUpdater = log.child({ modulo: "updater" });
+const { consultarVersaoRemota } = require("./updaterRemoteCheck");
+
+function updaterDepsBase() {
+  return {
+    versaoAtual: VERSAO_ATUAL,
+    updaterState,
+    lerConfig,
+    manifestUpdater,
+    logUpdater,
+    autoUpdate: AUTO_UPDATE,
+  };
+}
 
 async function verificarAtualizacao() {
   if (!AUTO_UPDATE) return;
-  if (!manifestUpdater.isManifestOk()) {
-    updaterState.ultimoErro =
-      manifestUpdater.getManifestBootMotivo() ||
-      "manifest.json com SHA-256 incompleto";
-    logUpdater.error(
-      { acao: "verificar_atualizacao", resultado: "recusado", err: updaterState.ultimoErro },
-      "Auto-update recusado — manifest incompleto",
-    );
-    return;
-  }
-  const cfg = await lerConfig();
-  if (!cfg.backendUrl || !cfg.backendToken) return;
-
-  const fetch = require("node-fetch");
-
-  try {
-    const resp = await fetch(`${cfg.backendUrl}/pdv/agente/versao`, {
-      headers: { Authorization: `Bearer ${cfg.backendToken}` },
-      timeout: 8000,
-    });
-
-    if (!resp.ok) return;
-
-    const { versao, urlDownload, changelog, sha256 } = await resp.json();
-    updaterState.ultimaVerificacao = new Date().toISOString();
-
-    if (!versao || versao === VERSAO_ATUAL) {
-      updaterState.versaoDisponivel = null;
-      updaterState.changelog = null;
-      console.log(`[Updater] ✓ Versão ${VERSAO_ATUAL} — up to date.`);
-      return;
-    }
-
+  const resultado = await consultarVersaoRemota({
+    ...updaterDepsBase(),
+    aplicarAutomaticamente: true,
+    aplicarAtualizacao,
+  });
+  if (resultado.resultado === "atualizado") {
+    console.log(`[Updater] ✓ Versão ${VERSAO_ATUAL} — up to date.`);
+  } else if (resultado.resultado === "disponivel" || resultado.resultado === "aplicando") {
     console.log(
-      `[Updater] ⬆  Nova versão disponível: ${versao} (atual: ${VERSAO_ATUAL})`,
-    );
-    updaterState.versaoDisponivel = versao;
-    updaterState.changelog = changelog || null;
-
-    if (urlDownload) {
-      await aplicarAtualizacao(urlDownload, versao, sha256);
-    }
-  } catch (err) {
-    updaterState.ultimoErro = err.message;
-    logUpdater.warn(
-      { acao: "verificar_atualizacao", resultado: "falha", err },
-      "Falha ao verificar atualização",
+      `[Updater] ⬆  Nova versão disponível: ${resultado.versaoDisponivel} (atual: ${VERSAO_ATUAL})`,
     );
   }
 }
@@ -1234,16 +1211,67 @@ function iniciarServidor() {
     async (req, res) => {
       auditLog.registrar("UPDATER_VERIFICAR", {}, req);
       if (updaterState.atualizando) {
-        return res.json({
+        return res.status(409).json({
+          ok: false,
+          resultado: "erro",
+          mensagem: "Atualização já em andamento — aguarde a conclusão.",
+          versaoAtual: VERSAO_ATUAL,
+          versaoDisponivel: updaterState.versaoDisponivel,
+          podeAplicar: false,
+          autoUpdate: AUTO_UPDATE,
+          estado: { versaoAtual: VERSAO_ATUAL, ...updaterState },
+        });
+      }
+      const resultado = await consultarVersaoRemota({
+        ...updaterDepsBase(),
+        aplicarAutomaticamente: AUTO_UPDATE,
+        aplicarAtualizacao: AUTO_UPDATE ? aplicarAtualizacao : null,
+      });
+      const status = resultado.ok ? 200 : 503;
+      res.status(status).json({
+        ...resultado,
+        estado: { versaoAtual: VERSAO_ATUAL, ...updaterState },
+      });
+    },
+  );
+
+  app.post(
+    "/updater/aplicar",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    async (req, res) => {
+      auditLog.registrar("UPDATER_APLICAR", {}, req);
+      if (updaterState.atualizando) {
+        return res.status(409).json({
           ok: false,
           mensagem: "Atualização já em andamento.",
         });
       }
-      verificarAtualizacao().catch(() => {});
+      if (!updaterState.versaoDisponivel) {
+        return res.status(400).json({
+          ok: false,
+          mensagem:
+            "Nenhuma versão nova confirmada. Use “Verificar atualização” antes de aplicar.",
+        });
+      }
+      if (!updaterState.pendingUrlDownload || !updaterState.pendingSha256) {
+        return res.status(400).json({
+          ok: false,
+          mensagem:
+            "Pacote de atualização indisponível. Verifique novamente ou use o instalador.",
+        });
+      }
+      const { versaoDisponivel, pendingUrlDownload, pendingSha256 } =
+        updaterState;
+      aplicarAtualizacao(
+        pendingUrlDownload,
+        versaoDisponivel,
+        pendingSha256,
+      ).catch(() => {});
       res.json({
         ok: true,
-        mensagem: "Verificação iniciada.",
-        estado: updaterState,
+        mensagem: `Aplicação da versão v${versaoDisponivel} iniciada.`,
+        estado: { versaoAtual: VERSAO_ATUAL, ...updaterState },
       });
     },
   );
@@ -2426,9 +2454,14 @@ function iniciarServidor() {
   );
 
   app.get("/diagnostico/saude", privateNetworkHeaders, (req, res) => {
+    const { lerFrontBuildId } = require("./frontVersion");
+    const { API_CONTRACT_VERSION } = require("./apiContract");
+    const frontVersion = lerFrontBuildId();
     res.json({
       ok: true,
       versao: VERSAO_ATUAL,
+      frontVersion: frontVersion || null,
+      apiContractVersion: API_CONTRACT_VERSION,
       uptime: process.uptime(),
       manifestOk: manifestUpdater.isManifestOk(),
       fiscal: filaFiscal.status(),

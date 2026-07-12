@@ -251,8 +251,7 @@ async function enviarHeartbeat(backendUrl, backendToken) {
   const fetch = require("node-fetch");
   const fiscalTrace = require("./fiscalTraceLog");
   const filaFiscal = require("./filaFiscal");
-  const providerId =
-    process.env.ACBR_DRIVER === "lib" ? "agent-local-lib" : "agent-local-monitor";
+  const { montarPayloadHeartbeat } = require("./heartbeatPayload");
   let filaStatus = {};
   try {
     filaStatus = filaFiscal.status() || {};
@@ -260,25 +259,14 @@ async function enviarHeartbeat(backendUrl, backendToken) {
     /* ignore */
   }
   try {
+    const payload = montarPayloadHeartbeat(filaStatus);
     const resp = await fetch(`${backendUrl}/pdv/agente/heartbeat`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${backendToken}`,
       },
-      body: JSON.stringify({
-        providerId,
-        filaFiscal: {
-          pendentes: filaStatus.pendentes ?? 0,
-          incerto: filaStatus.incerto ?? 0,
-          processando: filaStatus.processando ?? 0,
-          recuperando: filaStatus.recuperando ?? 0,
-          falhasTemporarias: filaStatus.falhasTemporarias ?? 0,
-          falhas: filaStatus.falhas ?? 0,
-          concluidos: filaStatus.concluidos ?? 0,
-          pausada: filaStatus.pausada ? 1 : 0,
-        },
-      }),
+      body: JSON.stringify(payload),
     });
     if (!resp.ok) {
       const txt = await resp.text().catch(() => "");
@@ -288,7 +276,9 @@ async function enviarHeartbeat(backendUrl, backendToken) {
       });
       log.debug({ status: resp.status, body: txt.slice(0, 80) }, "[ConfigSync] heartbeat HTTP");
     } else {
-      fiscalTrace.trace("Heartbeat", "OK — agente online no backend", { providerId });
+      fiscalTrace.trace("Heartbeat", "OK — agente online no backend", {
+        providerId: payload.providerId,
+      });
     }
   } catch (err) {
     fiscalTrace.warn("Heartbeat", "Falha ao enviar heartbeat", { err: err.message });

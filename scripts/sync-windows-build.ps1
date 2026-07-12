@@ -22,12 +22,6 @@ Write-Host "==> Verificando alinhamento de versão release..."
 node (Join-Path $AgentRoot "scripts\check-release-alignment.js")
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "==> Gerando manifest.json..."
-Push-Location $AgentRoot
-& npm run manifest
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-Pop-Location
-
 Write-Host "==> Sincronizando versão do instalador..."
 node (Join-Path $AgentRoot "scripts\sync-installer-version.js")
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -86,6 +80,13 @@ if (-not $SkipFrontBuild) {
         Write-Warning "frontend-dist ausente"
     }
 }
+
+Write-Host "==> Gerando manifest.json (agente + frontend-dist)..."
+Push-Location $AgentRoot
+& npm run manifest
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Pop-Location
+Copy-Item -Force (Join-Path $AgentRoot "manifest.json") (Join-Path $AppDest "manifest.json")
 
 $fail = 0
 function Require([string]$Path, [string]$Label) {

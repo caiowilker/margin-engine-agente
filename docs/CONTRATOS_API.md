@@ -161,12 +161,16 @@ Body: PayloadEmissaoNfse + { numeroRps, correlationId, modeloDocumento: "99" }
 {
   "ok": true,
   "versao": "1.0.0",
+  "frontVersion": "build-id ou null",
+  "apiContractVersion": 3,
   "uptime": 123.4,
   "manifestOk": true,
   "fiscal": { "pendentes": 0, "falhas": 0, ... },
   "timestamp": "ISO8601"
 }
 ```
+
+`apiContractVersion` — inteiro do contrato HTTP front↔agente (ver `docs/API_CONTRACT_VERSION.md`). **Não** é `versao` do pacote.
 
 **Status de compatibilidade:** ✓
 
@@ -449,7 +453,7 @@ Body: PayloadEmissaoNfse + { numeroRps, correlationId, modeloDocumento: "99" }
 
 ---
 
-### GET /updater/status · POST /updater/verificar
+### GET /updater/status · POST /updater/verificar · POST /updater/aplicar
 
 **Consumidor:** `DiagnosticoPage` / `agenteService.updater`
 

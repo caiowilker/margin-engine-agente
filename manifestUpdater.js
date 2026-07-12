@@ -5,7 +5,15 @@ const crypto = require("crypto");
 const { execSync } = require("child_process");
 const { getDirectoryManager } = require("./runtime/directoryManager");
 
-const MANIFEST_PATH = path.join(__dirname, "manifest.json");
+let agentRootOverride = null;
+
+function agentRoot() {
+  return agentRootOverride || __dirname;
+}
+
+function manifestPath() {
+  return path.join(agentRoot(), "manifest.json");
+}
 
 function backupDir() {
   return getDirectoryManager().file("agent", "backup-pre-update");
@@ -20,12 +28,22 @@ function calcularSha256(filePath) {
   return hash.digest("hex");
 }
 
-function lerManifest() {
-  if (!fs.existsSync(MANIFEST_PATH)) return null;
-  return JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8"));
+function ensureParentDir(filePath) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
 }
 
-function validarManifest(manifest, baseDir = __dirname) {
+function copiarArquivoPara(destAbs, srcAbs) {
+  ensureParentDir(destAbs);
+  fs.copyFileSync(srcAbs, destAbs);
+}
+
+function lerManifest() {
+  const fp = manifestPath();
+  if (!fs.existsSync(fp)) return null;
+  return JSON.parse(fs.readFileSync(fp, "utf8"));
+}
+
+function validarManifest(manifest, baseDir = agentRoot()) {
   if (!manifest?.arquivos?.length) throw new Error("manifest.json inválido");
   for (const item of manifest.arquivos) {
     if (!item.sha256 || String(item.sha256).trim() === "") {
@@ -75,9 +93,9 @@ function backupArquivos(arquivos) {
   const dir = path.join(root, String(stamp));
   fs.mkdirSync(dir, { recursive: true });
   for (const nome of arquivos) {
-    const src = path.join(__dirname, nome);
+    const src = path.join(agentRoot(), nome);
     if (fs.existsSync(src)) {
-      fs.copyFileSync(src, path.join(dir, nome));
+      copiarArquivoPara(path.join(dir, nome), src);
     }
   }
   fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ arquivos }, null, 2));
@@ -124,7 +142,7 @@ function rollbackUltimo() {
   for (const nome of manifest.arquivos) {
     const src = path.join(dir, nome);
     if (fs.existsSync(src)) {
-      fs.copyFileSync(src, path.join(__dirname, nome));
+      copiarArquivoPara(path.join(agentRoot(), nome), src);
     }
   }
   return dir;
@@ -154,11 +172,21 @@ async function aplicarPacote(tmpDir, shaEsperado, novaVersao) {
   for (const item of manifest.arquivos) {
     const src = path.join(tmpDir, item.arquivo);
     if (fs.existsSync(src)) {
-      fs.copyFileSync(src, path.join(__dirname, item.arquivo));
+      copiarArquivoPara(path.join(agentRoot(), item.arquivo), src);
     }
   }
 
+  validarManifest(manifest, agentRoot());
+
   return { versao: novaVersao || manifest.versao, arquivos: nomes.length };
+}
+
+function __setAgentRootForTests(root) {
+  agentRootOverride = root;
+}
+
+function __resetAgentRootForTests() {
+  agentRootOverride = null;
 }
 
 module.exports = {
@@ -173,5 +201,8 @@ module.exports = {
   rollbackDisponivel,
   ultimoBackupInfo,
   aplicarPacote,
-  MANIFEST_PATH,
+  manifestPath,
+  MANIFEST_PATH: manifestPath(),
+  __setAgentRootForTests,
+  __resetAgentRootForTests,
 };

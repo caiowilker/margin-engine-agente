@@ -18,9 +18,6 @@ echo "==> Build root: $BUILD_ROOT"
 echo "==> Verificando alinhamento de versão release..."
 node "$AGENT_ROOT/scripts/check-release-alignment.js"
 
-echo "==> Gerando manifest.json (SHA-256)..."
-(cd "$AGENT_ROOT" && npm run manifest)
-
 echo "==> Sincronizando versão do instalador..."
 node "$AGENT_ROOT/scripts/sync-installer-version.js" "$BUILD_ROOT/pdv-agente-installer.iss" 2>/dev/null || \
   node "$AGENT_ROOT/scripts/sync-installer-version.js"
@@ -79,6 +76,9 @@ if [[ "$SYNC_FRONT" == "1" ]]; then
 else
   echo "AVISO: SYNC_FRONT=0"
 fi
+
+echo "==> Gerando manifest.json (SHA-256, agente + frontend-dist)..."
+(cd "$AGENT_ROOT" && npm run manifest)
 
 # ── Validações obrigatórias ───────────────────────────────────────────────────
 FAIL=0
