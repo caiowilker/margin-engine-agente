@@ -79,6 +79,7 @@ fi
 
 echo "==> Gerando manifest.json (SHA-256, agente + frontend-dist)..."
 (cd "$AGENT_ROOT" && npm run manifest)
+cp "$AGENT_ROOT/manifest.json" "$BUILD_ROOT/dist/app/manifest.json"
 
 # ── Validações obrigatórias ───────────────────────────────────────────────────
 FAIL=0
