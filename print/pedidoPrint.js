@@ -50,6 +50,7 @@ function normalizarPedidoPayload(raw) {
     createdAt: o.createdAt ?? o.created_at ?? null,
     copies: Math.max(1, parseInt(String(o.copies ?? 1), 10) || 1),
     items,
+    exibirLogo: typeof o.exibirLogo === "boolean" ? o.exibirLogo : undefined,
   };
 }
 

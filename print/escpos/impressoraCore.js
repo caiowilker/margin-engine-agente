@@ -1108,9 +1108,9 @@ async function renderFechamentoConteudo(printer, payload) {
   printer
     .align("lt")
     .text("Caixa   : " + (payload.numeroCaixa || "Principal"))
-    .text("Operador: " + payload.operador)
+    .text("Operador: " + tx(payload.operador || "-"))
     .text("Abertura: " + (payload.aberturaEm || "-"))
-    .text("Fecham. : " + payload.fechamentoEm);
+    .text("Fecham. : " + (payload.fechamentoEm || "-"));
 
   if (payload.minutosAberto) {
     const h = Math.floor(payload.minutosAberto / 60);
@@ -1131,10 +1131,16 @@ async function renderFechamentoConteudo(printer, payload) {
     .style("normal");
   printer
     .align("lt")
-    .text("Vendas      : " + payload.quantidadeVendas)
-    .text("Faturamento : " + fmt(payload.totalVendas))
-    .text("Lucro total : " + fmt(payload.totalLucro))
-    .text("Margem media: " + Number(payload.margemMedia).toFixed(1) + "%");
+    .text("Vendas      : " + (payload.quantidadeVendas ?? 0))
+    .text("Faturamento : " + fmt(payload.totalVendas));
+  if (payload.totalLucro != null && Number(payload.totalLucro) !== 0) {
+    printer.text("Lucro total : " + fmt(payload.totalLucro));
+  }
+  if (payload.margemMedia != null && Number(payload.margemMedia) !== 0) {
+    printer.text(
+      "Margem media: " + Number(payload.margemMedia).toFixed(1) + "%",
+    );
+  }
 
   printer
     .align("ct")
@@ -1155,14 +1161,17 @@ async function renderFechamentoConteudo(printer, payload) {
           debito: "Debito",
           fiado: "Fiado",
           voucher: "Voucher",
+          outros: "Outros",
+          crediario: "Crediario",
         }[forma] || forma;
+      const qtd = Number(d.quantidade || 0);
       printer
         .align("lt")
         .text(
           label.padEnd(10) +
             fmt(d.total).padStart(10) +
-            (d.quantidade > 0
-              ? (" " + d.quantidade + " venda(s)").padStart(12)
+            (qtd > 0
+              ? (" " + qtd + " venda(s)").padStart(12)
               : "".padStart(12)),
         );
     });
@@ -1173,25 +1182,29 @@ async function renderFechamentoConteudo(printer, payload) {
     .style("b")
     .text("CONFERENCIA DE CAIXA")
     .style("normal")
-    .align("lt")
-    .text("Fundo abertura: " + fmt(payload.valorAbertura))
-    .text("Valor contado : " + fmt(payload.valorContado));
+    .align("lt");
+  if (payload.valorAbertura == null || Number.isNaN(Number(payload.valorAbertura))) {
+    printer.text("Fundo abertura: --");
+  } else {
+    printer.text("Fundo abertura: " + fmt(payload.valorAbertura));
+  }
+  printer.text("Valor contado : " + fmt(payload.valorContado));
 
-  const diff = payload.diferenca;
+  const diff = Number(payload.diferenca ?? 0);
   const diffStr =
     Math.abs(diff) < 0.02
-      ? "OK — caixa confere"
+      ? "OK - caixa confere"
       : diff > 0
         ? "Sobra: " + fmt(diff)
         : "Falta: " + fmt(Math.abs(diff));
-  printer.text("Diferenca     : " + diffStr);
+  printer.text("Diferenca     : " + tx(diffStr));
 
   if (payload.observacao) {
     printer
       .align("ct")
       .text(linha())
       .align("lt")
-      .text("Obs: " + payload.observacao);
+      .text("Obs: " + tx(payload.observacao));
   }
 
   printer
@@ -1230,7 +1243,7 @@ async function renderAberturaConteudo(printer, payload) {
     .text(linha())
     .align("lt")
     .text("Caixa   : " + (payload.numeroCaixa || "Principal"))
-    .text("Operador: " + (payload.operador || "-"))
+    .text("Operador: " + tx(payload.operador || "-"))
     .text(
       "Data/Hr : " + (payload.aberturaEm || new Date().toLocaleString("pt-BR")),
     )
@@ -1238,7 +1251,12 @@ async function renderAberturaConteudo(printer, payload) {
     .text(linha())
     .style("b")
     .align("lt")
-    .text("Fundo   : " + fmt(payload.valorAbertura || 0))
+    .text(
+      "Fundo   : " +
+        (payload.valorAbertura == null || Number.isNaN(Number(payload.valorAbertura))
+          ? "--"
+          : fmt(payload.valorAbertura)),
+    )
     .style("normal")
     .align("ct")
     .text(linha())
@@ -1246,7 +1264,7 @@ async function renderAberturaConteudo(printer, payload) {
     .cut();
 }
 
-function renderPedido(printer, payload) {
+async function renderPedido(printer, payload) {
   const { sep: linha } = helpers();
   const {
     normalizarPedidoPayload,
@@ -1258,9 +1276,10 @@ function renderPedido(printer, payload) {
   const p = normalizarPedidoPayload(payload);
   const cancelado = p.eventType === "ORDER_CANCELLED";
 
+  printer.font("a").align("ct");
+  await imprimirLogoCupomEscpos(printer, payload);
+
   printer
-    .font("a")
-    .align("ct")
     .style("b")
     .size(1, 1)
     .text(labelPrintType(p.printType))
@@ -1310,13 +1329,14 @@ function renderPedido(printer, payload) {
   printer.align("ct").text(linha()).feed(3).cut();
 }
 
-function renderMovimentoCaixa(printer, payload) {
+async function renderMovimentoCaixa(printer, payload) {
   const { sep: linha, fmt } = helpers();
   const tipoLabel = payload.tipo === "suprimento" ? "SUPRIMENTO" : "SANGRIA";
 
+  printer.font("a").align("ct");
+  await imprimirLogoCupomEscpos(printer, payload);
+
   printer
-    .font("a")
-    .align("ct")
     .style("b")
     .size(1, 1)
     .text(tipoLabel + " DE CAIXA")
@@ -1325,15 +1345,15 @@ function renderMovimentoCaixa(printer, payload) {
     .text(linha())
     .align("lt")
     .text("Caixa   : " + (payload.numeroCaixa || "Principal"))
-    .text("Operador: " + payload.operador)
-    .text("Data/Hr : " + payload.emitidoEm)
+    .text("Operador: " + tx(payload.operador || "-"))
+    .text("Data/Hr : " + (payload.emitidoEm || "-"))
     .align("ct")
     .text(linha())
     .style("b")
     .align("lt")
     .text("Valor   : " + fmt(payload.valor))
     .style("normal")
-    .text("Motivo  : " + payload.motivo)
+    .text("Motivo  : " + tx(payload.motivo || "-"))
     .text("Saldo   : " + fmt(payload.saldoAtual))
     .align("ct")
     .text(linha())
@@ -1429,9 +1449,9 @@ function imprimirMovimentoCaixa(payload) {
 function imprimirPedido(payload) {
   const { normalizarPedidoPayload } = require("../pedidoPrint");
   const p = normalizarPedidoPayload(payload);
-  return imprimirRender((printer) => {
+  return imprimirRender(async (printer) => {
     for (let i = 0; i < p.copies; i++) {
-      renderPedido(printer, p);
+      await renderPedido(printer, p);
     }
   });
 }

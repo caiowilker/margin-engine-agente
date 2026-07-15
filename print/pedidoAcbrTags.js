@@ -2,7 +2,7 @@
  * Comanda Order Engine em tags ACBr — mesma identidade visual do cupom (48 col).
  */
 const { toThermalText } = require("../thermalText");
-const { tagCorte } = require("./acbrTags");
+const { tagCorte, tagLogoHeader } = require("./acbrTags");
 const {
   labelPrintType,
   labelEventType,
@@ -25,7 +25,7 @@ function tx(v) {
 
 function renderPedidoTags(rawPayload = {}) {
   const payload = normalizarPedidoPayload(rawPayload);
-  const lines = ["</zera>"];
+  const lines = ["</zera>", tagLogoHeader(payload)];
   const estacao = labelPrintType(payload.printType);
   const evento = labelEventType(payload.eventType);
   const cancelado = payload.eventType === "ORDER_CANCELLED";

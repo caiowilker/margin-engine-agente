@@ -32,7 +32,7 @@ function formatarLinhaEndereco(empresa) {
 }
 
 function renderAberturaTags(payload = {}) {
-  const lines = ["</zera>", tagLogoHeader()];
+  const lines = ["</zera>", tagLogoHeader(payload)];
   if (payload.empresa?.nome) {
     lines.push(`<ce><n>${tx(payload.empresa.nome)}</n></ce>`);
   }
@@ -47,7 +47,11 @@ function renderAberturaTags(payload = {}) {
     `Operador: ${tx(payload.operador || "-")}`,
     `Data/Hr : ${payload.aberturaEm || new Date().toLocaleString("pt-BR")}`,
     sepDash(),
-    `<n>Fundo   : ${fmtR$(payload.valorAbertura || 0)}</n>`,
+    `<n>Fundo   : ${
+      payload.valorAbertura == null || Number.isNaN(Number(payload.valorAbertura))
+        ? "--"
+        : fmtR$(payload.valorAbertura)
+    }</n>`,
     sepEq(),
     tagCorte(),
   );
@@ -62,7 +66,7 @@ function nomeEmpresaCaixa(empresa) {
 }
 
 function renderFechamentoTags(payload = {}) {
-  const lines = ["</zera>", tagLogoHeader()];
+  const lines = ["</zera>", tagLogoHeader(payload)];
   lines.push(`<ce><n>${nomeEmpresaCaixa(payload.empresa)}</n></ce>`);
   if (payload.empresa?.cnpj) {
     lines.push(`CNPJ: ${toThermalDoc(payload.empresa.cnpj)}`);
@@ -113,6 +117,7 @@ function renderFechamentoTags(payload = {}) {
           fiado: "Fiado",
           voucher: "Voucher",
           outros: "Outros",
+          crediario: "Crediario",
         }[forma] || forma;
       const qtd =
         d?.quantidade > 0 ? ` (${d.quantidade} venda(s))` : "";
@@ -129,16 +134,22 @@ function renderFechamentoTags(payload = {}) {
 
   if (payload.valorAbertura != null || payload.valorContado != null) {
     lines.push(sepDash(), "<n>CONFERENCIA DE CAIXA</n>");
-    lines.push(`Fundo abertura: ${fmtR$(payload.valorAbertura)}`);
+    lines.push(
+      `Fundo abertura: ${
+        payload.valorAbertura == null || Number.isNaN(Number(payload.valorAbertura))
+          ? "--"
+          : fmtR$(payload.valorAbertura)
+      }`,
+    );
     lines.push(`Valor contado : ${fmtR$(payload.valorContado)}`);
     const diff = Number(payload.diferenca ?? 0);
     const diffStr =
       Math.abs(diff) < 0.02
-        ? "OK — caixa confere"
+        ? "OK - caixa confere"
         : diff > 0
           ? `Sobra: ${fmtR$(diff)}`
           : `Falta: ${fmtR$(Math.abs(diff))}`;
-    lines.push(`Diferenca     : ${diffStr}`);
+    lines.push(`Diferenca     : ${tx(diffStr)}`);
   }
 
   if (payload.valorFechamento != null) {
@@ -161,7 +172,7 @@ function renderMovimentoCaixaTags(payload = {}) {
   const tipoLabel = payload.tipo === "suprimento" ? "SUPRIMENTO" : "SANGRIA";
   const lines = [
     "</zera>",
-    tagLogoHeader(),
+    tagLogoHeader(payload),
     `<ce><n>${tipoLabel} DE CAIXA</n></ce>`,
     sepDash(),
     `Caixa   : ${payload.numeroCaixa || "Principal"}`,
