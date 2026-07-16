@@ -2152,6 +2152,19 @@ function iniciarServidor() {
     }
   });
 
+  app.post("/acbr/nfe/manifesto/evento", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    try {
+      const body = req.body || {};
+      const manifestoDestinatario = require("./manifestoDestinatario");
+      const tpEvento = String(body.tpEvento || "").trim();
+      const chave = String(body.chaveAcesso || body.chave || "").replace(/\D/g, "");
+      const xJust = body.xJust || body.justificativa || null;
+      res.json(await manifestoDestinatario.executarEventoManifestacao(tpEvento, chave, xJust));
+    } catch (err) {
+      res.status(400).json({ ok: false, erro: err.message });
+    }
+  });
+
   app.post("/acbr/nfce/inutilizar", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       const cfg = await lerConfig();

@@ -23,8 +23,13 @@ function sanitizarPath(p) {
 
 function formatarEventoEmissao(row) {
   if (!row) return null;
-  if (typeof row === "string") return row;
-  const quando = row.atualizado_em || row.criado_em || null;
+  if (typeof row === "string") {
+    const { formatarDatasEmTexto } = require("./formatarDataExibicao");
+    return formatarDatasEmTexto(row);
+  }
+  const { formatarDataHoraExibicao } = require("./formatarDataExibicao");
+  const quandoRaw = row.atualizado_em || row.criado_em || null;
+  const quando = quandoRaw ? formatarDataHoraExibicao(quandoRaw) : null;
   const venda = row.numero_venda ? `venda ${row.numero_venda}` : null;
   const status = row.status ? String(row.status) : null;
   const erro = row.erro ? String(row.erro).slice(0, 120) : null;
@@ -188,11 +193,25 @@ function coletarContextoEnterprise(deps) {
             ? "offline"
             : "desconhecido",
       ultimaImpressao: ultimaJob
-        ? `${ultimaJob.tipo || "impressao"} · ${ultimaJob.impressoEm || ultimaJob.atualizadoEm || ""}`
+        ? (() => {
+            const { formatarDataHoraExibicao, formatarDatasEmTexto } = require("./formatarDataExibicao");
+            const quando = ultimaJob.impressoEm || ultimaJob.atualizadoEm || "";
+            const quandoFmt = quando ? formatarDataHoraExibicao(quando) : "";
+            return formatarDatasEmTexto(
+              `${ultimaJob.tipo || "impressao"}${quandoFmt ? ` · ${quandoFmt}` : ""}`,
+            );
+          })()
         : ultima
           ? typeof ultima === "object"
-            ? ultima.quando || ultima.em || JSON.stringify(ultima).slice(0, 80)
-            : String(ultima)
+            ? (() => {
+                const { formatarDataHoraExibicao } = require("./formatarDataExibicao");
+                const q = ultima.quando || ultima.em || null;
+                return q ? formatarDataHoraExibicao(q) : JSON.stringify(ultima).slice(0, 80);
+              })()
+            : (() => {
+                const { formatarDatasEmTexto } = require("./formatarDataExibicao");
+                return formatarDatasEmTexto(String(ultima));
+              })()
           : null,
       tempoMs: ultimaJob?.duracaoMs ?? ultima?.durationMs ?? ultima?.tempoMs ?? printObs?.tempoMedioMs ?? null,
       fila: printObs?.fila || null,
@@ -293,7 +312,9 @@ function coletarContextoEnterprise(deps) {
         ? {
             chave: ultimoXmlDoc.chave || null,
             arquivo: sanitizarPath(ultimoXmlDoc.xml_path),
-            quando: ultimoXmlDoc.criado_em || null,
+            quando: ultimoXmlDoc.criado_em
+              ? require("./formatarDataExibicao").formatarDataHoraExibicao(ultimoXmlDoc.criado_em)
+              : null,
           }
         : null,
       tempoMedioMs,

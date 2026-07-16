@@ -66,6 +66,37 @@ async function run() {
     );
   });
 
+  await test("montarIniManifestacaoEvento — Confirmação 210200", () => {
+    const ini = acbr.montarIniManifestacaoEvento(CHAVE, CNPJ, "210200", null);
+    assert.ok(ini.includes("tpEvento=210200"));
+    assert.ok(ini.includes("[EVENTO001]"));
+    assert.ok(!ini.includes("xJust="), "Confirmação não exige xJust");
+  });
+
+  await test("montarIniManifestacaoEvento — Não realizada exige justificativa", () => {
+    assert.throws(
+      () => acbr.montarIniManifestacaoEvento(CHAVE, CNPJ, "210240", "curta"),
+      /15 caracteres/,
+    );
+    const ini = acbr.montarIniManifestacaoEvento(
+      CHAVE,
+      CNPJ,
+      "210240",
+      "Mercadoria nao entregue pelo transportador",
+    );
+    assert.ok(ini.includes("tpEvento=210240"));
+    assert.ok(ini.includes("xJust="));
+  });
+
+  await test("parseResumoNfe extrai chave e emitente", () => {
+    const manifesto = require("../manifestoDestinatario");
+    const xml = `<resNFe><chNFe>${CHAVE}</chNFe><CNPJ>12345678000190</CNPJ><xNome>FORN</xNome><vNF>10.00</vNF></resNFe>`;
+    const parsed = manifesto.parseResumoNfe(xml);
+    assert.strictEqual(parsed.chaveAcesso, CHAVE);
+    assert.strictEqual(parsed.cnpjEmitente, "12345678000190");
+    assert.strictEqual(parsed.valorTotal, 10);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed\n`);
   process.exit(failed > 0 ? 1 : 0);
 }

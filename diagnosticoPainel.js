@@ -1,10 +1,15 @@
 // Painel operacional fiscal — HTML inline, zero dependências
 const { calcularStatusGeral, escapeHtml } = require("./diagnosticoDashboard");
+const { formatarDataHoraExibicao } = require("./formatarDataExibicao");
 
 function renderPainelHtml(payload) {
   const statusGeral = calcularStatusGeral(payload);
   const versao = escapeHtml(payload.versao || "?");
-  const ts = escapeHtml(payload.timestamp || new Date().toISOString());
+  const ts = escapeHtml(
+    formatarDataHoraExibicao(payload.timestamp || new Date().toISOString(), {
+      comSegundos: true,
+    }),
+  );
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -266,6 +271,33 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
   function textoOperador(err){
     return sanitizarErroLinha(err) + " — Consulte Diagnóstico ou contate o suporte.";
   }
+  /** Datas SQLite (espaço) = UTC; ISO com Z = absoluto; T sem fuso = local. */
+  function fmtDh(raw){
+    if (raw == null || raw === "" || raw === "-") return "—";
+    var s = String(raw).trim();
+    var br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+    var d = null;
+    if (br) {
+      d = new Date(+br[3], +br[2]-1, +br[1], br[4]!=null?+br[4]:0, br[5]!=null?+br[5]:0, br[6]!=null?+br[6]:0);
+    } else if (/^\d{4}-\d{2}-\d{2}T.+(Z|[+-]\d{2}:?\d{2})$/i.test(s)) {
+      d = new Date(s);
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      var p = s.split("-");
+      d = new Date(+p[0], +p[1]-1, +p[2]);
+    } else {
+      var m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+      if (m) {
+        d = s.indexOf(" ") >= 0
+          ? new Date(Date.UTC(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +m[6]))
+          : new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +m[6]);
+      } else {
+        d = new Date(s);
+      }
+    }
+    if (!d || isNaN(d.getTime())) return s;
+    function p2(n){ return String(n).padStart(2,"0"); }
+    return p2(d.getDate())+"/"+p2(d.getMonth()+1)+"/"+d.getFullYear()+" "+p2(d.getHours())+":"+p2(d.getMinutes());
+  }
   var tokenInput = document.getElementById("agentToken");
   var saved = sessionStorage.getItem(TOKEN_KEY);
   if (saved) tokenInput.value = saved;
@@ -429,7 +461,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     renderAlertasOperacionais(a, m);
     renderCStatTable(a, m);
     var rows = (a.ultimasEmissoes || []).map(function(e){
-      return "<tr><td>"+(e.numeroVenda||"-")+"</td><td>"+chip(e.status)+"</td><td>"+(e.timestamp||"-")+"</td><td style='font-family:monospace;font-size:.72rem'>"+(e.chaveTruncada||"-")+"</td></tr>";
+      return "<tr><td>"+(e.numeroVenda||"-")+"</td><td>"+chip(e.status)+"</td><td>"+fmtDh(e.timestamp)+"</td><td style='font-family:monospace;font-size:.72rem'>"+(e.chaveTruncada||"-")+"</td></tr>";
     }).join("");
     document.getElementById("tblEmissoes").innerHTML = rows || "<tr><td colspan='4'>Nenhuma emissão</td></tr>";
   }
@@ -446,7 +478,7 @@ footer{margin-top:20px;color:var(--muted);font-size:.75rem;text-align:center}
     var itens = st.itens || [];
     document.getElementById("tblFila").innerHTML = itens.map(function(j){
       var err = sanitizarErroLinha(j.erro || "");
-      return "<tr><td>"+j.id+"</td><td>"+j.tipo+"</td><td>"+(j.numero_venda||"-")+"</td><td>"+chip(j.status)+"</td><td>"+(j.tentativas||0)+"</td><td title='"+err.replace(/'/g,"")+"'>"+err+"</td><td>"+(j.criado_em||"-")+"</td></tr>";
+      return "<tr><td>"+j.id+"</td><td>"+j.tipo+"</td><td>"+(j.numero_venda||"-")+"</td><td>"+chip(j.status)+"</td><td>"+(j.tentativas||0)+"</td><td title='"+err.replace(/'/g,"")+"'>"+err+"</td><td>"+fmtDh(j.criado_em)+"</td></tr>";
     }).join("") || "<tr><td colspan='7'>Fila vazia</td></tr>";
   }
 

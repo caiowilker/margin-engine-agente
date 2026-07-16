@@ -1898,28 +1898,63 @@ function isCStatManifestacaoOk(cStat, raw) {
 }
 
 function montarIniManifestacaoCiencia(chave, cnpjDestinatario) {
+  return montarIniManifestacaoEvento(chave, cnpjDestinatario, "210210", null);
+}
+
+function descricaoEventoManifestacao(tpEvento) {
+  switch (String(tpEvento)) {
+    case "210200":
+      return "Confirmacao da Operacao";
+    case "210210":
+      return "Ciencia da Operacao";
+    case "210220":
+      return "Desconhecimento da Operacao";
+    case "210240":
+      return "Operacao nao Realizada";
+    default:
+      return "Manifestacao do Destinatario";
+  }
+}
+
+function montarIniManifestacaoEvento(chave, cnpjDestinatario, tpEvento, xJust) {
   const k = String(chave || "").replace(/\D/g, "");
   const cnpj = String(cnpjDestinatario || "").replace(/\D/g, "");
+  const tp = String(tpEvento || "").trim();
   if (k.length !== 44) {
     throw new Error("Chave NF-e deve ter 44 dígitos para manifestação.");
   }
   if (cnpj.length !== 14) {
     throw new Error("CNPJ do destinatário obrigatório para manifestação (14 dígitos).");
   }
-  return [
+  if (!["210200", "210210", "210220", "210240"].includes(tp)) {
+    throw new Error(`tpEvento inválido para manifestação: ${tp}`);
+  }
+  if (tp === "210240") {
+    const just = String(xJust || "").trim();
+    if (just.length < 15) {
+      throw new Error("Operação Não Realizada (210240) exige justificativa com ao menos 15 caracteres.");
+    }
+  }
+  const lines = [
     "[EVENTO]",
     "idLote=1",
+    "[EVENTO001]",
     "cOrgao=91",
     `tpAmb=${resolverTpAmb()}`,
     `CNPJ=${cnpj}`,
     `chNFe=${k}`,
     `dhEvento=${formatarDhEmi()}`,
-    "tpEvento=210210",
+    `tpEvento=${tp}`,
     "nSeqEvento=1",
     "verEvento=1.00",
-    "descEvento=Ciencia da Operacao",
-    "xJust=Ciencia da operacao registrada pelo destinatario",
-  ].join("\r\n");
+    `descEvento=${descricaoEventoManifestacao(tp)}`,
+  ];
+  if (tp === "210240") {
+    lines.push(`xJust=${String(xJust).trim().slice(0, 255)}`);
+  } else if (tp === "210210") {
+    lines.push("xJust=Ciencia da operacao registrada pelo destinatario");
+  }
+  return lines.join("\r\n");
 }
 
 async function distribuicaoDFePorChave(chave, cnpjDestinatario, ufAutor) {
@@ -1963,15 +1998,22 @@ async function distribuicaoDFePorUltNsu(ultNsu, cnpjDestinatario, uf) {
   );
   const docs = require("./documentosFiscais");
   const xmls = [];
-  const re = /<nfeProc[\s\S]*?<\/nfeProc>/gi;
+  const reProc = /<nfeProc[\s\S]*?<\/nfeProc>/gi;
   let m;
-  while ((m = re.exec(resposta)) !== null) {
+  while ((m = reProc.exec(resposta)) !== null) {
     xmls.push(m[0]);
   }
   if (xmls.length === 0) {
     const unico = docs.extrairXmlDaResposta(resposta);
-    if (unico) xmls.push(unico);
+    if (unico && unico.includes("<NFe")) xmls.push(unico);
   }
+
+  const resumos = [];
+  const reRes = /<resNFe[\s\S]*?<\/resNFe>/gi;
+  while ((m = reRes.exec(resposta)) !== null) {
+    resumos.push(m[0]);
+  }
+
   const p = parseResposta(resposta);
   const ultNsuFinal =
     resposta.match(/ultNSU\s*[=:]\s*(\d+)/i)?.[1] ||
@@ -1988,20 +2030,26 @@ async function distribuicaoDFePorUltNsu(ultNsu, cnpjDestinatario, uf) {
     ultNsuFinal,
     maxNsu,
     xmls,
+    resumos,
     raw: resposta,
   };
 }
 
 async function manifestarCienciaOperacao(chave, cnpjDestinatario) {
+  return manifestarEventoDestinatario(chave, cnpjDestinatario, "210210", null);
+}
+
+async function manifestarEventoDestinatario(chave, cnpjDestinatario, tpEvento, xJust) {
   const cnpj = String(cnpjDestinatario || "").replace(/\D/g, "");
   if (cnpj.length !== 14) {
     throw new Error("CNPJ do destinatário obrigatório para manifestação (14 dígitos).");
   }
   const chaveNorm = String(chave || "").replace(/\D/g, "");
-  const documentIni = montarIniManifestacaoCiencia(chaveNorm, cnpj);
+  const tp = String(tpEvento || "210210").trim();
+  const documentIni = montarIniManifestacaoEvento(chaveNorm, cnpj, tp, xJust);
   const iniPath = path.join(
     PATHS.ini,
-    `manifesto-ciencia-${Date.now()}-${chaveNorm.slice(-8)}.ini`,
+    `manifesto-${tp}-${Date.now()}-${chaveNorm.slice(-8)}.ini`,
   );
   fs.writeFileSync(iniPath, documentIni, "utf8");
   const { p, resposta } = await criarEnviarIniModelo(iniPath, 55, {
@@ -2020,7 +2068,7 @@ async function manifestarCienciaOperacao(chave, cnpjDestinatario) {
     chave: p.chave || chaveNorm,
     xMotivo: p.xMotivo,
     raw: resposta,
-    tipoEvento: "210210",
+    tipoEvento: tp,
     modeloDocumento: "55",
   };
 }
@@ -2148,7 +2196,9 @@ module.exports = {
   distribuicaoDFePorChave,
   distribuicaoDFePorUltNsu,
   manifestarCienciaOperacao,
+  manifestarEventoDestinatario,
   montarIniManifestacaoCiencia,
+  montarIniManifestacaoEvento,
   resolverUfIbgeDestinatario,
   isCStatManifestacaoOk,
   emitirNfce,
