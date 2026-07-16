@@ -987,7 +987,7 @@ function iniciarServidor() {
     );
   });
 
-  const { criarApiProxy } = require("./apiProxy");
+  const { criarApiProxy, anexarProxyWebSocket } = require("./apiProxy");
   app.use("/api-proxy", privateNetworkHeaders, exigirLocalhost, criarApiProxy({ lerConfigSync }));
 
   // ── Diagnóstico HTML (antes do SPA — evita 404 do frontend-dist) ───────────
@@ -3056,6 +3056,12 @@ function iniciarServidor() {
           AGENT_PUBLIC_BASE +
           " para ativar.",
       );
+  });
+
+  // Túnel WS /api-proxy/ws/* → backend (print-station, kitchen, etc.)
+  anexarProxyWebSocket(httpServer, {
+    lerConfigSync,
+    isAllowed: (req) => isLocalhost(req),
   });
 }
 

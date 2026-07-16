@@ -1,11 +1,15 @@
 /**
  * Proxy same-origin /api-proxy -> backend Margin Engine.
  * Permite login e API no frontend servido em localhost:9100 sem CORS.
+ * Inclui túnel WebSocket para /api-proxy/ws/* (ex.: print-station).
  */
 const fs = require("fs");
+const http = require("http");
+const https = require("https");
 const path = require("path");
 
 const FALLBACK_DEV_BACKEND = "http://localhost:8080";
+const API_PROXY_PREFIX = "/api-proxy";
 
 function lerBackendPadraoDoFrontend() {
   const jsonPath = path.join(__dirname, "frontend-dist", "api-backend.json");
@@ -30,15 +34,19 @@ function resolverBackendUrlPadrao() {
   ).replace(/\/$/, "");
 }
 
-function criarApiProxy({ lerConfigSync }) {
-  function resolverBackendUrl() {
+function criarResolverBackendUrl(lerConfigSync) {
+  return function resolverBackendUrl() {
     const cfg = lerConfigSync();
     const url =
       cfg.backendUrl ||
       process.env.BACKEND_URL ||
       resolverBackendUrlPadrao();
     return String(url).replace(/\/$/, "");
-  }
+  };
+}
+
+function criarApiProxy({ lerConfigSync }) {
+  const resolverBackendUrl = criarResolverBackendUrl(lerConfigSync);
 
   const encaminharHeaders = [
     "authorization",
@@ -103,8 +111,125 @@ function criarApiProxy({ lerConfigSync }) {
   };
 }
 
+/**
+ * Encaminha upgrade WebSocket de /api-proxy/ws/* para o backend.
+ * O middleware HTTP (fetch) não consegue fazer handshake WS — sem isto o
+ * frontend em :9100 falha em loop ao abrir ws://localhost:9100/api-proxy/ws/*.
+ *
+ * @param {import('http').Server} httpServer
+ * @param {{ lerConfigSync: () => object, isAllowed?: (req: import('http').IncomingMessage) => boolean }} opts
+ */
+function anexarProxyWebSocket(httpServer, { lerConfigSync, isAllowed }) {
+  const resolverBackendUrl = criarResolverBackendUrl(lerConfigSync);
+
+  httpServer.on("upgrade", (req, socket, head) => {
+    const rawUrl = String(req.url || "");
+    if (!rawUrl.startsWith(`${API_PROXY_PREFIX}/ws`)) {
+      return;
+    }
+
+    if (typeof isAllowed === "function" && !isAllowed(req)) {
+      socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+
+    let backendBase;
+    try {
+      backendBase = resolverBackendUrl();
+    } catch (err) {
+      console.warn("[Agente] api-proxy ws: backend URL:", err.message);
+      socket.destroy();
+      return;
+    }
+
+    const suffix = rawUrl.slice(API_PROXY_PREFIX.length) || "/";
+    let target;
+    try {
+      target = new URL(suffix, `${backendBase}/`);
+    } catch (err) {
+      console.warn("[Agente] api-proxy ws: URL inválida:", err.message);
+      socket.destroy();
+      return;
+    }
+
+    const isHttps = target.protocol === "https:";
+    const lib = isHttps ? https : http;
+    const headers = { ...req.headers, host: target.host };
+
+    const proxyReq = lib.request({
+      protocol: target.protocol,
+      hostname: target.hostname,
+      port: target.port || (isHttps ? 443 : 80),
+      path: `${target.pathname}${target.search}`,
+      method: "GET",
+      headers,
+    });
+
+    proxyReq.on("upgrade", (proxyRes, proxySocket, proxyHead) => {
+      const statusLine = `HTTP/1.1 ${proxyRes.statusCode || 101} ${proxyRes.statusMessage || "Switching Protocols"}\r\n`;
+      let responseHeaders = "";
+      for (const [key, value] of Object.entries(proxyRes.headers)) {
+        if (value == null) continue;
+        if (Array.isArray(value)) {
+          for (const item of value) {
+            responseHeaders += `${key}: ${item}\r\n`;
+          }
+        } else {
+          responseHeaders += `${key}: ${value}\r\n`;
+        }
+      }
+      socket.write(`${statusLine}${responseHeaders}\r\n`);
+      if (proxyHead && proxyHead.length) socket.write(proxyHead);
+
+      proxySocket.pipe(socket);
+      socket.pipe(proxySocket);
+
+      const destroyBoth = () => {
+        proxySocket.destroy();
+        socket.destroy();
+      };
+      proxySocket.on("error", destroyBoth);
+      socket.on("error", destroyBoth);
+    });
+
+    proxyReq.on("error", (err) => {
+      console.warn("[Agente] api-proxy ws:", err.message);
+      if (!socket.destroyed) {
+        socket.write("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n");
+        socket.destroy();
+      }
+    });
+
+    proxyReq.on("response", (res) => {
+      // Backend recusou o upgrade (ex.: 401 token inválido).
+      let responseHeaders = "";
+      for (const [key, value] of Object.entries(res.headers)) {
+        if (value == null) continue;
+        if (Array.isArray(value)) {
+          for (const item of value) {
+            responseHeaders += `${key}: ${item}\r\n`;
+          }
+        } else {
+          responseHeaders += `${key}: ${value}\r\n`;
+        }
+      }
+      socket.write(
+        `HTTP/1.1 ${res.statusCode} ${res.statusMessage || ""}\r\n${responseHeaders}\r\n`,
+      );
+      res.pipe(socket);
+    });
+
+    if (head && head.length) {
+      proxyReq.write(head);
+    }
+    proxyReq.end();
+  });
+}
+
 module.exports = {
   criarApiProxy,
+  anexarProxyWebSocket,
   resolverBackendUrlPadrao,
   lerBackendPadraoDoFrontend,
 };
