@@ -475,6 +475,32 @@ async function enviarBuffer(buffer) {
 
   const add = (metodo, fn) => tentativas.push({ metodo, fn });
 
+  let stationOverride = null;
+  try {
+    stationOverride = require("../printerStationRoutes").getPortaOverride();
+  } catch (_) {
+    /* ignore */
+  }
+
+  if (stationOverride && /^TCP:/i.test(stationOverride)) {
+    const { parsePortaTcp } = require("../printerModelMap");
+    const tcp = parsePortaTcp(stationOverride);
+    if (tcp) {
+      add("network-station", async () => {
+        await enviarRede(tcp.host, tcp.port, buffer);
+        ultimaImpressoraUsada = { metodo: "network", host: tcp.host, porta: tcp.port };
+      });
+    }
+  } else if (stationOverride && /^RAW:/i.test(stationOverride) && process.platform === "win32") {
+    const nome = stationOverride.replace(/^RAW:/i, "").trim();
+    if (nome) {
+      add("windows-station", async () => {
+        enviarRawWindows(nome, buffer);
+        ultimaImpressoraUsada = { metodo: "windows", nome };
+      });
+    }
+  }
+
   if (PRINTER_TYPE === "windows" || PRINTER_TYPE === "auto") {
     add("windows", async () => {
       const win =
@@ -536,7 +562,7 @@ async function enviarBuffer(buffer) {
     );
   }
 
-  const ordem =
+  const ordemBase =
     PRINTER_TYPE === "windows"
       ? ["windows"]
       : PRINTER_TYPE === "network"
@@ -546,6 +572,8 @@ async function enviarBuffer(buffer) {
           : IS_WIN
             ? ["windows", "network", "usb"]
             : ["usb", "network", "windows"];
+  // Rotas por estação (mesmo PC) têm prioridade absoluta sobre a porta padrão
+  const ordem = ["network-station", "windows-station", ...ordemBase];
 
   for (const metodo of ordem) {
     const t = tentativas.find((x) => x.metodo === metodo);
@@ -555,6 +583,13 @@ async function enviarBuffer(buffer) {
       return { ok: true, metodo, ultima: ultimaImpressoraUsada };
     } catch (err) {
       erros.push(`${metodo}: ${err.message}`);
+      // Se a rota de estação falhou, não cai na impressora padrão (evita comanda no lugar errado)
+      if (metodo === "network-station" || metodo === "windows-station") {
+        throw new Error(
+          `Impressora da estação indisponível (${metodo}).\n` +
+            erros.map((e) => `  - ${e}`).join("\n"),
+        );
+      }
     }
   }
 
@@ -1311,14 +1346,19 @@ async function renderPedido(printer, payload) {
     for (const item of p.items) {
       const qty = fmtQty(item.quantity, item.unit);
       const nome = tx(item.name || item.code || "Item");
-      printer.text(qty + " x " + nome);
+      printer.style("b").text(qty + " x " + nome).style("normal");
+      if (item.notes) {
+        printer.text("  * " + tx(item.notes));
+      }
       if (item.code && item.name) {
         printer.text("  Cod: " + tx(item.code));
       }
     }
   }
 
-  const totalFmt = fmtTotal(p.total);
+  const showTotal =
+    p.printType === "cliente" || p.printType === "entrega" || p.printType === "CLIENTE" || p.printType === "ENTREGA";
+  const totalFmt = showTotal ? fmtTotal(p.total) : null;
   if (totalFmt) {
     printer.align("ct").text(linha()).align("lt").style("b").text("Total : " + totalFmt).style("normal");
   }

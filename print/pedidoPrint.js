@@ -24,11 +24,13 @@ const EVENT_TYPE_LABELS = Object.freeze({
 
 function mapItem(raw) {
   const item = raw || {};
+  const notesRaw = item.notes ?? item.observacao ?? item.obs ?? null;
   return {
     code: String(item.code ?? item.codigo ?? ""),
     name: String(item.name ?? item.nome ?? ""),
     quantity: Number(item.quantity ?? item.quantidade ?? 0),
     unit: item.unit != null ? String(item.unit) : item.unidade != null ? String(item.unidade) : null,
+    notes: notesRaw != null && String(notesRaw).trim() ? String(notesRaw).trim() : null,
   };
 }
 

@@ -67,14 +67,19 @@ function renderPedidoTags(rawPayload = {}) {
     for (const item of payload.items) {
       const qty = fmtQty(item.quantity, item.unit);
       const nome = tx(item.name || item.code || "Item");
-      lines.push(`${qty} x ${nome}`);
+      lines.push(`<n>${qty} x ${nome}</n>`);
+      if (item.notes) {
+        lines.push(`  * ${tx(item.notes)}`);
+      }
       if (item.code && item.name) {
         lines.push(`  Cod: ${tx(item.code)}`);
       }
     }
   }
 
-  const totalFmt = fmtTotal(payload.total);
+  const showTotal =
+    payload.printType === "cliente" || payload.printType === "entrega";
+  const totalFmt = showTotal ? fmtTotal(payload.total) : null;
   if (totalFmt) {
     lines.push(sepDash(), `<n>Total : ${totalFmt}</n>`);
   }

@@ -206,7 +206,12 @@ module.exports = {
     imprimirViaTags(caixaTags.renderFechamentoTags, p, native.imprimirFechamento),
   imprimirMovimentoCaixa: (p) =>
     imprimirViaTags(caixaTags.renderMovimentoCaixaTags, p, native.imprimirMovimentoCaixa),
-  imprimirPedido: (p) =>
-    imprimirViaTags(pedidoTags.renderPedidoTags, p, native.imprimirPedido),
+  imprimirPedido: (p) => {
+    const routes = require("../printerStationRoutes");
+    const porta = routes.resolvePortaForPrintType(p?.printType ?? p?.print_type);
+    return routes.withPortaOverride(porta, () =>
+      imprimirViaTags(pedidoTags.renderPedidoTags, p, native.imprimirPedido),
+    );
+  },
   abrirGaveta,
 };

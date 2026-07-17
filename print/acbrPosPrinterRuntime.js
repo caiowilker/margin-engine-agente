@@ -280,6 +280,12 @@ function buildRuntimeValues() {
     process.env.PRINTER_PORTA ||
     process.env.PRINTER_PATH ||
     "";
+  try {
+    const override = require("./printerStationRoutes").getPortaOverride();
+    if (override) porta = override;
+  } catch (_) {
+    /* módulo opcional */
+  }
   const { portaAcbrValida, normalizarPortaAcbr } = require("./printerModelMap");
   if (!portaAcbrValida(porta) && process.env.PRINTER_NAME) {
     porta = normalizarPortaAcbr(`RAW:${process.env.PRINTER_NAME}`, {

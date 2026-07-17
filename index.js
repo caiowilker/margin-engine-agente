@@ -1589,6 +1589,27 @@ function iniciarServidor() {
     }
   });
 
+  /** Rotas printType → porta (2 impressoras no mesmo PC: cozinha + bar). */
+  app.get("/config/impressora/station-routes", privateNetworkHeaders, (req, res) => {
+    try {
+      const routes = require("./print/printerStationRoutes");
+      res.json(routes.ler());
+    } catch (e) {
+      res.status(500).json({ erro: e.message || "Erro ao ler rotas de estação" });
+    }
+  });
+
+  app.put("/config/impressora/station-routes", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    try {
+      const routes = require("./print/printerStationRoutes");
+      const saved = routes.salvar(req.body || {});
+      impressora.resetPrintProvider?.();
+      res.json({ ok: true, routes: saved });
+    } catch (e) {
+      res.status(400).json({ erro: e.message || "Erro ao salvar rotas de estação" });
+    }
+  });
+
   // Sincroniza X-Agent-Token no browser (localhost ou código efêmero pós-ativação).
   app.get("/auth/local-token", privateNetworkHeaders, exigirLocalhost, async (req, res) => {
     const authSync = require("./authSync");

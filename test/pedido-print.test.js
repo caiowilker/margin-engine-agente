@@ -72,5 +72,26 @@ test("labelPrintType cobre tipos do Order Engine", () => {
   assert.strictEqual(labelPrintType("producao"), "PRODUCAO");
 });
 
+test("normalizarPedidoPayload preserva notes do item", () => {
+  const p = normalizarPedidoPayload({
+    orderNumber: "ORD-3",
+    printType: "cozinha",
+    items: [{ name: "Burger", quantity: 1, notes: "sem cebola" }],
+  });
+  assert.strictEqual(p.items[0].notes, "sem cebola");
+});
+
+test("renderPedidoTags imprime observação do item e omite total na cozinha", () => {
+  const tags = renderPedidoTags({
+    printType: "cozinha",
+    eventType: "ORDER_CREATED",
+    orderNumber: "ORD-4",
+    total: 99.9,
+    items: [{ name: "Burger", quantity: 1, notes: "sem cebola" }],
+  });
+  assert.ok(tags.includes("sem cebola"));
+  assert.ok(!tags.includes("Total :"));
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

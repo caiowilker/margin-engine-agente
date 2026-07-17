@@ -397,6 +397,21 @@ Body: PayloadEmissaoNfse + { numeroRps, correlationId, modeloDocumento: "99" }
 
 **Status de compatibilidade:** ✓ (Sprint Order Engine — estação de impressão)
 
+Se existirem rotas em `GET/PUT /config/impressora/station-routes`, o job é impresso na porta
+mapeada para `printType` (mesmo PC com cozinha + bar). Sem rota → porta padrão do PosPrinter.
+
+---
+
+### GET /config/impressora/station-routes
+
+**Response:** `{ "byPrintType": { "cozinha": "", "bar": "TCP:…", "producao": "", "cliente": "", "entrega": "" } }`
+
+Porta vazia = usa a impressora padrão. Formatos: `RAW:Nome Windows`, `TCP:ip:9100`, `COMn`.
+
+### PUT /config/impressora/station-routes
+
+**Request:** mesmo formato de `byPrintType`. Persiste em `data/printer-stations.json`.
+
 ---
 
 ### POST /venda
