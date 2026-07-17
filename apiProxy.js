@@ -86,7 +86,15 @@ function criarApiProxy({ lerConfigSync }) {
         }
       }
 
-      const upstream = await fetch(target, init);
+      const timeoutMs = Number(process.env.API_PROXY_TIMEOUT_MS || 15_000);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      let upstream;
+      try {
+        upstream = await fetch(target, { ...init, signal: controller.signal });
+      } finally {
+        clearTimeout(timer);
+      }
       res.status(upstream.status);
       const omitir = new Set([
         "transfer-encoding",
