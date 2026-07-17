@@ -1,7 +1,14 @@
 # PROGRESS — Agente Local
 
-**Última atualização:** 2026-07-11  
+**Última atualização:** 2026-07-17  
 **Versão:** `1.0.0` — certificada com a plataforma
+
+## Changelog (2026-07-17)
+
+### Impressão — contrato HTTP e status honest
+
+- Helper `responderResultadoImpressao`: contrato único **200** impresso / **202** fila em cupom, abertura, fechamento, movimento, pedido, gaveta, teste, segunda-via.
+- `GET /status`: durante fiscal ocupado, **não** chama `impressora.testar()` (paridade com `/status-basico`); evita falso `impressoraConectada=false` / timeout → offline no PDV.
 
 > **Certificação:** [`../../margin-engine/.ai/certification/CERTIFICACAO_1.0.md`](../../margin-engine/.ai/certification/CERTIFICACAO_1.0.md)  
 > **Estado oficial:** [`../../margin-engine/.ai/PROJECT_STATUS.md`](../../margin-engine/.ai/PROJECT_STATUS.md)

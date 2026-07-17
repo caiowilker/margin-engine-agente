@@ -1447,10 +1447,16 @@ function iniciarServidor() {
     exigirAgentToken,
     async (req, res) => {
       config = await lerConfig();
-      const [impressoraOk, fiscalProbe] = await Promise.all([
-        impressora.testar().catch(() => false),
-        probeStatusFiscal(),
-      ]);
+      // Durante emissão/PDF fiscal, não bloqueia em testar() da impressora —
+      // evita timeout → falso offline / impressoraConectada=false no PDV.
+      const fiscalOcupado =
+        fiscalDriver.isAcbrBusy() || filaFiscal.estaProcessando();
+      const [impressoraOk, fiscalProbe] = fiscalOcupado
+        ? [null, await probeStatusFiscal()]
+        : await Promise.all([
+            impressora.testar().catch(() => false),
+            probeStatusFiscal(),
+          ]);
       const { pendentes, falhas } = await fila.contadores();
       const contingencia = lerContingencia();
 
@@ -1464,9 +1470,15 @@ function iniciarServidor() {
         epecPendentes = row ? row.n : 0;
       }
 
+      // null = probe pulado (fiscal ocupado): não mentir "desconectada".
+      const impressoraConectada =
+        impressoraOk === null
+          ? true
+          : !!impressoraOk;
+
       res.json({
         online: true,
-        impressoraConectada: impressoraOk,
+        impressoraConectada: !!impressoraConectada,
         acbrConectado: fiscalDriver.EMISSAO_FISCAL ? fiscalProbe.acbrOk : false,
         acbrOcupado: fiscalProbe.acbrOcupado,
         fiscalProcessando: fiscalProbe.fiscalProcessando,
@@ -2625,19 +2637,34 @@ function iniciarServidor() {
     res.status(500).json(formatarErroHttpImpressao(err));
   }
 
+  /** Contrato único: 200 impresso | 202 enfileirado (worker retenta). */
+  function responderResultadoImpressao(res, resultado, extras = {}) {
+    if (resultado?.queued) {
+      return res.status(202).json({
+        ok: false,
+        fila: true,
+        mensagem: resultado.message,
+        jobId: resultado.jobId || null,
+        ...(resultado.job ? { job: resultado.job.id ? { id: resultado.job.id } : resultado.job } : {}),
+        ...extras,
+      });
+    }
+    return res.json({
+      ok: true,
+      jobId: resultado?.jobId || null,
+      ...(resultado?.job ? { job: resultado.job.id ? { id: resultado.job.id } : resultado.job } : {}),
+      ...extras,
+      ...(resultado && typeof resultado === "object" ? (() => {
+        const { queued, message, jobId, job, ok, ...rest } = resultado;
+        return rest;
+      })() : {}),
+    });
+  }
+
   async function imprimirCupomHandler(req, res) {
     try {
       const resultado = await impressora.imprimirCupom(req.body);
-      if (resultado?.queued) {
-        return res.status(202).json({
-          ok: false,
-          fila: true,
-          mensagem: resultado.message,
-          jobId: resultado.jobId,
-          job: resultado.job,
-        });
-      }
-      res.json({ ok: true, jobId: resultado.jobId, ...resultado });
+      responderResultadoImpressao(res, resultado);
     } catch (err) {
       responderErroImpressao(res, err);
     }
@@ -2648,16 +2675,7 @@ function iniciarServidor() {
 
   app.post("/impressora/abertura", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
-      const resultado = await impressora.imprimirAbertura(req.body);
-      if (resultado?.queued) {
-        return res.status(202).json({
-          ok: false,
-          fila: true,
-          mensagem: resultado.message,
-          jobId: resultado.jobId,
-        });
-      }
-      res.json({ ok: true, jobId: resultado?.jobId || null });
+      responderResultadoImpressao(res, await impressora.imprimirAbertura(req.body));
     } catch (err) {
       responderErroImpressao(res, err);
     }
@@ -2665,8 +2683,7 @@ function iniciarServidor() {
 
   app.post("/impressora/fechamento", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
-      await impressora.imprimirFechamento(req.body);
-      res.json({ ok: true });
+      responderResultadoImpressao(res, await impressora.imprimirFechamento(req.body));
     } catch (err) {
       responderErroImpressao(res, err);
     }
@@ -2678,8 +2695,7 @@ function iniciarServidor() {
     exigirAgentToken,
     async (req, res) => {
       try {
-        await impressora.imprimirMovimentoCaixa(req.body);
-        res.json({ ok: true });
+        responderResultadoImpressao(res, await impressora.imprimirMovimentoCaixa(req.body));
       } catch (err) {
         responderErroImpressao(res, err);
       }
@@ -2688,21 +2704,7 @@ function iniciarServidor() {
 
   app.post("/impressora/pedido", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
-      const resultado = await impressora.imprimirPedido(req.body);
-      if (resultado?.queued) {
-        return res.status(202).json({
-          ok: false,
-          fila: true,
-          mensagem: resultado.message,
-          jobId: resultado.jobId,
-          job: resultado.job ? { id: resultado.job.id } : undefined,
-        });
-      }
-      res.json({
-        ok: true,
-        jobId: resultado.jobId,
-        job: resultado.job ? { id: resultado.job.id } : undefined,
-      });
+      responderResultadoImpressao(res, await impressora.imprimirPedido(req.body));
     } catch (err) {
       responderErroImpressao(res, err);
     }
@@ -2710,8 +2712,7 @@ function iniciarServidor() {
 
   app.post("/impressora/gaveta", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
-      await impressora.abrirGaveta();
-      res.json({ ok: true });
+      responderResultadoImpressao(res, await impressora.abrirGaveta());
     } catch (err) {
       responderErroImpressao(res, err);
     }
@@ -2755,8 +2756,7 @@ function iniciarServidor() {
 
   app.post("/impressora/teste", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
-      const resultado = await impressora.imprimirTeste();
-      res.json({ ok: true, ...resultado });
+      responderResultadoImpressao(res, await impressora.imprimirTeste());
     } catch (err) {
       responderErroImpressao(res, err);
     }
@@ -2764,9 +2764,9 @@ function iniciarServidor() {
 
   app.post("/impressora/segunda-via", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
-      const body = req.body || {};
-      const resultado = await impressora.imprimirSegundaVia(body);
-      res.json({ ok: true, segundaVia: true, ...resultado });
+      responderResultadoImpressao(res, await impressora.imprimirSegundaVia(req.body || {}), {
+        segundaVia: true,
+      });
     } catch (err) {
       responderErroImpressao(res, err);
     }
