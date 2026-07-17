@@ -485,7 +485,7 @@ async function tentarBackend(payload) {
   }
 }
 
-async function sincronizar() {
+async function sincronizar(opts = {}) {
   if (syncEmAndamento) {
     return { sincronizadas: 0, falhas: 0, emAndamento: true };
   }
@@ -498,16 +498,18 @@ async function sincronizar() {
 
   syncEmAndamento = true;
   try {
-    return await sincronizarInterno(url, token);
+    return await sincronizarInterno(url, token, opts);
   } finally {
     syncEmAndamento = false;
   }
 }
 
-async function sincronizarInterno(url, token) {
+async function sincronizarInterno(url, token, opts = {}) {
   const fetch = require("node-fetch");
+  const adiarVenda =
+    typeof opts.adiarVenda === "function" ? opts.adiarVenda : () => false;
 
-  const pendentes = db
+  let pendentes = db
     .prepare(
       `
     SELECT id, numero_venda, payload, tentativas
@@ -519,7 +521,23 @@ async function sincronizarInterno(url, token) {
     )
     .all();
 
-  if (pendentes.length === 0) return { sincronizadas: 0, falhas: 0 };
+  const adiadas = [];
+  pendentes = pendentes.filter((row) => {
+    if (adiarVenda(String(row.numero_venda))) {
+      adiadas.push(String(row.numero_venda));
+      return false;
+    }
+    return true;
+  });
+  if (adiadas.length > 0) {
+    console.log(
+      `[Fila] Adiando ${adiadas.length} venda(s) ORDER-* — OPEN de mesa ainda pendente`,
+    );
+  }
+
+  if (pendentes.length === 0) {
+    return { sincronizadas: 0, falhas: 0, adiadas: adiadas.length };
+  }
 
   // Monta mapa numero_venda → row para lookup eficiente na resposta
   const mapaNumero = {};

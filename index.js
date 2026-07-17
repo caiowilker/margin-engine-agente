@@ -57,6 +57,7 @@ const crypto = require("crypto");
 const impressora = require("./impressora");
 const fiscalDriver = require("./fiscalDriver");
 const fila = require("./fila");
+const mesaFila = require("./mesaFila");
 const configSync = require("./configSync");
 const credenciais = require("./credenciais");
 const marginPaths = require("./marginPaths");
@@ -330,6 +331,7 @@ async function boot() {
   if (config.backendToken) process.env.BACKEND_TOKEN = config.backendToken;
   if (config.backendUrl && config.backendToken) {
     fila.atualizarConfig(config.backendUrl, config.backendToken);
+    mesaFila.atualizarConfig(config.backendUrl, config.backendToken);
   }
 
   getDirectoryManager().ensureAll();
@@ -1684,6 +1686,7 @@ function iniciarServidor() {
       sincronizarContextoLog(novoConfig);
 
       fila.atualizarConfig(backendUrl, dados.token);
+      mesaFila.atualizarConfig(backendUrl, dados.token);
       void configSync.sincronizar(lerConfig).catch(() => {});
       const authSync = require("./authSync");
       const syncCode = authSync.issueSyncCode(agentToken);
@@ -2959,14 +2962,72 @@ function iniciarServidor() {
     return res.json(row);
   });
 
+  // ── Mesas offline ────────────────────────────────────────────────────────────
+  app.get("/mesa/snapshot", exigirAgentToken, (req, res) => {
+    res.json({ mesas: mesaFila.mesclarSnapshotComLocal() });
+  });
+
+  app.put("/mesa/snapshot", exigirAgentToken, (req, res) => {
+    const mesas = Array.isArray(req.body?.mesas) ? req.body.mesas : req.body;
+    res.json(mesaFila.salvarSnapshot(mesas));
+  });
+
+  app.get("/mesa/local", exigirAgentToken, (req, res) => {
+    res.json({ locais: mesaFila.listarLocal() });
+  });
+
+  app.put("/mesa/local/:mesaId", exigirAgentToken, (req, res) => {
+    try {
+      const body = { ...(req.body || {}), mesa_id: req.params.mesaId };
+      res.json(mesaFila.upsertLocal(body));
+    } catch (err) {
+      res.status(400).json({ erro: err.message });
+    }
+  });
+
+  app.delete("/mesa/local/:mesaId", exigirAgentToken, (req, res) => {
+    res.json(mesaFila.removerLocal(req.params.mesaId));
+  });
+
+  app.post("/mesa/ops/cancel", exigirAgentToken, (req, res) => {
+    const mesaId = req.body?.mesa_id || req.body?.mesaId;
+    if (!mesaId) return res.status(400).json({ erro: "mesa_id obrigatorio" });
+    const keep = req.body?.keep;
+    res.json(mesaFila.cancelarOpsMesa(mesaId, { keep }));
+  });
+
+  app.post("/mesa/ops", exigirAgentToken, (req, res) => {
+    try {
+      res.json(mesaFila.enfileirarOp(req.body || {}));
+    } catch (err) {
+      res.status(400).json({ erro: err.message });
+    }
+  });
+
+  app.get("/mesa/ops", exigirAgentToken, (req, res) => {
+    res.json({ ops: mesaFila.listarOps(), ...mesaFila.contadores() });
+  });
+
+  app.post("/mesa/sincronizar", exigirAgentToken, async (req, res) => {
+    res.json(await mesaFila.sincronizar());
+  });
+
   app.post("/fila/sincronizar", exigirAgentToken, async (req, res) => {
-    res.json(await fila.sincronizar());
+    const mesa = await mesaFila.sincronizar().catch((err) => ({
+      ok: false,
+      erro: err.message,
+    }));
+    const vendas = await fila.sincronizar({
+      adiarVenda: (numero) => mesaFila.deveAdiarVendaOrder(numero),
+    });
+    res.json({ mesa, ...vendas, vendas });
   });
 
   app.post("/fila/reprocessar", exigirAgentToken, async (req, res) => {
     auditLog.registrar("FILA_REPROCESSAR", { numeros: req.body?.numeros }, req);
     const numeros = Array.isArray(req.body?.numeros) ? req.body.numeros : [];
     const resultado = fila.resetarFalhas(numeros.length > 0 ? numeros : null);
+    mesaFila.sincronizar().catch(() => {});
     fila.sincronizar().catch(() => {});
     res.json({ ok: true, ...resultado });
   });
@@ -2992,7 +3053,7 @@ function iniciarServidor() {
   if (fs.existsSync(FRONTEND_INDEX)) {
     app.use(express.static(FRONTEND_DIST));
     app.get(
-      /^(?!\/api|\/api-proxy|\/status|\/health|\/venda|\/fila|\/impressora|\/acbr|\/ativar|\/auth|\/config|\/contingencia|\/diagnostico|\/updater|\/fiscal).*$/,
+      /^(?!\/api|\/api-proxy|\/status|\/health|\/venda|\/fila|\/mesa|\/impressora|\/acbr|\/ativar|\/auth|\/config|\/contingencia|\/diagnostico|\/updater|\/fiscal).*$/,
       (req, res) => res.sendFile(FRONTEND_INDEX),
     );
   }
@@ -3009,6 +3070,7 @@ function iniciarServidor() {
 
   // ── Inicialização ─────────────────────────────────────────────────────────────
   fila.inicializar();
+  mesaFila.inicializar();
   inicializarDb();
   try {
     const fiscalLocalConfig = require("./fiscalLocalConfig");
