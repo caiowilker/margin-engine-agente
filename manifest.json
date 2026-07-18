@@ -1,6 +1,6 @@
 {
   "versao": "1.0.1",
-  "geradoEm": "2026-07-18T19:02:39.849Z",
+  "geradoEm": "2026-07-18T19:10:02.951Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -44,7 +44,7 @@
     },
     {
       "arquivo": "configSync.js",
-      "sha256": "166f06077352ec342077abe0ac35f759d43488d9ac4cf575babe3565b75b7378"
+      "sha256": "da09d86435a11362a5cc8530a2c99811b17225e9a9442b7619cf1475c9926ee7"
     },
     {
       "arquivo": "credenciais.js",
@@ -4652,7 +4652,7 @@
     },
     {
       "arquivo": "index.js",
-      "sha256": "f1852334b2995747d9c47fcba5923bfd99c174f2af6ef3b4ff1bd6a121ffb2c1"
+      "sha256": "ff07f33a99984fdd1b7dc883f3bf74a530b97490639eeb1261c479f5e677154b"
     },
     {
       "arquivo": "install-service.js",
@@ -4668,7 +4668,7 @@
     },
     {
       "arquivo": "manifestUpdater.js",
-      "sha256": "7e82d4ad528ec64cfe2945527850c8622850db0c8feadc65e2bca89d11fdc381"
+      "sha256": "3caae460907080bbf14f3d8dc1a7e6e2b1c5c7684302bb120816b2486c39994c"
     },
     {
       "arquivo": "marginPaths.js",

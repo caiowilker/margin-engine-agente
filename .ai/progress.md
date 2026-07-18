@@ -5,6 +5,12 @@
 
 ## Changelog (2026-07-18)
 
+### Update remoto — hardening pós-auditoria
+
+- Agente: `atualizando` até o exit; ACK cloud só pós-restart; manifest obrigatório; versão lida do disco; rollback limpa pending.
+- Backend: ACK sem body = falha; erro sempre gravado em `ok=false`; `@Version` + `@DynamicUpdate` anti lost-update; revogar limpa pedido.
+- Front: force via `codigo`/`podeForcar`; feedback no cancelar.
+
 ### Update remoto — fase 5 (fechamento / hardening)
 
 - **ACK pós-restart:** `updaterCloudPending.js` persiste pedido de ACK após apply cloud; flush no poll de config (idempotente).

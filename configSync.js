@@ -326,13 +326,8 @@ async function processarPedidoUpdateCloud(remoto, backendUrl, backendToken) {
   // Sempre tenta confirmar ACK pendente de apply anterior (mesmo sem pedido novo)
   try {
     const updaterCloudPending = require("./updaterCloudPending");
-    const versaoAtual = () => {
-      try {
-        return require("./package.json").version;
-      } catch {
-        return "";
-      }
-    };
+    const manifestUpdater = require("./manifestUpdater");
+    const versaoAtual = () => manifestUpdater.lerVersaoInstalada() || "";
     await updaterCloudPending.flushPendingAck({
       enviarAck: (payload) => enviarUpdateAck(backendUrl, backendToken, payload),
       lerVersaoAtual: versaoAtual,

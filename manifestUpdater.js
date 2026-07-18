@@ -281,6 +281,7 @@ module.exports = {
   rollbackDisponivel,
   ultimoBackupInfo,
   aplicarPacote,
+  lerVersaoInstalada,
   manifestPath,
   MANIFEST_PATH: manifestPath(),
   __setAgentRootForTests,

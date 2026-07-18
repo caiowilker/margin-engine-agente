@@ -765,37 +765,26 @@ async function aplicarAtualizacao(urlDownload, novaVersao, shaEsperado, opts = {
       );
     }
 
-    const novoIndex = path.join(tmpDir, "index.js");
     const manifestNoPacote = path.join(tmpDir, "manifest.json");
-    if (!fs.existsSync(manifestNoPacote) && !fs.existsSync(novoIndex)) {
-      throw new Error("Pacote inválido: manifest.json ou index.js ausente");
+    if (!fs.existsSync(manifestNoPacote)) {
+      throw new Error(
+        "Pacote inválido: manifest.json obrigatório (path legado sem SHA/anti-downgrade removido).",
+      );
     }
 
     const backupDir = backupPreUpdateDir();
     if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
 
-    if (fs.existsSync(manifestNoPacote)) {
-      await manifestUpdater.aplicarPacote(tmpDir, shaEsperado, novaVersao);
-    } else {
-      const jsFiles = ["index.js", "impressora.js", "fiscalDriver.js", "fila.js", "credenciais.js"];
-      manifestUpdater.backupArquivos(jsFiles);
-      for (const f of jsFiles) {
-        const src = path.join(tmpDir, f);
-        if (fs.existsSync(src)) {
-          fs.copyFileSync(src, path.join(__dirname, f));
-          console.log(`[Updater] ✓ ${f} atualizado (legado)`);
-        }
-      }
-    }
+    await manifestUpdater.aplicarPacote(tmpDir, shaEsperado, novaVersao);
 
     fs.rmSync(tmpDir, { recursive: true, force: true });
 
     console.log(
       `[Updater] ✅ Atualização ${novaVersao} aplicada. Reiniciando agente...`,
     );
-    updaterState.atualizando = false;
+    // Mantém atualizando=true até o exit — evita double-apply e backup corrompido
+    // na janela antes do restart.
 
-    // Cloud: persiste ACK para confirmar após o restart (e tenta já agora)
     if (origem === "cloud") {
       updaterCloudPending.marcarAposApplyCloud({
         versaoAlvo: novaVersao,
@@ -1354,8 +1343,15 @@ function iniciarServidor() {
     exigirAgentToken,
     (req, res) => {
       try {
+        if (updaterState.atualizando) {
+          return res.status(409).json({
+            ok: false,
+            erro: "Atualização em andamento — aguarde o reinício antes do rollback.",
+          });
+        }
         auditLog.registrar("UPDATER_ROLLBACK", {}, req);
         const dir = manifestUpdater.rollbackUltimo();
+        updaterCloudPending.limparPending();
         // Disco restaurado — processo ainda roda código antigo em memória.
         setTimeout(() => {
           encerrarGracefully("UPDATER_ROLLBACK", 0).catch(() => process.exit(0));
@@ -3164,13 +3160,8 @@ function iniciarServidor() {
     log.warn({ err: err.message }, "[Agente] Falha ao sincronizar segredos fiscais do .env");
   }
   configSync.setOnUpdateRequested(async ({ backendUrl, backendToken }) => {
-    const versaoPkg = () => {
-      try {
-        return require("./package.json").version;
-      } catch {
-        return VERSAO_ATUAL;
-      }
-    };
+    const versaoPkg = () =>
+      manifestUpdater.lerVersaoInstalada() || VERSAO_ATUAL;
     const enviarAck = (payload) =>
       configSync.enviarUpdateAck(backendUrl, backendToken, payload);
 
@@ -3183,19 +3174,12 @@ function iniciarServidor() {
       });
 
       if (resultado.resultado === "aplicando") {
-        // Marker em aplicarAtualizacao; ACK best-effort + flush pós-boot se falhar
-        try {
-          await enviarAck({
-            ok: true,
-            agentVersion: resultado.versaoDisponivel || versaoPkg(),
-            erro: "",
-          });
-        } catch (ackErr) {
-          logUpdater.warn(
-            { err: ackErr.message },
-            "ACK update cloud falhou (aplicando) — pending reintentará após restart",
-          );
-        }
+        // Não ACK ok:true aqui — versão ainda não confirmada pós-restart.
+        // pending-cloud-update-ack.json + flushPendingAck são a fonte de verdade.
+        logUpdater.info(
+          { versao: resultado.versaoDisponivel },
+          "Update cloud aplicado no disco — ACK após restart",
+        );
         return;
       }
 
