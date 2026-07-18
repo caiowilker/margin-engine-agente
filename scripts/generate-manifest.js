@@ -1,49 +1,20 @@
 #!/usr/bin/env node
-// Gera manifest.json com SHA-256 de todos os módulos do agente + frontend-dist/
+/**
+ * Gera manifest.json com SHA-256 do pacote de update remoto.
+ * Política: scripts/manifestPolicy.js (print/fiscal/runtime/storage + JS raiz + package.json + frontend-dist).
+ */
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const {
+  listarArquivosUpdate,
+  validarCoberturaObrigatoria,
+} = require("./manifestPolicy");
 
 const ROOT = path.join(__dirname, "..");
 const MANIFEST_PATH = path.join(ROOT, "manifest.json");
 const FRONTEND_DIST = "frontend-dist";
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
-
-const ARQUIVOS_PADRAO = [
-  "index.js",
-  "acbr.js",
-  "fila.js",
-  "filaFiscal.js",
-  "fiscalService.js",
-  "fiscalMetrics.js",
-  "fiscalRateLimit.js",
-  "diagnosticoRateLimit.js",
-  "fiscalPurge.js",
-  "fiscalRecuperacao.js",
-  "fiscalStorage.js",
-  "auditLog.js",
-  "fiscalRetry.js",
-  "fiscalPreflight.js",
-  "fiscalNumeracao.js",
-  "fiscalValidacao.js",
-  "documentosFiscais.js",
-  "reconciliacaoFiscal.js",
-  "watchdog.js",
-  "impressora.js",
-  "credenciais.js",
-  "marginPaths.js",
-  "logger.js",
-  "acbrNfceSetup.js",
-  "manifestUpdater.js",
-  "updaterRemoteCheck.js",
-  "fiscalAlertas.js",
-  "fiscalRelatorio.js",
-  "diagnosticoDashboard.js",
-  "heartbeatPayload.js",
-  "configSync.js",
-  "frontVersion.js",
-  "apiContract.js",
-];
 
 function sha256(fp) {
   const h = crypto.createHash("sha256");
@@ -51,43 +22,14 @@ function sha256(fp) {
   return h.digest("hex");
 }
 
-function listarFrontendDist() {
-  const base = path.join(ROOT, FRONTEND_DIST);
-  if (!fs.existsSync(base)) return [];
-  const files = [];
-  function walk(dir, relPrefix) {
-    for (const name of fs.readdirSync(dir)) {
-      const abs = path.join(dir, name);
-      const rel = relPrefix ? `${relPrefix}/${name}` : name;
-      const st = fs.statSync(abs);
-      if (st.isDirectory()) walk(abs, rel);
-      else files.push(`${FRONTEND_DIST}/${rel}`);
-    }
-  }
-  walk(base, "");
-  return files.sort();
+const lista = listarArquivosUpdate(ROOT);
+const cobertura = validarCoberturaObrigatoria(lista);
+if (!cobertura.ok) {
+  console.error("ERRO: manifest incompleto — faltam arquivos obrigatórios do update remoto:");
+  cobertura.faltando.forEach((a) => console.error(`  - ${a}`));
+  process.exit(1);
 }
 
-function listarArquivos() {
-  const set = new Set(ARQUIVOS_PADRAO);
-  if (fs.existsSync(MANIFEST_PATH)) {
-    try {
-      const existing = JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8"));
-      if (Array.isArray(existing.arquivos)) {
-        existing.arquivos.forEach((a) => {
-          // Não reutiliza entradas antigas do front — hashes mudam a cada build Vite.
-          if (!String(a.arquivo).startsWith(`${FRONTEND_DIST}/`)) {
-            set.add(a.arquivo);
-          }
-        });
-      }
-    } catch (_) {}
-  }
-  for (const f of listarFrontendDist()) set.add(f);
-  return [...set];
-}
-
-const lista = listarArquivos();
 const ausentes = [];
 const arquivos = [];
 
@@ -114,7 +56,9 @@ if (!arquivos.length) {
   process.exit(1);
 }
 
-const frontCount = arquivos.filter((a) => a.arquivo.startsWith(`${FRONTEND_DIST}/`)).length;
+const frontCount = arquivos.filter((a) =>
+  a.arquivo.startsWith(`${FRONTEND_DIST}/`),
+).length;
 const agentCount = arquivos.length - frontCount;
 
 const manifest = {

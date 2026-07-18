@@ -64,7 +64,31 @@ Depois acesse **http://localhost:9100** e ative com o código do painel.
 4. O bootstrap preserva **`%ProgramData%\MarginEngine`** (bancos, config, logs, fiscal).
 5. Ao finalizar, confira **http://localhost:9100/diagnostico/dashboard** → `manifestOk: true`.
 
-### Atualização manual (desenvolvimento)
+### Atualização remota (Diagnóstico / `update.zip`)
+
+Canal para **patches de código** sem reinstalar (JS do agente + `print/` + `fiscal/` + `runtime/` + `storage/` + `frontend-dist` + `package.json`).
+
+**Não substitui o instalador** quando a mudança envolve:
+
+- `node_modules` / binários nativos (`.node`)
+- DLLs ACBrLib / PosPrinter (`acbrlib/`)
+- Node embutido do Setup
+- Dados/config em `%ProgramData%\MarginEngine`, certificado A1, CSC, `.env`
+
+**Publicar um update remoto:**
+
+```bash
+npm run manifest          # gera SHA-256 completo (política em scripts/manifestPolicy.js)
+npm run package:update    # dist/update.zip + SHA-256 no stdout
+# Faça upload do ZIP e configure no backend:
+#   PDV_AGENTE_VERSAO / PDV_AGENTE_URL_DOWNLOAD / PDV_AGENTE_SHA256 / PDV_AGENTE_CHANGELOG
+```
+
+No caixa: Diagnóstico → **Verificar atualização** → **Aplicar**. O agente valida SHA do ZIP e de cada arquivo, faz backup, grava o novo `manifest.json`, atualiza `package.json` (versão) e reinicia o serviço.
+
+**Anti-downgrade:** igual ao instalador — versão remota inferior à instalada é recusada na verificação e na aplicação.
+
+`AUTO_UPDATE` continua **desligado por padrão** (evita restart no meio da venda). Ligue só com processo operacional claro.
 
 1. **Pare o serviço** do agente (Serviços Windows → **Margin Engine** → Parar).
 2. **Faça backup** de `%ProgramData%\MarginEngine` (veja seção 6).

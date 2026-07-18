@@ -1,5 +1,7 @@
 // Consulta de versão remota do agente — usada por auto-update e checagem manual.
 
+const { isUpgrade, isSameVersion, isDowngrade } = require("./updaterVersion");
+
 const CODIGOS_REDE = new Set([
   "ECONNREFUSED",
   "ENOTFOUND",
@@ -32,16 +34,7 @@ function montarRespostaBase(updaterState, versaoAtual, extras = {}) {
 
 /**
  * Consulta GET /pdv/agente/versao no backend.
- * @param {object} opts
- * @param {string} opts.versaoAtual
- * @param {object} opts.updaterState — mutado in-place
- * @param {Function} opts.lerConfig
- * @param {object} opts.manifestUpdater
- * @param {object} [opts.logUpdater]
- * @param {boolean} [opts.aplicarAutomaticamente=false]
- * @param {Function} [opts.aplicarAtualizacao]
- * @param {Function} [opts.fetchFn] — injetável em testes
- * @param {boolean} [opts.autoUpdate=false]
+ * Anti-downgrade: versão remota inferior à instalada é recusada (paridade Inno).
  */
 async function consultarVersaoRemota(opts) {
   const {
@@ -109,7 +102,7 @@ async function consultarVersaoRemota(opts) {
     updaterState.pendingUrlDownload = urlDownload || null;
     updaterState.pendingSha256 = sha256 || null;
 
-    if (!versao || versao === versaoAtual) {
+    if (!versao || isSameVersion(versao, versaoAtual)) {
       updaterState.versaoDisponivel = null;
       updaterState.changelog = null;
       updaterState.pendingUrlDownload = null;
@@ -122,6 +115,31 @@ async function consultarVersaoRemota(opts) {
       };
     }
 
+    if (isDowngrade(versao, versaoAtual)) {
+      updaterState.versaoDisponivel = null;
+      updaterState.changelog = null;
+      updaterState.pendingUrlDownload = null;
+      updaterState.pendingSha256 = null;
+      const mensagem =
+        `Downgrade bloqueado — servidor ofereceu v${versao}, instalada v${versaoAtual}. ` +
+        `Publique uma versão igual ou superior no backend.`;
+      logUpdater?.warn?.(
+        {
+          acao: "verificar_atualizacao",
+          resultado: "downgrade_bloqueado",
+          versaoRemota: versao,
+          versaoAtual,
+        },
+        "Update remoto recusado — anti-downgrade",
+      );
+      return {
+        ok: true,
+        resultado: "atualizado",
+        mensagem,
+        ...montarRespostaBase(updaterState, versaoAtual, { autoUpdate }),
+      };
+    }
+
     updaterState.versaoDisponivel = versao;
     updaterState.changelog = changelog || null;
 
@@ -129,9 +147,10 @@ async function consultarVersaoRemota(opts) {
       !updaterState.atualizando &&
       !!urlDownload &&
       !!sha256 &&
-      manifestUpdater.isManifestOk();
+      manifestUpdater.isManifestOk() &&
+      isUpgrade(versao, versaoAtual);
 
-    if (aplicarAutomaticamente && urlDownload && aplicarAtualizacao) {
+    if (aplicarAutomaticamente && urlDownload && aplicarAtualizacao && podeAplicar) {
       await aplicarAtualizacao(urlDownload, versao, sha256);
       return {
         ok: true,

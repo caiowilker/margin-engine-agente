@@ -5,6 +5,14 @@
 
 ## Changelog (2026-07-18)
 
+### Update remoto — fase 1 (manifest completo + anti-downgrade)
+
+- **Política** `scripts/manifestPolicy.js`: update.zip inclui JS da raiz, `package.json`, `print/`, `fiscal/`, `runtime/`, `storage/` e `frontend-dist/`; exclui nativos, DLLs, `node_modules`, testes e scripts de build.
+- **Geração** `generate-manifest.js` / `package:update` validam cobertura obrigatória (ex.: `print/qrCodeAcbrBmp.js`) antes de publicar.
+- **Anti-downgrade** `updaterVersion.js` (paridade Inno) em `updaterRemoteCheck` e `manifestUpdater.aplicarPacote`.
+- **Apply sólido:** grava o novo `manifest.json` após copiar arquivos (corrige boot `manifestOk: false`); backup formato 2 com `_backup-index.json` sem sobrescrever o manifest real; exige `package.json` no pacote.
+- Testes: `manifest-policy.test.js`, anti-downgrade em `updater-remote-check` e `manifest-updater-front`.
+
 ### QR Code NFC-e no cupom térmico — BMP sem sharp
 
 - **Bug:** `gerarBmpQrAcbr` usava `sharp.toFormat("bmp")`, formato de saída **não suportado** pelo sharp. Toda URL de QR NFC-e (contém `|`) falhava na geração do BMP → `printExecutor` caía no fallback ESC/POS nativo → impressoras sem comando QR nativo imprimiam a **URL em texto** no lugar do QR.

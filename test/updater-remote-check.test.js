@@ -183,6 +183,40 @@ async function run() {
     assert.strictEqual(aplicou, true);
   });
 
+  await test("anti-downgrade — versão remota inferior é recusada", async () => {
+    const state = criarState();
+    let aplicou = false;
+    const res = await consultarVersaoRemota({
+      versaoAtual: "1.2.0",
+      updaterState: state,
+      lerConfig: async () => ({
+        backendUrl: "http://backend.test",
+        backendToken: "tok",
+      }),
+      manifestUpdater: criarManifestOk(),
+      aplicarAutomaticamente: true,
+      aplicarAtualizacao: async () => {
+        aplicou = true;
+      },
+      fetchFn: async () => ({
+        ok: true,
+        json: async () => ({
+          versao: "1.0.0",
+          urlDownload: "https://cdn.test/agente.zip",
+          changelog: "old",
+          sha256: "abc",
+        }),
+      }),
+      autoUpdate: true,
+    });
+    assert.strictEqual(res.ok, true);
+    assert.strictEqual(res.resultado, "atualizado");
+    assert.match(res.mensagem, /Downgrade bloqueado/i);
+    assert.strictEqual(aplicou, false);
+    assert.strictEqual(res.podeAplicar, false);
+    assert.strictEqual(state.pendingUrlDownload, null);
+  });
+
   console.log(`\nUpdater remote check: ${passed} ok, ${failed} falha(s)\n`);
   process.exit(failed > 0 ? 1 : 0);
 }

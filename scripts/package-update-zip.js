@@ -3,11 +3,17 @@
  * Empacota update.zip com manifest.json + todos os arquivos listados (agente + frontend-dist).
  * Uso: npm run manifest && npm run package:update
  * Saída: dist/update.zip (SHA-256 impresso no stdout)
+ *
+ * Política: scripts/manifestPolicy.js — não inclui nativos/DLLs/node_modules.
  */
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { execSync } = require("child_process");
+const {
+  validarCoberturaObrigatoria,
+  resumirPolitica,
+} = require("./manifestPolicy");
 
 const ROOT = path.join(__dirname, "..");
 const MANIFEST_PATH = path.join(ROOT, "manifest.json");
@@ -25,11 +31,6 @@ function rmrf(dir) {
   if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
 }
 
-function copyTree(src, dest) {
-  fs.mkdirSync(path.dirname(dest), { recursive: true });
-  fs.copyFileSync(src, dest);
-}
-
 function main() {
   if (!fs.existsSync(MANIFEST_PATH)) {
     console.error("ERRO: manifest.json ausente — execute npm run manifest");
@@ -41,9 +42,32 @@ function main() {
     process.exit(1);
   }
 
+  const nomes = manifest.arquivos.map((a) => a.arquivo);
+  const cobertura = validarCoberturaObrigatoria(nomes);
+  if (!cobertura.ok) {
+    console.error(
+      "ERRO: manifest desatualizado — rode npm run manifest. Faltando:",
+    );
+    cobertura.faltando.forEach((a) => console.error(`  - ${a}`));
+    process.exit(1);
+  }
+
+  const pkgVersion = JSON.parse(
+    fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
+  ).version;
+  if (manifest.versao && manifest.versao !== pkgVersion) {
+    console.error(
+      `ERRO: manifest.versao (${manifest.versao}) ≠ package.json (${pkgVersion}) — rode npm run manifest`,
+    );
+    process.exit(1);
+  }
+
   rmrf(STAGING);
   fs.mkdirSync(STAGING, { recursive: true });
-  fs.writeFileSync(path.join(STAGING, "manifest.json"), JSON.stringify(manifest, null, 2));
+  fs.writeFileSync(
+    path.join(STAGING, "manifest.json"),
+    JSON.stringify(manifest, null, 2),
+  );
 
   const ausentes = [];
   for (const item of manifest.arquivos) {
@@ -80,11 +104,16 @@ function main() {
     String(a.arquivo).startsWith("frontend-dist/"),
   ).length;
   const agentCount = manifest.arquivos.length - frontCount;
+  const politica = resumirPolitica();
 
-  console.log(`update.zip gerado — ${manifest.arquivos.length} arquivos`);
+  console.log(`update.zip gerado — ${manifest.arquivos.length} arquivos v${manifest.versao}`);
   console.log(`  agente: ${agentCount} · frontend-dist: ${frontCount}`);
+  console.log(`  dirs: ${politica.includeDirs.join(", ")}`);
   console.log(`  SHA-256: ${sha}`);
   console.log(`  caminho: ${OUT_ZIP}`);
+  console.log(
+    `  requer instalador (não neste ZIP): ${politica.requerInstalador.length} categorias`,
+  );
 
   rmrf(STAGING);
 }
