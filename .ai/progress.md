@@ -5,6 +5,31 @@
 
 ## Changelog (2026-07-18)
 
+### Update remoto — fase 5 (fechamento / hardening)
+
+- **ACK pós-restart:** `updaterCloudPending.js` persiste pedido de ACK após apply cloud; flush no poll de config (idempotente).
+- **Rollback HTTP:** `/updater/rollback` restaura backup e **agenda reinício** (evita processo com código velho em memória).
+- Testes: `updater-cloud-pending.test.js`.
+
+### Update remoto — fase 4 (observabilidade no ERP)
+
+- Listagem `GET /pdv/ativacao/terminais` inclui `agentVersion`, heartbeat, flags de update (`updatePendente`, erro, `versionOutdated`) e `latestAgentVersion`.
+- Front Terminais PDV: chips de status, alerta de frota desatualizada, cancelar pedido pendente.
+- Testes em `PdvAtivacaoControllerTest` (toTerminalListItem).
+
+### Update remoto — fase 3 (comando por dispositivo no cloud)
+
+- Backend: colunas `update_requested_*` / `update_applied_at` / `update_last_error`; `POST /pdv/dispositivos/{id}/update/request|cancel`; `POST /pdv/agente/update/ack`.
+- Agente: após poll de config, se `aplicarUpdateQuandoOcioso`, tenta apply ocioso (`force: false`) e envia ACK; ocupado não ACK (reintenta).
+- Front: Terminais PDV → “Atualizar agente” por terminal ATIVO.
+- Teste: `updater-cloud-request.test.js`.
+
+### Update remoto — fase 2 (publicação + apply seguro)
+
+- **`npm run release:update`**: gera `dist/update.zip` + `update-release.json` + `update-release.env` (variáveis `PDV_AGENTE_*` para o Render).
+- **`updaterIdleGuard`**: `UPDATE_REQUIRE_IDLE=true` (padrão) — não aplica com fiscal/fila ativos; Diagnóstico oferece força com confirmação; AUTO_UPDATE nunca força.
+- Front Diagnóstico: confirm “Aplicar mesmo assim” quando 409 ocupado.
+
 ### Update remoto — fase 1 (manifest completo + anti-downgrade)
 
 - **Política** `scripts/manifestPolicy.js`: update.zip inclui JS da raiz, `package.json`, `print/`, `fiscal/`, `runtime/`, `storage/` e `frontend-dist/`; exclui nativos, DLLs, `node_modules`, testes e scripts de build.

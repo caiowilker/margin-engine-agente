@@ -1,6 +1,6 @@
 {
   "versao": "1.0.1",
-  "geradoEm": "2026-07-18T18:44:02.193Z",
+  "geradoEm": "2026-07-18T19:02:39.849Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -44,7 +44,7 @@
     },
     {
       "arquivo": "configSync.js",
-      "sha256": "1b939d380e689ae447d00ace6e9a543ff90ddbc1afa8e9bf2a46705c3f9215db"
+      "sha256": "166f06077352ec342077abe0ac35f759d43488d9ac4cf575babe3565b75b7378"
     },
     {
       "arquivo": "credenciais.js",
@@ -4652,7 +4652,7 @@
     },
     {
       "arquivo": "index.js",
-      "sha256": "08fe91be76381f8a66b24852784d70d3b46358593ef436baa4ba44ddceea7aa1"
+      "sha256": "f1852334b2995747d9c47fcba5923bfd99c174f2af6ef3b4ff1bd6a121ffb2c1"
     },
     {
       "arquivo": "install-service.js",
@@ -4680,7 +4680,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "da408c8f92bd303654b00f8689208618f2eecf739c1b31a9e5ee01575b99520d"
+      "sha256": "78211ff17fa235843c20e3e3ee668cff480f18dba955e16a596fd10d2a65f449"
     },
     {
       "arquivo": "print/acbrPosPrinterErrors.js",
@@ -4899,8 +4899,16 @@
       "sha256": "7cb1c80ec1b8abd284aaa03dc05c96ec87a2946fe7ec2630934d0ad547709941"
     },
     {
+      "arquivo": "updaterCloudPending.js",
+      "sha256": "6920e45c9a2abbc2de421752cf41ccdace863c198915ad59039c56089885a29e"
+    },
+    {
+      "arquivo": "updaterIdleGuard.js",
+      "sha256": "590d1ee045bb9e105f54f4d90ff3523223dd5b2867c96b3086d98deabf095dc4"
+    },
+    {
       "arquivo": "updaterRemoteCheck.js",
-      "sha256": "a812b4b47fc8d6ac1fe280402246ddd5f2fc6e2f579888199fc000eab3fb8e94"
+      "sha256": "4d2c0d072e5ce08f267c1a572a7514d5d4d156b522d3deeb1f668c2eff262139"
     },
     {
       "arquivo": "updaterVersion.js",

@@ -151,17 +151,38 @@ async function consultarVersaoRemota(opts) {
       isUpgrade(versao, versaoAtual);
 
     if (aplicarAutomaticamente && urlDownload && aplicarAtualizacao && podeAplicar) {
-      await aplicarAtualizacao(urlDownload, versao, sha256);
-      return {
-        ok: true,
-        resultado: "aplicando",
-        mensagem: `Atualização para v${versao} em andamento.`,
-        versaoDisponivel: versao,
-        podeAplicar: false,
-        autoUpdate,
-        changelog: updaterState.changelog,
-        ultimaVerificacao: updaterState.ultimaVerificacao,
-      };
+      try {
+        await aplicarAtualizacao(urlDownload, versao, sha256, {
+          force: false,
+          origem: "auto",
+        });
+        return {
+          ok: true,
+          resultado: "aplicando",
+          mensagem: `Atualização para v${versao} em andamento.`,
+          versaoDisponivel: versao,
+          podeAplicar: false,
+          autoUpdate,
+          changelog: updaterState.changelog,
+          ultimaVerificacao: updaterState.ultimaVerificacao,
+        };
+      } catch (applyErr) {
+        if (applyErr?.code === "UPDATE_BUSY") {
+          return {
+            ok: true,
+            resultado: "disponivel",
+            mensagem: applyErr.message,
+            versaoAtual,
+            versaoDisponivel: versao,
+            ultimaVerificacao: updaterState.ultimaVerificacao,
+            podeAplicar: true,
+            autoUpdate,
+            changelog: updaterState.changelog,
+            bloqueios: applyErr.bloqueios || [],
+          };
+        }
+        throw applyErr;
+      }
     }
 
     if (!urlDownload || !sha256) {

@@ -31,6 +31,9 @@ let heartbeatHandle = null;
 let acbrRef = null;
 let lerConfigFnRef = null;
 let sincronizando = false;
+/** @type {null | ((ctx: { remoto: object, backendUrl: string, backendToken: string }) => Promise<void>)} */
+let onUpdateRequestedFn = null;
+let processandoUpdateCloud = false;
 
 function obterEnvFallbackFiscal() {
   return (process.env.EMISSAO_FISCAL || "false").toLowerCase() === "true";
@@ -302,6 +305,59 @@ async function enviarAck(backendUrl, backendToken) {
   return resp.json();
 }
 
+async function enviarUpdateAck(backendUrl, backendToken, payload) {
+  const fetch = require("node-fetch");
+  const resp = await fetch(`${backendUrl.replace(/\/$/, "")}/pdv/agente/update/ack`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${backendToken}`,
+    },
+    body: JSON.stringify(payload || { ok: true }),
+  });
+  if (!resp.ok) {
+    const txt = await resp.text().catch(() => "");
+    throw new Error(`Update ACK HTTP ${resp.status}: ${txt.slice(0, 120)}`);
+  }
+  return resp.json().catch(() => ({}));
+}
+
+async function processarPedidoUpdateCloud(remoto, backendUrl, backendToken) {
+  // Sempre tenta confirmar ACK pendente de apply anterior (mesmo sem pedido novo)
+  try {
+    const updaterCloudPending = require("./updaterCloudPending");
+    const versaoAtual = () => {
+      try {
+        return require("./package.json").version;
+      } catch {
+        return "";
+      }
+    };
+    await updaterCloudPending.flushPendingAck({
+      enviarAck: (payload) => enviarUpdateAck(backendUrl, backendToken, payload),
+      lerVersaoAtual: versaoAtual,
+      log,
+    });
+  } catch (flushErr) {
+    log.warn({ err: flushErr.message }, "[ConfigSync] Flush ACK cloud falhou");
+  }
+
+  if (!remoto?.aplicarUpdateQuandoOcioso) return;
+  if (typeof onUpdateRequestedFn !== "function") {
+    log.debug("[ConfigSync] Pedido de update remoto ignorado — handler não registrado");
+    return;
+  }
+  if (processandoUpdateCloud) return;
+  processandoUpdateCloud = true;
+  try {
+    await onUpdateRequestedFn({ remoto, backendUrl, backendToken });
+  } catch (err) {
+    log.warn({ err: err.message }, "[ConfigSync] Falha ao processar update remoto");
+  } finally {
+    processandoUpdateCloud = false;
+  }
+}
+
 async function sincronizar(lerConfigFn) {
   if (sincronizando) return getStatus();
   sincronizando = true;
@@ -343,6 +399,8 @@ async function sincronizar(lerConfigFn) {
     } catch (ackErr) {
       log.warn("[ConfigSync] Config aplicada, ACK falhou:", ackErr.message);
     }
+    // Após config: pedido de update do cloud (ocioso, nunca force)
+    await processarPedidoUpdateCloud(remoto, backendUrl, backendToken);
   } catch (err) {
     estado.ultimoErro = err.message;
     runtimeConfig.manterUltimoConhecido();
@@ -395,5 +453,10 @@ module.exports = {
   getStatus,
   aplicarConfigRemota,
   sincronizarEmissaoFiscalLocal,
+  setOnUpdateRequested(fn) {
+    onUpdateRequestedFn = typeof fn === "function" ? fn : null;
+  },
+  enviarUpdateAck,
+  processarPedidoUpdateCloud,
   POLL_INTERVAL_MS: () => pollIntervalMs,
 };

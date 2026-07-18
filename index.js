@@ -664,6 +664,8 @@ let updaterState = {
 
 const logUpdater = log.child({ modulo: "updater" });
 const { consultarVersaoRemota } = require("./updaterRemoteCheck");
+const { avaliarProntidaoUpdate } = require("./updaterIdleGuard");
+const updaterCloudPending = require("./updaterCloudPending");
 
 function updaterDepsBase() {
   return {
@@ -692,8 +694,36 @@ async function verificarAtualizacao() {
   }
 }
 
-async function aplicarAtualizacao(urlDownload, novaVersao, shaEsperado) {
+/**
+ * @param {string} urlDownload
+ * @param {string} novaVersao
+ * @param {string} shaEsperado
+ * @param {{ force?: boolean, origem?: string }} [opts]
+ */
+async function aplicarAtualizacao(urlDownload, novaVersao, shaEsperado, opts = {}) {
   if (updaterState.atualizando) return;
+  const force = opts.force === true;
+  const origem = opts.origem || "auto";
+
+  const prontidao = avaliarProntidaoUpdate({ force });
+  if (!prontidao.ok) {
+    updaterState.ultimoErro = prontidao.mensagem;
+    logUpdater.warn(
+      {
+        acao: "aplicar_atualizacao",
+        resultado: "adiado_ocupado",
+        bloqueios: prontidao.bloqueios,
+        origem,
+        versao: novaVersao,
+      },
+      "Update adiado — agente ocupado",
+    );
+    const err = new Error(prontidao.mensagem);
+    err.code = "UPDATE_BUSY";
+    err.bloqueios = prontidao.bloqueios;
+    throw err;
+  }
+
   updaterState.atualizando = true;
   const t0 = Date.now();
 
@@ -701,6 +731,12 @@ async function aplicarAtualizacao(urlDownload, novaVersao, shaEsperado) {
   const tmpZip = path.join(tmpDir, "update.zip");
 
   try {
+    if (prontidao.forçado) {
+      logUpdater.warn(
+        { bloqueios: prontidao.bloqueios, origem },
+        "Update forçado com agente ocupado",
+      );
+    }
     fs.mkdirSync(tmpDir, { recursive: true });
     console.log(`[Updater] Baixando atualização ${novaVersao}...`);
 
@@ -759,6 +795,14 @@ async function aplicarAtualizacao(urlDownload, novaVersao, shaEsperado) {
     );
     updaterState.atualizando = false;
 
+    // Cloud: persiste ACK para confirmar após o restart (e tenta já agora)
+    if (origem === "cloud") {
+      updaterCloudPending.marcarAposApplyCloud({
+        versaoAlvo: novaVersao,
+        origem: "cloud",
+      });
+    }
+
     setTimeout(() => {
       encerrarGracefully("AUTO_UPDATE", 0).catch(() => process.exit(0));
     }, 1500);
@@ -774,16 +818,19 @@ async function aplicarAtualizacao(urlDownload, novaVersao, shaEsperado) {
       },
       "Falha ao aplicar atualização",
     );
-    try {
-      manifestUpdater.rollbackUltimo();
-      logUpdater.warn({ acao: "rollback", resultado: "ok" }, "Backup restaurado após falha");
-    } catch (rollbackErr) {
-      logUpdater.warn(
-        { acao: "rollback", resultado: "indisponivel", err: rollbackErr },
-        "Rollback indisponível",
-      );
+    if (err.code !== "UPDATE_BUSY") {
+      try {
+        manifestUpdater.rollbackUltimo();
+        logUpdater.warn({ acao: "rollback", resultado: "ok" }, "Backup restaurado após falha");
+      } catch (rollbackErr) {
+        logUpdater.warn(
+          { acao: "rollback", resultado: "indisponivel", err: rollbackErr },
+          "Rollback indisponível",
+        );
+      }
     }
     fs.rmSync(tmpDir, { recursive: true, force: true });
+    throw err;
   }
 }
 
@@ -1263,16 +1310,39 @@ function iniciarServidor() {
             "Pacote de atualização indisponível. Verifique novamente ou use o instalador.",
         });
       }
+      const force =
+        req.body?.force === true ||
+        req.body?.force === "true" ||
+        req.query?.force === "1" ||
+        req.query?.force === "true";
       const { versaoDisponivel, pendingUrlDownload, pendingSha256 } =
         updaterState;
-      aplicarAtualizacao(
-        pendingUrlDownload,
-        versaoDisponivel,
-        pendingSha256,
-      ).catch(() => {});
+
+      // Pré-checagem síncrona — evita 200 se já estiver ocupado
+      const prontidao = avaliarProntidaoUpdate({ force });
+      if (!prontidao.ok) {
+        return res.status(409).json({
+          ok: false,
+          codigo: "UPDATE_BUSY",
+          erro: prontidao.mensagem,
+          mensagem: prontidao.mensagem,
+          bloqueios: prontidao.bloqueios,
+          podeForcar: true,
+        });
+      }
+
+      aplicarAtualizacao(pendingUrlDownload, versaoDisponivel, pendingSha256, {
+        force,
+        origem: force ? "manual_force" : "manual",
+      }).catch((err) => {
+        if (err?.code === "UPDATE_BUSY") {
+          logUpdater.warn({ err: err.message }, "Apply abortado — ocupado");
+        }
+      });
       res.json({
         ok: true,
         mensagem: `Aplicação da versão v${versaoDisponivel} iniciada.`,
+        forçado: prontidao.forçado === true,
         estado: { versaoAtual: VERSAO_ATUAL, ...updaterState },
       });
     },
@@ -1286,7 +1356,17 @@ function iniciarServidor() {
       try {
         auditLog.registrar("UPDATER_ROLLBACK", {}, req);
         const dir = manifestUpdater.rollbackUltimo();
-        res.json({ ok: true, backup: dir });
+        // Disco restaurado — processo ainda roda código antigo em memória.
+        setTimeout(() => {
+          encerrarGracefully("UPDATER_ROLLBACK", 0).catch(() => process.exit(0));
+        }, 1500);
+        res.json({
+          ok: true,
+          backup: dir,
+          reinicioAgendado: true,
+          mensagem:
+            "Backup restaurado. Reiniciando o agente para carregar os arquivos anteriores.",
+        });
       } catch (err) {
         res.status(500).json({ erro: err.message });
       }
@@ -3083,6 +3163,101 @@ function iniciarServidor() {
   } catch (err) {
     log.warn({ err: err.message }, "[Agente] Falha ao sincronizar segredos fiscais do .env");
   }
+  configSync.setOnUpdateRequested(async ({ backendUrl, backendToken }) => {
+    const versaoPkg = () => {
+      try {
+        return require("./package.json").version;
+      } catch {
+        return VERSAO_ATUAL;
+      }
+    };
+    const enviarAck = (payload) =>
+      configSync.enviarUpdateAck(backendUrl, backendToken, payload);
+
+    try {
+      const resultado = await consultarVersaoRemota({
+        ...updaterDepsBase(),
+        aplicarAutomaticamente: true,
+        aplicarAtualizacao: (url, ver, sha) =>
+          aplicarAtualizacao(url, ver, sha, { force: false, origem: "cloud" }),
+      });
+
+      if (resultado.resultado === "aplicando") {
+        // Marker em aplicarAtualizacao; ACK best-effort + flush pós-boot se falhar
+        try {
+          await enviarAck({
+            ok: true,
+            agentVersion: resultado.versaoDisponivel || versaoPkg(),
+            erro: "",
+          });
+        } catch (ackErr) {
+          logUpdater.warn(
+            { err: ackErr.message },
+            "ACK update cloud falhou (aplicando) — pending reintentará após restart",
+          );
+        }
+        return;
+      }
+
+      if (resultado.resultado === "atualizado") {
+        await enviarAck({
+          ok: true,
+          agentVersion: versaoPkg(),
+          erro: "",
+        });
+        return;
+      }
+
+      if (resultado.resultado === "disponivel") {
+        if (
+          resultado.bloqueios?.length ||
+          /ocupado|adiada/i.test(resultado.mensagem || "")
+        ) {
+          logUpdater.info(
+            { bloqueios: resultado.bloqueios },
+            "Update cloud adiado — reintentará no próximo poll",
+          );
+          return;
+        }
+        if (/não forneceu pacote|indisponível/i.test(resultado.mensagem || "")) {
+          await enviarAck({
+            ok: false,
+            agentVersion: versaoPkg(),
+            erro:
+              resultado.mensagem || "Pacote de update indisponível no backend",
+          });
+          return;
+        }
+        logUpdater.info(
+          { mensagem: resultado.mensagem },
+          "Update cloud pendente — aguardando condição de apply",
+        );
+        return;
+      }
+
+      if (resultado.resultado === "erro") {
+        await enviarAck({
+          ok: false,
+          agentVersion: versaoPkg(),
+          erro: resultado.mensagem || "Falha ao verificar update",
+        });
+      }
+    } catch (err) {
+      if (err?.code === "UPDATE_BUSY") {
+        logUpdater.info("Update cloud adiado — agente ocupado");
+        return;
+      }
+      try {
+        await enviarAck({
+          ok: false,
+          agentVersion: versaoPkg(),
+          erro: err.message || "Falha no update remoto",
+        });
+      } catch (_) {}
+      throw err;
+    }
+  });
+
   configSync.iniciar(lerConfig, fiscalDriver);
 
   try {

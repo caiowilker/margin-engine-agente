@@ -78,17 +78,37 @@ Canal para **patches de código** sem reinstalar (JS do agente + `print/` + `fis
 **Publicar um update remoto:**
 
 ```bash
-npm run manifest          # gera SHA-256 completo (política em scripts/manifestPolicy.js)
-npm run package:update    # dist/update.zip + SHA-256 no stdout
-# Faça upload do ZIP e configure no backend:
-#   PDV_AGENTE_VERSAO / PDV_AGENTE_URL_DOWNLOAD / PDV_AGENTE_SHA256 / PDV_AGENTE_CHANGELOG
+# Um comando — gera ZIP + metadados para o Render
+npm run release:update -- --url=https://cdn.exemplo/agente/update-1.0.2.zip --changelog="QR NFC-e + updater"
+
+# Ou em etapas:
+npm run manifest
+npm run package:update
 ```
 
-No caixa: Diagnóstico → **Verificar atualização** → **Aplicar**. O agente valida SHA do ZIP e de cada arquivo, faz backup, grava o novo `manifest.json`, atualiza `package.json` (versão) e reinicia o serviço.
+Artefatos em `dist/`:
+
+| Arquivo | Uso |
+|---------|-----|
+| `update.zip` | Upload HTTPS (CDN / storage) |
+| `update-release.json` | Metadados (versão, SHA, checklist) |
+| `update-release.env` | Colar no Render (`PDV_AGENTE_*`) |
+
+No Render (backend): setar `PDV_AGENTE_VERSAO`, `PDV_AGENTE_URL_DOWNLOAD`, `PDV_AGENTE_SHA256`, `PDV_AGENTE_CHANGELOG` e redesploy.
+
+No caixa: Diagnóstico → **Verificar atualização** → **Aplicar agora** (com caixa ocioso). Se o agente estiver emitindo/na fila, o apply é **adiado**; o operador pode confirmar “Aplicar mesmo assim” (force).
 
 **Anti-downgrade:** igual ao instalador — versão remota inferior à instalada é recusada na verificação e na aplicação.
 
-`AUTO_UPDATE` continua **desligado por padrão** (evita restart no meio da venda). Ligue só com processo operacional claro.
+**Ociosidade:** `UPDATE_REQUIRE_IDLE=true` (padrão). Auto-update (`AUTO_UPDATE`) nunca força restart com fiscal/fila ativos.
+
+**Update remoto pelo cloud (por terminal):** em Configurações → Terminais PDV, botão **Atualizar agente** (ícone de refresh) no terminal ATIVO. O backend marca o pedido; o agente vê `aplicarUpdateQuandoOcioso` no poll de config (~45s) e aplica **sem force** quando ocioso. Ocupado → reintenta no próximo poll; sucesso/falha permanente → ACK que limpa o pedido. Não exige Diagnóstico nem `AUTO_UPDATE`.
+
+**Observabilidade (Terminais PDV):** a lista mostra versão do agente, último heartbeat, chips *Update pendente* / *Desatualizado* / *Falha no update*, alerta de frota quando há terminais atrás da versão publicada (`pdv.agente.versao`), e botão para **cancelar** pedido pendente.
+
+**ACK e rollback:** após apply cloud, o agente confirma o ACK também no próximo boot (se a rede falhou no momento do apply). Rollback pelo Diagnóstico restaura o backup e **reinicia** o serviço para carregar o código antigo.
+
+`AUTO_UPDATE` continua **desligado por padrão**. Ligue só com processo operacional claro.
 
 1. **Pare o serviço** do agente (Serviços Windows → **Margin Engine** → Parar).
 2. **Faça backup** de `%ProgramData%\MarginEngine` (veja seção 6).

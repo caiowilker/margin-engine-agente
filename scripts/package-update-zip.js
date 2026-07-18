@@ -106,16 +106,45 @@ function main() {
   const agentCount = manifest.arquivos.length - frontCount;
   const politica = resumirPolitica();
 
+  const releaseMeta = {
+    versao: manifest.versao,
+    geradoEm: new Date().toISOString(),
+    arquivo: "update.zip",
+    caminho: OUT_ZIP,
+    sha256: sha,
+    arquivos: manifest.arquivos.length,
+    agente: agentCount,
+    frontendDist: frontCount,
+    includeDirs: politica.includeDirs,
+    requerInstalador: politica.requerInstalador,
+    env: {
+      PDV_AGENTE_VERSAO: manifest.versao,
+      PDV_AGENTE_SHA256: sha,
+      PDV_AGENTE_URL_DOWNLOAD: "",
+      PDV_AGENTE_CHANGELOG: "",
+    },
+  };
+  fs.writeFileSync(
+    path.join(OUT_DIR, "update-release.json"),
+    JSON.stringify(releaseMeta, null, 2),
+  );
+
   console.log(`update.zip gerado — ${manifest.arquivos.length} arquivos v${manifest.versao}`);
   console.log(`  agente: ${agentCount} · frontend-dist: ${frontCount}`);
   console.log(`  dirs: ${politica.includeDirs.join(", ")}`);
   console.log(`  SHA-256: ${sha}`);
   console.log(`  caminho: ${OUT_ZIP}`);
+  console.log(`  metadados: ${path.join(OUT_DIR, "update-release.json")}`);
   console.log(
     `  requer instalador (não neste ZIP): ${politica.requerInstalador.length} categorias`,
   );
 
   rmrf(STAGING);
+  return releaseMeta;
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = { main };
