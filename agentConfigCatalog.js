@@ -563,6 +563,14 @@ const CATALOGO = {
     grupo: "impressora",
     label: "QR Code — nível de correção",
   },
+  printerQrEscposMode: {
+    env: "PRINTER_QR_ESCPOS_MODE",
+    tipo: "string",
+    default: "gs_k",
+    enum: ["gs_k", "raster"],
+    grupo: "impressora",
+    label: "QR Code ESC/POS — GS ( k nativo ou raster (imagem)",
+  },
   printerBarcodeAltura: {
     env: "PRINTER_BARCODE_ALTURA",
     tipo: "number",

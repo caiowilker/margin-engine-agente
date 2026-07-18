@@ -690,31 +690,40 @@ function sepDash() {
   return "-".repeat(COLS);
 }
 
-/** Versão QR ESC/POS (modo byte, nível M) conforme tamanho do conteúdo. */
-function calcularVersaoQrEscpos(texto) {
-  const len = Buffer.byteLength(String(texto), "utf8");
-  const caps = [
-    [1, 14],
-    [2, 26],
-    [3, 42],
-    [4, 62],
-    [5, 84],
-    [6, 106],
-    [7, 124],
-    [8, 152],
-    [9, 180],
-    [10, 213],
-    [11, 251],
-    [12, 287],
-    [13, 331],
-    [14, 362],
-    [15, 412],
-    [16, 450],
-  ];
-  for (const [versao, cap] of caps) {
-    if (len <= cap) return versao;
-  }
-  return 16;
+// ── QR Code ESC/POS padrão (GS ( k) ──────────────────────────────────────────
+// A lib escpos usa comandos proprietários (GS Z / ESC Z) no printer.qrcode(),
+// que só existem em algumas controladoras chinesas. Impressoras Epson-compatíveis
+// (Epson, Elgin, Bematech, Daruma, Tanca, POS-80 genéricas) ignoram esses bytes
+// e imprimem o conteúdo do QR — a URL da NFC-e — como texto puro no cupom.
+// A sequência correta e universal é GS ( k (Funções 165/167/169/180/181),
+// a mesma usada por ACBr, python-escpos e escpos-php.
+const QR_ESCPOS_MODE = (process.env.PRINTER_QR_ESCPOS_MODE || "gs_k").toLowerCase();
+const QR_GS_K_NIVEIS = { L: 48, M: 49, Q: 50, H: 51 };
+// Capacidade máxima QR modo byte (versão 40, nível M) — acima disso só raster
+const QR_GS_K_MAX_BYTES = 2331;
+
+/** Monta a sequência GS ( k completa (modelo 2, byte-safe, sem iconv). */
+function bytesQrGsK(conteudo, opts = {}) {
+  const data = Buffer.from(String(conteudo), "utf8");
+  const moduleSize = Math.min(16, Math.max(1, Number(opts.moduleSize) || IMPRIMIR_QR_NFCE_SIZE));
+  const nivelCfg = String(
+    opts.errorLevel || process.env.PRINTER_QR_ERROR_LEVEL || "M",
+  ).toUpperCase();
+  const nivel = QR_GS_K_NIVEIS[nivelCfg] ?? QR_GS_K_NIVEIS.M;
+  const storeLen = data.length + 3;
+  return Buffer.concat([
+    // Fn 165 — seleciona QR modelo 2
+    Buffer.from([0x1d, 0x28, 0x6b, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00]),
+    // Fn 167 — tamanho do módulo (1–16 dots)
+    Buffer.from([0x1d, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x43, moduleSize]),
+    // Fn 169 — nível de correção de erro
+    Buffer.from([0x1d, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x45, nivel]),
+    // Fn 180 — armazena os dados do símbolo (pL/pH = len + 3, little-endian)
+    Buffer.from([0x1d, 0x28, 0x6b, storeLen & 0xff, (storeLen >> 8) & 0xff, 0x31, 0x50, 0x30]),
+    data,
+    // Fn 181 — imprime o símbolo armazenado
+    Buffer.from([0x1d, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x51, 0x30]),
+  ]);
 }
 
 function promisificarQrImage(printer, conteudo, options) {
@@ -726,21 +735,28 @@ function promisificarQrImage(printer, conteudo, options) {
   });
 }
 
-/** Imprime QR NFC-e: nativo ESC/POS (síncrono) com fallback raster assíncrono. */
+/** Imprime QR (NFC-e/PIX): GS ( k padrão com fallback raster assíncrono. */
 async function imprimirQrNfce(printer, conteudo) {
-  const version = calcularVersaoQrEscpos(conteudo);
-  try {
-    printer.align("ct").feed(1);
-    printer.qrcode(conteudo, version, "M", IMPRIMIR_QR_NFCE_SIZE);
-    printer.feed(2);
-    return;
-  } catch (err) {
-    console.warn(
-      "[Impressora] QR nativo falhou, tentando raster:",
-      err.message,
-    );
+  const texto = String(conteudo || "").trim();
+  if (!texto) return;
+  const usarRaster =
+    QR_ESCPOS_MODE === "raster" ||
+    Buffer.byteLength(texto, "utf8") > QR_GS_K_MAX_BYTES;
+  if (!usarRaster) {
+    try {
+      printer.align("ct").feed(1);
+      // Bytes crus via raw() — bypass do iconv/encoding do driver
+      printer.raw(bytesQrGsK(texto));
+      printer.feed(2);
+      return;
+    } catch (err) {
+      console.warn(
+        "[Impressora] QR GS(k) falhou, tentando raster:",
+        err.message,
+      );
+    }
   }
-  await promisificarQrImage(printer, conteudo, {
+  await promisificarQrImage(printer, texto, {
     type: "png",
     mode: "dhdw",
     size: 4,
@@ -1506,6 +1522,7 @@ module.exports = {
   getInfo,
   listar,
   detectar: () => detectarImpressora(true),
+  bytesQrGsK,
   imprimirCupom,
   imprimirTeste,
   abrirGaveta,

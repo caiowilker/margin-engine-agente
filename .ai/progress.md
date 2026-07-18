@@ -5,6 +5,13 @@
 
 ## Changelog (2026-07-18)
 
+### QR Code NFC-e no cupom térmico (impressão do sistema)
+
+- Causa: `printer.qrcode()` da lib `escpos` envia `GS Z`/`ESC Z` (proprietário). Impressoras Epson-compatíveis ignoram e imprimem a URL da NFC-e como texto.
+- Correção: sequência padrão `GS ( k` (Fn 165/167/169/180/181) via `bytesQrGsK` + `printer.raw()`, com fallback raster.
+- Config: `PRINTER_QR_ESCPOS_MODE=gs_k|raster` (padrão `gs_k`).
+- Teste: `test/qr-cupom.test.js` no pipeline `test:print`.
+
 ### Update remoto — hardening pós-auditoria
 
 - Agente: `atualizando` até o exit; ACK cloud só pós-restart; manifest obrigatório; versão lida do disco; rollback limpa pending.

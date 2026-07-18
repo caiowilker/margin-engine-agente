@@ -1,6 +1,6 @@
 {
   "versao": "1.0.1",
-  "geradoEm": "2026-07-18T19:13:52.519Z",
+  "geradoEm": "2026-07-18T21:56:41.865Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -20,7 +20,7 @@
     },
     {
       "arquivo": "agentConfigCatalog.js",
-      "sha256": "fd9fa1ce8b894c050b3e7d812d18743a5b5ce9bd31404f818be2f8e7289f0665"
+      "sha256": "329b9b5e4fdbe7f90af323f33d2018d6bf2fbf9437d9269c6d29e8a7bd75d620"
     },
     {
       "arquivo": "apiContract.js",
@@ -4736,7 +4736,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "78211ff17fa235843c20e3e3ee668cff480f18dba955e16a596fd10d2a65f449"
+      "sha256": "693e924a26359e2ba520178b8b79b5e2fc7815d66e75b3f93feb3a7aa5ad693b"
     },
     {
       "arquivo": "print/acbrPosPrinterErrors.js",
@@ -4792,7 +4792,7 @@
     },
     {
       "arquivo": "print/escpos/impressoraCore.js",
-      "sha256": "1c286c5c1d8708b0c31ea1b41c749078248a4b9c2589a1b70b9352693a1353af"
+      "sha256": "8c12cb18a8cc15134526173b60a3a9dd667efdc4ff7c71850c87e15fc2bedbaa"
     },
     {
       "arquivo": "print/factory.js",

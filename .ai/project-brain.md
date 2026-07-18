@@ -48,13 +48,14 @@ Architecture: agente serve SPA em produção ou apenas API
 | Recurso | Implementação |
 |---------|----------------|
 | QR conteúdo | URL `infNFeSupl/qrCode` — `resolverQrCodeNfce` |
-| ESC/POS | `printer.qrcode(..., "M", size)` + fallback `qrimage` PNG |
+| ESC/POS | `GS ( k` padrão Epson (Fn 165/167/169/180/181, bytes crus via `bytesQrGsK`) + fallback `qrimage` PNG. **Nunca** usar `printer.qrcode()` da lib escpos — envia `GS Z`/`ESC Z` proprietário e a impressora imprime a URL como texto |
+| ACBr tags | QR NFC-e vira BMP raster (`qrCodeAcbrBmp.js`) pois a URL contém `\|` |
 | Obrigatoriedade | NFC-e modelo 65 sem QR → **erro** (não imprime fiscal incompleto) |
 | Portal consulta | Host extraído da URL do QR (`portalConsultaDocumento`) |
 | Chave | Grupos de 4 dígitos |
 | Endereço | `formatarLinhaEnderecoEmpresa` — sem duplicar bairro |
 | NF-e 55 | Título e portal distintos; QR não exigido |
-| Env | `IMPRIMIR_QR_NFCE=true`, `IMPRIMIR_QR_NFCE_SIZE=3..8` |
+| Env | `IMPRIMIR_QR_NFCE=true`, `IMPRIMIR_QR_NFCE_SIZE=3..8`, `PRINTER_QR_ESCPOS_MODE=gs_k\|raster` |
 
 Teste: `test/qr-cupom.test.js`
 
