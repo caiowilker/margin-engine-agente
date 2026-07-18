@@ -22,15 +22,32 @@ const printerLogo = require("../print/printerLogo");
 
 let passed = 0;
 let failed = 0;
+const pendentes = [];
 
 function test(name, fn) {
+  const registrar = (ok, err) => {
+    if (ok) {
+      passed++;
+      console.log(`  ✓ ${name}`);
+    } else {
+      failed++;
+      console.error(`  ✗ ${name}:`, err.message);
+    }
+  };
   try {
-    fn();
-    passed++;
-    console.log(`  ✓ ${name}`);
+    const out = fn();
+    if (out && typeof out.then === "function") {
+      pendentes.push(
+        out.then(
+          () => registrar(true),
+          (e) => registrar(false, e),
+        ),
+      );
+      return;
+    }
+    registrar(true);
   } catch (e) {
-    failed++;
-    console.error(`  ✗ ${name}:`, e.message);
+    registrar(false, e);
   }
 }
 
@@ -241,6 +258,7 @@ test("qrCodeAcbrBmp — URL com pipe usa placeholder e gera BMP", async () => {
     qrPrecisaBmp,
     tagQrBmpPlaceholder,
     resolverQrBmpPlaceholders,
+    gerarBmpQrAcbr,
     QR_BMP_PLACEHOLDER,
   } = require("../print/qrCodeAcbrBmp");
   const url =
@@ -256,6 +274,14 @@ test("qrCodeAcbrBmp — URL com pipe usa placeholder e gera BMP", async () => {
   );
   assert.ok(!resolvido.includes(QR_BMP_PLACEHOLDER));
   assert.ok(resolvido.includes("<bmp>"));
+
+  // BMP físico deve ser monocromático válido (header BM, 1 bpp)
+  const bmpPath = await gerarBmpQrAcbr(url);
+  const buf = fs.readFileSync(bmpPath);
+  assert.strictEqual(buf.toString("ascii", 0, 2), "BM");
+  assert.strictEqual(buf.readUInt32LE(2), buf.length);
+  assert.strictEqual(buf.readUInt16LE(28), 1); // 1 bpp
+  assert.ok(buf.readInt32LE(18) >= 100); // largura útil para leitura
 });
 
 test("documentosFiscais — resolverDocumentoFiscalLocal retorna null sem dados", () => {
@@ -287,5 +313,7 @@ test("acbrPosPrinterRuntime — buildRuntimeValues não usa USB no Windows com p
   }
 });
 
-console.log(`\nprint-extended: ${passed} passed, ${failed} failed\n`);
-process.exit(failed > 0 ? 1 : 0);
+Promise.all(pendentes).then(() => {
+  console.log(`\nprint-extended: ${passed} passed, ${failed} failed\n`);
+  process.exit(failed > 0 ? 1 : 0);
+});

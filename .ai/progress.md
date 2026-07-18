@@ -1,7 +1,15 @@
 # PROGRESS — Agente Local
 
-**Última atualização:** 2026-07-17  
+**Última atualização:** 2026-07-18  
 **Versão:** `1.0.0` — certificada com a plataforma
+
+## Changelog (2026-07-18)
+
+### QR Code NFC-e no cupom térmico — BMP sem sharp
+
+- **Bug:** `gerarBmpQrAcbr` usava `sharp.toFormat("bmp")`, formato de saída **não suportado** pelo sharp. Toda URL de QR NFC-e (contém `|`) falhava na geração do BMP → `printExecutor` caía no fallback ESC/POS nativo → impressoras sem comando QR nativo imprimiam a **URL em texto** no lugar do QR.
+- **Correção:** `print/qrCodeAcbrBmp.js` agora codifica BMP monocromático 1-bpp diretamente da matriz do QR (`qr-image.matrix`), com quiet zone de 4 módulos e escala via `PRINTER_QR_BMP_WIDTH` (padrão 280 px). Sem dependência de sharp no fluxo de impressão.
+- **Teste:** harness de `test/print-extended.test.js` corrigido para aguardar testes assíncronos (a falha era engolida); teste do QR BMP agora valida header `BM`, 1 bpp e tamanho do arquivo gerado.
 
 ## Changelog (2026-07-17)
 
