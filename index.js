@@ -561,21 +561,45 @@ const CORS_ORIGENS_ENV = CORS_ORIGINS_RAW.split(",")
 
 const LOCALHOST_RX = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
 
+/** Origens oficiais do painel — sempre liberadas (ativação pode gravar outro frontendOrigin). */
+const CORS_ORIGENS_PADRAO = [
+  "https://app.marginengine.com.br",
+  "https://www.marginengine.com.br",
+  "https://staging.marginengine.com.br",
+];
+
+/**
+ * Decide se a Origin do browser pode falar com o agente local.
+ * IMPORTANTE: o preflight OPTIONS (privateNetworkHeaders) já devolve ACAO;
+ * se este callback rejeitar a requisição real, o Chrome reporta "Failed to fetch"
+ * / CORS mesmo com o agente processando a venda (ex.: POST /venda 200 sem ACAO).
+ */
+function isCorsOriginAllowed(origin, cfg = lerConfigSync()) {
+  if (!origin) return true;
+  if (LOCALHOST_RX.test(origin)) return true;
+  if (CORS_ORIGENS_ENV.includes(origin)) return true;
+  if (CORS_ORIGENS_PADRAO.includes(origin)) return true;
+  if (cfg.frontendOrigin && origin === cfg.frontendOrigin) return true;
+  if (CORS_ORIGENS_ENV.length === 0 && !cfg.frontendOrigin) return true;
+  return false;
+}
+
 const corsMiddleware = cors({
   origin(origin, callback) {
-    if (!origin) return callback(null, true);
-    if (LOCALHOST_RX.test(origin)) return callback(null, true);
-    if (CORS_ORIGENS_ENV.includes(origin)) return callback(null, true);
-    // Lê do cache — seguro após boot
     const cfg = lerConfigSync();
-    if (cfg.frontendOrigin && origin === cfg.frontendOrigin) {
-      return callback(null, true);
-    }
-    if (CORS_ORIGENS_ENV.length === 0 && !cfg.frontendOrigin) {
-      console.warn(
-        `[CORS] Origem "${origin}" permitida (agente ainda sem CORS_ORIGINS / frontendOrigin configurado). ` +
-          "Ative o terminal pelo painel ou defina CORS_ORIGINS para restringir.",
-      );
+    if (isCorsOriginAllowed(origin, cfg)) {
+      if (
+        origin &&
+        !LOCALHOST_RX.test(origin) &&
+        !CORS_ORIGENS_ENV.includes(origin) &&
+        !CORS_ORIGENS_PADRAO.includes(origin) &&
+        !cfg.frontendOrigin
+      ) {
+        console.warn(
+          `[CORS] Origem "${origin}" permitida (agente ainda sem CORS_ORIGINS / frontendOrigin configurado). ` +
+            "Ative o terminal pelo painel ou defina CORS_ORIGINS para restringir.",
+        );
+      }
       return callback(null, true);
     }
     console.warn(`[CORS] Origem bloqueada: ${origin}`);
@@ -3016,7 +3040,8 @@ function iniciarServidor() {
   });
 
   // ── Venda / Fila ──────────────────────────────────────────────────────────────
-  app.post("/venda", exigirAgentToken, async (req, res) => {
+  // privateNetworkHeaders reforça ACAO na resposta real (além do preflight OPTIONS).
+  app.post("/venda", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     const payload = req.body;
     if (!payload?.numeroVendaCliente)
       return res.status(400).json({ erro: "numeroVendaCliente obrigatório." });
@@ -3089,7 +3114,7 @@ function iniciarServidor() {
     res.json({ ops: mesaFila.listarOps(), ...mesaFila.contadores() });
   });
 
-  app.post("/mesa/sincronizar", exigirAgentToken, async (req, res) => {
+  app.post("/mesa/sincronizar", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     res.json(await mesaFila.sincronizar());
   });
 
