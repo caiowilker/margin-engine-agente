@@ -57,6 +57,30 @@ bash scripts/run-homolog-acbrlib-producao.sh
 | **parity** | `ACBR_LIB_ALLOW_PARITY=true` **sem** DLL | Fallback Monitor TCP — **apenas dev/CI** |
 | **unconfigured** | Sem DLL e sem `ALLOW_PARITY` | `emitir` falha com erro explícito |
 
+## CT-e e MDF-e (Windows)
+
+CT-e (modelo 57) e MDF-e (modelo 58) permanecem desabilitados por padrão:
+
+```env
+TRANSPORT_CTE_ENABLED=false
+TRANSPORT_MDFE_ENABLED=false
+```
+
+Para habilitar, o instalador deve validar separadamente a DLL, o INI e os schemas
+de cada documento. O adaptador chama apenas contratos nativos documentados
+`CTE_*` e `MDFE_*`, isolados pelos nomes internos `ACBrCTe_*` e
+`ACBrMDFe_*`; não usa comandos NF-e/NFC-e e não possui fallback Monitor.
+
+- CT-e: emissão e cancelamento.
+- MDF-e: emissão e encerramento.
+- Condutor MDF-e: deve constar no `documentIni` antes da emissão. A ACBrLib não
+  documenta export para alteração de condutor após a autorização; a rota retorna
+  falha explícita em vez de executar uma chamada FFI não comprovada.
+
+Cada emissão usa numeração SQLite independente por modelo, persiste XML/PDF em
+subpastas locais `cte`/`mdfe`, enfileira callback em
+`TRANSPORT_CALLBACK_PATH` e preserva lock, retry e idempotência da fila fiscal.
+
 ---
 
 ## Configuração para emissão nativa real

@@ -14,6 +14,12 @@ const TIPOS = [
   "INUTILIZACAO",
   "EPEC",
   "EVENTO_FISCAL",
+  "TRANSPORTE_CTE_EMITIR_CTE",
+  "TRANSPORTE_CTE_CANCELAR_CTE",
+  "TRANSPORTE_MDFE_EMITIR_MDFE",
+  "TRANSPORTE_MDFE_ENCERRAR_MDFE",
+  "TRANSPORTE_MDFE_INCLUIR_CONDUTOR_MDFE",
+  "TRANSPORTE_CALLBACK",
 ];
 
 const STATUS = {
@@ -41,6 +47,12 @@ const PRIORIDADE = {
   INUTILIZACAO: 5,
   EPEC: 6,
   EVENTO_FISCAL: 7,
+  TRANSPORTE_CTE_EMITIR_CTE: 1,
+  TRANSPORTE_MDFE_EMITIR_MDFE: 1,
+  TRANSPORTE_CTE_CANCELAR_CTE: 2,
+  TRANSPORTE_MDFE_ENCERRAR_MDFE: 2,
+  TRANSPORTE_MDFE_INCLUIR_CONDUTOR_MDFE: 2,
+  TRANSPORTE_CALLBACK: 3,
 };
 
 const BACKOFF_MS = [60000, 120000, 300000, 900000, 1800000];
@@ -276,13 +288,13 @@ function enfileirar(tipo, payload, correlationId = null, numeroVenda = null) {
     }
   }
 
-  if (correlationId && tipo === "EMISSAO") {
+  if (correlationId && (tipo === "EMISSAO" || tipo.startsWith("TRANSPORTE_"))) {
     const dup = db
       .prepare(
-        `SELECT id, correlation_id FROM fila_fiscal WHERE tipo = 'EMISSAO' AND correlation_id = ?
+        `SELECT id, correlation_id FROM fila_fiscal WHERE tipo = ? AND correlation_id = ?
          AND status IN ('PENDENTE','PROCESSANDO','INCERTO','FALHA_TEMPORARIA') LIMIT 1`,
       )
-      .get(correlationId);
+      .get(tipo, correlationId);
     if (dup) return { id: dup.id, deduplicado: true, correlationId: dup.correlation_id };
   }
 

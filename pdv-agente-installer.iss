@@ -76,6 +76,10 @@ Source: "dist\node\*"; DestDir: "{app}\node"; Flags: recursesubdirs createallsub
 Source: "dist\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "node_modules\*,data\*,daemon\*,frontend-dist\*,.env,homolog-acbrlib\*,test\*,.git\*,RESULTADO-*.md,*.log,*.db,*.db-shm,*.db-wal"
 Source: "dist\app\node_modules\*"; DestDir: "{app}\app\node_modules"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 Source: "dist\app\acbrlib\data\Schemas\*"; DestDir: "{app}\app\acbrlib\data\Schemas"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "dist\app\acbrlib\lib\ACBrCTe64.dll"; DestDir: "{app}\app\acbrlib\lib"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "dist\app\acbrlib\lib\ACBrMDFe64.dll"; DestDir: "{app}\app\acbrlib\lib"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "dist\app\acbrlib\data\config\acbrcte.ini"; DestDir: "{app}\app\acbrlib\data\config"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist
+Source: "dist\app\acbrlib\data\config\acbrmdfe.ini"; DestDir: "{app}\app\acbrlib\data\config"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist
 Source: "dist\app\acbrlib\data\config\ACBrNFeServicos.ini"; DestDir: "{app}\app\acbrlib\data\config"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist
 Source: "dist\app\acbrlib\data\config\acbrlib.ini"; DestDir: "{app}\app\acbrlib\data\config"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist
 Source: "dist\app\data\acbrlib.ini"; DestDir: "{app}\app\data"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist

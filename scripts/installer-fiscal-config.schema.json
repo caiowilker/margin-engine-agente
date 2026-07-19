@@ -12,6 +12,14 @@
     "cscId": { "type": "string" },
     "cscToken": { "type": "string" },
     "libPath": { "type": "string" },
-    "libIni": { "type": "string" }
+    "libIni": { "type": "string" },
+    "transportCteEnabled": { "type": "boolean" },
+    "transportMdfeEnabled": { "type": "boolean" },
+    "cteLibPath": { "type": "string" },
+    "cteIni": { "type": "string" },
+    "cteSchemasPath": { "type": "string" },
+    "mdfeLibPath": { "type": "string" },
+    "mdfeIni": { "type": "string" },
+    "mdfeSchemasPath": { "type": "string" }
   }
 }

@@ -57,6 +57,27 @@ const CATALOGO = {
     grupo: "fiscal",
     label: "Série NFC-e (modelo 65)",
   },
+  transportCteEnabled: {
+    env: "TRANSPORT_CTE_ENABLED",
+    tipo: "boolean",
+    default: false,
+    grupo: "fiscal",
+    label: "CT-e modelo 57 habilitado (requer componentes locais)",
+  },
+  transportMdfeEnabled: {
+    env: "TRANSPORT_MDFE_ENABLED",
+    tipo: "boolean",
+    default: false,
+    grupo: "fiscal",
+    label: "MDF-e modelo 58 habilitado (requer componentes locais)",
+  },
+  transportCallbackPath: {
+    env: "TRANSPORT_CALLBACK_PATH",
+    tipo: "string",
+    default: "/pdv/transporte/fiscal",
+    grupo: "fiscal",
+    label: "Endpoint de callback fiscal de transporte",
+  },
   fiscalPreflightRapido: {
     env: "FISCAL_PREFLIGHT_RAPIDO",
     tipo: "boolean",

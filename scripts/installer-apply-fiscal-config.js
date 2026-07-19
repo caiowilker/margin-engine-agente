@@ -90,6 +90,35 @@ if (cfg.driver === "lib") {
   envContent = patchEnv(envContent, "ACBR_LIB_INI", iniPath.replace(/\\/g, "\\\\"));
 }
 
+function patchTransportEnv(documento, enabled, libPath, iniPath, schemasPath) {
+  const upper = documento.toUpperCase();
+  envContent = patchEnv(envContent, `TRANSPORT_${upper}_ENABLED`, enabled ? "true" : "false");
+  if (libPath) envContent = patchEnv(envContent, `ACBR_${upper}_LIB_PATH`, libPath.replace(/\\/g, "\\\\"));
+  if (iniPath) envContent = patchEnv(envContent, `ACBR_${upper}_INI`, iniPath.replace(/\\/g, "\\\\"));
+  if (schemasPath) {
+    envContent = patchEnv(
+      envContent,
+      `ACBR_${upper}_SCHEMAS_PATH`,
+      schemasPath.replace(/\\/g, "\\\\"),
+    );
+  }
+}
+
+patchTransportEnv(
+  "cte",
+  !!cfg.transportCteEnabled,
+  cfg.cteLibPath,
+  cfg.cteIni,
+  cfg.cteSchemasPath,
+);
+patchTransportEnv(
+  "mdfe",
+  !!cfg.transportMdfeEnabled,
+  cfg.mdfeLibPath,
+  cfg.mdfeIni,
+  cfg.mdfeSchemasPath,
+);
+
 fs.writeFileSync(envPath, envContent, "utf8");
 
 const vaultPatch = {};

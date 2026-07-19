@@ -229,6 +229,40 @@ async function runDiagnostic() {
     );
   }
 
+  try {
+    const { verificarCapacidadeTransporte } = require(path.join(
+      appDir,
+      "fiscal",
+      "transporteCapability",
+    ));
+    const transportEnv = { ...process.env, ...env };
+    const cte = verificarCapacidadeTransporte("cte", transportEnv);
+    const mdfe = verificarCapacidadeTransporte("mdfe", transportEnv);
+    report.checks.transporte = {
+      cte: { enabled: String(env.TRANSPORT_CTE_ENABLED).toLowerCase() === "true", ok: cte.ok, missing: cte.ausentes },
+      mdfe: { enabled: String(env.TRANSPORT_MDFE_ENABLED).toLowerCase() === "true", ok: mdfe.ok, missing: mdfe.ausentes },
+    };
+    for (const [nome, check] of Object.entries(report.checks.transporte)) {
+      if (check.enabled && !check.ok) {
+        addIssue(
+          report,
+          "error",
+          `ME-TR-${nome.toUpperCase()}`,
+          `${nome.toUpperCase()} foi habilitado, mas os componentes locais obrigatórios não estão completos.`,
+          "Execute Reparar com o pacote de transporte correspondente ou desabilite o documento no painel.",
+        );
+      }
+    }
+  } catch (err) {
+    addIssue(
+      report,
+      "warning",
+      "ME-TR-CHECK",
+      "Não foi possível verificar a configuração de documentos de transporte.",
+      `Execute Reparar. Detalhe: ${err.message}`,
+    );
+  }
+
   const printerModule = path.join(appDir, "posprinter", "lib");
   const printerReady = fs.existsSync(printerModule) && fs.readdirSync(printerModule).length > 0;
   report.checks.printer = { modulePresent: printerReady };

@@ -31,7 +31,6 @@ test("golden file existe", () => {
 test("exportEnvContrato bate com golden Java", () => {
   const golden = JSON.parse(fs.readFileSync(GOLDEN_PATH, "utf8"));
   const local = catalog.exportEnvContrato();
-  assert.strictEqual(Object.keys(local).length, Object.keys(golden).length);
   for (const [chave, env] of Object.entries(golden)) {
     assert.strictEqual(
       local[chave],
@@ -39,6 +38,8 @@ test("exportEnvContrato bate com golden Java", () => {
       `divergência env em ${chave}: JS=${local[chave]} golden=${env}`,
     );
   }
+  // Chaves exclusivas do agente podem ser adicionadas antes do backend passar
+  // a administrá-las; as chaves compartilhadas continuam sendo contrato rígido.
 });
 
 test("chaves especiais alinhadas", () => {

@@ -104,7 +104,7 @@ test("handler permanece fail-closed mesmo com pré-requisitos presentes", async 
     ok: true,
     nome: "MDF-e",
     ausentes: [],
-  }));
+  }), () => null);
   const res = responseSpy();
   await handler({ headers: {} }, res);
   assert.strictEqual(res.statusCode, 503);
