@@ -1952,6 +1952,20 @@ function iniciarServidor() {
     }
   });
 
+  // CT-e/MDF-e são contratos fail-closed até existir adapter ACBr específico.
+  // O handler valida DLL, schemas e INI antes de qualquer operação fiscal.
+  require("./fiscal/transporteRoutes").registrarRotasTransporte(app, [
+    privateNetworkHeaders,
+    exigirAgentToken,
+  ], {
+    criarContexto: async () => ({
+      lerConfig,
+      filaFiscal,
+      fiscalPreflight,
+      fiscalService,
+    }),
+  });
+
   app.post("/fiscal/lib/emitir", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     req.body = { ...(req.body || {}), acbrDriver: "lib" };
     const forcarEmissao = req.body?.forcarEmissao === true;
