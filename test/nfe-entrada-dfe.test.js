@@ -197,6 +197,29 @@ async function run() {
     const r = manifesto.avaliarPaginaDist({ cStat: "656", xmls: [], resumos: [] });
     assert.ok(r.erro);
     assert.ok(/consumo indevido/i.test(r.erro));
+    assert.strictEqual(r.consumoIndevido, true);
+    assert.strictEqual(r.naoAvancarNsu, true);
+  });
+
+  await test("cooldown 656 bloqueia sync sem bater na SEFAZ", async () => {
+    const manifesto = require("../manifestoDestinatario");
+    manifesto.limparCooldown656();
+    process.env.MANIFESTO_656_COOLDOWN_MS = "3600000";
+    manifesto.registrarCooldown656();
+    manifesto.configurar({
+      lerConfig: async () => ({
+        backendUrl: "http://localhost:9999",
+        backendToken: "t",
+      }),
+    });
+    manifesto.limparCacheEmpresa();
+    const r = await manifesto.executarSincronizacao(true);
+    assert.strictEqual(r.ok, false);
+    assert.strictEqual(r.ignorado, true);
+    assert.strictEqual(r.motivo, "consumo_indevido_cooldown");
+    assert.ok(r.cooldownMs > 0);
+    manifesto.limparCooldown656();
+    delete process.env.MANIFESTO_656_COOLDOWN_MS;
   });
 
   await test("avaliarPaginaDist — sem cStat é erro (não Sucesso falso)", () => {

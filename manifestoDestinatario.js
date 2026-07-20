@@ -1,4 +1,5 @@
 // Manifesto do Destinatário — sincronização DistDFe (NSU) + Ciência + XML completo
+const fs = require("fs");
 const log = require("./logger").child({ modulo: "manifesto_destinatario" });
 
 let intervalHandle = null;
@@ -7,6 +8,81 @@ let getCfgFn = async () => ({});
 /** Cache curto do cadastro fiscal (evita martelar /pdv/empresa no job). */
 let empresaCache = { at: 0, data: null };
 const EMPRESA_CACHE_MS = 5 * 60 * 1000;
+
+/** Após cStat 656 a SEFAZ exige ~1h sem nova DistDFe no mesmo CNPJ. */
+let cooldown656AteMs = 0;
+const COOLDOWN_656_MS_DEFAULT = 60 * 60 * 1000;
+
+function cooldown656MsConfig() {
+  const n = parseInt(process.env.MANIFESTO_656_COOLDOWN_MS || "", 10);
+  return Number.isFinite(n) && n >= 60_000 ? n : COOLDOWN_656_MS_DEFAULT;
+}
+
+function cooldown656Path() {
+  try {
+    return require("./runtime/directoryManager").getDirectoryManager().file(
+      "agent",
+      "manifesto-dist-cooldown.json",
+    );
+  } catch {
+    return null;
+  }
+}
+
+function carregarCooldown656() {
+  const p = cooldown656Path();
+  if (!p || !fs.existsSync(p)) return;
+  try {
+    const j = JSON.parse(fs.readFileSync(p, "utf8"));
+    const ate = Number(j?.ateMs);
+    if (Number.isFinite(ate) && ate > Date.now()) {
+      cooldown656AteMs = ate;
+    } else {
+      cooldown656AteMs = 0;
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function persistirCooldown656(ateMs) {
+  cooldown656AteMs = ateMs;
+  const p = cooldown656Path();
+  if (!p) return;
+  try {
+    const { writeJsonAtomicSync } = require("./runtime/atomicWrite");
+    writeJsonAtomicSync(
+      p,
+      { ateMs, registradoEm: new Date().toISOString(), cStat: "656" },
+      {
+        ensureDir: (dir) =>
+          require("./runtime/directoryManager").getDirectoryManager().ensurePath(dir, "agentData"),
+      },
+    );
+  } catch (err) {
+    log.debug({ err: err.message }, "Falha ao persistir cooldown DistDFe 656");
+  }
+}
+
+function registrarCooldown656() {
+  persistirCooldown656(Date.now() + cooldown656MsConfig());
+}
+
+function restanteCooldown656Ms() {
+  carregarCooldown656();
+  return Math.max(0, cooldown656AteMs - Date.now());
+}
+
+function mensagemConsumoIndevido(xMotivo) {
+  const base =
+    xMotivo ||
+    "Rejeição: Consumo Indevido (utilize o ultNSU nas solicitações subsequentes. Tente após 1 hora)";
+  return (
+    `${base}. ` +
+    "A SEFAZ bloqueia DistDFe por ~1h quando há consultas demais ou outro sistema " +
+    "(Sieg, Arquivei, Domínio, etc.) consulta o mesmo CNPJ. Não clique em sincronizar de novo agora."
+  );
+}
 
 function configurar(deps) {
   if (deps?.lerConfig) getCfgFn = deps.lerConfig;
@@ -251,6 +327,8 @@ function mensagemMotivo(motivo) {
       return "CNPJ da empresa não encontrado (cadastro do tenant / NFE_CNPJ).";
     case "uf_empresa_nao_configurada":
       return "UF da empresa não configurada — necessária para DistDFe.";
+    case "consumo_indevido_cooldown":
+      return "SEFAZ bloqueou DistDFe (consumo indevido). Aguarde o cooldown antes de nova consulta.";
     default:
       return `Sincronização ignorada: ${motivo}`;
   }
@@ -265,11 +343,12 @@ function avaliarPaginaDist(dist) {
   const xMotivo = dist?.xMotivo || "";
   const hasDocs = (dist?.xmls || []).length > 0 || (dist?.resumos || []).length > 0;
 
-  if (["656"].includes(cStat)) {
+  if (["656"].includes(cStat) || /consumo indevido/i.test(xMotivo)) {
     return {
       parar: true,
       naoAvancarNsu: true,
-      erro: xMotivo || `DistDFe consumo indevido (cStat ${cStat}). Aguarde antes de nova consulta.`,
+      consumoIndevido: true,
+      erro: mensagemConsumoIndevido(xMotivo),
     };
   }
   if (cStat === "137") {
@@ -305,6 +384,18 @@ async function executarSincronizacao(_forcar = false) {
 
   if (!cfg.backendUrl || !cfg.backendToken) {
     return respostaIgnorada("agente_nao_ativado");
+  }
+
+  const restCooldown = restanteCooldown656Ms();
+  if (restCooldown > 0) {
+    const min = Math.max(1, Math.ceil(restCooldown / 60_000));
+    return respostaIgnorada("consumo_indevido_cooldown", {
+      erro:
+        `SEFAZ bloqueou DistDFe (consumo indevido cStat 656). Aguarde ${min} min antes de nova consulta. ` +
+        "Se o contador usa Sieg/Arquivei/Domínio no mesmo CNPJ, peça para espaçar ou pausar a busca automática.",
+      cooldownMs: restCooldown,
+      cStat: "656",
+    });
   }
 
   const empresa = await resolverEmpresaFiscal(cfg);
@@ -375,6 +466,9 @@ async function executarSincronizacao(_forcar = false) {
       }
 
       const avaliacao = avaliarPaginaDist(dist);
+      if (avaliacao.consumoIndevido) {
+        registrarCooldown656();
+      }
       if (avaliacao.naoAvancarNsu) {
         nsuTravado = true;
         ultNsuAtual = nsuAntes;
@@ -394,6 +488,9 @@ async function executarSincronizacao(_forcar = false) {
     }
   } catch (err) {
     const msg = String(err.message || err);
+    if (/consumo indevido|cStat\s*656/i.test(msg)) {
+      registrarCooldown656();
+    }
     const certificado = /certific|expirad|senha|a1|a3/i.test(msg);
     const timeout = /timeout|timed out|ETIMEDOUT/i.test(msg);
     const resultadoErro = await enviarSyncBackend(cfg, {
@@ -534,6 +631,18 @@ function limparCacheEmpresa() {
   empresaCache = { at: 0, data: null };
 }
 
+function limparCooldown656() {
+  cooldown656AteMs = 0;
+  const p = cooldown656Path();
+  if (p && fs.existsSync(p)) {
+    try {
+      fs.unlinkSync(p);
+    } catch (_) {
+      /* ignore */
+    }
+  }
+}
+
 module.exports = {
   configurar,
   executarSincronizacao,
@@ -544,4 +653,7 @@ module.exports = {
   avaliarPaginaDist,
   cienciaRegistradaOk,
   limparCacheEmpresa,
+  limparCooldown656,
+  restanteCooldown656Ms,
+  registrarCooldown656,
 };
