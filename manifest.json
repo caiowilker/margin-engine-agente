@@ -1,6 +1,6 @@
 {
   "versao": "1.0.1",
-  "geradoEm": "2026-07-20T19:24:13.643Z",
+  "geradoEm": "2026-07-20T19:37:08.529Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -88,7 +88,7 @@
     },
     {
       "arquivo": "fiscal/drivers/acbrLibDriver.js",
-      "sha256": "1b26dfa3cece040bc9d15f36044fb1fcc51c63c646f4618f32de42c046496600"
+      "sha256": "7b45ae8752f343a798625a4d13c6dcaff4d2e30275b15f1779a97730a32d0183"
     },
     {
       "arquivo": "fiscal/drivers/acbrLibRuntime.js",
@@ -232,7 +232,7 @@
     },
     {
       "arquivo": "frontend-dist/api-backend.json",
-      "sha256": "3507d45025618799bf6642fb3d3bb2c22730d26d9534ccb7f759594d20ddcc88"
+      "sha256": "c69dfec400e8489a5586dbc466fcacc11d850d6c5e8952b60832bfff1d8410c4"
     },
     {
       "arquivo": "frontend-dist/apple-touch-icon.png",
@@ -4752,7 +4752,7 @@
     },
     {
       "arquivo": "frontend-dist/version.json",
-      "sha256": "e899acadd09e015ee1c76a87679f6eb759b83492c783b878369365727d94a9dd"
+      "sha256": "f68a53872e7075a4c1f3ac16b03257358cd6618bd22fcba8f7b030c7bd534d5f"
     },
     {
       "arquivo": "frontend-dist/workbox-3147e214.js",
