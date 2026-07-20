@@ -53,9 +53,21 @@ bash scripts/run-homolog-acbrlib-producao.sh
 
 | Modo | Condição | Comportamento |
 |------|----------|---------------|
-| **native** | `ACBR_LIB_PATH` aponta para `.so`/`.dll` existente | Emissão real via `ACBrLibNFeMT` |
+| **native** | `ACBR_LIB_PATH` aponta para `.so`/`.dll` existente | Emissão + DistDFe + manifesto via `ACBrLibNFeMT` |
 | **parity** | `ACBR_LIB_ALLOW_PARITY=true` **sem** DLL | Fallback Monitor TCP — **apenas dev/CI** |
 | **unconfigured** | Sem DLL e sem `ALLOW_PARITY` | `emitir` falha com erro explícito |
+
+### DistDFe / Manifesto do Destinatário (nativo)
+
+Com `ACBR_DRIVER=lib` (padrão) e DLL presente, o manifesto **não** usa a porta 9200:
+
+| Operação | Método FFI |
+|----------|------------|
+| Sync NSU | `NFE_DistribuicaoDFePorUltNSU` |
+| Download por chave | `NFE_DistribuicaoDFePorChave` |
+| Ciência / decisão | `NFE_CarregarEventoINI` + `NFE_EnviarEvento` |
+
+Consumidores (`manifestoDestinatario.js`, consulta de entrada) usam `fiscalDriver` — o mesmo ponto da emissão.
 
 ---
 

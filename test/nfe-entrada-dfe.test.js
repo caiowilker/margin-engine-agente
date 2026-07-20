@@ -88,6 +88,30 @@ async function run() {
     assert.ok(ini.includes("xJust="));
   });
 
+  await test("parseDistribuicaoDFeUltNsuResposta extrai xmls e resumos", () => {
+    const acbr = require("../acbr");
+    const chave = CHAVE;
+    const raw =
+      `cStat=138\nxMotivo=Documento localizado\nultNSU=5\nmaxNSU=9\n` +
+      `<nfeProc><NFe Id="NFe${chave}"></NFe></nfeProc>` +
+      `<resNFe><chNFe>${chave}</chNFe><CNPJ>12345678000190</CNPJ></resNFe>`;
+    const parsed = acbr.parseDistribuicaoDFeUltNsuResposta(raw, "0");
+    assert.strictEqual(parsed.cStat, "138");
+    assert.strictEqual(parsed.xmls.length, 1);
+    assert.strictEqual(parsed.resumos.length, 1);
+    assert.strictEqual(parsed.ultNsuFinal, "5");
+    assert.strictEqual(parsed.maxNsu, "9");
+  });
+
+  await test("acbrLibDriver exporta DistDFe e manifesto nativos", () => {
+    const lib = require("../fiscal/drivers/acbrLibDriver");
+    assert.strictEqual(typeof lib.distribuicaoDFePorUltNsu, "function");
+    assert.strictEqual(typeof lib.distribuicaoDFePorChave, "function");
+    assert.strictEqual(typeof lib.manifestarEventoDestinatario, "function");
+    assert.strictEqual(typeof lib.manifestarCienciaOperacao, "function");
+    assert.strictEqual(typeof lib.consultarChaveEntrada, "function");
+  });
+
   await test("parseResumoNfe extrai chave e emitente", () => {
     const manifesto = require("../manifestoDestinatario");
     const xml = `<resNFe><chNFe>${CHAVE}</chNFe><CNPJ>12345678000190</CNPJ><xNome>FORN</xNome><vNF>10.00</vNF></resNFe>`;

@@ -909,8 +909,16 @@ async function enviarEventoFiscalLib(payload) {
   const runtime = buildNativeRuntime();
   const nativeIniPath = acbrLibRuntime.resolveNativeDocumentIniPath(iniPath, runtime);
   const resposta = await withNativeLib("enviarEvento", (inst) => {
-    inst.limparLista();
-    inst.carregarINI(nativeIniPath);
+    if (typeof inst.limparListaEventos === "function") {
+      inst.limparListaEventos();
+    } else {
+      inst.limparLista();
+    }
+    if (typeof inst.carregarEventoINI === "function") {
+      inst.carregarEventoINI(nativeIniPath);
+    } else {
+      inst.carregarINI(nativeIniPath);
+    }
     inst.assinar();
     return inst.enviarEvento(1);
   });
@@ -928,6 +936,118 @@ async function enviarEventoFiscalLib(payload) {
     native: true,
     tipoEvento: payload?.tipoEvento || payload?.tipo || null,
   };
+}
+
+function toUfAutorNumber(ufHint, chaveFallback) {
+  const cod = acbr.resolverUfIbgeDestinatario(ufHint, chaveFallback);
+  const n = Number(String(cod || "").replace(/\D/g, ""));
+  if (!Number.isFinite(n) || n < 11 || n > 99) {
+    throw new Error(`UF do destinatário inválida para DistDFe ACBrLib: ${ufHint || cod || "?"}`);
+  }
+  return n;
+}
+
+async function distribuicaoDFePorUltNsuLib(ultNsu, cnpjDestinatario, uf) {
+  if (getIntegrationMode() !== "native") {
+    return acbr.distribuicaoDFePorUltNsu(ultNsu, cnpjDestinatario, uf);
+  }
+  const cnpj = String(cnpjDestinatario || "").replace(/\D/g, "");
+  if (cnpj.length !== 14) {
+    throw new Error("CNPJ do destinatário obrigatório para Distribuição DFe (14 dígitos).");
+  }
+  const nsu = String(ultNsu || "0").replace(/\D/g, "").padStart(15, "0");
+  const ufAutor = toUfAutorNumber(uf, null);
+  const resposta = await withNativeLib("distribuicaoDFePorUltNSU", (inst) =>
+    inst.distribuicaoDFePorUltNSU(ufAutor, cnpj, nsu),
+  );
+  const parsed = acbr.parseDistribuicaoDFeUltNsuResposta(resposta, nsu);
+  return { ...parsed, native: true };
+}
+
+async function distribuicaoDFePorChaveLib(chave, cnpjDestinatario, ufAutor) {
+  if (getIntegrationMode() !== "native") {
+    return acbr.distribuicaoDFePorChave(chave, cnpjDestinatario, ufAutor);
+  }
+  const chaveNorm = String(chave || "").replace(/\D/g, "");
+  if (chaveNorm.length !== 44) {
+    throw new Error("Chave NF-e deve ter 44 dígitos.");
+  }
+  const cnpj = String(cnpjDestinatario || "").replace(/\D/g, "");
+  if (cnpj.length !== 14) {
+    throw new Error("CNPJ do destinatário obrigatório para Distribuição DFe (14 dígitos).");
+  }
+  const ufNum = toUfAutorNumber(ufAutor, chaveNorm);
+  const resposta = await withNativeLib("distribuicaoDFePorChave", (inst) =>
+    inst.distribuicaoDFePorChave(ufNum, cnpj, chaveNorm),
+  );
+  const parsed = acbr.parseDistribuicaoDFePorChaveResposta(resposta, chaveNorm);
+  return { ...parsed, native: true };
+}
+
+async function manifestarEventoDestinatarioLib(chave, cnpjDestinatario, tpEvento, xJust) {
+  if (getIntegrationMode() !== "native") {
+    return acbr.manifestarEventoDestinatario(chave, cnpjDestinatario, tpEvento, xJust);
+  }
+  const cnpj = String(cnpjDestinatario || "").replace(/\D/g, "");
+  if (cnpj.length !== 14) {
+    throw new Error("CNPJ do destinatário obrigatório para manifestação (14 dígitos).");
+  }
+  const chaveNorm = String(chave || "").replace(/\D/g, "");
+  const tp = String(tpEvento || "210210").trim();
+  const documentIni = acbr.montarIniManifestacaoEvento(chaveNorm, cnpj, tp, xJust);
+  const iniPath = path.join(
+    PATHS.ini,
+    `manifesto-lib-${tp}-${Date.now()}-${chaveNorm.slice(-8)}.ini`,
+  );
+  fs.writeFileSync(iniPath, documentIni, "utf8");
+  const runtime = buildNativeRuntime();
+  const nativeIniPath = acbrLibRuntime.resolveNativeDocumentIniPath(iniPath, runtime);
+  const resposta = await withNativeLib("manifestarEventoDestinatario", (inst) => {
+    if (typeof inst.limparListaEventos === "function") {
+      inst.limparListaEventos();
+    } else {
+      inst.limparLista();
+    }
+    if (typeof inst.carregarEventoINI !== "function") {
+      throw new Error("ACBrLib sem NFE_CarregarEventoINI — atualize a biblioteca nativa.");
+    }
+    inst.carregarEventoINI(nativeIniPath);
+    inst.assinar();
+    return inst.enviarEvento(1);
+  });
+  const p = acbrLibResposta.parseRespostaLib(resposta);
+  const cStat = String(p.cStat || "");
+  const { isCStatAutorizado, CSTAT_LOTE_OK } = require("../../acbrResposta");
+  const ok = acbr.isCStatManifestacaoOk(cStat, resposta);
+  if (!ok && !isCStatAutorizado(cStat) && !CSTAT_LOTE_OK.has(cStat)) {
+    const motivo = p.xMotivo || `SEFAZ rejeitou manifesto cStat ${cStat || "?"}`;
+    const err = new Error(motivo);
+    err.cStat = p.cStat;
+    throw err;
+  }
+  return {
+    ok: true,
+    cStat: p.cStat,
+    protocolo: p.protocolo,
+    chave: p.chave || chaveNorm,
+    xMotivo: p.xMotivo,
+    raw: resposta,
+    tipoEvento: tp,
+    modeloDocumento: "55",
+    native: true,
+  };
+}
+
+async function manifestarCienciaOperacaoLib(chave, cnpjDestinatario) {
+  return manifestarEventoDestinatarioLib(chave, cnpjDestinatario, "210210", null);
+}
+
+async function consultarChaveEntradaLib(chave, cnpjDestinatario, ufAutor) {
+  return acbr.consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, {
+    consultarChave: consultarChaveLib,
+    distribuicaoDFePorChave: distribuicaoDFePorChaveLib,
+    manifestarCienciaOperacao: manifestarCienciaOperacaoLib,
+  });
 }
 
 /** Invalida sessão nativa — próxima operação reinicializa a biblioteca. */
@@ -961,9 +1081,14 @@ module.exports = Object.assign({}, acbr, {
   testar: testarLib,
   testarLibDetalhe,
   consultarChave: consultarChaveLib,
+  consultarChaveEntrada: consultarChaveEntradaLib,
   cancelarNfce: cancelarNfceLib,
   inutilizarNfce: inutilizarNfceLib,
   enviarEventoFiscal: enviarEventoFiscalLib,
+  distribuicaoDFePorUltNsu: distribuicaoDFePorUltNsuLib,
+  distribuicaoDFePorChave: distribuicaoDFePorChaveLib,
+  manifestarCienciaOperacao: manifestarCienciaOperacaoLib,
+  manifestarEventoDestinatario: manifestarEventoDestinatarioLib,
   refreshLibRuntimeConfig,
   invalidateNativeSession,
   getLibSessionStatus: () => acbrLibSession.getSessionStatus(),

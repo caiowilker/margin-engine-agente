@@ -58,6 +58,11 @@ const REQUIRED_METHODS = [
   "montarIniNfce",
   "montarIniNfe",
   "enviarEventoFiscal",
+  "distribuicaoDFePorUltNsu",
+  "distribuicaoDFePorChave",
+  "manifestarCienciaOperacao",
+  "manifestarEventoDestinatario",
+  "consultarChaveEntrada",
   "obterStatusMemoria",
   "obterStatusDetalhe",
 ];

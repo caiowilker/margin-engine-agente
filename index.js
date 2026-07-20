@@ -2260,8 +2260,7 @@ function iniciarServidor() {
       const chave = String(body.chaveAcesso || body.chave || "").replace(/\D/g, "");
       const cnpj = String(empresa.cnpj || body.cnpj || "").replace(/\D/g, "");
       const uf = String(empresa.uf || snap.uf || body.uf || "").trim();
-      const acbr = require("./acbr");
-      res.json(await acbr.consultarChaveEntrada(chave, cnpj, uf));
+      res.json(await fiscalDriver.consultarChaveEntrada(chave, cnpj, uf));
     } catch (err) {
       res.status(400).json({ ok: false, erro: err.message });
     }

@@ -181,7 +181,7 @@ function cienciaRegistradaOk(ciencia, acbr) {
   return cs === "135" || cs === "136" || cs === "573";
 }
 
-async function processarDocumentoDist(acbr, item, cnpj, uf, notasOut) {
+async function processarDocumentoDist(fiscalApi, item, cnpj, uf, notasOut) {
   const chave = item.chaveAcesso || extrairChaveDoXml(item.xml || item.xmlResumo || "");
   if (!chave || String(chave).length !== 44) return;
   if (notasOut.some((n) => n.chaveAcesso === chave)) return;
@@ -189,8 +189,8 @@ async function processarDocumentoDist(acbr, item, cnpj, uf, notasOut) {
   let cienciaOk = false;
   let cienciaCStat = null;
   try {
-    const ciencia = await acbr.manifestarCienciaOperacao(chave, cnpj);
-    cienciaOk = cienciaRegistradaOk(ciencia, acbr);
+    const ciencia = await fiscalApi.manifestarCienciaOperacao(chave, cnpj);
+    cienciaOk = cienciaRegistradaOk(ciencia, fiscalApi);
     cienciaCStat = ciencia?.cStat != null ? String(ciencia.cStat) : null;
   } catch (manifestErr) {
     log.debug({ chave, err: manifestErr.message }, "Manifestação ciência — tentativa registrada");
@@ -204,7 +204,7 @@ async function processarDocumentoDist(acbr, item, cnpj, uf, notasOut) {
   let xmlCompleto = item.xml && /<NFe[\s>]/i.test(item.xml) ? item.xml : null;
   if (!xmlCompleto) {
     try {
-      const dist = await acbr.distribuicaoDFePorChave(chave, cnpj, uf);
+      const dist = await fiscalApi.distribuicaoDFePorChave(chave, cnpj, uf);
       if (dist.xml && /<NFe[\s>]/i.test(dist.xml)) {
         xmlCompleto = dist.xml;
       }
@@ -312,7 +312,7 @@ async function executarSincronizacao(_forcar = false) {
     return respostaIgnorada("uf_empresa_nao_configurada");
   }
 
-  const acbr = require("./acbr");
+  const fiscalDriver = require("./fiscalDriver");
 
   let ultNsuInicial = "0";
   try {
@@ -338,18 +338,19 @@ async function executarSincronizacao(_forcar = false) {
   const notas = [];
   const limitePaginas = Math.max(1, parseInt(process.env.MANIFESTO_MAX_PAGINAS || "50", 10));
   let nsuTravado = false;
+  const driverInfo = typeof fiscalDriver.getDriverInfo === "function" ? fiscalDriver.getDriverInfo() : null;
 
   try {
     for (let pagina = 0; pagina < limitePaginas; pagina++) {
       const nsuAntes = ultNsuAtual;
-      const dist = await acbr.distribuicaoDFePorUltNsu(ultNsuAtual, cnpj, uf);
+      const dist = await fiscalDriver.distribuicaoDFePorUltNsu(ultNsuAtual, cnpj, uf);
       maxNsu = dist.maxNsu || maxNsu;
       ultimoCStat = dist.cStat != null ? String(dist.cStat) : ultimoCStat;
       ultimoXMotivo = dist.xMotivo || ultimoXMotivo;
 
       for (const xml of dist.xmls || []) {
         await processarDocumentoDist(
-          acbr,
+          fiscalDriver,
           { xml, chaveAcesso: extrairChaveDoXml(xml) },
           cnpj,
           uf,
@@ -361,7 +362,7 @@ async function executarSincronizacao(_forcar = false) {
         const parsed = typeof resumo === "string" ? parseResumoNfe(resumo) : resumo;
         if (!parsed?.chaveAcesso) continue;
         if (notas.some((n) => n.chaveAcesso === parsed.chaveAcesso)) continue;
-        await processarDocumentoDist(acbr, parsed, cnpj, uf, notas);
+        await processarDocumentoDist(fiscalDriver, parsed, cnpj, uf, notas);
       }
 
       const avaliacao = avaliarPaginaDist(dist);
@@ -394,6 +395,7 @@ async function executarSincronizacao(_forcar = false) {
       mensagem: msg,
       erroCertificado: certificado,
       timeout,
+      falha: true,
     }).catch((e) => {
       log.warn({ err: e.message }, "Falha ao reportar erro manifesto");
       return null;
@@ -427,6 +429,7 @@ async function executarSincronizacao(_forcar = false) {
             `Nenhum documento DistDFe (cStat ${ultimoCStat || "—"}; ambiente ${ambiente})`,
       erroCertificado: false,
       timeout: false,
+      falha: false,
     });
   } catch (err) {
     log.error({ err: err.message, notas: notas.length }, "DistDFe ok mas falha ao gravar sync no backend");
@@ -451,6 +454,8 @@ async function executarSincronizacao(_forcar = false) {
       ambiente,
       cnpj: cnpj.slice(0, 8) + "******",
       fonteEmpresa: empresa.fonte,
+      driver: driverInfo?.provider || driverInfo?.mode || null,
+      native: driverInfo?.native === true,
     },
     "Manifesto do destinatário sincronizado",
   );
@@ -469,6 +474,8 @@ async function executarSincronizacao(_forcar = false) {
     cnpjDestinatario: cnpj,
     fonteEmpresa: empresa.fonte,
     ultNsuFinal: ultNsuAtual,
+    driver: driverInfo?.provider || null,
+    native: driverInfo?.native === true,
   };
 }
 
@@ -477,7 +484,7 @@ async function executarEventoManifestacao(tpEvento, chaveAcesso, xJust) {
   if (!cfg.backendUrl || !cfg.backendToken) {
     throw new Error("Agente não ativado — configure o token do backend.");
   }
-  const acbr = require("./acbr");
+  const fiscalDriver = require("./fiscalDriver");
   const empresa = await resolverEmpresaFiscal(cfg);
   const cnpj = String(empresa.cnpj || "").replace(/\D/g, "");
   if (cnpj.length !== 14) {
@@ -486,7 +493,7 @@ async function executarEventoManifestacao(tpEvento, chaveAcesso, xJust) {
     );
   }
   const chave = String(chaveAcesso || "").replace(/\D/g, "");
-  const resultado = await acbr.manifestarEventoDestinatario(chave, cnpj, tpEvento, xJust);
+  const resultado = await fiscalDriver.manifestarEventoDestinatario(chave, cnpj, tpEvento, xJust);
   const backend = await enviarEventoBackend(cfg, {
     chaveAcesso: chave,
     tpEvento: String(tpEvento),

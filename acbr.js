@@ -1971,6 +1971,11 @@ async function distribuicaoDFePorChave(chave, cnpjDestinatario, ufAutor) {
     55,
     ACBR_TIMEOUT_EMISSAO,
   );
+  return parseDistribuicaoDFePorChaveResposta(resposta, chave);
+}
+
+/** Parse compartilhado Monitor/ACBrLib — DistDFe por chave. */
+function parseDistribuicaoDFePorChaveResposta(resposta, chave) {
   const docs = require("./documentosFiscais");
   const xml = docs.extrairXmlDaResposta(resposta);
   const p = parseResposta(resposta);
@@ -1996,32 +2001,39 @@ async function distribuicaoDFePorUltNsu(ultNsu, cnpjDestinatario, uf) {
     55,
     ACBR_TIMEOUT_EMISSAO,
   );
+  return parseDistribuicaoDFeUltNsuResposta(resposta, nsu);
+}
+
+/** Parse compartilhado Monitor/ACBrLib — DistDFe por último NSU. */
+function parseDistribuicaoDFeUltNsuResposta(resposta, nsuInicial) {
+  const nsu = String(nsuInicial || "0").replace(/\D/g, "").padStart(15, "0");
   const docs = require("./documentosFiscais");
+  const raw = String(resposta || "");
   const xmls = [];
   const reProc = /<nfeProc[\s\S]*?<\/nfeProc>/gi;
   let m;
-  while ((m = reProc.exec(resposta)) !== null) {
+  while ((m = reProc.exec(raw)) !== null) {
     xmls.push(m[0]);
   }
   if (xmls.length === 0) {
-    const unico = docs.extrairXmlDaResposta(resposta);
-    if (unico && unico.includes("<NFe")) xmls.push(unico);
+    const unico = docs.extrairXmlDaResposta(raw);
+    if (unico && /<NFe[\s>]/i.test(unico)) xmls.push(unico);
   }
 
   const resumos = [];
   const reRes = /<resNFe[\s\S]*?<\/resNFe>/gi;
-  while ((m = reRes.exec(resposta)) !== null) {
+  while ((m = reRes.exec(raw)) !== null) {
     resumos.push(m[0]);
   }
 
-  const p = parseResposta(resposta);
+  const p = parseResposta(raw);
   const ultNsuFinal =
-    resposta.match(/ultNSU\s*[=:]\s*(\d+)/i)?.[1] ||
-    resposta.match(/<ultNSU>(\d+)<\/ultNSU>/i)?.[1] ||
+    raw.match(/ultNSU\s*[=:]\s*(\d+)/i)?.[1] ||
+    raw.match(/<ultNSU>(\d+)<\/ultNSU>/i)?.[1] ||
     nsu;
   const maxNsu =
-    resposta.match(/maxNSU\s*[=:]\s*(\d+)/i)?.[1] ||
-    resposta.match(/<maxNSU>(\d+)<\/maxNSU>/i)?.[1] ||
+    raw.match(/maxNSU\s*[=:]\s*(\d+)/i)?.[1] ||
+    raw.match(/<maxNSU>(\d+)<\/maxNSU>/i)?.[1] ||
     null;
   return {
     cStat: p.cStat,
@@ -2031,7 +2043,7 @@ async function distribuicaoDFePorUltNsu(ultNsu, cnpjDestinatario, uf) {
     maxNsu,
     xmls,
     resumos,
-    raw: resposta,
+    raw,
   };
 }
 
@@ -2073,7 +2085,11 @@ async function manifestarEventoDestinatario(chave, cnpjDestinatario, tpEvento, x
   };
 }
 
-async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor) {
+/**
+ * Consulta NF-e de entrada (modelo 55).
+ * @param {object} [deps] — permite ACBrLib sobrescrever consultar/DistDFe/ciência
+ */
+async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = null) {
   if (!chave || String(chave).replace(/\D/g, "").length !== 44) {
     throw new Error("Chave NF-e deve ter 44 dígitos.");
   }
@@ -2096,10 +2112,15 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor) {
     };
   }
   const uf = resolverUfIbgeDestinatario(ufAutor, chaveNorm);
+  const api = {
+    consultarChave: deps?.consultarChave || consultarChave,
+    distribuicaoDFePorChave: deps?.distribuicaoDFePorChave || distribuicaoDFePorChave,
+    manifestarCienciaOperacao: deps?.manifestarCienciaOperacao || manifestarCienciaOperacao,
+  };
 
   let consulta;
   try {
-    consulta = await consultarChave(chaveNorm);
+    consulta = await api.consultarChave(chaveNorm);
   } catch (err) {
     consulta = { cStat: null, xMotivo: err.message, situacao: "ERRO_CONSULTA" };
   }
@@ -2131,11 +2152,11 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor) {
   let fonte = "PORTAL_NACIONAL";
 
   async function tentarDistribuicao() {
-    const dist = await distribuicaoDFePorChave(chaveNorm, cnpj, uf);
-    return dist.xml && dist.xml.includes("<NFe") ? dist.xml : null;
+    const dist = await api.distribuicaoDFePorChave(chaveNorm, cnpj, uf);
+    return dist.xml && /<NFe[\s>]/i.test(dist.xml) ? dist.xml : null;
   }
 
-  if (!xml || !xml.includes("<NFe")) {
+  if (!xml || !/<NFe[\s>]/i.test(xml)) {
     try {
       xml = await tentarDistribuicao();
       if (xml) fonte = "DISTRIBUICAO_DFE";
@@ -2153,9 +2174,9 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor) {
     }
   }
 
-  if (!xml || !xml.includes("<NFe")) {
+  if (!xml || !/<NFe[\s>]/i.test(xml)) {
     try {
-      await manifestarCienciaOperacao(chaveNorm, cnpj);
+      await api.manifestarCienciaOperacao(chaveNorm, cnpj);
       xml = await tentarDistribuicao();
       if (xml) fonte = "DISTRIBUICAO_DFE";
     } catch {
@@ -2163,7 +2184,7 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor) {
     }
   }
 
-  if (!xml || !xml.includes("<NFe")) {
+  if (!xml || !/<NFe[\s>]/i.test(xml)) {
     return {
       ok: false,
       chave: chaveNorm,
@@ -2195,6 +2216,8 @@ module.exports = {
   consultarChaveEntrada,
   distribuicaoDFePorChave,
   distribuicaoDFePorUltNsu,
+  parseDistribuicaoDFePorChaveResposta,
+  parseDistribuicaoDFeUltNsuResposta,
   manifestarCienciaOperacao,
   manifestarEventoDestinatario,
   montarIniManifestacaoCiencia,
