@@ -9,6 +9,7 @@ const {
   fmtQty,
   fmtTotal,
   normalizarPedidoPayload,
+  wrapThermalLines,
 } = require("./pedidoPrint");
 
 const COLS = 48;
@@ -21,6 +22,23 @@ function sepDash() {
 }
 function tx(v) {
   return toThermalText(v);
+}
+
+function appendDeliveryBlock(lines, payload) {
+  if (payload.customerPhone) {
+    lines.push(`Tel    : ${tx(payload.customerPhone)}`);
+  }
+  if (payload.deliveryAddress) {
+    const addrLines = wrapThermalLines(tx(payload.deliveryAddress), COLS - 2);
+    if (addrLines.length === 1 && addrLines[0].length <= COLS - 9) {
+      lines.push(`Endere.: ${addrLines[0]}`);
+    } else {
+      lines.push("Endereco:");
+      for (const line of addrLines) {
+        lines.push(`  ${line}`);
+      }
+    }
+  }
 }
 
 function renderPedidoTags(rawPayload = {}) {
@@ -49,6 +67,7 @@ function renderPedidoTags(rawPayload = {}) {
   if (payload.customerName) {
     lines.push(`Cliente: ${tx(payload.customerName)}`);
   }
+  appendDeliveryBlock(lines, payload);
   if (payload.createdAt) {
     lines.push(`Data/Hr: ${tx(payload.createdAt)}`);
   }

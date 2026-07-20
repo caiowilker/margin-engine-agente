@@ -1323,6 +1323,7 @@ async function renderPedido(printer, payload) {
     labelEventType,
     fmtQty,
     fmtTotal,
+    wrapThermalLines,
   } = require("../pedidoPrint");
   const p = normalizarPedidoPayload(payload);
   const cancelado = p.eventType === "ORDER_CANCELLED";
@@ -1347,6 +1348,18 @@ async function renderPedido(printer, payload) {
   if (p.orderNumber) printer.text("Pedido : " + tx(p.orderNumber));
   if (p.tableCode) printer.text("Mesa   : " + tx(p.tableCode));
   if (p.customerName) printer.text("Cliente: " + tx(p.customerName));
+  if (p.customerPhone) printer.text("Tel    : " + tx(p.customerPhone));
+  if (p.deliveryAddress) {
+    const addrLines = wrapThermalLines(tx(p.deliveryAddress), 46);
+    if (addrLines.length === 1 && addrLines[0].length <= 39) {
+      printer.text("Endere.: " + addrLines[0]);
+    } else {
+      printer.text("Endereco:");
+      for (const line of addrLines) {
+        printer.text("  " + line);
+      }
+    }
+  }
   if (p.createdAt) printer.text("Data/Hr: " + tx(p.createdAt));
   if (p.elapsedSeconds > 0) printer.text("Tempo  : " + p.elapsedSeconds + "s");
   if (p.priority && p.priority !== "normal") {

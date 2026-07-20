@@ -37,6 +37,8 @@ function mapItem(raw) {
 function normalizarPedidoPayload(raw) {
   const o = raw || {};
   const items = Array.isArray(o.items) ? o.items.map(mapItem) : [];
+  const phoneRaw = o.customerPhone ?? o.customer_phone ?? null;
+  const addressRaw = o.deliveryAddress ?? o.delivery_address ?? null;
   return {
     jobId: String(o.jobId ?? o.job_id ?? ""),
     printType: String(o.printType ?? o.print_type ?? "cozinha").toLowerCase(),
@@ -45,6 +47,9 @@ function normalizarPedidoPayload(raw) {
     orderId: String(o.orderId ?? o.order_id ?? ""),
     tableCode: o.tableCode ?? o.table_code ?? null,
     customerName: o.customerName ?? o.customer_name ?? null,
+    customerPhone: phoneRaw != null && String(phoneRaw).trim() ? String(phoneRaw).trim() : null,
+    deliveryAddress:
+      addressRaw != null && String(addressRaw).trim() ? String(addressRaw).trim() : null,
     total: o.total != null ? Number(o.total) : null,
     notes: o.notes ?? null,
     priority: String(o.priority ?? "normal"),
@@ -54,6 +59,33 @@ function normalizarPedidoPayload(raw) {
     items,
     exibirLogo: typeof o.exibirLogo === "boolean" ? o.exibirLogo : undefined,
   };
+}
+
+/** Quebra texto longo para impressora térmica (cols padrão 48). */
+function wrapThermalLines(text, maxCols = 48) {
+  const raw = String(text || "").trim();
+  if (!raw) return [];
+  const words = raw.split(/\s+/);
+  const lines = [];
+  let current = "";
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length <= maxCols) {
+      current = next;
+      continue;
+    }
+    if (current) lines.push(current);
+    if (word.length <= maxCols) {
+      current = word;
+    } else {
+      for (let i = 0; i < word.length; i += maxCols) {
+        lines.push(word.slice(i, i + maxCols));
+      }
+      current = "";
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
 }
 
 function labelPrintType(printType) {
@@ -90,4 +122,5 @@ module.exports = {
   labelEventType,
   fmtQty,
   fmtTotal,
+  wrapThermalLines,
 };

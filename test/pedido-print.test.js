@@ -29,6 +29,8 @@ test("normalizarPedidoPayload aceita snake_case do backend", () => {
     order_id: "uuid-1",
     table_code: "M12",
     customer_name: "Maria",
+    customer_phone: "11999998888",
+    delivery_address: "Rua A, 10 — Centro, SP — CEP 01310-100",
     total: 42.5,
     copies: 2,
     items: [{ code: "1", name: "Cafe", quantity: 2, unit: "un" }],
@@ -37,6 +39,8 @@ test("normalizarPedidoPayload aceita snake_case do backend", () => {
   assert.strictEqual(p.printType, "cozinha");
   assert.strictEqual(p.orderNumber, "ORD-9");
   assert.strictEqual(p.tableCode, "M12");
+  assert.strictEqual(p.customerPhone, "11999998888");
+  assert.strictEqual(p.deliveryAddress, "Rua A, 10 — Centro, SP — CEP 01310-100");
   assert.strictEqual(p.copies, 2);
   assert.strictEqual(p.items[0].name, "Cafe");
 });
@@ -91,6 +95,25 @@ test("renderPedidoTags imprime observação do item e omite total na cozinha", (
   });
   assert.ok(tags.includes("sem cebola"));
   assert.ok(!tags.includes("Total :"));
+});
+
+test("renderPedidoTags imprime telefone e endereço na comanda de entrega", () => {
+  const tags = renderPedidoTags({
+    printType: "entrega",
+    eventType: "ORDER_READY",
+    orderNumber: "ORD-5",
+    customerName: "Joao",
+    customerPhone: "11988887777",
+    deliveryAddress: "Rua das Flores, 120 — Apto 42 — Centro, Sao Paulo — SP — CEP 01310-100",
+    total: 55,
+    items: [{ name: "Pizza", quantity: 1, unit: "un" }],
+  });
+  assert.ok(tags.includes("ENTREGA"));
+  assert.ok(tags.includes("Tel    : 11988887777"));
+  assert.ok(tags.includes("Endereco:") || tags.includes("Endere.:"));
+  assert.ok(tags.includes("Rua das Flores"));
+  assert.ok(tags.includes("Apto 42"));
+  assert.ok(tags.includes("Total :"));
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
