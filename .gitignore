@@ -8,7 +8,8 @@ dist/
 .env
 
 # Dados locais da maquina (banco, logs, vault criptografado)
-data/
+# Somente a pasta /data na raiz do agente — NÃO acbrlib/data (schemas/INI).
+/data/
 
 # Frontend (tem repo proprio — copie o build como frontend-dist/)
 frontend-dist/
@@ -18,7 +19,7 @@ frontend-dist/
 .fiscal-vault
 
 # Backup pre-atualizacao (gerado pelo updater automatico)
-data/backup-pre-update/
+/data/backup-pre-update/
 
 # Logs do npm
 npm-debug.log*
@@ -32,6 +33,12 @@ acbrlib/lib/*.dll
 acbrlib/lib/*.so
 acbrlib/data/cert/
 acbrlib/data/cert/**
+acbrlib/data/log/
+acbrlib/data/log/**
+acbrlib/data/pdf/
+acbrlib/data/pdf/**
+acbrlib/data/notas/
+acbrlib/data/notas/**
 acbrlib/.env
 acbrlib/data/config/acbrlib.ini
 acbrlib/data/config/acbrlib.runtime.ini
