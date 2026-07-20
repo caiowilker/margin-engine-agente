@@ -16,8 +16,12 @@ const { initLogging } = require("./runtime/loggingService");
 initLogging({ patchConsole: process.env.LOG_PATCH_CONSOLE !== "false" });
 
 const PORT = Number(process.env.PORT || process.env.AGENT_PORT || 9100);
+/** URL pública do PDV — sempre localhost (bind do agente é 127.0.0.1). */
 const AGENT_PUBLIC_BASE = (
-  process.env.AGENT_PUBLIC_HOST || `http://127.0.0.1:${PORT}`
+  process.env.AGENT_PUBLIC_HOST &&
+  /localhost|127\.0\.0\.1/i.test(process.env.AGENT_PUBLIC_HOST)
+    ? process.env.AGENT_PUBLIC_HOST
+    : `http://localhost:${PORT}`
 ).replace(/\/$/, "");
 
 const path = require("path");
@@ -167,14 +171,14 @@ svc.on("install", () => {
   }
 
   setTimeout(() => {
-    const url = AGENT_PUBLIC_BASE;
-    const cmd =
-      process.platform === "win32"
-        ? `start ${url}`
-        : process.platform === "darwin"
-          ? `open ${url}`
-          : `xdg-open ${url}`;
-    exec(cmd);
+    const url = `${AGENT_PUBLIC_BASE}/`;
+    if (process.platform === "win32") {
+      exec(`cmd /c start "" "${url}"`);
+    } else if (process.platform === "darwin") {
+      exec(`open "${url}"`);
+    } else {
+      exec(`xdg-open "${url}"`);
+    }
   }, 2000);
 });
 

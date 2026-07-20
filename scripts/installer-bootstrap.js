@@ -382,9 +382,11 @@ function createShortcuts() {
 function openPanel() {
   if (!withOpen || process.platform !== "win32") return;
   const port = process.env.AGENT_PORT || process.env.PORT || "9100";
+  // Sempre localhost — IP da LAN (ex.: …101) não alcança o bind 127.0.0.1 do agente.
+  const url = `http://localhost:${port}/`;
   try {
-    run(`cmd /c start http://127.0.0.1:${port}/`, { stdio: "pipe" });
-    initBootstrapLog().info({ acao: "open_panel", url: `http://127.0.0.1:${port}/` }, "Painel aberto no navegador");
+    run(`cmd /c start "" "${url}"`, { stdio: "pipe" });
+    initBootstrapLog().info({ acao: "open_panel", url }, "Painel aberto no navegador");
   } catch (err) {
     initBootstrapLog().warn({ err: err.message }, "Não foi possível abrir o navegador automaticamente");
   }

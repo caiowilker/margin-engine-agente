@@ -89,7 +89,7 @@ const { execFile } = require("child_process");
 const app = express();
 const PORT = Number(process.env.PORT || process.env.AGENT_PORT || 9100);
 const AGENT_PUBLIC_BASE = (
-  process.env.AGENT_PUBLIC_HOST || `http://127.0.0.1:${PORT}`
+  process.env.AGENT_PUBLIC_HOST || `http://localhost:${PORT}`
 ).replace(/\/$/, "");
 
 // ── Versão atual do agente (fonte: package.json — alinhada ao instalador 1.0.0) ──

@@ -114,8 +114,8 @@ Name: "{#MarginDataRoot}\acbr\ini"; Permissions: users-modify; Flags: uninsnever
 Name: "{#MarginDataRoot}\acbr\backup"; Permissions: users-modify; Flags: uninsneveruninstall
 
 [Icons]
-Name: "{group}\Margin Engine"; Filename: "http://localhost:9100/"; IconFilename: "{app}\app\assets\margin-engine.ico"
-Name: "{commondesktop}\Margin Engine"; Filename: "http://localhost:9100/"; IconFilename: "{app}\app\assets\margin-engine.ico"; Tasks: desktopicon
+Name: "{group}\Margin Engine"; Filename: "{app}\app\scripts\open-pdv.cmd"; WorkingDir: "{app}\app"; IconFilename: "{app}\app\assets\margin-engine.ico"; Comment: "Abrir Margin Engine em http://localhost:9100/"
+Name: "{commondesktop}\Margin Engine"; Filename: "{app}\app\scripts\open-pdv.cmd"; WorkingDir: "{app}\app"; IconFilename: "{app}\app\assets\margin-engine.ico"; Comment: "Abrir Margin Engine em http://localhost:9100/"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\node\node.exe"; Parameters: """{app}\app\scripts\installer-bootstrap.js"" ""{app}\app"" --mode={code:GetBootstrapMode}{code:GetBootstrapFlags} --npm={app}\node\npm.cmd"; WorkingDir: "{app}\app"; Flags: runhidden waituntilterminated; StatusMsg: "Configurando Margin Engine (serviço, firewall e diagnóstico)..."
@@ -129,7 +129,7 @@ Type: filesandordirs; Name: "{app}\app\daemon"
 
 [Messages]
 brazilianportuguese.WelcomeLabel2=Este assistente instala o **Margin Engine** no ponto de venda.%n%nO sistema conecta impressão, documentos fiscais e operação offline ao navegador do PDV.%n%nSe já existe uma instalação, seus dados (configurações, certificados, vendas e logs) serão preservados automaticamente.%n%nAo concluir, o serviço será instalado e iniciado — não é necessário abrir o Gerenciador de Serviços do Windows.
-brazilianportuguese.FinishedLabel=O Margin Engine foi instalado neste computador.%n%nO serviço local foi configurado, o firewall atualizado e o sistema deve abrir automaticamente no navegador.%n%nUse o atalho **Margin Engine** para acessar o painel e ativar o terminal de caixa.
+brazilianportuguese.FinishedLabel=O Margin Engine foi instalado neste computador.%n%nO serviço local foi configurado, o firewall atualizado e o sistema deve abrir automaticamente em http://localhost:9100/%n%nUse o atalho **Margin Engine** (sempre localhost) para acessar o painel e ativar o terminal de caixa.
 
 [Code]
 var
