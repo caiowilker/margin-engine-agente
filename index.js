@@ -1617,19 +1617,27 @@ function iniciarServidor() {
   app.put("/config/fiscal", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       const fiscalLocalConfig = require("./fiscalLocalConfig");
-      const saved = await fiscalLocalConfig.salvar(req.body || {});
+      await fiscalLocalConfig.salvar(req.body || {});
       fiscalPreflight.invalidarCache();
 
       let syncBackend = null;
+      const fiscalConfigAuthority = require("./fiscalConfigAuthority");
+      const syncOpts = {};
       if (typeof req.body?.emissaoFiscal === "boolean") {
         configSync.sincronizarEmissaoFiscalLocal();
-        const fiscalConfigAuthority = require("./fiscalConfigAuthority");
+        syncOpts.fiscalEnabled = req.body.emissaoFiscal;
+      }
+      if (req.body?.ambienteSefaz != null) {
+        syncOpts.ambienteSefaz = req.body.ambienteSefaz;
+      }
+      if (Object.keys(syncOpts).length > 0) {
         syncBackend = await fiscalConfigAuthority
-          .propagarEmissaoAoBackend(lerConfig, req.body.emissaoFiscal)
+          .propagarFiscalAoBackend(lerConfig, syncOpts)
           .catch((err) => ({ ok: false, reason: err.message }));
       }
 
-      res.json({ ok: true, config: fiscalLocalConfig.ler(), syncBackend });
+      const config = fiscalLocalConfig.ler();
+      res.json({ ok: true, config, syncBackend });
     } catch (e) {
       res.status(400).json({ erro: e.message || "Erro ao salvar config fiscal" });
     }

@@ -13,7 +13,15 @@ function isUncPath(p) {
 
 function readIniValues(iniPath) {
   if (!iniPath || !fs.existsSync(iniPath)) {
-    return { senha: "", idCsc: "000001", csc: "", uf: "MG", ambiente: "2" };
+    return {
+      senha: "",
+      idCsc: "000001",
+      csc: "",
+      uf: "MG",
+      ambiente: "2",
+      ambienteSefaz: "homologacao",
+      ambienteLib: "1",
+    };
   }
   const iniDir = path.dirname(iniPath);
   const resolveRel = (p) => resolveIniRelative(iniDir, p);
@@ -24,12 +32,57 @@ function readIniValues(iniPath) {
     const re = new RegExp(`\\[${sec}\\][\\s\\S]*?^${key}=(.+)$`, "m");
     return raw.match(re)?.[1]?.trim() || "";
   };
+
+  let fiscalLocal = null;
+  try {
+    fiscalLocal = require("../../fiscalLocalConfig");
+  } catch (_) {
+    fiscalLocal = null;
+  }
+
+  const ambEnvRaw = String(process.env.AMBIENTE_SEFAZ || "").toLowerCase();
+  const ambLabelIni =
+    getSec("Sistema", "AmbienteSefaz") ||
+    getSec("ACBrNFe", "AmbienteSefaz") ||
+    getSec("NFe", "AmbienteSefaz") ||
+    "";
   const ambienteIni =
-    getSec("ACBrNFe", "Ambiente") || getSec("NFe", "Ambiente") || get("Ambiente") || "2";
-  const ambEnv = String(process.env.AMBIENTE_SEFAZ || "").toLowerCase();
-  let ambiente = ambienteIni;
-  if (ambEnv === "producao" || ambEnv === "1") ambiente = "1";
-  else if (ambEnv === "homologacao" || ambEnv === "2") ambiente = "2";
+    getSec("ACBrNFe", "Ambiente") || getSec("NFe", "Ambiente") || get("Ambiente") || "";
+
+  let ambienteSefaz = "homologacao";
+  if (fiscalLocal?.normalizarAmbienteSefaz) {
+    ambienteSefaz =
+      fiscalLocal.normalizarAmbienteSefaz(ambEnvRaw) ||
+      fiscalLocal.normalizarAmbienteSefaz(ambLabelIni) ||
+      (ambienteIni
+        ? fiscalLocal.tpAmbToAmbiente(ambienteIni)
+        : null) ||
+      "homologacao";
+  } else if (ambEnvRaw === "producao" || ambEnvRaw === "1") {
+    ambienteSefaz = "producao";
+  } else if (ambEnvRaw === "homologacao" || ambEnvRaw === "2") {
+    ambienteSefaz = "homologacao";
+  } else if (String(ambLabelIni).toLowerCase() === "producao") {
+    ambienteSefaz = "producao";
+  } else if (ambienteIni === "0") {
+    ambienteSefaz = "producao";
+  } else if (ambienteIni === "2") {
+    ambienteSefaz = "homologacao";
+  } else if (ambienteIni === "1") {
+    // Legado: INI com tpAmb SEFAZ=1 (produção) antes de AmbienteSefaz
+    ambienteSefaz = "producao";
+  }
+
+  const tpAmb =
+    (fiscalLocal?.ambienteToTpAmb
+      ? fiscalLocal.ambienteToTpAmb(ambienteSefaz)
+      : ambienteSefaz === "producao"
+        ? "1"
+        : "2");
+  const ambienteLib =
+    fiscalLocal?.ambienteToAmbienteLib
+      ? fiscalLocal.ambienteToAmbienteLib(ambienteSefaz)
+      : tpAmbToAmbienteLib(tpAmb);
 
   const vault = fiscalSecrets.lerSync();
   const senhaIni = get("Senha") || getSec("Certificado", "Senha") || "";
@@ -56,9 +109,11 @@ function readIniValues(iniPath) {
     servicos: resolveRel(
       get("ArquivoServicos") || getSec("ACBrNFe", "ArquivoServicos") || getSec("NFe", "IniServicos") || get("IniServicos"),
     ),
-    ambiente,
-    /** Ambiente ACBrLib [NFe]: 0=produção · 1=homologação (≠ tpAmb SEFAZ 1/2) */
-    ambienteLib: tpAmbToAmbienteLib(ambiente),
+    /** tpAmb SEFAZ 1/2 — documentos / XML */
+    ambiente: tpAmb,
+    ambienteSefaz,
+    /** enum ACBrLib 0/1 */
+    ambienteLib,
   };
 }
 
@@ -181,6 +236,7 @@ function prepareNativeRuntime({ libPath, iniConfigPath, assets, stagingRoot, for
       idCsc: iniVals.idCsc,
       csc: iniVals.csc,
       tpAmb: iniVals.ambiente || "2",
+      ambienteSefaz: iniVals.ambienteSefaz || "homologacao",
       ambienteLib: iniVals.ambienteLib || tpAmbToAmbienteLib(iniVals.ambiente || "2"),
       staged: false,
     };
@@ -216,6 +272,7 @@ function prepareNativeRuntime({ libPath, iniConfigPath, assets, stagingRoot, for
   const runtimeIni = path.join(dirs.config, "acbrlib.runtime.ini");
   const tpAmb = iniVals.ambiente || "2";
   const ambLib = iniVals.ambienteLib || tpAmbToAmbienteLib(tpAmb);
+  const ambSefaz = iniVals.ambienteSefaz || (tpAmb === "1" ? "producao" : "homologacao");
   const certIniPath = stagedCert;
 
   const iniContent = `[Principal]
@@ -226,9 +283,11 @@ LogPath=${dirs.log}
 [Sistema]
 Nome=MarginEngine-ACBrLib
 Versao=1.0.0
+AmbienteSefaz=${ambSefaz}
 
 [NFe]
 Ambiente=${ambLib}
+AmbienteSefaz=${ambSefaz}
 ModeloDF=1
 VersaoDF=3
 IniServicos=${path.join("config", path.basename(stagedServicos))}
@@ -246,6 +305,7 @@ CSC=${iniVals.csc}
 
 [ACBrNFe]
 Ambiente=${ambLib}
+AmbienteSefaz=${ambSefaz}
 ModeloDF=65
 VersaoDF=4.00
 PathSchemas=${path.join("Schemas", "NFe")}
@@ -299,6 +359,7 @@ CSC=${iniVals.csc}
     idCsc: iniVals.idCsc,
     csc: iniVals.csc,
     tpAmb,
+    ambienteSefaz: ambSefaz,
     ambienteLib: ambLib,
     staged: true,
   };
@@ -425,10 +486,18 @@ function applyDanfeLayoutConfig(inst, modeloDf = "55") {
 function applyNativeRuntimeConfig(inst, runtime) {
   const servicosName = path.basename(runtime.servicos || "ACBrNFeServicos.ini");
   const servicosRel = path.join("config", servicosName);
-  const ambLib = runtime.ambienteLib || tpAmbToAmbienteLib(runtime.tpAmb || runtime.ambiente || "2");
+  const ambLib = String(
+    runtime.ambienteLib || tpAmbToAmbienteLib(runtime.tpAmb || runtime.ambiente || "2"),
+  );
+  const ambSefaz = String(
+    runtime.ambienteSefaz || (String(runtime.tpAmb) === "1" ? "producao" : "homologacao"),
+  );
   const sets = [
     ["NFe", "Ambiente", ambLib],
     ["ACBrNFe", "Ambiente", ambLib],
+    ["NFe", "AmbienteSefaz", ambSefaz],
+    ["ACBrNFe", "AmbienteSefaz", ambSefaz],
+    ["Sistema", "AmbienteSefaz", ambSefaz],
     ["NFe", "PathSchemas", schemasPathForNativeLib(runtime)],
     ["NFe", "IniServicos", servicosRel],
     ["NFe", "PathSalvar", path.join("notas")],

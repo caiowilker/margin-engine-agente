@@ -55,6 +55,11 @@ function tpAmbFromAmbiente(amb) {
   return String(amb || "").toLowerCase() === "producao" ? "1" : "2";
 }
 
+/** ACBrLib Ambiente enum: 0=produção · 1=homologação */
+function ambienteLibFromAmbiente(amb) {
+  return String(amb || "").toLowerCase() === "producao" ? "0" : "1";
+}
+
 let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
 
 envContent = patchEnv(envContent, "EMISSAO_FISCAL", cfg.emissaoFiscal ? "true" : "false");
@@ -196,7 +201,8 @@ console.log(
   copiadosBundled + copiadosRoot,
 );
 
-const tpAmb = tpAmbFromAmbiente(cfg.ambiente);
+const ambLib = ambienteLibFromAmbiente(cfg.ambiente);
+const ambSefaz = String(cfg.ambiente || "homologacao").toLowerCase() === "producao" ? "producao" : "homologacao";
 const senhaIni = cfg.certSenha ? "__VAULT__" : "";
 const cscIni = cfg.cscToken ? "__VAULT__" : "";
 const iniContent = `[Principal]
@@ -207,9 +213,11 @@ LogPath=${path.join(logsDir)}
 [Sistema]
 Nome=MarginEngine-Agente
 Versao=1.0.0
+AmbienteSefaz=${ambSefaz}
 
 [ACBrNFe]
-Ambiente=${tpAmb}
+Ambiente=${ambLib}
+AmbienteSefaz=${ambSefaz}
 ModeloDF=65
 VersaoDF=4.00
 PathSchemas=${schemasDir}
@@ -222,6 +230,12 @@ SalvarWS=1
 ExibirErroSchema=1
 FormaEmissao=0
 Timeout=30000
+UF=${cfg.uf || "MG"}
+
+[NFe]
+Ambiente=${ambLib}
+AmbienteSefaz=${ambSefaz}
+UF=${cfg.uf || "MG"}
 
 [Certificado]
 Arquivo=${certFile}

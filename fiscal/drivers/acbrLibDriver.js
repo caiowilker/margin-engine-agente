@@ -8,7 +8,8 @@
  * - parity  — ACBR_LIB_ALLOW_PARITY=true SEM DLL; fallback Monitor TCP (dev/CI only)
  * - unconfigured — sem DLL e sem ALLOW_PARITY; emitir falha com erro explícito
  *
- * SEFAZ: Ambiente=2 homolog (testes) · Ambiente=1 produção — definido em acbrlib.ini
+ * SEFAZ tpAmb: 1=produção · 2=homologação (XML/documentos).
+ * ACBrLib [NFe] Ambiente: 0=produção · 1=homologação — gravado no INI pelo fiscalLocalConfig.
  */
 const fs = require("fs");
 const os = require("os");

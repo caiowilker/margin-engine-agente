@@ -39,6 +39,8 @@ function fingerprintRuntime(runtime) {
     runtime.iniConfig,
     iniMtime,
     runtime.tpAmb,
+    runtime.ambienteLib || "",
+    runtime.ambienteSefaz || "",
     runtime.cert || runtime.certRel || "",
     runtime.idCsc || "",
     runtime.senha ? "1" : "0",

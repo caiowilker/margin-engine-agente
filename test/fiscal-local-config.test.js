@@ -74,11 +74,35 @@ async function run() {
   await test("salvar alterna para producao no INI e .env", async () => {
     await fiscalLocalConfig.salvar({ ambienteSefaz: "producao" });
     const raw = fs.readFileSync(INI, "utf8");
-    assert.match(raw, /Ambiente=1/);
+    // ACBrLib enum: 0=produção (não tpAmb SEFAZ=1)
+    assert.match(raw, /Ambiente=0/);
+    assert.match(raw, /AmbienteSefaz=producao/);
     assert.match(fs.readFileSync(ENV, "utf8"), /AMBIENTE_SEFAZ=producao/);
     const cfg = fiscalLocalConfig.ler();
     assert.strictEqual(cfg.ambienteSefaz, "producao");
     assert.strictEqual(cfg.tpAmb, "1");
+    assert.strictEqual(cfg.ambienteLib, "0");
+  });
+
+  await test("salvar homologacao grava Ambiente=1 (enum Lib)", async () => {
+    await fiscalLocalConfig.salvar({ ambienteSefaz: "homologacao" });
+    const raw = fs.readFileSync(INI, "utf8");
+    assert.match(raw, /Ambiente=1/);
+    assert.match(raw, /AmbienteSefaz=homologacao/);
+    const cfg = fiscalLocalConfig.ler();
+    assert.strictEqual(cfg.ambienteSefaz, "homologacao");
+    assert.strictEqual(cfg.tpAmb, "2");
+    assert.strictEqual(cfg.ambienteLib, "1");
+  });
+
+  await test("ambienteToTpAmb", () => {
+    assert.strictEqual(fiscalLocalConfig.ambienteToTpAmb("producao"), "1");
+    assert.strictEqual(fiscalLocalConfig.ambienteToTpAmb("homologacao"), "2");
+  });
+
+  await test("ambienteToAmbienteLib — produção=0 homolog=1", () => {
+    assert.strictEqual(fiscalLocalConfig.ambienteToAmbienteLib("producao"), "0");
+    assert.strictEqual(fiscalLocalConfig.ambienteToAmbienteLib("homologacao"), "1");
   });
 
   await test("salvar certificado e senha no cofre fiscal", async () => {
@@ -91,11 +115,6 @@ async function run() {
     assert.match(raw, /Senha=__VAULT__/);
     const cfg = fiscalLocalConfig.ler();
     assert.strictEqual(cfg.certificado.senhaConfigurada, true);
-  });
-
-  await test("ambienteToTpAmb", () => {
-    assert.strictEqual(fiscalLocalConfig.ambienteToTpAmb("producao"), "1");
-    assert.strictEqual(fiscalLocalConfig.ambienteToTpAmb("homologacao"), "2");
   });
 
   await test("reconciliarEmissaoComEnv prioriza .env editado após autoridade local", () => {

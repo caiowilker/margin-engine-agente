@@ -9,11 +9,11 @@ function gerarConteudoIni(opts = {}) {
   const paths = dm.PATHS;
   dm.ensureAll();
 
-  const tpAmb =
+  const isProd =
     String(opts.ambiente || opts.tpAmb || "2") === "1" ||
-    String(opts.ambiente || "").toLowerCase() === "producao"
-      ? "1"
-      : "2";
+    String(opts.ambiente || "").toLowerCase() === "producao";
+  const ambLib = isProd ? "0" : "1";
+  const ambSefaz = isProd ? "producao" : "homologacao";
   const uf = opts.uf || "MG";
   const certFile = opts.certFile || path.join(paths.root, "cert", "cert.pfx");
   const senhaIni = opts.certSenha ? "__VAULT__" : opts.senhaIni || "";
@@ -35,9 +35,11 @@ LogPath=${logsDir}
 [Sistema]
 Nome=MarginEngine-Agente
 Versao=1.0.0
+AmbienteSefaz=${ambSefaz}
 
 [ACBrNFe]
-Ambiente=${tpAmb}
+Ambiente=${ambLib}
+AmbienteSefaz=${ambSefaz}
 ModeloDF=65
 VersaoDF=4.00
 PathSchemas=${schemasDir}
@@ -50,6 +52,11 @@ SalvarWS=1
 ExibirErroSchema=1
 FormaEmissao=0
 Timeout=30000
+
+[NFe]
+Ambiente=${ambLib}
+AmbienteSefaz=${ambSefaz}
+UF=${uf}
 
 [Certificado]
 Arquivo=${certFile}

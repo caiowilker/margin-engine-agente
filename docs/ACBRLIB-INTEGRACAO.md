@@ -69,6 +69,8 @@ Com `ACBR_DRIVER=lib` (padrão) e DLL presente, o manifesto **não** usa a porta
 
 Antes de DistDFe/evento, o driver força `ModeloDF=0` (moNFe) para usar as sessões `[NFe_AN_H]`/`[NFe_AN_P]` do `ACBrNFeServicos.ini`. O PDV restaura `ModeloDF=1` (moNFCe) em seguida — evita o erro `Sessão "NFCe_AN_H" não encontrada`.
 
+**Ambiente SEFAZ:** ao salvar Produção no painel, o agente grava `AMBIENTE_SEFAZ=producao`, `AmbienteSefaz=producao` e `Ambiente=0` (enum ACBrLib; **não** confundir com tpAmb SEFAZ=1). Homologação: `Ambiente=1`. A sessão nativa é invalidada na hora.
+
 Consumidores (`manifestoDestinatario.js`, consulta de entrada) usam `fiscalDriver` — o mesmo ponto da emissão.
 
 ---

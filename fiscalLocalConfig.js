@@ -58,8 +58,30 @@ function ambienteToTpAmb(amb) {
   return "2";
 }
 
+/** ACBrLib [NFe]/[ACBrNFe] Ambiente: 0=produção · 1=homologação (≠ tpAmb SEFAZ). */
+function ambienteToAmbienteLib(amb) {
+  const s = String(amb || "").toLowerCase();
+  if (s === "producao" || s === "1" || s === "0") return "0";
+  return "1";
+}
+
+function normalizarAmbienteSefaz(raw) {
+  const s = String(raw || "").trim().toLowerCase();
+  if (s === "producao" || s === "produção" || s === "1") return "producao";
+  if (s === "homologacao" || s === "homologação" || s === "2") return "homologacao";
+  return null;
+}
+
+/**
+ * Converte valor legado do INI `Ambiente` (tpAmb 1/2 ou enum Lib 0/1) → sefaz.
+ * Preferir sempre AMBIENTE_SEFAZ / AmbienteSefaz — este fallback só cobre installs antigos.
+ */
 function tpAmbToAmbiente(tp) {
-  return String(tp) === "1" ? "producao" : "homologacao";
+  const a = String(tp || "").trim();
+  if (a === "0") return "producao"; // enum Lib produção
+  if (a === "1") return "producao"; // legado SEFAZ produção (antes de AmbienteSefaz)
+  if (a === "2") return "homologacao"; // legado SEFAZ homolog
+  return "homologacao";
 }
 
 function lerEnvMap() {
@@ -177,7 +199,7 @@ function ensureIniFile(iniPath) {
     log.warn({ err: err.message }, "[FiscalLocalConfig] Fallback INI mínimo");
     fs.writeFileSync(
       dest,
-      `[ACBrNFe]\nAmbiente=2\nModeloDF=65\n\n[Certificado]\nArquivo=\nSenha=\n\n[DFe]\nUF=MG\n\n[NFCe]\nIdCSC=\nCSC=\n`,
+      `[Sistema]\nAmbienteSefaz=homologacao\n\n[ACBrNFe]\nAmbiente=1\nAmbienteSefaz=homologacao\nModeloDF=65\n\n[NFe]\nAmbiente=1\nAmbienteSefaz=homologacao\n\n[Certificado]\nArquivo=\nSenha=\n\n[DFe]\nUF=MG\n\n[NFCe]\nIdCSC=\nCSC=\n`,
       "utf8",
     );
   }
@@ -246,15 +268,23 @@ function ler() {
     ["ACBrNFe", "Ambiente"],
     ["NFe", "Ambiente"],
   ]);
+  const ambienteSefazIni = normalizarAmbienteSefaz(
+    getIniValue(sections, [
+      ["Sistema", "AmbienteSefaz"],
+      ["ACBrNFe", "AmbienteSefaz"],
+      ["NFe", "AmbienteSefaz"],
+    ]),
+  );
   const ambienteEnv = String(
     env.AMBIENTE_SEFAZ || process.env.AMBIENTE_SEFAZ || "",
   ).toLowerCase();
+  const ambienteEnvNorm = normalizarAmbienteSefaz(ambienteEnv);
   const ambienteSefaz =
-    ambienteEnv === "producao" || ambienteEnv === "1"
-      ? "producao"
-      : ambienteEnv === "homologacao" || ambienteEnv === "2"
-        ? "homologacao"
-        : tpAmbToAmbiente(tpAmbIni || "2");
+    ambienteEnvNorm ||
+    ambienteSefazIni ||
+    (tpAmbIni != null && tpAmbIni !== ""
+      ? tpAmbToAmbiente(tpAmbIni)
+      : "homologacao");
 
   const certRel = getIniValue(sections, [["Certificado", "Arquivo"]]);
   const certEnv = desescaparValorEnv(env.CERT_A1_PATH || process.env.CERT_A1_PATH || "");
@@ -330,11 +360,14 @@ function ler() {
       envPath: resolveAgentEnvPath(),
     },
     fonteAmbiente:
-      ambienteEnv && ambienteEnv !== ""
+      ambienteEnvNorm
         ? "env"
-        : tpAmbIni
-          ? "ini"
-          : "padrao",
+        : ambienteSefazIni
+          ? "ini_label"
+          : tpAmbIni
+            ? "ini"
+            : "padrao",
+    ambienteLib: ambienteToAmbienteLib(ambienteSefaz),
     logo: (() => {
       try {
         const fiscalLogo = require("./fiscal/fiscalLogo");
@@ -367,14 +400,17 @@ async function salvar(updates) {
   const vaultPatch = {};
 
   if (updates.ambienteSefaz != null) {
-    const amb = String(updates.ambienteSefaz).toLowerCase();
-    if (!["homologacao", "producao"].includes(amb)) {
+    const amb = normalizarAmbienteSefaz(updates.ambienteSefaz);
+    if (!amb) {
       throw new Error("ambienteSefaz deve ser homologacao ou producao");
     }
-    const tpAmb = ambienteToTpAmb(amb);
+    const ambLib = ambienteToAmbienteLib(amb);
+    // ACBrLib lê Ambiente no inicializar como enum 0/1 — NÃO gravar tpAmb SEFAZ (1/2) aqui.
     for (const sec of SECOES_AMBIENTE) {
-      raw = upsertIniKey(raw, sec, "Ambiente", tpAmb);
+      raw = upsertIniKey(raw, sec, "Ambiente", ambLib);
+      raw = upsertIniKey(raw, sec, "AmbienteSefaz", amb);
     }
+    raw = upsertIniKey(raw, "Sistema", "AmbienteSefaz", amb);
     envPatch.AMBIENTE_SEFAZ = amb;
   }
 
@@ -444,7 +480,14 @@ async function salvar(updates) {
   }
 
   log.info(
-    { ambiente: updates.ambienteSefaz, uf: updates.uf },
+    {
+      ambiente: updates.ambienteSefaz,
+      ambienteLib:
+        updates.ambienteSefaz != null
+          ? ambienteToAmbienteLib(updates.ambienteSefaz)
+          : undefined,
+      uf: updates.uf,
+    },
     "[FiscalLocalConfig] Configuração salva",
   );
 
@@ -599,6 +642,8 @@ module.exports = {
   resolveLibPath,
   resolveAgentEnvPath,
   ambienteToTpAmb,
+  ambienteToAmbienteLib,
+  normalizarAmbienteSefaz,
   tpAmbToAmbiente,
   ensureIniFile,
 };

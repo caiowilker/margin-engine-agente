@@ -74,7 +74,7 @@ function obterStatus() {
   };
 }
 
-async function propagarEmissaoAoBackend(lerConfigFn, fiscalEnabled) {
+async function propagarFiscalAoBackend(lerConfigFn, opts = {}) {
   try {
     const cfg = typeof lerConfigFn === "function" ? await lerConfigFn() : {};
     const backendUrl = cfg.backendUrl || process.env.BACKEND_URL || "";
@@ -83,8 +83,22 @@ async function propagarEmissaoAoBackend(lerConfigFn, fiscalEnabled) {
       return { ok: false, reason: "backend_nao_configurado" };
     }
 
+    const bodyObj = {};
+    if (typeof opts.fiscalEnabled === "boolean") {
+      bodyObj.fiscalEnabled = opts.fiscalEnabled;
+    }
+    if (opts.ambienteSefaz != null) {
+      const amb = String(opts.ambienteSefaz).toLowerCase();
+      if (amb === "producao" || amb === "homologacao") {
+        bodyObj.ambienteSefaz = amb;
+      }
+    }
+    if (Object.keys(bodyObj).length === 0) {
+      return { ok: false, reason: "nada_para_sincronizar" };
+    }
+
     const fetch = require("node-fetch");
-    const body = JSON.stringify({ fiscalEnabled: !!fiscalEnabled });
+    const body = JSON.stringify(bodyObj);
     const headers = {
       "Content-Type": "application/json",
       Authorization: `Bearer ${backendToken}`,
@@ -96,21 +110,28 @@ async function propagarEmissaoAoBackend(lerConfigFn, fiscalEnabled) {
       body,
     });
 
-    if (resp.status === 404) {
+    if (resp.status === 404 && typeof bodyObj.fiscalEnabled === "boolean") {
       resp = await fetch(`${backendUrl}/pdv/agente/config/bootstrap-fiscal`, {
         method: "POST",
         headers,
-        body,
+        body: JSON.stringify({ fiscalEnabled: bodyObj.fiscalEnabled }),
       });
     }
 
     if (resp.ok) {
       const payload = await resp.json().catch(() => ({}));
       log.info(
-        { fiscalEnabled: payload.fiscalEnabled ?? fiscalEnabled },
+        {
+          fiscalEnabled: payload.fiscalEnabled ?? bodyObj.fiscalEnabled,
+          ambienteSefaz: bodyObj.ambienteSefaz || null,
+        },
         "[FiscalAuthority] Backend espelho sincronizado",
       );
-      return { ok: true, fiscalEnabled: payload.fiscalEnabled ?? fiscalEnabled };
+      return {
+        ok: true,
+        fiscalEnabled: payload.fiscalEnabled ?? bodyObj.fiscalEnabled,
+        ambienteSefaz: bodyObj.ambienteSefaz || null,
+      };
     }
 
     if (resp.status === 409 || resp.status === 400) {
@@ -123,6 +144,11 @@ async function propagarEmissaoAoBackend(lerConfigFn, fiscalEnabled) {
     log.debug({ err: err.message }, "[FiscalAuthority] Sync backend falhou");
     return { ok: false, reason: err.message };
   }
+}
+
+/** @deprecated use propagarFiscalAoBackend */
+async function propagarEmissaoAoBackend(lerConfigFn, fiscalEnabled) {
+  return propagarFiscalAoBackend(lerConfigFn, { fiscalEnabled: !!fiscalEnabled });
 }
 
 function resetAutoridadeLocal() {
@@ -140,6 +166,7 @@ module.exports = {
   temAutoridadeLocalSobreBackend,
   obterStatus,
   propagarEmissaoAoBackend,
+  propagarFiscalAoBackend,
   carregarPersistido,
   resetAutoridadeLocal,
 };
