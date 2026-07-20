@@ -39,6 +39,12 @@ RSYNC_EXCLUDES=(
   --exclude frontend-dist
   --exclude '*.log'
   --exclude 'RESULTADO-*.md'
+  # Schemas XSD não vão no git (gitignore data/) — preservar no destino do build
+  --exclude 'acbrlib/data/Schemas'
+  --exclude 'acbrlib/data/cert'
+  --exclude 'acbrlib/data/log'
+  --exclude 'acbrlib/data/notas'
+  --exclude 'acbrlib/data/pdf'
 )
 
 echo "==> Sincronizando agente → $BUILD_ROOT/dist/app"
@@ -97,7 +103,22 @@ check "$BUILD_ROOT/dist/app/acbrlib/lib/ACBrNFe64.dll" "ACBrNFe64.dll"
 check "$BUILD_ROOT/dist/app/posprinter/lib/ACBrPosPrinter64.dll" "ACBrPosPrinter64.dll"
 check "$BUILD_ROOT/dist/app/print/printerBootstrap.js" "printerBootstrap (auto-detect)"
 
-SCHEMA_COUNT="$(find "$BUILD_ROOT/dist/app/acbrlib/data/Schemas" -maxdepth 2 -name '*.xsd' 2>/dev/null | wc -l | tr -d ' ')"
+# Schemas ficam fora do git — se o destino estiver vazio, tenta recuperar da instalação local
+SCHEMA_DIR="$BUILD_ROOT/dist/app/acbrlib/data/Schemas"
+SCHEMA_COUNT="$(find "$SCHEMA_DIR" -maxdepth 2 -name '*.xsd' 2>/dev/null | wc -l | tr -d ' ')"
+if [[ "${SCHEMA_COUNT:-0}" -lt 10 ]]; then
+  for CANDIDATE in \
+    "/mnt/c/Program Files/Margin Engine/app/acbrlib/data/Schemas" \
+    "/mnt/c/Program Files (x86)/Margin Engine/app/acbrlib/data/Schemas"; do
+    if [[ -d "$CANDIDATE" ]]; then
+      echo "==> Restaurando Schemas a partir de: $CANDIDATE"
+      mkdir -p "$SCHEMA_DIR"
+      rsync -a "$CANDIDATE/" "$SCHEMA_DIR/"
+      break
+    fi
+  done
+  SCHEMA_COUNT="$(find "$SCHEMA_DIR" -maxdepth 2 -name '*.xsd' 2>/dev/null | wc -l | tr -d ' ')"
+fi
 if [[ "${SCHEMA_COUNT:-0}" -lt 10 ]]; then
   echo "ERRO: acbrlib/data/Schemas incompleto ($SCHEMA_COUNT .xsd)"
   FAIL=1
