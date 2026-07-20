@@ -30,8 +30,15 @@ function parseJsonAcbrLib(bruto) {
     if (!j || typeof j !== "object") return null;
 
     const envio = j.Envio || j.envio || null;
+    const dist =
+      j.DistribuicaoDFe ||
+      j.distribuicaoDFe ||
+      j.Distribuicao ||
+      j.distribuicao ||
+      null;
     const block =
       envio ||
+      dist ||
       j.Status ||
       j.status ||
       j.Consulta ||
@@ -80,10 +87,64 @@ function parseJsonAcbrLib(bruto) {
       ),
       tpAmb: pick(block.tpAmb, block.TpAmb, nested?.tpAmb),
       xml: pick(nested?.XML, nested?.xml, block.XML, block.xml),
+      ultNSU: pick(block.ultNSU, block.UltNSU, block.ultNsu),
+      maxNSU: pick(block.maxNSU, block.MaxNSU, block.maxNsu),
+      /** Bloco DistDFe bruto (JSON TipoResposta=2). */
+      distribuicaoDFe: dist || null,
     };
   } catch (_) {
     return null;
   }
+}
+
+/**
+ * Extrai XMLs / resNFe dos blocos ResDFe* (INI ou JSON ACBrLib DistDFe).
+ */
+function extrairDocsDistribuicaoDFe(resposta) {
+  const xmls = [];
+  const resumos = [];
+  const bruto = String(resposta || "");
+
+  try {
+    const j = JSON.parse(bruto.trim());
+    if (j && typeof j === "object") {
+      const walk = (obj) => {
+        if (!obj || typeof obj !== "object") return;
+        for (const [key, val] of Object.entries(obj)) {
+          if (/^ResDFe\d+$/i.test(key) && val && typeof val === "object") {
+            const xml = pick(val.XML, val.xml, val.Arquivo, val.arquivo);
+            const xmlStr = xml != null ? String(xml) : "";
+            if (/<nfeProc[\s>]/i.test(xmlStr) || /<NFe[\s>]/i.test(xmlStr)) {
+              xmls.push(xmlStr);
+            } else if (/<resNFe[\s>]/i.test(xmlStr)) {
+              resumos.push(xmlStr);
+            } else {
+              const ch = pick(val.chDFe, val.chNFe, val.Chave, val.chave);
+              if (ch && String(ch).replace(/\D/g, "").length === 44) {
+                const cnpj = pick(val.CNPJCPF, val.CNPJ, val.cnpj) || "";
+                const xNome = pick(val.xNome, val.XNome, val.EmixNome) || "";
+                const vNF = pick(val.vNF, val.VNF) || "";
+                resumos.push(
+                  `<resNFe><chNFe>${String(ch).replace(/\D/g, "")}</chNFe>` +
+                    (cnpj ? `<CNPJ>${cnpj}</CNPJ>` : "") +
+                    (xNome ? `<xNome>${xNome}</xNome>` : "") +
+                    (vNF ? `<vNF>${vNF}</vNF>` : "") +
+                    `</resNFe>`,
+                );
+              }
+            }
+          } else if (val && typeof val === "object") {
+            walk(val);
+          }
+        }
+      };
+      walk(j);
+    }
+  } catch (_) {
+    /* INI / texto */
+  }
+
+  return { xmls, resumos };
 }
 
 function parseRespostaLib(resposta) {
@@ -95,7 +156,12 @@ function parseRespostaLib(resposta) {
 
   const base = acbr.parseResposta(resposta);
   if (base.cStat) {
-    return { ...base, native: true };
+    return {
+      ...base,
+      ultNSU: fromJson?.ultNSU || null,
+      maxNSU: fromJson?.maxNSU || null,
+      native: true,
+    };
   }
 
   const cStat =
@@ -103,6 +169,8 @@ function parseRespostaLib(resposta) {
     base.cStat ||
     bruto.match(/CStat\s*[=:]\s*(\d+)/i)?.[1] ||
     bruto.match(/cStat\s*[=:]\s*(\d+)/i)?.[1] ||
+    bruto.match(/"CStat"\s*:\s*"?(\d+)"?/i)?.[1] ||
+    bruto.match(/"cStat"\s*:\s*"?(\d+)"?/i)?.[1] ||
     null;
   const xMotivo =
     fromJson?.xMotivo ||
@@ -123,9 +191,11 @@ function parseRespostaLib(resposta) {
       null,
     protocolo: fromJson?.protocolo || base.protocolo,
     tpAmb: fromJson?.tpAmb || base.tpAmb,
+    ultNSU: fromJson?.ultNSU || null,
+    maxNSU: fromJson?.maxNSU || null,
     raw: resposta,
     native: true,
   };
 }
 
-module.exports = { parseRespostaLib, parseJsonAcbrLib };
+module.exports = { parseRespostaLib, parseJsonAcbrLib, extrairDocsDistribuicaoDFe };

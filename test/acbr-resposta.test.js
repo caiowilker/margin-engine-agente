@@ -123,5 +123,22 @@ test("parseRespostaLib — JSON Status cStat 107", () => {
   assert.match(p.xMotivo || "", /Operação/i);
 });
 
+test("parseRespostaLib — JSON DistribuicaoDFe cStat 137", () => {
+  const raw = JSON.stringify({
+    DistribuicaoDFe: {
+      CStat: 137,
+      XMotivo: "Nenhum documento localizado para o destinatário",
+      ultNSU: "000000000000000",
+      maxNSU: "000000000000010",
+      tpAmb: 1,
+    },
+  });
+  const p = parseRespostaLib(raw);
+  assert.strictEqual(p.cStat, "137");
+  assert.strictEqual(p.ultNSU, "000000000000000");
+  assert.strictEqual(p.maxNSU, "000000000000010");
+  assert.match(p.xMotivo || "", /Nenhum documento/i);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

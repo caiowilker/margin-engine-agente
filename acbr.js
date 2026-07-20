@@ -1977,8 +1977,9 @@ async function distribuicaoDFePorChave(chave, cnpjDestinatario, ufAutor) {
 /** Parse compartilhado Monitor/ACBrLib — DistDFe por chave. */
 function parseDistribuicaoDFePorChaveResposta(resposta, chave) {
   const docs = require("./documentosFiscais");
+  const libResp = require("./acbrLibResposta");
   const xml = docs.extrairXmlDaResposta(resposta);
-  const p = parseResposta(resposta);
+  const p = libResp.parseRespostaLib(resposta);
   return {
     chave,
     cStat: p.cStat,
@@ -2008,6 +2009,7 @@ async function distribuicaoDFePorUltNsu(ultNsu, cnpjDestinatario, uf) {
 function parseDistribuicaoDFeUltNsuResposta(resposta, nsuInicial) {
   const nsu = String(nsuInicial || "0").replace(/\D/g, "").padStart(15, "0");
   const docs = require("./documentosFiscais");
+  const libResp = require("./acbrLibResposta");
   const raw = String(resposta || "");
   const xmls = [];
   const reProc = /<nfeProc[\s\S]*?<\/nfeProc>/gi;
@@ -2026,13 +2028,25 @@ function parseDistribuicaoDFeUltNsuResposta(resposta, nsuInicial) {
     resumos.push(m[0]);
   }
 
-  const p = parseResposta(raw);
+  const fromJsonDocs = libResp.extrairDocsDistribuicaoDFe(raw);
+  for (const x of fromJsonDocs.xmls || []) {
+    if (!xmls.includes(x)) xmls.push(x);
+  }
+  for (const r of fromJsonDocs.resumos || []) {
+    if (!resumos.includes(r)) resumos.push(r);
+  }
+
+  const p = libResp.parseRespostaLib(raw);
   const ultNsuFinal =
+    p.ultNSU ||
     raw.match(/ultNSU\s*[=:]\s*(\d+)/i)?.[1] ||
+    raw.match(/"ultNSU"\s*:\s*"?(\d+)"?/i)?.[1] ||
     raw.match(/<ultNSU>(\d+)<\/ultNSU>/i)?.[1] ||
     nsu;
   const maxNsu =
+    p.maxNSU ||
     raw.match(/maxNSU\s*[=:]\s*(\d+)/i)?.[1] ||
+    raw.match(/"maxNSU"\s*:\s*"?(\d+)"?/i)?.[1] ||
     raw.match(/<maxNSU>(\d+)<\/maxNSU>/i)?.[1] ||
     null;
   return {

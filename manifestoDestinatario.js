@@ -287,6 +287,15 @@ function avaliarPaginaDist(dist) {
       naoAvancarNsu: true,
     };
   }
+  if (!cStat) {
+    return {
+      parar: true,
+      naoAvancarNsu: true,
+      erro:
+        xMotivo ||
+        "DistDFe sem cStat na resposta ACBr — verifique logs em acbr/logs e Ambiente/certificado.",
+    };
+  }
   return { parar: true, erro: null };
 }
 

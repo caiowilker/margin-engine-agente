@@ -103,6 +103,30 @@ async function run() {
     assert.strictEqual(parsed.maxNsu, "9");
   });
 
+  await test("parseDistribuicaoDFeUltNsuResposta — JSON DistribuicaoDFe (TipoResposta=2)", () => {
+    const chave = CHAVE;
+    const raw = JSON.stringify({
+      DistribuicaoDFe: {
+        CStat: 137,
+        XMotivo: "Nenhum documento localizado",
+        ultNSU: "000000000000000",
+        maxNSU: "000000000000000",
+        tpAmb: 1,
+      },
+      ResDFe001: {
+        chDFe: chave,
+        CNPJCPF: "12345678000190",
+        xNome: "FORN",
+        vNF: "10.00",
+      },
+    });
+    const parsed = acbr.parseDistribuicaoDFeUltNsuResposta(raw, "0");
+    assert.strictEqual(parsed.cStat, "137");
+    assert.match(parsed.xMotivo || "", /Nenhum documento/i);
+    assert.strictEqual(parsed.ultNsuFinal, "000000000000000");
+    assert.ok(parsed.resumos.some((r) => r.includes(chave)));
+  });
+
   await test("acbrLibDriver exporta DistDFe e manifesto nativos", () => {
     const lib = require("../fiscal/drivers/acbrLibDriver");
     assert.strictEqual(typeof lib.distribuicaoDFePorUltNsu, "function");
@@ -173,6 +197,14 @@ async function run() {
     const r = manifesto.avaliarPaginaDist({ cStat: "656", xmls: [], resumos: [] });
     assert.ok(r.erro);
     assert.ok(/consumo indevido/i.test(r.erro));
+  });
+
+  await test("avaliarPaginaDist — sem cStat é erro (não Sucesso falso)", () => {
+    const manifesto = require("../manifestoDestinatario");
+    const r = manifesto.avaliarPaginaDist({ cStat: null, xmls: [], resumos: [] });
+    assert.strictEqual(r.parar, true);
+    assert.ok(r.erro);
+    assert.strictEqual(r.naoAvancarNsu, true);
   });
 
   await test("executarSincronizacao sem token retorna ignorado com erro", async () => {
