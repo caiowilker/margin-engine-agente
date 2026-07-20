@@ -1,6 +1,6 @@
 {
   "versao": "1.0.1",
-  "geradoEm": "2026-07-20T20:29:20.642Z",
+  "geradoEm": "2026-07-20T20:36:57.434Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -232,7 +232,7 @@
     },
     {
       "arquivo": "frontend-dist/api-backend.json",
-      "sha256": "71615cee59ad881091bdfcc72179496a4aa851fe7d2b764ff46af315bfba7d9f"
+      "sha256": "ce5d4b840f7dff204266fdf2976640f4b16aede88a4ee1fb39f15a1232934209"
     },
     {
       "arquivo": "frontend-dist/apple-touch-icon.png",
@@ -4748,7 +4748,7 @@
     },
     {
       "arquivo": "frontend-dist/version.json",
-      "sha256": "2da7cbaa2355b674879e0783eb358be029f7dfaf0ba7283c15dcfe4fc94adb09"
+      "sha256": "91221c7cf9fa8761c8edd71cb6c6c0c071e9b377e1b3602c929adcb9aa82c84d"
     },
     {
       "arquivo": "frontend-dist/workbox-3147e214.js",
@@ -4768,11 +4768,11 @@
     },
     {
       "arquivo": "index.js",
-      "sha256": "3f4115a5b462d36b74d313d6443654ae1082ca4e5b17d38e885ca259f4a04b4d"
+      "sha256": "1df19fb646b17f5776def1b45180c27f3b84c3b509076801b9ee72f19778f764"
     },
     {
       "arquivo": "install-service.js",
-      "sha256": "da560c3eb3a38a0e93a22f4f8769fcf829e273366b76d0f414afe0fbaf9f9dc4"
+      "sha256": "25be7b2e72015f4114f760f5e82caebe11871239883ddf2527f3384c39d908b4"
     },
     {
       "arquivo": "logger.js",
@@ -4796,7 +4796,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "693e924a26359e2ba520178b8b79b5e2fc7815d66e75b3f93feb3a7aa5ad693b"
+      "sha256": "e77f643bf9c23bc133eed3ffbe955cbd230b6c416491ba4669216f5b075205a6"
     },
     {
       "arquivo": "print/acbrPosPrinterErrors.js",
