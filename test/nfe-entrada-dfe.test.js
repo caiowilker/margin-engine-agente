@@ -97,6 +97,112 @@ async function run() {
     assert.strictEqual(parsed.valorTotal, 10);
   });
 
+  await test("cienciaRegistradaOk — rejeição cStat não marca ciência", () => {
+    const manifesto = require("../manifestoDestinatario");
+    assert.strictEqual(
+      manifesto.cienciaRegistradaOk({ ok: false, cStat: "204" }, acbr),
+      false,
+    );
+    assert.strictEqual(
+      manifesto.cienciaRegistradaOk({ ok: true, cStat: "135" }, acbr),
+      true,
+    );
+    assert.strictEqual(
+      manifesto.cienciaRegistradaOk({ ok: false, cStat: "573" }, acbr),
+      true,
+    );
+  });
+
+  await test("avaliarPaginaDist — 138 sem docs não avança NSU", () => {
+    const manifesto = require("../manifestoDestinatario");
+    const r = manifesto.avaliarPaginaDist({ cStat: "138", xmls: [], resumos: [] });
+    assert.strictEqual(r.parar, true);
+    assert.ok(r.naoAvancarNsu);
+    assert.ok(r.erro);
+  });
+
+  await test("avaliarPaginaDist — 137 encerra sem erro", () => {
+    const manifesto = require("../manifestoDestinatario");
+    const r = manifesto.avaliarPaginaDist({ cStat: "137", xmls: [], resumos: [] });
+    assert.strictEqual(r.parar, true);
+    assert.strictEqual(r.erro, null);
+  });
+
+  await test("avaliarPaginaDist — 656 consumo indevido", () => {
+    const manifesto = require("../manifestoDestinatario");
+    const r = manifesto.avaliarPaginaDist({ cStat: "656", xmls: [], resumos: [] });
+    assert.ok(r.erro);
+    assert.ok(/consumo indevido/i.test(r.erro));
+  });
+
+  await test("executarSincronizacao sem token retorna ignorado com erro", async () => {
+    const manifesto = require("../manifestoDestinatario");
+    manifesto.configurar({ lerConfig: async () => ({}) });
+    manifesto.limparCacheEmpresa();
+    const r = await manifesto.executarSincronizacao(true);
+    assert.strictEqual(r.ok, false);
+    assert.strictEqual(r.ignorado, true);
+    assert.strictEqual(r.motivo, "agente_nao_ativado");
+    assert.ok(r.erro);
+  });
+
+  await test("resolverEmpresaFiscal busca CNPJ em /pdv/empresa", async () => {
+    const manifesto = require("../manifestoDestinatario");
+    manifesto.limparCacheEmpresa();
+    const originalFetch = global.fetch;
+    global.fetch = async (url) => {
+      if (String(url).includes("/pdv/empresa")) {
+        return {
+          ok: true,
+          json: async () => ({ cnpj: "11.222.333/0001-81", uf: "SP" }),
+        };
+      }
+      throw new Error(`fetch inesperado: ${url}`);
+    };
+    try {
+      const emp = await manifesto.resolverEmpresaFiscal({
+        backendUrl: "http://localhost:8080",
+        backendToken: "token",
+      });
+      assert.strictEqual(emp.cnpj, "11222333000181");
+      assert.strictEqual(emp.uf, "SP");
+      assert.strictEqual(emp.fonte, "backend");
+    } finally {
+      global.fetch = originalFetch;
+      manifesto.limparCacheEmpresa();
+    }
+  });
+
+  await test("executarSincronizacao sem CNPJ retorna motivo claro", async () => {
+    const manifesto = require("../manifestoDestinatario");
+    manifesto.limparCacheEmpresa();
+    const originalFetch = global.fetch;
+    global.fetch = async (url) => {
+      if (String(url).includes("/pdv/empresa")) {
+        return {
+          ok: true,
+          json: async () => ({ cnpj: "", uf: "MG" }),
+        };
+      }
+      throw new Error(`fetch inesperado: ${url}`);
+    };
+    try {
+      manifesto.configurar({
+        lerConfig: async () => ({
+          backendUrl: "http://localhost:8080",
+          backendToken: "token-teste",
+        }),
+      });
+      const r = await manifesto.executarSincronizacao(true);
+      assert.strictEqual(r.ok, false);
+      assert.strictEqual(r.motivo, "cnpj_empresa_nao_configurado");
+      assert.ok(r.erro);
+    } finally {
+      global.fetch = originalFetch;
+      manifesto.limparCacheEmpresa();
+    }
+  });
+
   console.log(`\n${passed} passed, ${failed} failed\n`);
   process.exit(failed > 0 ? 1 : 0);
 }
