@@ -947,6 +947,49 @@ function toUfAutorNumber(ufHint, chaveFallback) {
   return n;
 }
 
+/**
+ * DistDFe / manifesto usam Ambiente Nacional NF-e ([NFe_AN_H] / [NFe_AN_P]), não NFC-e.
+ * ACBrLib enum ModeloDF: 0=moNFe · 1=moNFCe — o runtime PDV fica em NFC-e por padrão.
+ */
+function aplicarModeloDfNfeParaDistDfe(inst) {
+  const sets = [
+    ["NFe", "ModeloDF", "0"], // enum moNFe → sessão NFe_AN_*
+    ["ACBrNFe", "ModeloDF", "55"],
+  ];
+  for (const [sec, key, val] of sets) {
+    try {
+      inst.configGravarValor(sec, key, val);
+    } catch (_) {
+      /* versão sem seção */
+    }
+  }
+}
+
+function restaurarModeloDfNfce(inst) {
+  const sets = [
+    ["NFe", "ModeloDF", "1"], // enum moNFCe — padrão PDV
+    ["ACBrNFe", "ModeloDF", "65"],
+  ];
+  for (const [sec, key, val] of sets) {
+    try {
+      inst.configGravarValor(sec, key, val);
+    } catch (_) {
+      /* ignore */
+    }
+  }
+}
+
+async function withNativeLibModeloNfe(opName, fn) {
+  return withNativeLib(opName, async (inst, runtime) => {
+    aplicarModeloDfNfeParaDistDfe(inst);
+    try {
+      return await fn(inst, runtime);
+    } finally {
+      restaurarModeloDfNfce(inst);
+    }
+  });
+}
+
 async function distribuicaoDFePorUltNsuLib(ultNsu, cnpjDestinatario, uf) {
   if (getIntegrationMode() !== "native") {
     return acbr.distribuicaoDFePorUltNsu(ultNsu, cnpjDestinatario, uf);
@@ -957,7 +1000,7 @@ async function distribuicaoDFePorUltNsuLib(ultNsu, cnpjDestinatario, uf) {
   }
   const nsu = String(ultNsu || "0").replace(/\D/g, "").padStart(15, "0");
   const ufAutor = toUfAutorNumber(uf, null);
-  const resposta = await withNativeLib("distribuicaoDFePorUltNSU", (inst) =>
+  const resposta = await withNativeLibModeloNfe("distribuicaoDFePorUltNSU", (inst) =>
     inst.distribuicaoDFePorUltNSU(ufAutor, cnpj, nsu),
   );
   const parsed = acbr.parseDistribuicaoDFeUltNsuResposta(resposta, nsu);
@@ -977,7 +1020,7 @@ async function distribuicaoDFePorChaveLib(chave, cnpjDestinatario, ufAutor) {
     throw new Error("CNPJ do destinatário obrigatório para Distribuição DFe (14 dígitos).");
   }
   const ufNum = toUfAutorNumber(ufAutor, chaveNorm);
-  const resposta = await withNativeLib("distribuicaoDFePorChave", (inst) =>
+  const resposta = await withNativeLibModeloNfe("distribuicaoDFePorChave", (inst) =>
     inst.distribuicaoDFePorChave(ufNum, cnpj, chaveNorm),
   );
   const parsed = acbr.parseDistribuicaoDFePorChaveResposta(resposta, chaveNorm);
@@ -1002,7 +1045,7 @@ async function manifestarEventoDestinatarioLib(chave, cnpjDestinatario, tpEvento
   fs.writeFileSync(iniPath, documentIni, "utf8");
   const runtime = buildNativeRuntime();
   const nativeIniPath = acbrLibRuntime.resolveNativeDocumentIniPath(iniPath, runtime);
-  const resposta = await withNativeLib("manifestarEventoDestinatario", (inst) => {
+  const resposta = await withNativeLibModeloNfe("manifestarEventoDestinatario", (inst) => {
     if (typeof inst.limparListaEventos === "function") {
       inst.limparListaEventos();
     } else {
@@ -1096,4 +1139,7 @@ module.exports = Object.assign({}, acbr, {
   gerarPdfDanfce: (chave, xmlPath, opts) => gerarPdfFiscalLib(chave, xmlPath, "65", opts),
   gerarPdfDanfe: (chave, xmlPath) => gerarPdfFiscalLib(chave, xmlPath, "55"),
   warnIfSelectedAtBoot,
+  // exportados para teste / diagnóstico DistDFe
+  aplicarModeloDfNfeParaDistDfe,
+  restaurarModeloDfNfce,
 });

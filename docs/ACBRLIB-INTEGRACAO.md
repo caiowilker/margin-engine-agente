@@ -67,6 +67,8 @@ Com `ACBR_DRIVER=lib` (padrão) e DLL presente, o manifesto **não** usa a porta
 | Download por chave | `NFE_DistribuicaoDFePorChave` |
 | Ciência / decisão | `NFE_CarregarEventoINI` + `NFE_EnviarEvento` |
 
+Antes de DistDFe/evento, o driver força `ModeloDF=0` (moNFe) para usar as sessões `[NFe_AN_H]`/`[NFe_AN_P]` do `ACBrNFeServicos.ini`. O PDV restaura `ModeloDF=1` (moNFCe) em seguida — evita o erro `Sessão "NFCe_AN_H" não encontrada`.
+
 Consumidores (`manifestoDestinatario.js`, consulta de entrada) usam `fiscalDriver` — o mesmo ponto da emissão.
 
 ---

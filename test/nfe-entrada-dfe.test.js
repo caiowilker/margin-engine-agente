@@ -112,6 +112,22 @@ async function run() {
     assert.strictEqual(typeof lib.consultarChaveEntrada, "function");
   });
 
+  await test("aplicarModeloDfNfeParaDistDfe força moNFe (evita NFCe_AN_H)", () => {
+    const lib = require("../fiscal/drivers/acbrLibDriver");
+    const calls = [];
+    const inst = {
+      configGravarValor(sec, key, val) {
+        calls.push([sec, key, val]);
+      },
+    };
+    lib.aplicarModeloDfNfeParaDistDfe(inst);
+    assert.ok(calls.some((c) => c[0] === "NFe" && c[1] === "ModeloDF" && c[2] === "0"));
+    assert.ok(calls.some((c) => c[0] === "ACBrNFe" && c[1] === "ModeloDF" && c[2] === "55"));
+    lib.restaurarModeloDfNfce(inst);
+    assert.ok(calls.some((c) => c[0] === "NFe" && c[1] === "ModeloDF" && c[2] === "1"));
+    assert.ok(calls.some((c) => c[0] === "ACBrNFe" && c[1] === "ModeloDF" && c[2] === "65"));
+  });
+
   await test("parseResumoNfe extrai chave e emitente", () => {
     const manifesto = require("../manifestoDestinatario");
     const xml = `<resNFe><chNFe>${CHAVE}</chNFe><CNPJ>12345678000190</CNPJ><xNome>FORN</xNome><vNF>10.00</vNF></resNFe>`;
