@@ -1,14 +1,14 @@
 {
   "versao": "1.0.1",
-  "geradoEm": "2026-07-20T19:37:08.529Z",
+  "geradoEm": "2026-07-20T19:56:02.716Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
-      "sha256": "85b7f8a5ff0481677b507a7b7ca8605ac2e276f9d8c63c7ed5fb7860565d71c3"
+      "sha256": "688ad32d4dc963ccfc5e22044088659f4e35e0d127380c21ffae361f5819f6a4"
     },
     {
       "arquivo": "acbrLibResposta.js",
-      "sha256": "e01cec17d2dbb65c923ee2b15ae16edd42161c11d64d174bb4891857674f5a10"
+      "sha256": "3d4507db95dbcef5106c5808ee7db6448530da4141d3364be7c01260f2041d97"
     },
     {
       "arquivo": "acbrNfceSetup.js",
@@ -232,7 +232,7 @@
     },
     {
       "arquivo": "frontend-dist/api-backend.json",
-      "sha256": "c69dfec400e8489a5586dbc466fcacc11d850d6c5e8952b60832bfff1d8410c4"
+      "sha256": "7be697fd8d3034f41ddc135615b71960d2a65243d1f28b74e63d951bbb51901b"
     },
     {
       "arquivo": "frontend-dist/apple-touch-icon.png",
@@ -4752,7 +4752,7 @@
     },
     {
       "arquivo": "frontend-dist/version.json",
-      "sha256": "f68a53872e7075a4c1f3ac16b03257358cd6618bd22fcba8f7b030c7bd534d5f"
+      "sha256": "f9fcc8f94bf2219881f1edf6a796cefc022925421545cb03f05ee89af7b1ccc1"
     },
     {
       "arquivo": "frontend-dist/workbox-3147e214.js",
@@ -4784,7 +4784,7 @@
     },
     {
       "arquivo": "manifestoDestinatario.js",
-      "sha256": "a6042e6f07ef2d82ca5e1eba60b33deecba064750286ad3c6642086fe2289aaf"
+      "sha256": "c3c1f3f22eb2995192af051ea13395be346bc3f4b81218b1cff53c251535bde1"
     },
     {
       "arquivo": "manifestUpdater.js",
