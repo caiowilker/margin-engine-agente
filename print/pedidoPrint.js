@@ -47,7 +47,10 @@ function normalizarPedidoPayload(raw) {
     orderId: String(o.orderId ?? o.order_id ?? ""),
     tableCode: o.tableCode ?? o.table_code ?? null,
     customerName: o.customerName ?? o.customer_name ?? null,
-    customerPhone: phoneRaw != null && String(phoneRaw).trim() ? String(phoneRaw).trim() : null,
+    customerPhone: (() => {
+      const raw = phoneRaw != null && String(phoneRaw).trim() ? String(phoneRaw).trim() : null;
+      return formatPhoneForPrint(raw);
+    })(),
     deliveryAddress:
       addressRaw != null && String(addressRaw).trim() ? String(addressRaw).trim() : null,
     total: o.total != null ? Number(o.total) : null,
@@ -88,6 +91,16 @@ function wrapThermalLines(text, maxCols = 48) {
   return lines;
 }
 
+/** Telefone legível na comanda: (11) 98888-7777 */
+function formatPhoneForPrint(phone) {
+  if (phone == null) return null;
+  const d = String(phone).replace(/\D/g, "");
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  const raw = String(phone).trim();
+  return raw || null;
+}
+
 function labelPrintType(printType) {
   return PRINT_TYPE_LABELS[String(printType || "").toLowerCase()] || String(printType || "PEDIDO").toUpperCase();
 }
@@ -123,4 +136,5 @@ module.exports = {
   fmtQty,
   fmtTotal,
   wrapThermalLines,
+  formatPhoneForPrint,
 };

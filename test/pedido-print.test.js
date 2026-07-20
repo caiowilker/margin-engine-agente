@@ -39,7 +39,7 @@ test("normalizarPedidoPayload aceita snake_case do backend", () => {
   assert.strictEqual(p.printType, "cozinha");
   assert.strictEqual(p.orderNumber, "ORD-9");
   assert.strictEqual(p.tableCode, "M12");
-  assert.strictEqual(p.customerPhone, "11999998888");
+  assert.strictEqual(p.customerPhone, "(11) 99999-8888");
   assert.strictEqual(p.deliveryAddress, "Rua A, 10 — Centro, SP — CEP 01310-100");
   assert.strictEqual(p.copies, 2);
   assert.strictEqual(p.items[0].name, "Cafe");
@@ -109,7 +109,7 @@ test("renderPedidoTags imprime telefone e endereço na comanda de entrega", () =
     items: [{ name: "Pizza", quantity: 1, unit: "un" }],
   });
   assert.ok(tags.includes("ENTREGA"));
-  assert.ok(tags.includes("Tel    : 11988887777"));
+  assert.ok(tags.includes("Tel    : (11) 98888-7777"));
   assert.ok(tags.includes("Endereco:") || tags.includes("Endere.:"));
   assert.ok(tags.includes("Rua das Flores"));
   assert.ok(tags.includes("Apto 42"));
