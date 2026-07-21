@@ -9,7 +9,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-if (-not (Test-Path $Src)) { throw "Build ausente: $Src — rode sync:windows-build" }
+if (-not (Test-Path $Src)) { throw "Build ausente: $Src - rode sync:windows-build" }
 if (-not (Test-Path $Dest)) { throw "Instalacao ausente: $Dest" }
 
 $bak = Join-Path $Dest (".backup-" + (Get-Date -Format "yyyyMMdd-HHmmss"))

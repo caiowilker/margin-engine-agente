@@ -89,7 +89,7 @@ if (-not $SkipNpm) {
 } else {
     $sqlite = Join-Path $App "node_modules\better-sqlite3\build\Release\better_sqlite3.node"
     if (-not (Test-Path $sqlite)) {
-        Write-Error "node_modules nativo ausente — execute prepare-build.ps1 sem -SkipNpm antes de compilar"
+        Write-Error "node_modules nativo ausente - execute prepare-build.ps1 sem -SkipNpm antes de compilar"
     }
 }
 
@@ -135,8 +135,8 @@ if ($Compile) {
     Write-Host "  Compilar:"
     Write-Host "    .\prepare-build.ps1 -Compile"
     Write-Host "  ou:"
-    Write-Host "    & `"$inno`" `"$Iss`""
-    Write-Host "  Saida: output\Margin-Engine-Setup-$($pkg.version).exe"
+    Write-Host ('    & "{0}" "{1}"' -f $inno, $Iss)
+    Write-Host ("  Saida: output\Margin-Engine-Setup-{0}.exe" -f $pkg.version)
 } else {
     Write-Host "  Inno Setup 6 nao encontrado - instale ou abra pdv-agente-installer.iss no IDE"
 }

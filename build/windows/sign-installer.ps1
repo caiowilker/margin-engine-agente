@@ -1,10 +1,10 @@
 # Assina o instalador Margin Engine com signtool (opcional).
-# Requer certificado de assinatura de código instalado ou variáveis de ambiente.
+# Requer certificado de assinatura de codigo instalado ou variaveis de ambiente.
 #
-# Variáveis:
-#   MARGIN_SIGN_PFX       — caminho do .pfx
-#   MARGIN_SIGN_PASSWORD  — senha do certificado
-#   MARGIN_SIGN_TIMESTAMP — URL timestamp (default: http://timestamp.digicert.com)
+# Variaveis:
+#   MARGIN_SIGN_PFX       - caminho do .pfx
+#   MARGIN_SIGN_PASSWORD  - senha do certificado
+#   MARGIN_SIGN_TIMESTAMP - URL timestamp (default: http://timestamp.digicert.com)
 #
 # Uso:
 #   .\sign-installer.ps1
@@ -23,7 +23,7 @@ if (-not $ExePath) {
 }
 
 if (-not (Test-Path $ExePath)) {
-    Write-Error "Instalador não encontrado: $ExePath`nCompile primeiro com prepare-build.ps1 -Compile"
+    Write-Error "Instalador nao encontrado: $ExePath`nCompile primeiro com prepare-build.ps1 -Compile"
 }
 
 $signtool = @(
@@ -32,7 +32,7 @@ $signtool = @(
 ) | Get-ChildItem -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
 
 if (-not $signtool) {
-    Write-Warning "signtool.exe não encontrado — pule assinatura ou instale Windows SDK"
+    Write-Warning "signtool.exe nao encontrado - pule assinatura ou instale Windows SDK"
     exit 0
 }
 
@@ -42,8 +42,8 @@ $ts = if ($env:MARGIN_SIGN_TIMESTAMP) { $env:MARGIN_SIGN_TIMESTAMP } else { "htt
 
 if (-not $pfx -or -not (Test-Path $pfx)) {
     Write-Host ""
-    Write-Host "Assinatura digital: PULADA (MARGIN_SIGN_PFX não configurado)"
-    Write-Host "Para assinar em produção:"
+    Write-Host "Assinatura digital: PULADA (MARGIN_SIGN_PFX nao configurado)"
+    Write-Host "Para assinar em producao:"
     Write-Host "  `$env:MARGIN_SIGN_PFX = 'C:\certs\margin-engine.pfx'"
     Write-Host "  `$env:MARGIN_SIGN_PASSWORD = '***'"
     Write-Host "  .\sign-installer.ps1"
@@ -59,4 +59,4 @@ Write-Host "==> Verificando assinatura"
 & $signtool.FullName verify /pa $ExePath
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "OK — instalador assinado"
+Write-Host "OK - instalador assinado"
