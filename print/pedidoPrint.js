@@ -20,17 +20,35 @@ const EVENT_TYPE_LABELS = Object.freeze({
   ORDER_READY: "Pedido pronto",
   ORDER_DELIVERED: "Em entrega",
   ORDER_FINISHED: "Pedido finalizado",
+  PRE_CONTA: "Pré-conta — cobrança",
+  BILL_REQUESTED: "Pré-conta — cobrança",
 });
 
 function mapItem(raw) {
   const item = raw || {};
   const notesRaw = item.notes ?? item.observacao ?? item.obs ?? null;
+  const qty = Number(item.quantity ?? item.quantidade ?? 0);
+  const unitPriceRaw = item.unitPrice ?? item.unit_price ?? item.precoUnitario ?? item.preco_unitario;
+  const lineTotalRaw = item.lineTotal ?? item.line_total ?? item.total ?? item.valorTotal;
+  const unitPrice =
+    unitPriceRaw != null && Number.isFinite(Number(unitPriceRaw))
+      ? Number(unitPriceRaw)
+      : null;
+  let lineTotal =
+    lineTotalRaw != null && Number.isFinite(Number(lineTotalRaw))
+      ? Number(lineTotalRaw)
+      : null;
+  if (lineTotal == null && unitPrice != null && qty) {
+    lineTotal = Math.round(qty * unitPrice * 100) / 100;
+  }
   return {
     code: String(item.code ?? item.codigo ?? ""),
     name: String(item.name ?? item.nome ?? ""),
-    quantity: Number(item.quantity ?? item.quantidade ?? 0),
+    quantity: qty,
     unit: item.unit != null ? String(item.unit) : item.unidade != null ? String(item.unidade) : null,
     notes: notesRaw != null && String(notesRaw).trim() ? String(notesRaw).trim() : null,
+    unitPrice,
+    lineTotal,
   };
 }
 
@@ -127,12 +145,28 @@ function fmtTotal(total) {
   );
 }
 
+/** Pré-conta / cliente / entrega exibem total (e preços de linha quando houver). */
+function deveExibirTotalPedido(printType, eventType) {
+  const type = String(printType || "").toLowerCase();
+  const ev = String(eventType || "").toUpperCase();
+  if (ev === "PRE_CONTA" || ev === "BILL_REQUESTED") return true;
+  return type === "cliente" || type === "entrega";
+}
+
+function tituloPedidoTermico(printType, eventType) {
+  const ev = String(eventType || "").toUpperCase();
+  if (ev === "PRE_CONTA" || ev === "BILL_REQUESTED") return "PRE-CONTA";
+  return labelPrintType(printType);
+}
+
 module.exports = {
   PRINT_TYPE_LABELS,
   EVENT_TYPE_LABELS,
   normalizarPedidoPayload,
   labelPrintType,
   labelEventType,
+  tituloPedidoTermico,
+  deveExibirTotalPedido,
   fmtQty,
   fmtTotal,
   wrapThermalLines,

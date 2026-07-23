@@ -48,9 +48,17 @@ function validarPayloadNfce(payload) {
     somaItens += itemTotal;
 
     const ncm = String(item.ncm || "").replace(/\D/g, "");
-    if (ncm && ncm.length !== 8) {
+    if (!ncm || ncm.length !== 8 || ncm === "00000000") {
       const err = new Error(
-        `Item "${item.nome}": NCM deve ter 8 dígitos (informado: ${ncm}).`,
+        `Item "${item.nome}": NCM obrigatório com 8 dígitos (informado: ${ncm || "vazio"}).`,
+      );
+      err.permanente = true;
+      throw err;
+    }
+    const cfop = String(item.cfop || "").replace(/\D/g, "");
+    if (!cfop || cfop.length !== 4) {
+      const err = new Error(
+        `Item "${item.nome}": CFOP obrigatório com 4 dígitos (informado: ${cfop || "vazio"}).`,
       );
       err.permanente = true;
       throw err;

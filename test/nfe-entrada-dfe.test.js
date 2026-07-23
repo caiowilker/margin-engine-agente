@@ -127,6 +127,77 @@ async function run() {
     assert.ok(parsed.resumos.some((r) => r.includes(chave)));
   });
 
+  await test("consultarChaveEntrada rejeita DV inválido sem SEFAZ", async () => {
+    const bad = "35260612345678000190550010000000019999999990";
+    await assert.rejects(
+      () => acbr.consultarChaveEntrada(bad, CNPJ, "SP"),
+      /verificador/i,
+    );
+  });
+
+  await test("consultarChaveEntrada rejeita modelo 65", async () => {
+    // chave válida fixture back com modelo forçado 65 + DV recalculado
+    const ok = "35260612345678000190550010000000011000000011";
+    const b43 = ok.slice(0, 20) + "65" + ok.slice(22, 43);
+    let peso = 2;
+    let soma = 0;
+    for (let i = b43.length - 1; i >= 0; i--) {
+      soma += Number(b43[i]) * peso;
+      peso = peso === 9 ? 2 : peso + 1;
+    }
+    const resto = soma % 11;
+    const dv = resto < 2 ? 0 : 11 - resto;
+    const chave65 = b43 + String(dv);
+    await assert.rejects(
+      () => acbr.consultarChaveEntrada(chave65, CNPJ, "SP"),
+      /modelo 55/i,
+    );
+  });
+
+  await test("consultarChaveEntrada obtém XML via DistDFe (deps mock)", async () => {
+    const ok = "35260612345678000190550010000000011000000011";
+    const xml = `<nfeProc><NFe Id="NFe${ok}"><infNFe/></NFe></nfeProc>`;
+    const r = await acbr.consultarChaveEntrada(ok, CNPJ, "SP", {
+      consultarChave: async () => ({
+        cStat: "100",
+        situacao: "AUTORIZADA",
+        xMotivo: "Autorizado",
+        raw: "sem xml completo",
+      }),
+      distribuicaoDFePorChave: async () => ({
+        cStat: "138",
+        xml,
+        xMotivo: "Documento localizado",
+      }),
+      manifestarCienciaOperacao: async () => {
+        throw new Error("não deveria chamar ciência se DistDFe já trouxe XML");
+      },
+    });
+    assert.strictEqual(r.ok, true);
+    assert.ok(r.xml && r.xml.includes("<NFe"));
+    assert.strictEqual(r.fonteConsulta, "DISTRIBUICAO_DFE");
+  });
+
+  await test("consultarChaveEntrada trata cStat 656 sem loop", async () => {
+    const ok = "35260612345678000190550010000000011000000011";
+    const r = await acbr.consultarChaveEntrada(ok, CNPJ, "SP", {
+      consultarChave: async () => ({
+        cStat: "100",
+        situacao: "AUTORIZADA",
+        raw: "",
+      }),
+      distribuicaoDFePorChave: async () => ({
+        cStat: "656",
+        xml: null,
+        xMotivo: "Consumo Indevido",
+      }),
+      manifestarCienciaOperacao: async () => ({ ok: true }),
+    });
+    assert.strictEqual(r.ok, false);
+    assert.strictEqual(r.cStat, "656");
+    assert.ok(/consumo indevido|656/i.test(r.mensagem || ""));
+  });
+
   await test("acbrLibDriver exporta DistDFe e manifesto nativos", () => {
     const lib = require("../fiscal/drivers/acbrLibDriver");
     assert.strictEqual(typeof lib.distribuicaoDFePorUltNsu, "function");

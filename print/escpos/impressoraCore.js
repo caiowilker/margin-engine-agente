@@ -879,9 +879,15 @@ async function renderCupomConteudo(printer, payload) {
     .style("normal")
     .size(0, 0);
 
-  if (empresa.razaoSocial && empresa.razaoSocial !== empresa.nomeFantasia)
-    printer.text(tx(empresa.razaoSocial));
+  const fantasia = String(empresa.nomeFantasia || "").trim();
+  const razao = String(empresa.razaoSocial || "").trim();
+  if (razao && fantasia && fantasia.toUpperCase() !== razao.toUpperCase()) {
+    printer.text(tx(razao));
+  }
   if (empresa.cnpj) printer.text("CNPJ: " + toThermalDoc(empresa.cnpj));
+  if (empresa.inscricaoEstadual) {
+    printer.text("IE: " + toThermalDoc(empresa.inscricaoEstadual));
+  }
   const linhaEndereco = formatarLinhaEnderecoEmpresa(empresa);
   if (linhaEndereco) printer.text(linhaEndereco.slice(0, COLS));
   if (empresa.cidade)
@@ -898,6 +904,9 @@ async function renderCupomConteudo(printer, payload) {
   printer.align("ct").style("b");
   printer.text(isFiscal ? tituloCupomFiscal(payload.chaveNfe) : "CUPOM NAO FISCAL");
   printer.style("normal");
+  if (payload.vendaCancelada) {
+    printer.align("ct").style("b").text("*** VENDA CANCELADA ***").style("normal");
+  }
   printer.align("lt").text(sepEq());
 
   // ── 3. Identificação — alinhada col2 (esq:dir) ──────────────────────────────
@@ -1035,6 +1044,15 @@ async function renderCupomConteudo(printer, payload) {
   // Volumes
   const totalVols = itens.reduce((s, i) => s + Number(i.quantidade || 0), 0);
   printer.text(col2("Volumes:", Math.round(totalVols) + " item(ns)"));
+
+  const { resolverIbptCupom, formatarTextoIbptCupom } = require("../../fiscalIbpt");
+  // IBPT só no documento fiscal (Lei 12.741) — nunca no cupom auxiliar.
+  const ibpt = isFiscal ? resolverIbptCupom(payload) : null;
+  const textoIbpt = ibpt ? formatarTextoIbptCupom(ibpt, totalFinal) : "";
+  if (textoIbpt) {
+    printer.text(sepDash());
+    printer.align("ct").text(textoIbpt).align("lt");
+  }
 
   // ── 6. NFC-e ─────────────────────────────────────────────────────────────────
   if (isFiscal) {
@@ -1319,14 +1337,16 @@ async function renderPedido(printer, payload) {
   const { sep: linha } = helpers();
   const {
     normalizarPedidoPayload,
-    labelPrintType,
     labelEventType,
+    tituloPedidoTermico,
+    deveExibirTotalPedido,
     fmtQty,
     fmtTotal,
     wrapThermalLines,
   } = require("../pedidoPrint");
   const p = normalizarPedidoPayload(payload);
   const cancelado = p.eventType === "ORDER_CANCELLED";
+  const showTotal = deveExibirTotalPedido(p.printType, p.eventType);
 
   printer.font("a").align("ct");
   await imprimirLogoCupomEscpos(printer, payload);
@@ -1334,7 +1354,7 @@ async function renderPedido(printer, payload) {
   printer
     .style("b")
     .size(1, 1)
-    .text(labelPrintType(p.printType))
+    .text(tituloPedidoTermico(p.printType, p.eventType))
     .style("normal")
     .size(0, 0)
     .text(labelEventType(p.eventType));
@@ -1376,6 +1396,15 @@ async function renderPedido(printer, payload) {
       const qty = fmtQty(item.quantity, item.unit);
       const nome = tx(item.name || item.code || "Item");
       printer.style("b").text(qty + " x " + nome).style("normal");
+      if (showTotal && item.lineTotal != null) {
+        const unitFmt = item.unitPrice != null ? fmtTotal(item.unitPrice) : null;
+        const lineFmt = fmtTotal(item.lineTotal);
+        if (unitFmt && lineFmt) {
+          printer.text("  " + unitFmt + "  =  " + lineFmt);
+        } else if (lineFmt) {
+          printer.text("  " + lineFmt);
+        }
+      }
       if (item.notes) {
         printer.text("  * " + tx(item.notes));
       }
@@ -1385,8 +1414,6 @@ async function renderPedido(printer, payload) {
     }
   }
 
-  const showTotal =
-    p.printType === "cliente" || p.printType === "entrega" || p.printType === "CLIENTE" || p.printType === "ENTREGA";
   const totalFmt = showTotal ? fmtTotal(p.total) : null;
   if (totalFmt) {
     printer.align("ct").text(linha()).align("lt").style("b").text("Total : " + totalFmt).style("normal");

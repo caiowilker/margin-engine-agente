@@ -12,7 +12,9 @@ Nome=MarginEngine-Agente
 Versao=1.0.0
 
 [ACBrNFe]
-Ambiente=2
+; Enum ACBrLib: 0=produção · 1=homologação (≠ tpAmb SEFAZ 1/2)
+Ambiente=1
+AmbienteSefaz=homologacao
 ModeloDF=65
 VersaoDF=4.00
 PathSchemas=

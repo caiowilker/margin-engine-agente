@@ -2296,31 +2296,50 @@ function iniciarServidor() {
     }
   });
 
+  app.post("/fiscal/inutilizar", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    try {
+      const cfg = await lerConfig();
+      const body = req.body || {};
+      const ano = body.ano || new Date().getFullYear();
+      const empresa = body.empresa || cfg.empresa || {};
+      const resultado = await fiscalService.inutilizarCompleto(cfg, {
+        ...body,
+        ano,
+        cnpj: body.cnpj || empresa.cnpj || cfg.cnpj,
+        empresa,
+      });
+      res.json(resultado);
+    } catch (err) {
+      res.status(400).json({ ok: false, erro: err.message });
+    }
+  });
+
   app.post("/acbr/nfce/inutilizar", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       const cfg = await lerConfig();
       const body = req.body || {};
       const ano = body.ano || new Date().getFullYear();
-      const empresa = body.empresa || {};
+      const empresa = body.empresa || cfg.empresa || {};
       const resultado = await fiscalService.inutilizarCompleto(cfg, {
         ...body,
         ano,
-        cnpj: body.cnpj || empresa.cnpj,
+        cnpj: body.cnpj || empresa.cnpj || cfg.cnpj,
+        empresa,
       });
       res.json(resultado);
     } catch (err) {
-      res.status(500).json({ erro: err.message });
+      res.status(400).json({ ok: false, erro: err.message });
     }
   });
 
   app.post("/acbr/nfce/reimprimir", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     const body = req.body || {};
-    const { chave, numeroVenda, qrcodeNfe, qrcode } = body;
+    const { chave, numeroVenda, qrcodeNfe, qrcode, exibirLogo } = body;
     try {
       const resultado = await fiscalService.reimprimirDanfceCompleto(
         chave,
         numeroVenda,
-        { qrcodeNfe, qrcode },
+        { qrcodeNfe, qrcode, exibirLogo },
       );
       res.json(resultado);
     } catch (err) {

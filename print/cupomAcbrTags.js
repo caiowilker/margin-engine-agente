@@ -124,10 +124,15 @@ function renderCupomTags(rawPayload) {
 
   lines.push("<ce>");
   lines.push(`<e><n>${tx((empresa.nomeFantasia || empresa.razaoSocial || "ESTABELECIMENTO").toUpperCase())}</n></e>`);
-  if (empresa.razaoSocial && empresa.razaoSocial !== empresa.nomeFantasia) {
-    lines.push(corpo(tx(empresa.razaoSocial)));
+  const fantasia = String(empresa.nomeFantasia || "").trim();
+  const razao = String(empresa.razaoSocial || "").trim();
+  if (razao && fantasia && fantasia.toUpperCase() !== razao.toUpperCase()) {
+    lines.push(corpo(tx(razao)));
   }
   if (empresa.cnpj) lines.push(corpo(`CNPJ: ${toThermalDoc(empresa.cnpj)}`));
+  if (empresa.inscricaoEstadual) {
+    lines.push(corpo(`IE: ${toThermalDoc(empresa.inscricaoEstadual)}`));
+  }
   const end = formatarLinhaEndereco(empresa);
   if (end) lines.push(corpo(end.slice(0, COLS)));
   if (empresa.cidade) {

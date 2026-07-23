@@ -811,23 +811,41 @@ async function consultarChaveLib(chave) {
   if (getIntegrationMode() !== "native") {
     return acbr.consultarChave(chave);
   }
-  const resposta = await withNativeLib("consultar", (inst) => inst.consultar(chave, true));
+  const chaveNorm = String(chave || "").replace(/\D/g, "");
+  const resposta = await withNativeLib("consultar", (inst) => inst.consultar(chaveNorm, true));
   const p0 = acbrLibResposta.parseRespostaLib(resposta);
   const p = await acbr.enrichParsePosEmissaoAsync(p0, resposta);
-  const cs = String(p.cStat || "");
   return {
-    chave,
+    chave: chaveNorm,
     cStat: p.cStat,
     xMotivo: p.xMotivo,
     protocolo: p.protocolo,
-    situacao:
-      cs === "100" || cs === "150"
-        ? "AUTORIZADA"
-        : cs === "101"
-          ? "CANCELADA"
-          : cs.startsWith("2")
-            ? "REJEITADA"
-            : "DESCONHECIDA",
+    situacao: acbr.inferirSituacao(p.cStat, resposta),
+    raw: resposta,
+    native: true,
+  };
+}
+
+/**
+ * Consulta situação de NF-e modelo 55 (entrada) — força ModeloDF=moNFe.
+ * Sem isso a sessão PDV (NFC-e) pode consultar no ambiente errado.
+ */
+async function consultarChaveNfeEntradaLib(chave) {
+  if (getIntegrationMode() !== "native") {
+    return acbr.consultarChave(chave);
+  }
+  const chaveNorm = String(chave || "").replace(/\D/g, "");
+  const resposta = await withNativeLibModeloNfe("consultarNFeEntrada", (inst) =>
+    inst.consultar(chaveNorm, true),
+  );
+  const p0 = acbrLibResposta.parseRespostaLib(resposta);
+  const p = await acbr.enrichParsePosEmissaoAsync(p0, resposta);
+  return {
+    chave: chaveNorm,
+    cStat: p.cStat,
+    xMotivo: p.xMotivo,
+    protocolo: p.protocolo,
+    situacao: acbr.inferirSituacao(p.cStat, resposta),
     raw: resposta,
     native: true,
   };
@@ -882,10 +900,19 @@ async function inutilizarNfceLib(params) {
     ),
   );
   const p = acbr.parseResposta(resposta);
+  const { isCStatInutilizacaoOk } = require("../../acbrResposta");
+  const cStat = String(p.cStat || "");
+  const ok = isCStatInutilizacaoOk(cStat);
+  if (!ok) {
+    const msg = p.xMotivo || p.mensagem || resposta;
+    throw new Error(
+      `SEFAZ rejeitou inutilização (cStat ${cStat || "?"}): ${String(msg).slice(0, 280)}`,
+    );
+  }
   return {
     ok: true,
     protocolo: p.protocolo,
-    cStat: p.cStat,
+    cStat,
     xMotivo: p.xMotivo,
     xml: require("../../documentosFiscais").extrairXmlDaResposta(resposta),
     raw: resposta,
@@ -1088,7 +1115,7 @@ async function manifestarCienciaOperacaoLib(chave, cnpjDestinatario) {
 
 async function consultarChaveEntradaLib(chave, cnpjDestinatario, ufAutor) {
   return acbr.consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, {
-    consultarChave: consultarChaveLib,
+    consultarChave: consultarChaveNfeEntradaLib,
     distribuicaoDFePorChave: distribuicaoDFePorChaveLib,
     manifestarCienciaOperacao: manifestarCienciaOperacaoLib,
   });

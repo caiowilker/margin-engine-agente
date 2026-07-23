@@ -34,7 +34,7 @@ function renderDanfeTermicoTags(payload) {
   const lines = [];
 
   lines.push("</zera>");
-  const logo = tagLogoHeader();
+  const logo = tagLogoHeader(payload);
   if (logo) lines.push(logo);
   if (payload.segundaVia) lines.push(tagSegundaViaBanner());
 
@@ -42,9 +42,12 @@ function renderDanfeTermicoTags(payload) {
   lines.push("<ce>Documento Auxiliar — via térmica</ce>");
   lines.push(sep("="));
 
-  const nome = toThermalText(empresa.nomeFantasia || empresa.razaoSocial || "EMITENTE");
+  const nome = toThermalText(empresa.nomeFantasia || empresa.razaoSocial || "ESTABELECIMENTO");
   lines.push(`<ce><n>${nome.toUpperCase()}</n></ce>`);
   if (empresa.cnpj) lines.push(`CNPJ: ${toThermalDoc(empresa.cnpj)}`);
+  if (empresa.inscricaoEstadual) {
+    lines.push(`IE: ${toThermalDoc(empresa.inscricaoEstadual)}`);
+  }
   lines.push(sep("-"));
 
   lines.push(col2("Venda:", payload.numeroVenda || ""));

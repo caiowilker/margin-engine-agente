@@ -55,6 +55,13 @@ function resolverCStatFinal({ todosCStat, prot, get }) {
   );
 }
 
+/** cStat de inutilização homologada na SEFAZ (102) ou já registrada (563). */
+const CSTAT_INUTILIZACAO_OK = new Set(["102", "563"]);
+
+function isCStatInutilizacaoOk(cStat) {
+  return CSTAT_INUTILIZACAO_OK.has(String(cStat || ""));
+}
+
 /** Somente cStat 100/150 (infProt) significam nota autorizada na SEFAZ. */
 function isCStatAutorizado(cStat) {
   const cs = String(cStat || "");
@@ -65,6 +72,8 @@ module.exports = {
   coalescerRespostaAcbr,
   resolverCStatFinal,
   isCStatAutorizado,
+  isCStatInutilizacaoOk,
+  CSTAT_INUTILIZACAO_OK,
   extrairProtocoloBruto,
   CSTAT_LOTE_OK,
   CSTAT_CONSULTA_NAO_LOCALIZADA,

@@ -24,14 +24,47 @@ function extrairValor(resposta, chave) {
   return null;
 }
 
-function ambienteAcbrHomologacao(valor) {
-  const t = String(valor || "").toUpperCase();
-  return t.includes("HOMOLOG") || t === "2";
+/**
+ * Interpreta ambiente retornado pelo emissor.
+ * @param {string} valor
+ * @param {"tpAmb"|"Ambiente"|"auto"} campo
+ *   - tpAmb: SEFAZ 1=prod · 2=homolog
+ *   - Ambiente: ACBrLib/Monitor enum 0=prod · 1=homolog
+ *   - auto: rótulo textual; "2"=homolog; "0"=prod; "1" ambíguo → SEFAZ prod
+ * @returns {"producao"|"homologacao"|null}
+ */
+function interpretarAmbienteResposta(valor, campo = "auto") {
+  const t = String(valor ?? "").trim();
+  if (!t) return null;
+  const u = t.toUpperCase();
+  if (u.includes("HOMOLOG")) return "homologacao";
+  if (u.includes("PRODUC")) return "producao";
+
+  if (campo === "tpAmb") {
+    if (t === "2") return "homologacao";
+    if (t === "1") return "producao";
+    return null;
+  }
+  if (campo === "Ambiente") {
+    if (t === "0") return "producao";
+    if (t === "1") return "homologacao";
+    // legado: alguns INIs gravavam tpAmb SEFAZ em Ambiente
+    if (t === "2") return "homologacao";
+    return null;
+  }
+  // auto
+  if (t === "2") return "homologacao";
+  if (t === "0") return "producao";
+  if (t === "1") return "producao"; // preferir tpAmb SEFAZ quando o campo é desconhecido
+  return null;
 }
 
-function ambienteAcbrProducao(valor) {
-  const t = String(valor || "").toUpperCase();
-  return t.includes("PRODUC") || t === "1";
+function ambienteAcbrHomologacao(valor, campo = "auto") {
+  return interpretarAmbienteResposta(valor, campo) === "homologacao";
+}
+
+function ambienteAcbrProducao(valor, campo = "auto") {
+  return interpretarAmbienteResposta(valor, campo) === "producao";
 }
 
 function cacheValido(entry) {
@@ -85,24 +118,35 @@ async function validarSefazOperacional() {
 }
 
 function validarAmbiente(ambienteEsperado, resposta, p) {
-  const ambAcbr =
+  // Preferir tpAmb SEFAZ (1/2) quando presente — é o que a SEFAZ autorizou.
+  const tpAmbRaw =
     extrairValor(resposta, "tpAmb") ||
+    (p?.tpAmb != null && String(p.tpAmb).trim() !== "" ? String(p.tpAmb) : "");
+  const ambienteRaw =
     extrairValor(resposta, "Ambiente") ||
     extrairValor(resposta, "TipoAmbiente") ||
-    p.tpAmb ||
     "";
-  if (!ambAcbr) return ambAcbr;
 
-  const fiscalDriverHomolog = ambienteAcbrHomologacao(ambAcbr);
-  const fiscalDriverProd = ambienteAcbrProducao(ambAcbr);
-  if (ambienteEsperado === "homologacao" && fiscalDriverProd && !fiscalDriverHomolog) {
+  let resolved = null;
+  let ambAcbr = "";
+  if (tpAmbRaw) {
+    ambAcbr = tpAmbRaw;
+    resolved = interpretarAmbienteResposta(tpAmbRaw, "tpAmb");
+  } else if (ambienteRaw) {
+    ambAcbr = ambienteRaw;
+    resolved = interpretarAmbienteResposta(ambienteRaw, "Ambiente");
+  }
+  if (!ambAcbr) return ambAcbr;
+  if (!resolved) return ambAcbr;
+
+  if (ambienteEsperado === "homologacao" && resolved === "producao") {
     throw new Error(
-      `AMBIENTE_SEFAZ=homologacao mas emissor fiscal está em produção (tpAmb=${ambAcbr})`,
+      `AMBIENTE_SEFAZ=homologacao mas emissor fiscal está em produção (valor=${ambAcbr})`,
     );
   }
-  if (ambienteEsperado === "producao" && fiscalDriverHomolog && !fiscalDriverProd) {
+  if (ambienteEsperado === "producao" && resolved === "homologacao") {
     throw new Error(
-      `AMBIENTE_SEFAZ=producao mas emissor fiscal está em homologação (tpAmb=${ambAcbr})`,
+      `AMBIENTE_SEFAZ=producao mas emissor fiscal está em homologação (valor=${ambAcbr})`,
     );
   }
   return ambAcbr;
@@ -227,4 +271,6 @@ module.exports = {
   validarEmissaoCompleta,
   invalidarCache,
   extrairValor,
+  interpretarAmbienteResposta,
+  validarAmbiente,
 };

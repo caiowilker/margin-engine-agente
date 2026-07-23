@@ -162,6 +162,16 @@ test("printerLogo — sem BMP não exibe logo", () => {
   assert.strictEqual(tagLogoHeader({}), "");
 });
 
+test("danfeTermico — respeita exibirLogo false", () => {
+  const tags = renderDanfeTermicoTags({
+    numeroVenda: "V1",
+    empresa: { nomeFantasia: "Loja", cnpj: "00" },
+    chaveNfe: "31260712343055000183550010000000121000000016",
+    exibirLogo: false,
+  });
+  assert.ok(!/<logo>/i.test(tags) && !/logo/i.test(tags.split("\n")[1] || ""));
+});
+
 test("printerLogo — exibirLogo false no payload ignora BMP", () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "logo-off-"));
   process.env.PRINTER_LOCAL_ENV_OVERRIDE = path.join(tmp, ".env");

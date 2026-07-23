@@ -160,10 +160,16 @@ function isAcbrBusy() {
   return acbrBusyDepth > 0;
 }
 
+/**
+ * Valor para NFE.SetAmbiente no ACBr Monitor (TACBrTipoAmbiente):
+ * 0 = produção · 1 = homologação.
+ * Diferente do tpAmb SEFAZ no XML/INI do documento (1 = produção · 2 = homologação).
+ */
 function resolverTpAmbAcbr() {
   const amb = String(process.env.AMBIENTE_SEFAZ || "homologacao").toLowerCase();
-  if (amb === "producao" || amb === "1") return "1";
-  return "2";
+  // AMBIENTE_SEFAZ=1 (legado) = produção → enum Monitor/Lib 0
+  if (amb === "producao" || amb === "1" || amb === "0") return "0";
+  return "1";
 }
 
 function melhorarErroAcbr(err) {
@@ -172,7 +178,7 @@ function melhorarErroAcbr(err) {
     const e = new Error(
       "ACBr rejeitou a emissão (URL-QRCode). O ACBrNFeServicos.ini no disco pode estar correto — " +
         "feche e abra o ACBr Monitor Demo para recarregar o INI. " +
-        "Confirme Homologação (tpAmb 2) no Monitor, igual a AMBIENTE_SEFAZ=homologacao no agente.",
+        "Confirme Homologação no Monitor (Ambiente=1 / tpAmb SEFAZ=2), igual a AMBIENTE_SEFAZ=homologacao no agente.",
     );
     e.cStat = err.cStat;
     e.permanente = err.permanente;
@@ -540,18 +546,19 @@ async function statusServico() {
 }
 
 async function consultarChave(chave) {
-  if (!chave || String(chave).length !== 44) {
+  const chaveNorm = String(chave || "").replace(/\D/g, "");
+  if (chaveNorm.length !== 44) {
     throw new Error("Chave NFC-e deve ter 44 dígitos.");
   }
-  const modelo = parseInt(inferirModeloDaChave(chave), 10);
+  const modelo = parseInt(inferirModeloDaChave(chaveNorm), 10);
   const resposta = await enviarNfeModelo(
-    `NFE.ConsultarNFe(${qAcbr(chave)})`,
+    `NFE.ConsultarNFe(${qAcbr(chaveNorm)})`,
     modelo,
   );
   let p = parseResposta(resposta);
   p = enrichParsePosEmissao(p, resposta);
   return {
-    chave,
+    chave: chaveNorm,
     cStat: p.cStat,
     xMotivo: p.xMotivo,
     protocolo: p.protocolo,
@@ -651,17 +658,7 @@ function fmtQty(n) {
 }
 
 function resolverGtin(item) {
-  const candidatos = [
-    item.gtin,
-    item.codigoBarras,
-    item.ean,
-    item.codigo,
-  ];
-  for (const raw of candidatos) {
-    const gtin = String(raw || "").replace(/\D/g, "");
-    if (gtin.length >= 8 && gtin.length <= 14) return gtin;
-  }
-  return "";
+  return require("./gtin").resolverGtin(item);
 }
 
 /** Distribui vTotTrib (IBPT) proporcionalmente entre itens — último item absorve centavos. */
@@ -709,13 +706,24 @@ function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
   const brutoLinha = desc > 0 ? total + desc : total;
   const un = unidadeFiscalDoItem(item);
   const gtin = resolverGtin(item);
-  const ncm = String(item.ncm || "00000000")
-    .replace(/\D/g, "")
-    .padStart(8, "0")
-    .slice(0, 8);
-  const cfop = String(item.cfop || "5102")
-    .replace(/\D/g, "")
-    .slice(0, 4);
+  const ncmDigits = String(item.ncm || "").replace(/\D/g, "");
+  if (ncmDigits.length !== 8 || ncmDigits === "00000000") {
+    const err = new Error(
+      `Item "${item.nome || n}": NCM inválido para emissão (informe 8 dígitos).`,
+    );
+    err.permanente = true;
+    throw err;
+  }
+  const ncm = ncmDigits;
+  const cfopDigits = String(item.cfop || "").replace(/\D/g, "");
+  if (cfopDigits.length !== 4) {
+    const err = new Error(
+      `Item "${item.nome || n}": CFOP inválido para emissão (informe 4 dígitos).`,
+    );
+    err.permanente = true;
+    throw err;
+  }
+  const cfop = cfopDigits;
   const nome = sanitizeAcbrText(item.nome, 120);
 
   let bloco = `[Produto${nn}]\n`;
@@ -743,14 +751,19 @@ function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
   bloco += `indTot=1\n\n`;
 
   bloco += `[ICMS${nn}]\n`;
+  let csosn = "";
   if (usaSimples) {
-    bloco += `CSOSN=${String(item.csosn || item.cst || "102")
+    csosn = String(item.csosn || item.cst || "102")
       .replace(/\D/g, "")
-      .slice(0, 3)}\n`;
+      .slice(0, 3)
+      .padStart(3, "0");
+    if (!csosn || csosn === "000") csosn = "102";
+    bloco += `CSOSN=${csosn}\n`;
   } else {
     bloco += `CST=${String(item.cst || "00")
       .replace(/\D/g, "")
-      .slice(0, 2)}\n`;
+      .padStart(2, "0")
+      .slice(-2)}\n`;
   }
   bloco += `orig=${String(item.origem || item.orig || "0")
     .replace(/\D/g, "")
@@ -758,9 +771,18 @@ function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
   if (!usaSimples) {
     bloco += `modBC=3\n`;
   }
+  // Simples: ICMS próprio zerado (DAS). Crédito SN só em CSOSN 101/201.
   bloco += `vBC=0.00\n`;
   bloco += `pICMS=${fmtMoney(usaSimples ? 0 : item.aliquotaIcms || 0)}\n`;
-  bloco += `vICMS=0.00\n\n`;
+  bloco += `vICMS=0.00\n`;
+  if (usaSimples && (csosn === "101" || csosn === "201")) {
+    const pCred = Math.max(0, Number(item.aliquotaIcms) || 0);
+    const liquido = Math.max(0, brutoLinha - desc);
+    const vCred = Math.round((liquido * pCred) / 100 * 100) / 100;
+    bloco += `pCredSN=${fmtMoney(pCred)}\n`;
+    bloco += `vCredICMSSN=${fmtMoney(vCred)}\n`;
+  }
+  bloco += `\n`;
 
   bloco += `[PIS${nn}]\n`;
   if (usaSimples) {
@@ -1000,7 +1022,9 @@ function montarIniNfce(payload, numeracao) {
   let vProd = 0;
   let vTotTrib = 0;
   let blocoItens = "";
-  const ibptTotal = Number(payload.ibpt?.total);
+  const { resolverIbptCupom } = require("./fiscalIbpt");
+  const ibptResolvido = resolverIbptCupom(payload);
+  const ibptTotal = Number(ibptResolvido?.total);
   const ibptCupom =
     Number.isFinite(ibptTotal) && ibptTotal > 0 ? ibptTotal : 0;
   let ibptAcum = 0;
@@ -1194,7 +1218,9 @@ function montarIniNfe(payload, numeracao, destinatario) {
   const destUf = sanitizeAcbrText(destinatario.endereco?.uf, 2).toUpperCase();
   const idDest = ufEmit && destUf && ufEmit !== destUf ? "2" : "1";
   const cfopDefault = cfopPadraoNfe(payload, ufEmit, destUf);
-  const ibptTotal = Number(payload.ibpt?.total);
+  const { resolverIbptCupom: resolverIbptNfe } = require("./fiscalIbpt");
+  const ibptResolvidoNfe = resolverIbptNfe(payload);
+  const ibptTotal = Number(ibptResolvidoNfe?.total);
   const ibptCupom =
     Number.isFinite(ibptTotal) && ibptTotal > 0 ? ibptTotal : 0;
 
@@ -1731,16 +1757,28 @@ async function inutilizarNfce(params) {
     numeroFinal,
     motivo,
   } = params;
+  const cnpjLimpo = String(cnpj || "").replace(/\D/g, "");
+  if (cnpjLimpo.length !== 14) {
+    throw new Error("CNPJ do emitente é obrigatório para inutilização na SEFAZ.");
+  }
   const motivoTexto = (motivo || "Inutilizacao solicitada").slice(0, 255);
-  const cnpjLimpo = String(cnpj).replace(/\D/g, "");
   const resposta = await enviarNfe(
     `NFE.InutilizarNFe(${qAcbr(cnpjLimpo)},${qAcbr(motivoTexto)},${ano},${modelo},${serie},${numeroInicial},${numeroFinal})`,
   );
   const p = parseResposta(resposta);
+  const { isCStatInutilizacaoOk } = require("./acbrResposta");
+  const cStat = String(p.cStat || "");
+  const ok = isCStatInutilizacaoOk(cStat);
+  if (!ok) {
+    const msg = p.xMotivo || p.mensagem || resposta;
+    throw new Error(
+      `SEFAZ rejeitou inutilização (cStat ${cStat || "?"}): ${String(msg).slice(0, 280)}`,
+    );
+  }
   return {
     ok: true,
     protocolo: p.protocolo,
-    cStat: p.cStat,
+    cStat,
     xMotivo: p.xMotivo,
     xml: require("./documentosFiscais").extrairXmlDaResposta(resposta),
     raw: resposta,
@@ -1958,20 +1996,21 @@ function montarIniManifestacaoEvento(chave, cnpjDestinatario, tpEvento, xJust) {
 }
 
 async function distribuicaoDFePorChave(chave, cnpjDestinatario, ufAutor) {
-  if (!chave || String(chave).length !== 44) {
+  const chaveNorm = String(chave || "").replace(/\D/g, "");
+  if (chaveNorm.length !== 44) {
     throw new Error("Chave NF-e deve ter 44 dígitos.");
   }
   const cnpj = String(cnpjDestinatario || "").replace(/\D/g, "");
   if (cnpj.length !== 14) {
     throw new Error("CNPJ do destinatário obrigatório para Distribuição DFe (14 dígitos).");
   }
-  const cUF = resolverUfIbgeDestinatario(ufAutor, chave);
+  const cUF = resolverUfIbgeDestinatario(ufAutor, chaveNorm);
   const resposta = await enviarNfeModelo(
-    `NFE.DistribuicaoDFePorChave(${cUF},${qAcbr(cnpj)},${qAcbr(chave)})`,
+    `NFE.DistribuicaoDFePorChave(${cUF},${qAcbr(cnpj)},${qAcbr(chaveNorm)})`,
     55,
     ACBR_TIMEOUT_EMISSAO,
   );
-  return parseDistribuicaoDFePorChaveResposta(resposta, chave);
+  return parseDistribuicaoDFePorChaveResposta(resposta, chaveNorm);
 }
 
 /** Parse compartilhado Monitor/ACBrLib — DistDFe por chave. */
@@ -2108,9 +2147,30 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = nu
     throw new Error("Chave NF-e deve ter 44 dígitos.");
   }
   const chaveNorm = String(chave).replace(/\D/g, "");
+  const ufIbge = chaveNorm.substring(0, 2);
+  const UFS = new Set([
+    "11", "12", "13", "14", "15", "16", "17", "21", "22", "23", "24", "25", "26", "27", "28", "29",
+    "31", "32", "33", "35", "41", "42", "43", "50", "51", "52", "53",
+  ]);
+  if (!UFS.has(ufIbge)) {
+    throw new Error(`UF inválida na chave de acesso: ${ufIbge}`);
+  }
   const modelo = chaveNorm.substring(20, 22);
   if (modelo !== "55") {
     throw new Error("Consulta de entrada suporta apenas NF-e modelo 55.");
+  }
+  // DV módulo 11 — falha rápida (estilo portal) antes de bater na SEFAZ
+  let peso = 2;
+  let soma = 0;
+  const base43 = chaveNorm.substring(0, 43);
+  for (let i = base43.length - 1; i >= 0; i--) {
+    soma += Number(base43[i]) * peso;
+    peso = peso === 9 ? 2 : peso + 1;
+  }
+  const resto = soma % 11;
+  const dvCalc = resto < 2 ? 0 : 11 - resto;
+  if (Number(chaveNorm[43]) !== dvCalc) {
+    throw new Error("Dígito verificador da chave de acesso é inválido");
   }
 
   const cnpj = String(cnpjDestinatario || "").replace(/\D/g, "");
@@ -2167,6 +2227,16 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = nu
 
   async function tentarDistribuicao() {
     const dist = await api.distribuicaoDFePorChave(chaveNorm, cnpj, uf);
+    const cStatDist = String(dist?.cStat || "");
+    if (cStatDist === "656") {
+      const err = new Error(
+        dist.xMotivo ||
+          "SEFAZ: consumo indevido (cStat 656). Aguarde alguns minutos antes de consultar de novo.",
+      );
+      err.cStat = "656";
+      err.consumoIndevido = true;
+      throw err;
+    }
     return dist.xml && /<NFe[\s>]/i.test(dist.xml) ? dist.xml : null;
   }
 
@@ -2175,6 +2245,17 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = nu
       xml = await tentarDistribuicao();
       if (xml) fonte = "DISTRIBUICAO_DFE";
     } catch (distErr) {
+      if (distErr?.consumoIndevido || String(distErr?.cStat) === "656") {
+        return {
+          ok: false,
+          chave: chaveNorm,
+          situacao: "CONSUMO_INDEVIDO",
+          cStat: "656",
+          mensagem: distErr.message,
+          fonteConsulta: "DISTRIBUICAO_DFE",
+          fallbackManual: true,
+        };
+      }
       if (!consulta.cStat) {
         return {
           ok: false,
@@ -2206,7 +2287,7 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = nu
       cStat: consulta.cStat,
       mensagem:
         consulta.xMotivo ||
-        "XML não disponível — utilize entrada manual ou aguarde manifesto do destinatário.",
+        "XML não disponível — utilize upload de XML ou aguarde o manifesto DistDFe.",
       fonteConsulta: fonte,
       fallbackManual: true,
     };
@@ -2228,6 +2309,7 @@ module.exports = {
   statusServico,
   consultarChave,
   consultarChaveEntrada,
+  inferirSituacao,
   distribuicaoDFePorChave,
   distribuicaoDFePorUltNsu,
   parseDistribuicaoDFePorChaveResposta,
@@ -2276,4 +2358,7 @@ module.exports = {
   normalizarResultado,
   enrichParsePosEmissaoAsync,
   assertAutorizada,
+  /** @internal testes / diagnóstico */
+  resolverTpAmb,
+  resolverTpAmbAcbr,
 };

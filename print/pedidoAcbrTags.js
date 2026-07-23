@@ -4,8 +4,9 @@
 const { toThermalText } = require("../thermalText");
 const { tagCorte, tagLogoHeader } = require("./acbrTags");
 const {
-  labelPrintType,
   labelEventType,
+  tituloPedidoTermico,
+  deveExibirTotalPedido,
   fmtQty,
   fmtTotal,
   normalizarPedidoPayload,
@@ -44,13 +45,14 @@ function appendDeliveryBlock(lines, payload) {
 function renderPedidoTags(rawPayload = {}) {
   const payload = normalizarPedidoPayload(rawPayload);
   const lines = ["</zera>", tagLogoHeader(payload)];
-  const estacao = labelPrintType(payload.printType);
+  const titulo = tituloPedidoTermico(payload.printType, payload.eventType);
   const evento = labelEventType(payload.eventType);
   const cancelado = payload.eventType === "ORDER_CANCELLED";
+  const showTotal = deveExibirTotalPedido(payload.printType, payload.eventType);
 
   lines.push(
     sepEq(),
-    `<ce><n>${estacao}</n></ce>`,
+    `<ce><n>${titulo}</n></ce>`,
     `<ce>${tx(evento)}</ce>`,
   );
   if (cancelado) {
@@ -87,6 +89,15 @@ function renderPedidoTags(rawPayload = {}) {
       const qty = fmtQty(item.quantity, item.unit);
       const nome = tx(item.name || item.code || "Item");
       lines.push(`<n>${qty} x ${nome}</n>`);
+      if (showTotal && item.lineTotal != null) {
+        const unitFmt = item.unitPrice != null ? fmtTotal(item.unitPrice) : null;
+        const lineFmt = fmtTotal(item.lineTotal);
+        if (unitFmt && lineFmt) {
+          lines.push(`  ${unitFmt}  =  ${lineFmt}`);
+        } else if (lineFmt) {
+          lines.push(`  ${lineFmt}`);
+        }
+      }
       if (item.notes) {
         lines.push(`  * ${tx(item.notes)}`);
       }
@@ -96,8 +107,6 @@ function renderPedidoTags(rawPayload = {}) {
     }
   }
 
-  const showTotal =
-    payload.printType === "cliente" || payload.printType === "entrega";
   const totalFmt = showTotal ? fmtTotal(payload.total) : null;
   if (totalFmt) {
     lines.push(sepDash(), `<n>Total : ${totalFmt}</n>`);

@@ -89,7 +89,8 @@ Windows/WSL: `ACBrNFe64.dll` + deps (`libxml2.dll`, `libssl`, etc.).
 
 ```bash
 cp templates/acbrlib.ini.template data/acbrlib.ini
-# Editar certificado, CSC, IdCSC, UF, Ambiente=2
+# Editar certificado, CSC, IdCSC, UF. Ambiente ACBrLib: 0=produção · 1=homologação.
+# (tpAmb no XML continua 1=produção · 2=homologação.)
 
 mkdir -p lib schemas/NFe
 cp /caminho/ACBrNFe64.dll lib/

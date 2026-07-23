@@ -1261,6 +1261,9 @@ async function reimprimirDanfceCompleto(chave, numeroVenda, opts = {}) {
   if (qrInformado && !require("./print/cupomValidate").resolverQrCodeNfce(payload)) {
     payload = { ...payload, qrcodeNfe: qrInformado, qrcode: qrInformado };
   }
+  if (typeof opts.exibirLogo === "boolean") {
+    payload = { ...payload, exibirLogo: opts.exibirLogo };
+  }
   if (modelo === "55") {
     payload = { ...payload, danfeTermico: true, layout: "danfe-termico" };
   }
@@ -1520,6 +1523,19 @@ async function enviarEventoCompleto(cfg, body) {
 
 async function inutilizarCompleto(cfg, body) {
   let inutilizacaoId = body.inutilizacaoId || null;
+  const cnpj =
+    body.cnpj ||
+    body.empresa?.cnpj ||
+    cfg.empresa?.cnpj ||
+    cfg.cnpj ||
+    null;
+  const payload = {
+    ...body,
+    cnpj,
+    ano: body.ano || new Date().getFullYear(),
+    modelo: body.modelo || "65",
+  };
+
   if (cfg.backendUrl && !inutilizacaoId) {
     const created = await httpRequest(
       `${cfg.backendUrl.replace(/\/$/, "")}/pdv/nfce/inutilizar`,
@@ -1531,22 +1547,31 @@ async function inutilizarCompleto(cfg, body) {
         },
       },
       JSON.stringify({
-        serie: body.serie,
-        numeroInicial: body.numeroInicial,
-        numeroFinal: body.numeroFinal,
-        motivo: body.motivo,
-        modelo: body.modelo || "65",
+        serie: payload.serie,
+        numeroInicial: payload.numeroInicial,
+        numeroFinal: payload.numeroFinal,
+        motivo: payload.motivo,
+        modelo: payload.modelo,
       }),
     );
     inutilizacaoId = created.id;
   }
-  const res = await resolverDriverFiscal(body).inutilizarNfce(body);
+
+  const res = await resolverDriverFiscal(payload).inutilizarNfce(payload);
+  if (!res?.ok) {
+    throw new Error(
+      res?.xMotivo ||
+        res?.mensagem ||
+        "Inutilização rejeitada pela SEFAZ sem detalhe.",
+    );
+  }
+
   let xmlPath = null;
   if (res.xml) {
     xmlPath = docs.salvarXmlInutilizacao(
-      body.serie,
-      body.numeroInicial,
-      body.numeroFinal,
+      payload.serie,
+      payload.numeroInicial,
+      payload.numeroFinal,
       res.xml,
     );
   }
@@ -1569,7 +1594,7 @@ async function inutilizarCompleto(cfg, body) {
         }),
       );
     } catch {
-      filaFiscal.enfileirar("INUTILIZACAO", { body: { ...body, inutilizacaoId }, res, xmlPath });
+      filaFiscal.enfileirar("INUTILIZACAO", { body: { ...payload, inutilizacaoId }, res, xmlPath });
     }
   }
   return { ...res, inutilizacaoId, xmlPath };
