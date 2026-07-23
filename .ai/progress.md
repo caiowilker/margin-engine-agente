@@ -83,7 +83,7 @@
 | Recovery SQLite degradado | 🟢 F15 |
 | Testes automatizados | 🟢 `npm test` + `test:integration` verdes |
 | Order Engine / Print Station | 🟢 `POST /impressora/pedido` + `frontend-dist` alinhado |
-| NFS-e (modelo 99) | 🟢 Rotas `/fiscal/nfse/emitir`, callback `chaveNfe`+`chaveNfse`, 6 testes contrato |
+| NFS-e (modelo 99) | 🟢 Rotas + callback; Lib nativa `ACBrNFSe64.dll` (`nfseLib.js`) com fallback Monitor |
 
 ---
 

@@ -33,6 +33,7 @@ if (fs.existsSync(envPath)) {
 
 const acbrLibDir = path.join(appDir, "acbrlib");
 const acbrLibDll = path.join(acbrLibDir, "lib", "ACBrNFe64.dll");
+const acbrNfseLibDll = path.join(acbrLibDir, "lib", "ACBrNFSe64.dll");
 const acbrLibIniDefault = path.join(acbrLibDir, "data", "config", "acbrlib.ini");
 const acbrLibIniData = path.join(appDir, "data", "acbrlib.ini");
 const acbrSchemasRoot = path.join(acbrLibDir, "data", "Schemas");
@@ -93,6 +94,10 @@ if (cfg.driver === "lib") {
   const iniPath = cfg.libIni || acbrLibIniDefault;
   envContent = patchEnv(envContent, "ACBR_LIB_PATH", libPath.replace(/\\/g, "\\\\"));
   envContent = patchEnv(envContent, "ACBR_LIB_INI", iniPath.replace(/\\/g, "\\\\"));
+  const nfseLibPath = cfg.nfseLibPath || acbrNfseLibDll;
+  if (fs.existsSync(nfseLibPath)) {
+    envContent = patchEnv(envContent, "ACBR_NFSE_LIB_PATH", nfseLibPath.replace(/\\/g, "\\\\"));
+  }
 }
 
 fs.writeFileSync(envPath, envContent, "utf8");

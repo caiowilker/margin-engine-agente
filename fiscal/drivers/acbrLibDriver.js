@@ -2,6 +2,7 @@
  * Driver fiscal via ACBrLib nativa (FFI/koffi) — Onda B.5.
  *
  * Integração real: @projetoacbr/acbrlib-nfe-node → ACBrLibNFeMT → libacbrnfe64.so / ACBrNFe64.dll
+ * NFS-e: @projetoacbr/acbrlib-nfse-node → ACBrLibNFSeMT → ACBrNFSe64.dll (fallback Monitor)
  *
  * Modos:
  * - native  — ACBR_LIB_PATH aponta para .so/.dll existente (provider OFICIAL 1.0)
@@ -110,6 +111,7 @@ function isNativeLibConfigured() {
 
 function getDriverInfo() {
   const mode = getIntegrationMode();
+  const nfseLib = require("../nfse/nfseLib");
   return {
     ...DRIVER_INFO,
     mode,
@@ -120,6 +122,7 @@ function getDriverInfo() {
     parityCnf: CNF_PARIDADE,
     package: "@projetoacbr/acbrlib-nfe-node",
     ready: mode === "native" || mode === "parity",
+    nfse: nfseLib.getNfseLibInfo(),
   };
 }
 
@@ -179,9 +182,9 @@ async function emitirNfceLibCore(payload) {
 
 async function emitirNfseLib(payload) {
   if (!acbr.isNfseHabilitado()) return { fiscal: false };
-  const nfseAcbr = require("../nfse/nfseAcbr");
+  const nfseLib = require("../nfse/nfseLib");
   return fiscalEmissionLock.withEmissionLock(
-    () => nfseAcbr.emitirNfseCore(payload),
+    () => nfseLib.emitirNfseLibCore(payload),
     "lib-nfse",
   );
 }
@@ -470,17 +473,26 @@ function warnIfSelectedAtBoot() {
       { libPath: info.libPath, libIni: info.libIni },
       "[ACBrLib] Modo NATIVO ativo — FFI via ACBrLibNFeMT",
     );
-    return;
-  }
-  if (info.mode === "parity") {
+  } else if (info.mode === "parity") {
     log.warn(
       "[ACBrLib] Modo PARIDADE ativo (ACBR_LIB_ALLOW_PARITY) — emissão via Monitor TCP, não é biblioteca nativa",
     );
-    return;
+  } else {
+    log.error(
+      "[ACBrLib] Driver Lib selecionado mas biblioteca nativa não encontrada — emissões falharão até configurar ACBR_LIB_PATH",
+    );
   }
-  log.error(
-    "[ACBrLib] Driver Lib selecionado mas biblioteca nativa não encontrada — emissões falharão até configurar ACBR_LIB_PATH",
-  );
+  if (info.nfse?.native) {
+    log.info(
+      { libPath: info.nfse.libPath },
+      "[ACBrLib NFSe] Modo NATIVO — FFI via ACBrLibNFSeMT",
+    );
+  } else {
+    log.info(
+      { libPath: info.nfse?.libPath || null, platform: process.platform },
+      "[ACBrLib NFSe] Fallback Monitor TCP (DLL ausente ou plataforma sem FFI)",
+    );
+  }
 }
 
 function buildNativeRuntime() {

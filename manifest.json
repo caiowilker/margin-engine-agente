@@ -1,10 +1,10 @@
 {
   "versao": "1.0.1",
-  "geradoEm": "2026-07-21T21:20:44.237Z",
+  "geradoEm": "2026-07-23T20:38:30.228Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
-      "sha256": "688ad32d4dc963ccfc5e22044088659f4e35e0d127380c21ffae361f5819f6a4"
+      "sha256": "2f6720639bc11c13b7defa3225eee047046ba4692f58cf385003552ce11b1d66"
     },
     {
       "arquivo": "acbrLibResposta.js",
@@ -16,7 +16,7 @@
     },
     {
       "arquivo": "acbrResposta.js",
-      "sha256": "07f7e6fbfb9141a39f66e683b4147dea6eb2e35cb4bc32d6584a2ccff41654e2"
+      "sha256": "e343b0e4571ce7a7344b8e1a94f64047f18576fdb2f6d3d5897fe96e841a9c40"
     },
     {
       "arquivo": "agentConfigCatalog.js",
@@ -88,7 +88,7 @@
     },
     {
       "arquivo": "fiscal/drivers/acbrLibDriver.js",
-      "sha256": "bc9c3bb2bbdc41c5fb88e143effda85320625f24471930822171120e887b9537"
+      "sha256": "ec1ff3d2e281cc90d3f854d8d0b9799b2b8520aca9a73ec47dab0a01d4762fc6"
     },
     {
       "arquivo": "fiscal/drivers/acbrLibRuntime.js",
@@ -135,6 +135,10 @@
       "sha256": "49a1c880df11afecf11c86097371f5cec5db2ea712b022862474bf2572015f17"
     },
     {
+      "arquivo": "fiscal/nfse/nfseLib.js",
+      "sha256": "820f33d3f9fedc23932f62d2784e09af93622299e385067bf37bdc59721f4bb7"
+    },
+    {
       "arquivo": "fiscal/nfse/nfseValidate.js",
       "sha256": "fed6f02dd785cec5d6af0a5a5693f5c79b10470845577e698b126d76d4f69f23"
     },
@@ -163,6 +167,10 @@
       "sha256": "2eefd58665d37add6dc65dac3ddb7537eebbd5c7a31c4f27e3a3b04f1860b13d"
     },
     {
+      "arquivo": "fiscalIbpt.js",
+      "sha256": "c83289670886a2eae2fc21fbfb910f5ed1ea135434b1b4a2b44b7a02192f4398"
+    },
+    {
       "arquivo": "fiscalLocalConfig.js",
       "sha256": "d9731f479abcdb2b246cdb74453a122121ae63bf44ba6258244a7660135eb7a9"
     },
@@ -180,7 +188,7 @@
     },
     {
       "arquivo": "fiscalPreflight.js",
-      "sha256": "b30330a2c10eb64fe01fb224043fec97142cca66e4305137a5b3d03a06b91ec1"
+      "sha256": "6ba039e5c9d39c28e9d9fa0c9eb5f00c63f529ffa9b85f6851f853cad092645c"
     },
     {
       "arquivo": "fiscalPurge.js",
@@ -208,7 +216,7 @@
     },
     {
       "arquivo": "fiscalService.js",
-      "sha256": "27222272074bc08ddd2abb51a1e9dab2d3ef89fe7dc030c7ff176961c1347a9b"
+      "sha256": "2a63013b58d37031f8ad8bad384d7f105fce40109cd16008e5c2d1be7251d7b9"
     },
     {
       "arquivo": "fiscalStorage.js",
@@ -220,7 +228,7 @@
     },
     {
       "arquivo": "fiscalValidacao.js",
-      "sha256": "5b00b7abd663eb06c5a879ccd31fa59e8b2a03635b806ae4919fcaca15a52322"
+      "sha256": "e47dd883d508be13001d990729a36e766946da3a17602cd97f3882997dad677d"
     },
     {
       "arquivo": "fiscalValidacaoNfe.js",
@@ -4863,6 +4871,10 @@
       "sha256": "aed0c9a38a6efe23c239c403cfbd7053de2e669bf5ca37b99ea0cb3ed2f98a6a"
     },
     {
+      "arquivo": "gtin.js",
+      "sha256": "41a375c6cf330fef0f3a1329c3c6650db513304ab302bb4a6c5aceee79dfe8ea"
+    },
+    {
       "arquivo": "heartbeatPayload.js",
       "sha256": "f92505a22722e301b5bf59842780586b7e96147f1e981354c269e799a0c8b19a"
     },
@@ -4872,7 +4884,7 @@
     },
     {
       "arquivo": "index.js",
-      "sha256": "1df19fb646b17f5776def1b45180c27f3b84c3b509076801b9ee72f19778f764"
+      "sha256": "85b7f733a975fca838a80fd55c956d52446f812b85845d0e04463204ea7db59a"
     },
     {
       "arquivo": "install-service.js",
@@ -4900,7 +4912,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "e77f643bf9c23bc133eed3ffbe955cbd230b6c416491ba4669216f5b075205a6"
+      "sha256": "ec7cfc76ed1d39f9f0445b5553a1559a34573624bd5cc1968aca312fcae05af8"
     },
     {
       "arquivo": "print/acbrPosPrinterErrors.js",
@@ -4924,7 +4936,7 @@
     },
     {
       "arquivo": "print/cupomAcbrTags.js",
-      "sha256": "0af8c9e3633bbd11d151c9cc89d74cd3ef2969061f12a35fb90e6b34fd8cc96a"
+      "sha256": "6e7aa7c4288105b4b664b0c33661dba53a727845cbc8b58e1968e848a0ad4145"
     },
     {
       "arquivo": "print/cupomContraste.js",
@@ -4936,7 +4948,7 @@
     },
     {
       "arquivo": "print/danfeTermico.js",
-      "sha256": "74c9597c334e6f785c0bff7873aa17576c460cd35f24f13f05be8b28f1a902cd"
+      "sha256": "df4164d092648f4b02365dd91b8c3e66720967d8163300fd9f6ae4c5ece9b424"
     },
     {
       "arquivo": "print/diagnosticoImpressao.js",
@@ -4956,7 +4968,7 @@
     },
     {
       "arquivo": "print/escpos/impressoraCore.js",
-      "sha256": "a75b72e775bd582c70ed561ffe31907b35826b40b71073eeb3f0daeb4554502f"
+      "sha256": "321600b8db1f71d149b44c5ccb22f8b9cf705833047c6f67df1a547a33847d08"
     },
     {
       "arquivo": "print/factory.js",
@@ -4964,11 +4976,11 @@
     },
     {
       "arquivo": "print/pedidoAcbrTags.js",
-      "sha256": "b0c1cdb5b08f04fa4c360193829bd16976139c885e75928e337f5ba9cef9e3cb"
+      "sha256": "2383b809ec0da93ed34f7dc0cbbd52bfa308c52fe7104b019b60f3524ddf1a67"
     },
     {
       "arquivo": "print/pedidoPrint.js",
-      "sha256": "e447821541e4b161f9a1561d08053390e66f698cec80c37fdb3eb0716f562653"
+      "sha256": "657769144671ee255cc687311d11a80190e6f537c393904c04262d1acaccbc97"
     },
     {
       "arquivo": "print/printerBootstrap.js",

@@ -6,10 +6,11 @@ O `acbrLibDriver.js` usa o pacote oficial **`@projetoacbr/acbrlib-nfe-node`**, q
 
 | Camada | Tecnologia |
 |--------|------------|
-| Node.js | `acbrLibDriver.js` + `acbrLibRuntime.js` |
-| Wrapper oficial | `ACBrLibNFeMT` (`@projetoacbr/acbrlib-nfe-node`) |
+| Node.js | `acbrLibDriver.js` + `acbrLibRuntime.js` + `fiscal/nfse/nfseLib.js` |
+| Wrapper oficial | `ACBrLibNFeMT` (`@projetoacbr/acbrlib-nfe-node`) · `ACBrLibNFSeMT` (`@projetoacbr/acbrlib-nfse-node`) |
 | FFI | `koffi` |
-| Nativo | `libacbrnfe64.so` (Linux MT) ou `ACBrNFe64.dll` (Windows MT) |
+| Nativo NF-e/NFC-e | `libacbrnfe64.so` (Linux MT) ou `ACBrNFe64.dll` (Windows MT) |
+| Nativo NFS-e | `libacbrnfse64.so` ou `ACBrNFSe64.dll` (`ACBR_NFSE_LIB_PATH`) |
 
 ### Sequência nativa (emissão)
 
@@ -25,6 +26,17 @@ inst.finalizar();
 ```
 
 Equivalente à sequência Monitor: `CriarEnviarNFe(ini)` → assinar → enviar SEFAZ.
+
+### Sequência nativa NFS-e
+
+```javascript
+inst.carregarINI(iniPath);
+inst.assinar();
+inst.validar();
+const resposta = inst.emitir(lote, modoEnvio, false); // modo padrão: LOTE_SINCRONO=2
+```
+
+Sem DLL Windows (`ACBrNFSe64.dll` / `ACBR_NFSE_LIB_PATH`): fallback automático para Monitor `NFSe.CriarEnviar`.
 
 **Não usa processo filho.** Mutex `withAcbrLock` serializa chamadas FFI.
 
