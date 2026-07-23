@@ -139,9 +139,12 @@ module.exports = {
       if (getIntegrationMode() === "native") {
         // Usa leitura de status (POS_LerStatusImpressoraFormatado) sem imprimir.
         // Evita avançar papel e contender a sessão ACBr durante emissão fiscal.
+        // Alinhado a getInfo: ausência de falha explícita = online (não exige ok===true).
         try {
           const status = await runtime.lerStatusFormatadoNative(2);
-          return status?.ok === true;
+          if (status?.ok === false) return false;
+          if (status?.ok === true) return true;
+          return !!det?.impressora;
         } catch (_) {
           // Sessão não inicializada ainda (DLL não carregada) — usa detecção
           return !!det?.impressora;

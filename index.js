@@ -388,14 +388,26 @@ async function boot() {
   }
   watchdog.iniciar(reiniciarEmissorFiscal, {
     onDegraded: (err) =>
-      ativarContingencia(err?.message || "SEFAZ indisponível — fila fiscal pausada"),
+      ativarContingencia(err?.message || "SEFAZ indisponível — fila fiscal pausada", {
+        motivo: "SEFAZ_OFFLINE",
+      }),
     onRestored: async () => {
       if (!estadoContingencia.ativa) return;
       filaFiscal.retomarFila();
       await tentarSincronizarEpecs();
-      await verificarEncerrarContingenciaEpec();
+      await verificarEncerrarContingenciaEpec({
+        observacao: "SEFAZ restaurada — contingência encerrada automaticamente.",
+        sefazOk: true,
+      });
     },
   });
+  // Se reiniciou já em contingência, mantém fila pausada até SEFAZ voltar.
+  if (estadoContingencia.ativa) {
+    try {
+      filaFiscal.pausarFila();
+      console.warn("[EPEC] Contingência ativa no boot — fila fiscal pausada.");
+    } catch (_) {}
+  }
   fiscalPurge.iniciar();
   reconciliacaoFiscal.iniciar(lerConfig);
   try {
@@ -1854,10 +1866,12 @@ function iniciarServidor() {
       );
       if (!resultado || resultado.fiscal === false)
         return res.json({ fiscal: false });
-      if (estadoContingencia.ativa && resultado.chave)
-        await encerrarContingenciaAutomatico(
-          "SEFAZ voltou — emissão normal restaurada.",
-        );
+      if (estadoContingencia.ativa && resultado.chave) {
+        await verificarEncerrarContingenciaEpec({
+          observacao: "SEFAZ voltou — emissão normal restaurada.",
+          sefazOk: true,
+        });
+      }
       return res.json(resultado);
     } catch (err) {
       return res.status(500).json({ erro: err.message || "Erro ao enfileirar NFC-e" });
@@ -1883,6 +1897,12 @@ function iniciarServidor() {
         },
         { sync },
       );
+      if (estadoContingencia.ativa && resultado?.chave) {
+        await verificarEncerrarContingenciaEpec({
+          observacao: "SEFAZ voltou — emissão normal restaurada.",
+          sefazOk: true,
+        });
+      }
       res.json(resultado);
     } catch (err) {
       const body = { erro: err.message };
@@ -2702,6 +2722,7 @@ function iniciarServidor() {
   app.get("/contingencia/status", exigirAgentToken, async (req, res) => {
     estadoContingencia = lerContingencia();
     let epecPendentes = 0;
+    let epecFalhasPermanentes = 0;
     if (db) {
       const row = db
         .prepare(
@@ -2709,19 +2730,63 @@ function iniciarServidor() {
         )
         .get();
       epecPendentes = row ? row.n : 0;
+      try {
+        const falhas = db
+          .prepare(
+            "SELECT COUNT(*) as n FROM epec_pendentes WHERE status='FALHA_PERMANENTE'",
+          )
+          .get();
+        epecFalhasPermanentes = falhas ? falhas.n : 0;
+      } catch (_) {}
     }
+    const wd = watchdog.statusWatchdog();
     res.json({
-      ativa: estadoContingencia.ativa,
+      ativa: estadoContingencia.ativa === true,
+      contingenciaId: estadoContingencia.contingenciaId || null,
       iniciadaEm: estadoContingencia.iniciadaEm,
-      motivo: estadoContingencia.motivo,
+      motivo: estadoContingencia.motivo || null,
       epecPendentes,
+      epecFalhasPermanentes,
+      sefazDegraded: wd.degraded === true,
+      filaPausada: typeof filaFiscal.status === "function"
+        ? filaFiscal.status().pausada === true
+        : null,
     });
+  });
+
+  app.post("/contingencia/iniciar", exigirAgentToken, async (req, res) => {
+    try {
+      const body = req.body || {};
+      const motivo = String(body.motivo || "MANUAL").slice(0, 80);
+      const observacao = String(
+        body.observacao || body.motivoErro || "Ativado pelo operador",
+      ).slice(0, 500);
+      await ativarContingencia(observacao, { motivo });
+      estadoContingencia = lerContingencia();
+      res.json({
+        ok: true,
+        ativa: estadoContingencia.ativa === true,
+        contingenciaId: estadoContingencia.contingenciaId || null,
+        iniciadaEm: estadoContingencia.iniciadaEm,
+        motivo: estadoContingencia.motivo,
+      });
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
   });
 
   app.post("/contingencia/encerrar", exigirAgentToken, async (req, res) => {
     try {
-      await encerrarContingenciaAutomatico("Encerrado pelo operador.");
-      await tentarSincronizarEpecs();
+      const body = req.body || {};
+      const observacao = String(
+        body.observacao || "Encerrado pelo operador.",
+      ).slice(0, 500);
+      await tentarSincronizarEpecs().catch(() => {});
+      const resultado = await verificarEncerrarContingenciaEpec({
+        force: true,
+        observacao,
+        sefazOk: true,
+      });
       const row = db
         ? db
             .prepare(
@@ -2729,7 +2794,29 @@ function iniciarServidor() {
             )
             .get()
         : { n: 0 };
-      res.json({ ok: true, epecPendentesRestantes: row ? row.n : 0 });
+      res.json({
+        ok: true,
+        encerrou: resultado.encerrou === true || estadoContingencia.ativa !== true,
+        epecPendentesRestantes: row ? row.n : 0,
+        motivo: resultado.motivo || "force_operador",
+      });
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
+  });
+
+  app.post("/contingencia/sincronizar", exigirAgentToken, async (req, res) => {
+    try {
+      const sync = await tentarSincronizarEpecs();
+      const auto = await verificarEncerrarContingenciaEpec({
+        observacao: "EPECs sincronizados — contingência encerrada automaticamente.",
+      });
+      res.json({
+        ok: true,
+        ...sync,
+        contingenciaEncerrada: auto.encerrou === true,
+        encerrarMotivo: auto.motivo,
+      });
     } catch (err) {
       res.status(500).json({ erro: err.message });
     }
@@ -2853,12 +2940,21 @@ function iniciarServidor() {
         await impressora.detectar(true);
       } catch (_) {}
     }
-    const [ok, info] = await Promise.all([
-      impressora.testar().catch(() => false),
-      impressora.getInfo().catch(() => null),
-    ]);
+    // Serializa probe + getInfo: Promise.all contende a sessão ACBr PosPrinter
+    // e fazia testar() falhar mesmo com impressão ok → badge Offline falso.
+    const recente =
+      typeof impressora.printJobService?.impressaoRecenteOk === "function"
+        ? impressora.printJobService.impressaoRecenteOk() === true
+        : false;
+    const ok = await impressora.testar().catch(() => false);
+    const info = await impressora.getInfo().catch(() => null);
+    const conectada =
+      recente ||
+      ok === true ||
+      info?.conectada === true ||
+      info?.ok === true;
     res.json({
-      conectada: ok,
+      conectada,
       tipo: process.env.PRINTER_TYPE || "auto",
       provider: typeof impressora.getProviderName === "function" ? impressora.getProviderName() : null,
       requestedProvider:
@@ -3388,10 +3484,26 @@ function formatUptime(seconds) {
 }
 
 // ── Contingência: funções internas ────────────────────────────────────────────
+const contingenciaPolicy = require("./contingenciaPolicy");
+
 function isUuidEpec(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(value || ""),
   );
+}
+
+function contarEpecPendentes() {
+  if (!db) return 0;
+  try {
+    const row = db
+      .prepare(
+        "SELECT COUNT(*) as n FROM epec_pendentes WHERE status='PENDENTE'",
+      )
+      .get();
+    return row ? row.n : 0;
+  } catch (_) {
+    return 0;
+  }
 }
 
 async function registrarEpecNoBackend(cfg, numeroVenda, xmlEpec) {
@@ -3412,68 +3524,160 @@ async function registrarEpecNoBackend(cfg, numeroVenda, xmlEpec) {
   return data.epecId;
 }
 
-async function ativarContingencia(motivoErro) {
-  if (estadoContingencia.ativa) return;
+/**
+ * Ativa contingência (idempotente). Pausa a fila fiscal e notifica o backend.
+ * @param {string} motivoErro
+ * @param {{ motivo?: string }} opts
+ */
+async function ativarContingencia(motivoErro, opts = {}) {
+  estadoContingencia = lerContingencia();
+  if (estadoContingencia.ativa) {
+    try {
+      filaFiscal.pausarFila();
+    } catch (_) {}
+    return estadoContingencia;
+  }
+
+  const motivo = String(opts.motivo || "SEFAZ_OFFLINE").slice(0, 80);
   const fetch = require("node-fetch");
   const cfg = await lerConfig();
+  let contingenciaId = null;
   try {
     if (cfg.backendUrl && cfg.backendToken) {
-      await fetch(`${cfg.backendUrl}/pdv/contingencia/iniciar`, {
+      const resp = await fetch(`${cfg.backendUrl}/pdv/contingencia/iniciar`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${cfg.backendToken}`,
         },
         body: JSON.stringify({
-          motivo: "SEFAZ_OFFLINE",
+          motivo,
           observacao: motivoErro,
           dispositivoId: cfg.dispositivoId || null,
         }),
       });
+      if (resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        contingenciaId = data.contingenciaId || data.id || null;
+      } else {
+        console.warn(
+          `[EPEC] Backend /iniciar respondeu ${resp.status} — contingência local mesmo assim`,
+        );
+      }
     }
   } catch (e) {
     console.warn("[EPEC] Não foi possível notificar backend:", e.message);
   }
+
+  try {
+    filaFiscal.pausarFila();
+  } catch (_) {}
+
   estadoContingencia = {
     ativa: true,
-    contingenciaId: null,
+    contingenciaId,
     iniciadaEm: new Date().toISOString(),
-    motivo: "SEFAZ_OFFLINE",
+    motivo,
+    observacao: String(motivoErro || "").slice(0, 500) || null,
   };
   salvarContingencia(estadoContingencia);
-  console.warn("[EPEC] ⚠️  Contingência ATIVADA.");
+  console.warn("[EPEC] ⚠️  Contingência ATIVADA.", { motivo, contingenciaId });
+  return estadoContingencia;
 }
 
-async function encerrarContingenciaAutomatico(observacao) {
+/**
+ * Encerra contingência local + backend, retoma fila e limpa watchdog degradado.
+ */
+async function encerrarContingencia({ observacao, force = false } = {}) {
   const fetch = require("node-fetch");
   const cfg = await lerConfig();
   try {
     if (cfg.backendUrl && cfg.backendToken) {
-      await fetch(`${cfg.backendUrl}/pdv/contingencia/encerrar`, {
+      const resp = await fetch(`${cfg.backendUrl}/pdv/contingencia/encerrar`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${cfg.backendToken}`,
         },
-        body: JSON.stringify({ observacao }),
+        body: JSON.stringify({
+          observacao: observacao || (force ? "Encerrado pelo operador." : "Encerrado automaticamente."),
+        }),
       });
+      // 4xx (sem contingência ativa no backend) não impede limpeza local.
+      if (!resp.ok && resp.status !== 404 && resp.status !== 409) {
+        const txt = await resp.text().catch(() => "");
+        console.warn(
+          `[EPEC] Backend /encerrar ${resp.status}: ${txt.slice(0, 120)}`,
+        );
+      }
     }
   } catch (e) {
     console.warn("[EPEC] Não foi possível notificar encerramento:", e.message);
   }
-  estadoContingencia = { ativa: false, contingenciaId: null, iniciadaEm: null };
+
+  estadoContingencia = {
+    ativa: false,
+    contingenciaId: null,
+    iniciadaEm: null,
+    motivo: null,
+    observacao: null,
+  };
   salvarContingencia(estadoContingencia);
-  console.log("[EPEC] ✅ Contingência ENCERRADA.");
+
+  try {
+    filaFiscal.retomarFila();
+  } catch (_) {}
+  try {
+    watchdog.resetDegraded();
+  } catch (_) {}
+
+  console.log("[EPEC] ✅ Contingência ENCERRADA.", { force: !!force });
+  return { ok: true, ativa: false };
 }
 
-async function verificarEncerrarContingenciaEpec() {
-  if (!db) return;
-  const restantes = db
-    .prepare("SELECT COUNT(*) as n FROM epec_pendentes WHERE status='PENDENTE'")
-    .get();
-  if (restantes.n === 0 && estadoContingencia.ativa) {
-    await encerrarContingenciaAutomatico("Todos os EPECs transmitidos.");
+/** Compat: nome antigo usado em comentários/logs. */
+async function encerrarContingenciaAutomatico(observacao) {
+  return encerrarContingencia({ observacao, force: false });
+}
+
+/**
+ * Sai automaticamente só na hora certa: SEFAZ ok + zero EPECs PENDENTE.
+ * Manual (force) sempre sai.
+ */
+async function verificarEncerrarContingenciaEpec(opts = {}) {
+  estadoContingencia = lerContingencia();
+  const pendentes = contarEpecPendentes();
+  let sefazOk = opts.sefazOk;
+  if (typeof sefazOk !== "boolean") {
+    if (opts.force === true) {
+      sefazOk = true;
+    } else if (typeof watchdog.isDegraded === "function" && watchdog.isDegraded()) {
+      sefazOk = false;
+    } else {
+      sefazOk = await fiscalDriver.testar().catch(() => false);
+    }
   }
+
+  const decisao = contingenciaPolicy.decidirEncerrarAutomatico({
+    ativa: estadoContingencia.ativa === true,
+    epecPendentes: pendentes,
+    sefazOk,
+    force: opts.force === true,
+  });
+
+  if (!decisao.podeEncerrar) {
+    return { encerrou: false, motivo: decisao.motivo, pendentes };
+  }
+
+  await encerrarContingencia({
+    observacao:
+      opts.observacao ||
+      (opts.force
+        ? "Encerrado pelo operador."
+        : "SEFAZ ok e sem EPECs pendentes."),
+    force: opts.force === true,
+  });
+  return { encerrou: true, motivo: decisao.motivo, pendentes: 0 };
 }
 
 function registrarHandlerEpecFila() {
@@ -3516,7 +3720,7 @@ function registrarHandlerEpecFila() {
         },
         "EPEC transmitido com sucesso",
       );
-      await verificarEncerrarContingenciaEpec();
+      await verificarEncerrarContingenciaEpec({ sefazOk: true });
     } catch (err) {
       if (db && payload.epecPendenteId) {
         db.prepare(
@@ -3528,10 +3732,47 @@ function registrarHandlerEpecFila() {
   });
 }
 
+/** Baixa EPECs do backend que ainda não estão no SQLite local. */
+async function puxarEpecsDoBackend(cfg) {
+  if (!db || !cfg.backendUrl || !cfg.backendToken) return 0;
+  const fetch = require("node-fetch");
+  const resp = await fetch(`${cfg.backendUrl}/pdv/contingencia/epec/pendentes`, {
+    headers: { Authorization: `Bearer ${cfg.backendToken}` },
+  });
+  if (!resp.ok) return 0;
+  const list = await resp.json().catch(() => []);
+  if (!Array.isArray(list) || list.length === 0) return 0;
+
+  const existeStmt = db.prepare(
+    `SELECT 1 as ok FROM epec_pendentes WHERE epec_id = ? OR (numero_venda = ? AND status='PENDENTE') LIMIT 1`,
+  );
+  const insertStmt = db.prepare(
+    `INSERT OR REPLACE INTO epec_pendentes (epec_id, numero_venda, xml_epec, status) VALUES (?, ?, ?, 'PENDENTE')`,
+  );
+
+  let importados = 0;
+  for (const item of list) {
+    const epecId = item.id || item.epecId || item.epec_id;
+    const numeroVenda = item.vendaNumero || item.numeroVenda || item.numero_venda;
+    const xml = item.xmlEpec || item.xml_epec || item.xml;
+    if (!epecId || !numeroVenda || !xml) continue;
+    const jaTem = existeStmt.get(String(epecId), String(numeroVenda));
+    if (jaTem) continue;
+    insertStmt.run(String(epecId), String(numeroVenda), String(xml));
+    importados += 1;
+  }
+  return importados;
+}
+
 async function tentarSincronizarEpecs() {
-  if (!db) return;
-  if (filaFiscal.acbrOcupado()) return;
+  if (!db) {
+    return { total: 0, enfileirados: 0, importadosBackend: 0 };
+  }
+  if (filaFiscal.acbrOcupado()) {
+    return { total: 0, enfileirados: 0, importadosBackend: 0, adiado: true };
+  }
   const cfg = await lerConfig();
+  let importadosBackend = 0;
   if (cfg.backendUrl && cfg.backendToken) {
     try {
       const fetch = require("node-fetch");
@@ -3542,13 +3783,25 @@ async function tentarSincronizarEpecs() {
     } catch (e) {
       console.warn("[EPEC] Falha ao sincronizar com backend:", e.message);
     }
+    try {
+      importadosBackend = await puxarEpecsDoBackend(cfg);
+      if (importadosBackend > 0) {
+        console.log(`[EPEC] ${importadosBackend} XML(s) importado(s) do backend`);
+      }
+    } catch (e) {
+      console.warn("[EPEC] Falha ao puxar pendentes do backend:", e.message);
+    }
   }
+
   const pendentes = db
     .prepare(
       `SELECT id, epec_id, numero_venda, xml_epec, tentativas FROM epec_pendentes WHERE status='PENDENTE' ORDER BY id LIMIT 20`,
     )
     .all();
-  if (pendentes.length === 0) return;
+  if (pendentes.length === 0) {
+    return { total: 0, enfileirados: 0, importadosBackend };
+  }
+
   for (const row of pendentes) {
     if (!isUuidEpec(row.epec_id) && cfg.backendUrl && cfg.backendToken) {
       try {
@@ -3568,6 +3821,7 @@ async function tentarSincronizarEpecs() {
       }
     }
   }
+
   console.log(`[EPEC] Enfileirando ${pendentes.length} XML(s) para retransmissão...`);
   for (const row of pendentes) {
     filaFiscal.enfileirar(
@@ -3584,6 +3838,11 @@ async function tentarSincronizarEpecs() {
     );
   }
   filaFiscal.dispararProcessamento();
+  return {
+    total: pendentes.length,
+    enfileirados: pendentes.length,
+    importadosBackend,
+  };
 }
 
 // ── Dispara tudo ──────────────────────────────────────────────────────────────

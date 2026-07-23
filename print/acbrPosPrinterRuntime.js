@@ -560,7 +560,12 @@ async function lerStatusFormatadoNative(tentativas = 3) {
     fields.forEach((name, i) => {
       status[name] = Number.isFinite(vals[i]) ? vals[i] : -1;
     });
-    return { raw, status, ok: status.erro !== 1 && status.semPapel !== 1 };
+    // offline / sem papel / tampa aberta = indisponível.
+    // "erro=1" sozinho é intermitente em várias térmicas e não deve marcar Offline
+    // se a impressão continua funcionando (POS_Imprimir ok).
+    const indisponivel =
+      status.offLine === 1 || status.semPapel === 1 || status.tampaAberta === 1;
+    return { raw, status, ok: !indisponivel };
   });
 }
 

@@ -12,6 +12,16 @@ function statusWatchdog() {
   return { degraded, falhasConsecutivas, intervalMs: INTERVAL_MS };
 }
 
+/** Limpa estado degradado (ex.: operador encerrou contingência manualmente). */
+function resetDegraded() {
+  degraded = false;
+  falhasConsecutivas = 0;
+}
+
+function isDegraded() {
+  return degraded === true;
+}
+
 async function tick(restartAcbrFn, hooks = {}) {
   const filaFiscal = require("./filaFiscal");
   if (fiscalDriver.isAcbrBusy?.() || filaFiscal.estaProcessando?.()) {
@@ -73,4 +83,4 @@ function parar() {
   timer = null;
 }
 
-module.exports = { iniciar, parar, statusWatchdog, tick };
+module.exports = { iniciar, parar, statusWatchdog, tick, resetDegraded, isDegraded };
