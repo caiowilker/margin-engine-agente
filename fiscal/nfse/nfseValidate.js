@@ -94,7 +94,9 @@ function validarServicoNfse(serv) {
   const aliq = serv?.aliquotaIss;
   if (aliq != null && aliq !== "") {
     const n = Number(aliq);
-    if (!Number.isFinite(n) || n < 0 || n > 100) faltando.push("Alíquota ISS (0–100%)");
+    // Aceita percentual (0–100) ou fração de domínio (0–1), ex.: 0.05 = 5%.
+    const okPercentual = Number.isFinite(n) && n >= 0 && n <= 100;
+    if (!okPercentual) faltando.push("Alíquota ISS inválida");
   }
   return faltando;
 }
