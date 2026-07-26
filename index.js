@@ -1887,9 +1887,14 @@ function iniciarServidor() {
           erro: "accessToken e refreshToken do operador são obrigatórios para gerar o QR.",
         });
       }
+      const operatorMe =
+        req.body?.operatorMe && typeof req.body.operatorMe === "object"
+          ? req.body.operatorMe
+          : null;
       const result = garcomFloor.mint({
         accessToken,
         refreshToken,
+        operatorMe,
         forceNew: !!req.body?.forceNew,
         lanIp,
         port: PORT,
@@ -1922,6 +1927,7 @@ function iniciarServidor() {
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,
         agentToken: result.agentToken,
+        operatorMe: result.operatorMe || null,
         expiresAt: result.expiresAt,
       });
     },

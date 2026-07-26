@@ -18,7 +18,7 @@ function tokensEqual(a, b) {
 const TTL_MS = 12 * 60 * 60 * 1000; // 12h
 const HUB_PATH = "/pdv/mesas";
 
-/** @type {{ floorToken: string, accessToken: string | null, refreshToken: string | null, expiresAt: number, mintedAt: number } | null} */
+/** @type {{ floorToken: string, accessToken: string | null, refreshToken: string | null, operatorMe: object | null, expiresAt: number, mintedAt: number } | null} */
 let _cache = null;
 
 function resolveFilePath() {
@@ -33,6 +33,7 @@ function emptyState() {
     floorToken: null,
     accessToken: null,
     refreshToken: null,
+    operatorMe: null,
     expiresAt: 0,
     mintedAt: 0,
   };
@@ -51,6 +52,8 @@ function load() {
       floorToken: raw.floorToken ? String(raw.floorToken) : null,
       accessToken: raw.accessToken ? String(raw.accessToken) : null,
       refreshToken: raw.refreshToken ? String(raw.refreshToken) : null,
+      operatorMe:
+        raw.operatorMe && typeof raw.operatorMe === "object" ? raw.operatorMe : null,
       expiresAt: Number(raw.expiresAt) || 0,
       mintedAt: Number(raw.mintedAt) || 0,
     };
@@ -94,7 +97,7 @@ function buildQrUrl({ lanIp, port, floorToken }) {
 }
 
 /**
- * @param {{ accessToken?: string, refreshToken?: string, forceNew?: boolean, lanIp?: string | null, port?: number }} opts
+ * @param {{ accessToken?: string, refreshToken?: string, operatorMe?: object | null, forceNew?: boolean, lanIp?: string | null, port?: number }} opts
  */
 function mint(opts = {}) {
   let state = purgeIfExpired();
@@ -106,6 +109,8 @@ function mint(opts = {}) {
     opts.refreshToken != null && String(opts.refreshToken).trim()
       ? String(opts.refreshToken).trim()
       : null;
+  const operatorMe =
+    opts.operatorMe && typeof opts.operatorMe === "object" ? opts.operatorMe : null;
   const forceNew = !!opts.forceNew;
   const port = Number(opts.port) || Number(process.env.AGENT_PORT || process.env.PORT || 9100);
   const lanIp = opts.lanIp !== undefined ? opts.lanIp : detectLanIPv4();
@@ -122,6 +127,7 @@ function mint(opts = {}) {
         ...state,
         accessToken,
         refreshToken: refreshToken || state.refreshToken,
+        operatorMe: operatorMe || state.operatorMe,
       };
       save(state);
     }
@@ -131,6 +137,7 @@ function mint(opts = {}) {
       qrUrl: buildQrUrl({ lanIp, port, floorToken: state.floorToken }),
       lanIp: lanIp && isPrivateIPv4(lanIp) ? lanIp : null,
       operatorBound: !!(state.accessToken && state.refreshToken),
+      hasOperatorMe: !!(state.operatorMe && state.operatorMe.userId),
       reused: true,
     };
   }
@@ -141,6 +148,7 @@ function mint(opts = {}) {
     floorToken,
     accessToken: accessToken || state.accessToken || null,
     refreshToken: refreshToken || state.refreshToken || null,
+    operatorMe: operatorMe || state.operatorMe || null,
     expiresAt: now + TTL_MS,
     mintedAt: now,
   };
@@ -152,6 +160,7 @@ function mint(opts = {}) {
     qrUrl: buildQrUrl({ lanIp, port, floorToken }),
     lanIp: lanIp && isPrivateIPv4(lanIp) ? lanIp : null,
     operatorBound: !!(state.accessToken && state.refreshToken),
+    hasOperatorMe: !!(state.operatorMe && state.operatorMe.userId),
     reused: false,
   };
 }
@@ -181,6 +190,7 @@ function exchange(floorToken, opts = {}) {
     accessToken: state.accessToken,
     refreshToken: state.refreshToken,
     agentToken: opts.agentToken || null,
+    operatorMe: state.operatorMe || null,
     expiresAt: state.expiresAt,
   };
 }

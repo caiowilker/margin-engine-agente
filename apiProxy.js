@@ -9,14 +9,45 @@ const https = require("https");
 const path = require("path");
 
 const FALLBACK_DEV_BACKEND = "http://localhost:8080";
+const PRODUCTION_API_URL = "https://api.marginengine.com.br";
 const API_PROXY_PREFIX = "/api-proxy";
+
+/**
+ * Host do SPA (app.*) não é a API REST — remapeia como o front em apiBaseUrl.ts.
+ * Sem isso o api-proxy devolve HTML do app e o PDV marca "Servidor indisponível".
+ * @param {string} url
+ */
+function normalizeBackendUrl(url) {
+  const u = String(url || "").trim().replace(/\/$/, "");
+  if (!u) return u;
+  try {
+    const parsed = new URL(u);
+    const host = parsed.hostname.toLowerCase();
+    if (
+      host === "app.marginengine.com.br" ||
+      host === "www.marginengine.com.br" ||
+      host === "marginengine.com.br"
+    ) {
+      return PRODUCTION_API_URL;
+    }
+  } catch {
+    /* URL relativa ou inválida — devolve como veio */
+  }
+  if (
+    u === "https://app.marginengine.com.br" ||
+    u === "http://app.marginengine.com.br"
+  ) {
+    return PRODUCTION_API_URL;
+  }
+  return u;
+}
 
 function lerBackendPadraoDoFrontend() {
   const jsonPath = path.join(__dirname, "frontend-dist", "api-backend.json");
   try {
     if (!fs.existsSync(jsonPath)) return null;
     const data = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
-    const url = String(data.apiUrl || "").replace(/\/$/, "");
+    const url = normalizeBackendUrl(String(data.apiUrl || ""));
     return url || null;
   } catch {
     return null;
@@ -24,14 +55,14 @@ function lerBackendPadraoDoFrontend() {
 }
 
 function resolverBackendUrlPadrao() {
-  return (
+  return normalizeBackendUrl(
     process.env.DEFAULT_BACKEND_URL ||
-    process.env.API_PUBLIC_URL ||
-    lerBackendPadraoDoFrontend() ||
-    (process.env.NODE_ENV === "production"
-      ? "https://app.marginengine.com.br"
-      : FALLBACK_DEV_BACKEND)
-  ).replace(/\/$/, "");
+      process.env.API_PUBLIC_URL ||
+      lerBackendPadraoDoFrontend() ||
+      (process.env.NODE_ENV === "production"
+        ? PRODUCTION_API_URL
+        : FALLBACK_DEV_BACKEND),
+  );
 }
 
 function criarResolverBackendUrl(lerConfigSync) {
@@ -41,7 +72,7 @@ function criarResolverBackendUrl(lerConfigSync) {
       cfg.backendUrl ||
       process.env.BACKEND_URL ||
       resolverBackendUrlPadrao();
-    return String(url).replace(/\/$/, "");
+    return normalizeBackendUrl(String(url));
   };
 }
 
@@ -240,4 +271,6 @@ module.exports = {
   anexarProxyWebSocket,
   resolverBackendUrlPadrao,
   lerBackendPadraoDoFrontend,
+  normalizeBackendUrl,
+  PRODUCTION_API_URL,
 };

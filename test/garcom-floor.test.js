@@ -39,19 +39,28 @@ test("mint gera qrUrl com IP LAN e floor (sem localhost)", () => {
   assert.equal(r.operatorBound, true);
 });
 
-test("exchange devolve JWT bound + agentToken", () => {
+test("exchange devolve operatorMe mintado no PC", () => {
+  const me = {
+    userId: "u1",
+    tenantId: "t1",
+    email: "op@test.com",
+    role: "OPERADOR_PDV",
+    plan: "FOOD_PRO",
+    tenantStatus: "ACTIVE",
+  };
   const minted = garcomFloor.mint({
-    accessToken: "acc-1",
-    refreshToken: "ref-1",
-    lanIp: "10.0.0.2",
+    accessToken: "acc-me",
+    refreshToken: "ref-me",
+    operatorMe: me,
+    lanIp: "10.0.0.5",
     port: 9100,
     forceNew: true,
   });
-  const ex = garcomFloor.exchange(minted.floorToken, { agentToken: "agent-xyz" });
+  assert.equal(minted.hasOperatorMe, true);
+  const ex = garcomFloor.exchange(minted.floorToken);
   assert.equal(ex.ok, true);
-  assert.equal(ex.accessToken, "acc-1");
-  assert.equal(ex.refreshToken, "ref-1");
-  assert.equal(ex.agentToken, "agent-xyz");
+  assert.equal(ex.operatorMe.userId, "u1");
+  assert.equal(ex.operatorMe.email, "op@test.com");
 });
 
 test("exchange sem operador bound retorna 409", () => {

@@ -48,7 +48,7 @@ case "$ENV" in
     API_URL="http://localhost:8080"
     ;;
   *)
-    API_URL="https://app.marginengine.com.br"
+    API_URL="https://api.marginengine.com.br"
     ;;
 esac
 

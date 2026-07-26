@@ -5,7 +5,12 @@
 
 ## Changelog (2026-07-26)
 
-### Bind LAN definitivo + autodiagnóstico (ERR_CONNECTION_REFUSED)
+### Login celular / QR — api-proxy app→api + me no floor
+
+- Causa: `api-backend.json` e fallback do proxy apontavam para `app.marginengine.com.br` (SPA) → login/getMe falhavam → "Servidor indisponível" e mesas não abriam.
+- Fix: `normalizeBackendUrl` no `apiProxy` (app/www → `api.marginengine.com.br`); build grava API correta.
+- Floor mint inclui `operatorMe`; exchange devolve perfil → celular entra no mapa sem depender de getMe/nuvem nem credenciais offline.
+- LoginPage: retry do QR + copy orientando garçom (não senha no celular).
 
 - Causa: `.env` com `AGENT_BIND_HOST=127.0.0.1` (legado do `.env.example`) vencía o LAN — QR com IP certo, celular `ERR_CONNECTION_REFUSED`.
 - Fix: `resolveBindHost` ignora loopback quando `lanStaffAccess` está on → força `0.0.0.0`.

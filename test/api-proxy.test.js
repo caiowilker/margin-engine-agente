@@ -9,18 +9,34 @@ const {
   resolverBackendUrlPadrao,
 } = require("../apiProxy");
 
-test("resolverBackendUrlPadrao respeita DEFAULT_BACKEND_URL", () => {
+test("normalizeBackendUrl remapeia app.* para api.*", () => {
+  const { normalizeBackendUrl, PRODUCTION_API_URL } = require("../apiProxy");
+  assert.equal(
+    normalizeBackendUrl("https://app.marginengine.com.br"),
+    PRODUCTION_API_URL,
+  );
+  assert.equal(
+    normalizeBackendUrl("https://www.marginengine.com.br/"),
+    PRODUCTION_API_URL,
+  );
+  assert.equal(
+    normalizeBackendUrl("https://api.marginengine.com.br"),
+    "https://api.marginengine.com.br",
+  );
+});
+
+test("resolverBackendUrlPadrao respeita DEFAULT_BACKEND_URL e normaliza app→api", () => {
   const prev = process.env.DEFAULT_BACKEND_URL;
   process.env.DEFAULT_BACKEND_URL = "https://app.marginengine.com.br";
   try {
-    assert.equal(resolverBackendUrlPadrao(), "https://app.marginengine.com.br");
+    assert.equal(resolverBackendUrlPadrao(), "https://api.marginengine.com.br");
   } finally {
     if (prev === undefined) delete process.env.DEFAULT_BACKEND_URL;
     else process.env.DEFAULT_BACKEND_URL = prev;
   }
 });
 
-test("criarApiProxy encaminha POST /auth/login para backend configurado", async () => {
+test("criarApiProxy encaminha POST /auth/login para API (não SPA app.*)", async () => {
   const calls = [];
   const originalFetch = global.fetch;
   global.fetch = async (url, init) => {
@@ -61,7 +77,7 @@ test("criarApiProxy encaminha POST /auth/login para backend configurado", async 
     await proxy(req, res);
     assert.equal(statusCode, 200);
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].url, "https://app.marginengine.com.br/auth/login");
+    assert.equal(calls[0].url, "https://api.marginengine.com.br/auth/login");
     assert.equal(calls[0].init.method, "POST");
     assert.equal(calls[0].init.body, JSON.stringify(req.body));
   } finally {
