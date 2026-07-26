@@ -5,7 +5,12 @@
 
 ## Changelog (2026-07-26)
 
-### Login celular / QR — api-proxy app→api + me no floor
+### Hardening sessão QR Garçom (review)
+
+- LoginPage aplica `entrarComQrGarcom` (setUser antes de navegar) — evita bounce /login↔/mesas.
+- `isUsableOperatorMe` + normalize FOOD_SERVICE; single-flight no exchange.
+- Floor sem perfil: não deixa sessão zumbi; pede regenerar QR.
+- Agente sanitiza operatorMe no mint (sem secrets).
 
 - Causa: `api-backend.json` e fallback do proxy apontavam para `app.marginengine.com.br` (SPA) → login/getMe falhavam → "Servidor indisponível" e mesas não abriam.
 - Fix: `normalizeBackendUrl` no `apiProxy` (app/www → `api.marginengine.com.br`); build grava API correta.

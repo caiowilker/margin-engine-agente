@@ -18,6 +18,42 @@ function tokensEqual(a, b) {
 const TTL_MS = 12 * 60 * 60 * 1000; // 12h
 const HUB_PATH = "/pdv/mesas";
 
+/**
+ * Snapshot mínimo do operador para o celular abrir mesas sem getMe.
+ * @param {unknown} me
+ * @returns {object | null}
+ */
+function sanitizeOperatorMe(me) {
+  if (!me || typeof me !== "object") return null;
+  const m = /** @type {Record<string, unknown>} */ (me);
+  const userId = m.userId != null ? String(m.userId).trim() : "";
+  const email = m.email != null ? String(m.email).trim() : "";
+  const role = m.role != null ? String(m.role).trim() : "";
+  const tenantStatus = m.tenantStatus != null ? String(m.tenantStatus).trim() : "";
+  if (!userId || !email || !role || !tenantStatus) return null;
+  let operationMode =
+    m.operationMode != null ? String(m.operationMode) : "FOOD_SERVICE";
+  if (operationMode !== "FOOD_SERVICE" && operationMode !== "HYBRID") {
+    operationMode = "FOOD_SERVICE";
+  }
+  return {
+    userId,
+    email,
+    role,
+    tenantStatus,
+    tenantId: m.tenantId != null ? String(m.tenantId) : null,
+    tenantName: m.tenantName != null ? String(m.tenantName) : null,
+    userName: m.userName != null ? String(m.userName) : null,
+    plan: m.plan != null ? String(m.plan) : null,
+    activationDaysRemaining: Number(m.activationDaysRemaining) || 0,
+    ownerEmail: m.ownerEmail != null ? String(m.ownerEmail) : null,
+    hasPassword: m.hasPassword !== false,
+    phone: m.phone != null ? String(m.phone) : null,
+    termsAccepted: m.termsAccepted !== false,
+    operationMode,
+  };
+}
+
 /** @type {{ floorToken: string, accessToken: string | null, refreshToken: string | null, operatorMe: object | null, expiresAt: number, mintedAt: number } | null} */
 let _cache = null;
 
@@ -109,8 +145,7 @@ function mint(opts = {}) {
     opts.refreshToken != null && String(opts.refreshToken).trim()
       ? String(opts.refreshToken).trim()
       : null;
-  const operatorMe =
-    opts.operatorMe && typeof opts.operatorMe === "object" ? opts.operatorMe : null;
+  const operatorMe = sanitizeOperatorMe(opts.operatorMe);
   const forceNew = !!opts.forceNew;
   const port = Number(opts.port) || Number(process.env.AGENT_PORT || process.env.PORT || 9100);
   const lanIp = opts.lanIp !== undefined ? opts.lanIp : detectLanIPv4();
@@ -229,6 +264,7 @@ module.exports = {
   revoke,
   status,
   buildQrUrl,
+  sanitizeOperatorMe,
   _resetForTests,
   resolveFilePath,
 };

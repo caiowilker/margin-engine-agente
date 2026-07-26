@@ -39,6 +39,19 @@ test("mint gera qrUrl com IP LAN e floor (sem localhost)", () => {
   assert.equal(r.operatorBound, true);
 });
 
+test("sanitizeOperatorMe exige campos mínimos e força FOOD_SERVICE", () => {
+  assert.equal(garcomFloor.sanitizeOperatorMe(null), null);
+  assert.equal(garcomFloor.sanitizeOperatorMe({ userId: "x" }), null);
+  const ok = garcomFloor.sanitizeOperatorMe({
+    userId: "u1",
+    email: "a@b.com",
+    role: "OPERADOR_PDV",
+    tenantStatus: "ACTIVE",
+    operationMode: "RETAIL",
+  });
+  assert.equal(ok.operationMode, "FOOD_SERVICE");
+});
+
 test("exchange devolve operatorMe mintado no PC", () => {
   const me = {
     userId: "u1",
@@ -61,6 +74,7 @@ test("exchange devolve operatorMe mintado no PC", () => {
   assert.equal(ex.ok, true);
   assert.equal(ex.operatorMe.userId, "u1");
   assert.equal(ex.operatorMe.email, "op@test.com");
+  assert.equal(ex.operatorMe.operationMode, "FOOD_SERVICE");
 });
 
 test("exchange sem operador bound retorna 409", () => {
