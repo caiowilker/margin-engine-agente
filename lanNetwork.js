@@ -91,16 +91,42 @@ function isLanStaffAccessEnabled(cfg, env = process.env) {
 }
 
 /**
- * Host de bind HTTP: AGENT_BIND_HOST explícito, senão 0.0.0.0 com LAN on.
+ * Host de bind considerado loopback (só o próprio PC).
+ * @param {string} host
+ */
+function isLoopbackBindHost(host) {
+  const h = String(host || "")
+    .trim()
+    .toLowerCase();
+  return h === "127.0.0.1" || h === "localhost" || h === "::1";
+}
+
+/**
+ * Host de bind HTTP.
+ *
+ * Com LAN do salão ligada: sempre `0.0.0.0` (todas as interfaces), salvo
+ * `AGENT_BIND_HOST` explícito **não-loopback** (ex.: IP de uma NIC).
+ *
+ * Importante: `.env` legado com `AGENT_BIND_HOST=127.0.0.1` (copiado do
+ * `.env.example` antigo) NÃO pode vencer o LAN — isso gera QR com IP certo
+ * e `ERR_CONNECTION_REFUSED` no celular.
  *
  * @param {{ ativado?: boolean, lanStaffAccess?: boolean } | null} cfg
  * @param {NodeJS.ProcessEnv} [env]
  */
 function resolveBindHost(cfg, env = process.env) {
-  if (env.AGENT_BIND_HOST && String(env.AGENT_BIND_HOST).trim()) {
-    return String(env.AGENT_BIND_HOST).trim();
+  const explicit = env.AGENT_BIND_HOST && String(env.AGENT_BIND_HOST).trim();
+  const lanOn = isLanStaffAccessEnabled(cfg, env);
+
+  if (lanOn) {
+    if (explicit && !isLoopbackBindHost(explicit)) {
+      return explicit;
+    }
+    return "0.0.0.0";
   }
-  return isLanStaffAccessEnabled(cfg, env) ? "0.0.0.0" : "127.0.0.1";
+
+  if (explicit) return explicit;
+  return "127.0.0.1";
 }
 
 /**
@@ -119,6 +145,7 @@ function buildLanPublicBase({ port, lanIp, preferLan = true }) {
 module.exports = {
   isPrivateIPv4,
   isLoopbackIPv4,
+  isLoopbackBindHost,
   listPrivateIPv4Candidates,
   detectLanIPv4,
   isLanStaffAccessEnabled,

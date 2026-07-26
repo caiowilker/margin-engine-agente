@@ -5,6 +5,14 @@
 
 ## Changelog (2026-07-26)
 
+### Bind LAN definitivo + autodiagnóstico (ERR_CONNECTION_REFUSED)
+
+- Causa: `.env` com `AGENT_BIND_HOST=127.0.0.1` (legado do `.env.example`) vencía o LAN — QR com IP certo, celular `ERR_CONNECTION_REFUSED`.
+- Fix: `resolveBindHost` ignora loopback quando `lanStaffAccess` está on → força `0.0.0.0`.
+- Firewall: regra `PDV Agente 9100` com **-Profile Any** (instalador + boot); migra `.env` no bootstrap.
+- `GET /lan/info.diagnostics` + UI no QR Garçom (bind / reachability / firewall).
+- Testes: `lan-network`, `lan-diagnostics`.
+
 ### QR Garçom na LAN (IP + token sem senha) — hardening
 
 - Mint via IP LAN do PC (não só loopback); JWT obrigatório no body; rate limit floor.

@@ -219,16 +219,66 @@ function ensureWindowsPermissions(dm) {
 function ensureFirewall() {
   if (process.platform !== "win32" || !withFirewall) return;
   const port = process.env.AGENT_PORT || process.env.PORT || "9100";
-  const ruleName = "Margin Engine Agente";
+  const ruleName = `PDV Agente ${port}`;
   try {
-    run(
-      `netsh advfirewall firewall add rule name="${ruleName}" dir=in action=allow protocol=TCP localport=${port}`,
-      { stdio: "pipe" },
+    // Profile Any: rede Wi‑Fi marcada como "Pública" no Windows ainda libera a porta.
+    const ps = `
+$ErrorActionPreference = 'Stop'
+$port = ${Number(port) || 9100}
+$ruleName = '${ruleName.replace(/'/g, "''")}'
+Remove-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
+New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow -Profile Any | Out-Null
+$legacy = Get-NetFirewallRule -DisplayName 'Margin Engine Agente' -ErrorAction SilentlyContinue
+if ($legacy) {
+  Set-NetFirewallRule -DisplayName 'Margin Engine Agente' -Direction Inbound -Action Allow -Enabled True -Profile Any -ErrorAction SilentlyContinue
+}
+`.trim();
+    execFileSync(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps],
+      { stdio: "pipe", windowsHide: true },
     );
-    initBootstrapLog().info({ acao: "firewall", porta: port }, "Regra de firewall registrada");
+    initBootstrapLog().info(
+      { acao: "firewall", porta: port, regra: ruleName, profile: "Any" },
+      "Regra de firewall registrada (Profile Any)",
+    );
   } catch {
-    initBootstrapLog().warn({ porta: port }, "Firewall não configurado (pode já existir ou política bloqueou)");
+    try {
+      run(
+        `netsh advfirewall firewall delete rule name="${ruleName}"`,
+        { stdio: "pipe" },
+      );
+    } catch (_) {}
+    try {
+      run(
+        `netsh advfirewall firewall add rule name="${ruleName}" dir=in action=allow protocol=TCP localport=${port} profile=any`,
+        { stdio: "pipe" },
+      );
+      initBootstrapLog().info(
+        { acao: "firewall", porta: port, via: "netsh" },
+        "Regra de firewall registrada via netsh profile=any",
+      );
+    } catch {
+      initBootstrapLog().warn(
+        { porta: port },
+        "Firewall não configurado (pode já existir ou política bloqueou)",
+      );
+    }
   }
+}
+
+/** Migra .env legado: AGENT_BIND_HOST=127.0.0.1 quebrava QR Garçom (IP certo + connection refused). */
+function migrateEnvLanBind() {
+  const envPath = path.join(appDir, ".env");
+  if (!fs.existsSync(envPath)) return;
+  let text = fs.readFileSync(envPath, "utf8");
+  if (!/^AGENT_BIND_HOST\s*=\s*(127\.0\.0\.1|localhost)\s*$/im.test(text)) return;
+  text = text.replace(
+    /^AGENT_BIND_HOST\s*=\s*(127\.0\.0\.1|localhost)\s*$/im,
+    "# Migrado: loopback impedia celular na LAN (ERR_CONNECTION_REFUSED)\nAGENT_BIND_HOST=0.0.0.0",
+  );
+  fs.writeFileSync(envPath, text, "utf8");
+  initBootstrapLog().info({ acao: "migrate_env_bind" }, "AGENT_BIND_HOST migrado para 0.0.0.0");
 }
 
 function validateDependencies() {
@@ -447,6 +497,7 @@ async function main() {
   }
   const dm = ensureDirectories();
   ensureEnv();
+  migrateEnvLanBind();
   ensureWindowsPermissions(dm);
 
   if (mode === "install" || mode === "update") {

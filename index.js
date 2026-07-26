@@ -1800,8 +1800,9 @@ function iniciarServidor() {
   // ── LAN / QR Garçom (salão) ───────────────────────────────────────────────
   const garcomFloorRateLimit = require("./garcomFloorRateLimit").middleware();
 
-  app.get("/lan/info", privateNetworkHeaders, (req, res) => {
+  app.get("/lan/info", privateNetworkHeaders, async (req, res) => {
     const lanNetwork = require("./lanNetwork");
+    const lanDiagnostics = require("./lanDiagnostics");
     const garcomFloor = require("./garcomFloor");
     const cfg = lerConfigSync();
     const lanStaffAccess = lanNetwork.isLanStaffAccessEnabled(cfg);
@@ -1811,6 +1812,25 @@ function iniciarServidor() {
     const qrBaseUrl = lanIp
       ? lanNetwork.buildLanPublicBase({ port: PORT, lanIp, preferLan: true })
       : null;
+
+    let diagnostics = null;
+    try {
+      diagnostics = await lanDiagnostics.buildLanDiagnostics({
+        server: httpServer,
+        configuredBindHost: bindHost,
+        lanIp,
+        port: PORT,
+        lanStaffAccess,
+        ensureFirewall: false,
+      });
+    } catch (e) {
+      diagnostics = {
+        bindOk: null,
+        bindMessage: e.message || "Falha no autodiagnóstico LAN",
+        readyForPhone: false,
+      };
+    }
+
     res.json({
       lanIp,
       port: PORT,
@@ -1818,7 +1838,8 @@ function iniciarServidor() {
       bindHost,
       qrBaseUrl,
       firewallHint:
-        "No Windows, a porta do agente (padrão 9100) deve estar liberada no firewall (instalador cria a regra).",
+        "No Windows, a porta do agente (padrão 9100) deve estar liberada no firewall (instalador cria a regra com Profile Any).",
+      diagnostics,
       floor: {
         active: floor.active,
         expiresAt: floor.expiresAt,
@@ -1826,6 +1847,18 @@ function iniciarServidor() {
       },
     });
   });
+
+  /** Garante regra de firewall (admin) — útil se o instalador não rodou com elevação. */
+  app.post(
+    "/lan/firewall/ensure",
+    privateNetworkHeaders,
+    exigirLocalhostOuToken,
+    async (req, res) => {
+      const lanDiagnostics = require("./lanDiagnostics");
+      const result = await lanDiagnostics.ensureWindowsFirewallRule(PORT);
+      res.status(result.ok ? 200 : 500).json(result);
+    },
+  );
 
   app.post(
     "/garcom/floor/mint",
@@ -1980,13 +2013,35 @@ function iniciarServidor() {
       console.log(
         `[Agente PDV] Ativado — tenant=${dados.tenantId} pdv=${dados.pdvNome}`,
       );
+
+      // Se o processo ainda escuta só em loopback, reinicia para aplicar 0.0.0.0
+      // (bind é decidido no boot — sem restart o celular continua com connection refused).
+      const lanNetwork = require("./lanNetwork");
+      const lanDiagnostics = require("./lanDiagnostics");
+      const desiredBind = lanNetwork.resolveBindHost(novoConfig);
+      const listening = lanDiagnostics.getListeningAddress(httpServer);
+      const needsLanRebind =
+        (desiredBind === "0.0.0.0" || desiredBind === "::") &&
+        listening &&
+        lanNetwork.isLoopbackBindHost(listening.address);
+
       res.json({
         ok: true,
         pdvNome: dados.pdvNome,
         tenantId: dados.tenantId,
         agentToken,
         syncCode,
+        reinicioLanAgendado: !!needsLanRebind,
       });
+
+      if (needsLanRebind) {
+        console.log(
+          "[LAN] Ativação exige bind 0.0.0.0 — reiniciando o serviço em 1.5s…",
+        );
+        setTimeout(() => {
+          encerrarGracefully("LAN_BIND_RESTART", 0).catch(() => process.exit(0));
+        }, 1500);
+      }
     } catch (err) {
       res.status(500).json({ erro: err.message });
     }
@@ -3611,6 +3666,14 @@ function iniciarServidor() {
   const lanNetwork = require("./lanNetwork");
   const BIND_HOST = lanNetwork.resolveBindHost(config);
   const lanIpBoot = lanNetwork.detectLanIPv4();
+  if (
+    lanNetwork.isLanStaffAccessEnabled(config) &&
+    lanNetwork.isLoopbackBindHost(process.env.AGENT_BIND_HOST || "")
+  ) {
+    console.warn(
+      "[LAN] AGENT_BIND_HOST=loopback ignorado — bind forçado em 0.0.0.0 para QR Garçom na rede.",
+    );
+  }
   httpServer = app.listen(PORT, BIND_HOST, () => {
     try {
       require("./bootGuards").assertProductionGuards();
@@ -3622,10 +3685,28 @@ function iniciarServidor() {
     console.log(`║  Margin Engine — Agente Local v1.0       ║`);
     console.log(`║  ${AGENT_PUBLIC_BASE.padEnd(40)}║`);
     console.log(`╚══════════════════════════════════════════╝\n`);
+    const listening = require("./lanDiagnostics").getListeningAddress(httpServer);
+    const listenAddr = listening?.address || BIND_HOST;
+    console.log(`[HTTP] Escutando em ${listenAddr}:${PORT} (config bind=${BIND_HOST})`);
     if (BIND_HOST === "0.0.0.0" || BIND_HOST === "::") {
       console.log(
         `[LAN] Bind ${BIND_HOST}:${PORT}` +
-          (lanIpBoot ? ` — QR salão: http://${lanIpBoot}:${PORT}/pdv/mesas` : " — sem IPv4 privado detectado"),
+          (lanIpBoot
+            ? ` — QR salão: http://${lanIpBoot}:${PORT}/pdv/mesas`
+            : " — sem IPv4 privado detectado"),
+      );
+      // Best-effort: regra firewall Profile Any (precisa admin; instalador também cria)
+      require("./lanDiagnostics")
+        .ensureWindowsFirewallRule(PORT)
+        .then((r) => {
+          if (r.skipped) return;
+          if (r.ok) console.log(`[LAN] Firewall OK — ${r.ruleName} (${r.detail})`);
+          else console.warn(`[LAN] Firewall: ${r.detail}`);
+        })
+        .catch(() => {});
+    } else if (lanNetwork.isLanStaffAccessEnabled(config)) {
+      console.warn(
+        `[LAN] ATENÇÃO: bind em ${listenAddr} — celular na Wi‑Fi receberá ERR_CONNECTION_REFUSED. Use 0.0.0.0.`,
       );
     }
     try {

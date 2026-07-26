@@ -6,6 +6,7 @@ const assert = require("node:assert/strict");
 const {
   isPrivateIPv4,
   isLoopbackIPv4,
+  isLoopbackBindHost,
   detectLanIPv4,
   listPrivateIPv4Candidates,
   isLanStaffAccessEnabled,
@@ -27,6 +28,13 @@ test("isLoopbackIPv4", () => {
   assert.equal(isLoopbackIPv4("127.0.0.1"), true);
   assert.equal(isLoopbackIPv4("::1"), true);
   assert.equal(isLoopbackIPv4("192.168.0.1"), false);
+});
+
+test("isLoopbackBindHost", () => {
+  assert.equal(isLoopbackBindHost("127.0.0.1"), true);
+  assert.equal(isLoopbackBindHost("localhost"), true);
+  assert.equal(isLoopbackBindHost("0.0.0.0"), false);
+  assert.equal(isLoopbackBindHost("10.0.0.111"), false);
 });
 
 test("detectLanIPv4 prefere Wi‑Fi/Ethernet sobre docker", () => {
@@ -61,11 +69,26 @@ test("isLanStaffAccessEnabled — env sobrescreve; default on se ativado", () =>
   );
 });
 
-test("resolveBindHost — 0.0.0.0 com LAN; AGENT_BIND_HOST explícito", () => {
+test("resolveBindHost — 0.0.0.0 com LAN; loopback no .env é ignorado", () => {
   assert.equal(resolveBindHost({ ativado: true }, {}), "0.0.0.0");
   assert.equal(resolveBindHost({ ativado: false }, {}), "127.0.0.1");
+  // Legado .env.example: AGENT_BIND_HOST=127.0.0.1 NÃO pode vencer o LAN
   assert.equal(
     resolveBindHost({ ativado: true }, { AGENT_BIND_HOST: "127.0.0.1" }),
+    "0.0.0.0",
+  );
+  assert.equal(
+    resolveBindHost({ ativado: true }, { AGENT_BIND_HOST: "localhost" }),
+    "0.0.0.0",
+  );
+  // Override explícito não-loopback ainda funciona (NIC específica)
+  assert.equal(
+    resolveBindHost({ ativado: true }, { AGENT_BIND_HOST: "10.0.0.111" }),
+    "10.0.0.111",
+  );
+  // Sem LAN, loopback explícito permanece
+  assert.equal(
+    resolveBindHost({ ativado: false }, { AGENT_BIND_HOST: "127.0.0.1" }),
     "127.0.0.1",
   );
 });
