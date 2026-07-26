@@ -462,6 +462,13 @@ const CATALOGO = {
     grupo: "operacao",
     label: "Crítico fila offline (vendas pendentes)",
   },
+  lanStaffAccess: {
+    env: "AGENT_LAN_ENABLED",
+    tipo: "boolean",
+    default: true,
+    grupo: "operacao",
+    label: "Acesso LAN do salão (QR Garçom / bind 0.0.0.0)",
+  },
   fiscalQueueWarnMax: {
     env: "FISCAL_QUEUE_WARN_MAX",
     tipo: "number",
@@ -662,6 +669,7 @@ function chaveToEnv(chave) {
       cStat999RateWindowMin: "CSTAT_999_RATE_WINDOW_MIN",
       cStat999RateMax: "CSTAT_999_RATE_MAX",
       exibirImagensPdv: "PDV_EXIBIR_IMAGENS",
+      lanStaffAccess: "AGENT_LAN_ENABLED",
     }[chave] ||
     String(chave)
       .replace(/([A-Z])/g, "_$1")

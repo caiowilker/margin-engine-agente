@@ -619,6 +619,7 @@ const corsMiddleware = cors({
   },
   allowedHeaders: [
     "Content-Type",
+    "Authorization",
     "X-Agent-Token",
     "X-Correlation-Id",
     "X-Fiscal-Sync",
@@ -637,7 +638,7 @@ function privateNetworkHeaders(req, res, next) {
   res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, X-Agent-Token, X-Correlation-Id, X-Fiscal-Sync",
+    "Content-Type, Authorization, X-Agent-Token, X-Correlation-Id, X-Fiscal-Sync",
   );
   res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS");
   if (req.method === "OPTIONS") {
@@ -651,6 +652,16 @@ function isLocalhost(req) {
   return ip === "127.0.0.1" || ip === "::1";
 }
 
+function clientIp(req) {
+  return String(req.socket?.remoteAddress || "").replace(/^::ffff:/, "");
+}
+
+function isPrivateNetworkClient(req) {
+  const { isPrivateIPv4, isLoopbackIPv4 } = require("./lanNetwork");
+  const ip = clientIp(req);
+  return isLoopbackIPv4(ip) || isPrivateIPv4(ip);
+}
+
 function exigirLocalhost(req, res, next) {
   if (isLocalhost(req)) return next();
   return res.status(403).json({
@@ -658,8 +669,42 @@ function exigirLocalhost(req, res, next) {
   });
 }
 
+/** Loopback ou rede privada — usado pelo api-proxy quando lanStaffAccess está on. */
+function exigirLocalhostOuRedePrivada(req, res, next) {
+  const {
+    isLanStaffAccessEnabled,
+  } = require("./lanNetwork");
+  if (isLocalhost(req)) return next();
+  if (isLanStaffAccessEnabled(lerConfigSync()) && isPrivateNetworkClient(req)) {
+    return next();
+  }
+  return res.status(403).json({
+    erro: "Acesso permitido apenas via localhost ou rede privada do salão.",
+  });
+}
+
+function exigirRedePrivada(req, res, next) {
+  if (isPrivateNetworkClient(req)) return next();
+  return res.status(403).json({
+    erro: "Acesso permitido apenas na rede local do salão.",
+  });
+}
+
 function exigirLocalhostOuToken(req, res, next) {
   if (isLocalhost(req)) return next();
+  return exigirAgentToken(req, res, next);
+}
+
+/**
+ * Mint do QR: localhost, agent token, ou rede privada com LAN staff
+ * (PC aberto via http://IP:9100 — remoteAddress não é loopback).
+ */
+function exigirMintGarcomFloor(req, res, next) {
+  if (isLocalhost(req)) return next();
+  const { isLanStaffAccessEnabled } = require("./lanNetwork");
+  if (isLanStaffAccessEnabled(lerConfigSync()) && isPrivateNetworkClient(req)) {
+    return next();
+  }
   return exigirAgentToken(req, res, next);
 }
 
@@ -1062,7 +1107,12 @@ function iniciarServidor() {
   });
 
   const { criarApiProxy, anexarProxyWebSocket } = require("./apiProxy");
-  app.use("/api-proxy", privateNetworkHeaders, exigirLocalhost, criarApiProxy({ lerConfigSync }));
+  app.use(
+    "/api-proxy",
+    privateNetworkHeaders,
+    exigirLocalhostOuRedePrivada,
+    criarApiProxy({ lerConfigSync }),
+  );
 
   // ── Diagnóstico HTML (antes do SPA — evita 404 do frontend-dist) ───────────
   app.get("/diagnostico/painel", privateNetworkHeaders, exigirLocalhostOuToken, (req, res) => {
@@ -1541,6 +1591,21 @@ function iniciarServidor() {
         requerToken: !!config.agentToken,
       },
 
+      lan: (() => {
+        try {
+          const lanNetwork = require("./lanNetwork");
+          const enabled = lanNetwork.isLanStaffAccessEnabled(config);
+          return {
+            enabled,
+            ip: lanNetwork.detectLanIPv4(),
+            bindHost: lanNetwork.resolveBindHost(config),
+            port: PORT,
+          };
+        } catch {
+          return { enabled: false, ip: null, bindHost: "127.0.0.1", port: PORT };
+        }
+      })(),
+
       sistema: {
         platform: os.platform(),
         arch: os.arch(),
@@ -1730,6 +1795,108 @@ function iniciarServidor() {
     } catch (e) {
       res.status(400).json({ erro: e.message || "Erro ao salvar rotas de estação" });
     }
+  });
+
+  // ── LAN / QR Garçom (salão) ───────────────────────────────────────────────
+  const garcomFloorRateLimit = require("./garcomFloorRateLimit").middleware();
+
+  app.get("/lan/info", privateNetworkHeaders, (req, res) => {
+    const lanNetwork = require("./lanNetwork");
+    const garcomFloor = require("./garcomFloor");
+    const cfg = lerConfigSync();
+    const lanStaffAccess = lanNetwork.isLanStaffAccessEnabled(cfg);
+    const lanIp = lanNetwork.detectLanIPv4();
+    const bindHost = lanNetwork.resolveBindHost(cfg);
+    const floor = garcomFloor.status({ lanIp, port: PORT });
+    const qrBaseUrl = lanIp
+      ? lanNetwork.buildLanPublicBase({ port: PORT, lanIp, preferLan: true })
+      : null;
+    res.json({
+      lanIp,
+      port: PORT,
+      lanStaffAccess,
+      bindHost,
+      qrBaseUrl,
+      firewallHint:
+        "No Windows, a porta do agente (padrão 9100) deve estar liberada no firewall (instalador cria a regra).",
+      floor: {
+        active: floor.active,
+        expiresAt: floor.expiresAt,
+        operatorBound: floor.operatorBound,
+      },
+    });
+  });
+
+  app.post(
+    "/garcom/floor/mint",
+    privateNetworkHeaders,
+    garcomFloorRateLimit,
+    exigirMintGarcomFloor,
+    (req, res) => {
+      const lanNetwork = require("./lanNetwork");
+      const garcomFloor = require("./garcomFloor");
+      const cfg = lerConfigSync();
+      if (!lanNetwork.isLanStaffAccessEnabled(cfg)) {
+        return res.status(403).json({
+          erro: "Acesso LAN do salão desabilitado (lanStaffAccess / AGENT_LAN_ENABLED).",
+        });
+      }
+      const lanIp = lanNetwork.detectLanIPv4();
+      if (!lanIp) {
+        return res.status(503).json({
+          erro: "Nenhum IPv4 privado detectado. Conecte o PC ao Wi‑Fi/Ethernet do salão.",
+        });
+      }
+      const accessToken = req.body?.accessToken;
+      const refreshToken = req.body?.refreshToken;
+      if (!accessToken || !refreshToken) {
+        return res.status(400).json({
+          erro: "accessToken e refreshToken do operador são obrigatórios para gerar o QR.",
+        });
+      }
+      const result = garcomFloor.mint({
+        accessToken,
+        refreshToken,
+        forceNew: !!req.body?.forceNew,
+        lanIp,
+        port: PORT,
+      });
+      res.json(result);
+    },
+  );
+
+  app.post(
+    "/garcom/floor/exchange",
+    privateNetworkHeaders,
+    garcomFloorRateLimit,
+    exigirRedePrivada,
+    (req, res) => {
+      const lanNetwork = require("./lanNetwork");
+      const garcomFloor = require("./garcomFloor");
+      const cfg = lerConfigSync();
+      if (!lanNetwork.isLanStaffAccessEnabled(cfg)) {
+        return res.status(403).json({
+          erro: "Acesso LAN do salão desabilitado (lanStaffAccess / AGENT_LAN_ENABLED).",
+        });
+      }
+      const result = garcomFloor.exchange(req.body?.floorToken || req.query?.floor, {
+        agentToken: cfg.agentToken || null,
+      });
+      if (!result.ok) {
+        return res.status(result.status || 401).json({ erro: result.erro });
+      }
+      res.json({
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        agentToken: result.agentToken,
+        expiresAt: result.expiresAt,
+      });
+    },
+  );
+
+  app.post("/garcom/floor/revoke", privateNetworkHeaders, exigirLocalhostOuToken, (req, res) => {
+    const garcomFloor = require("./garcomFloor");
+    res.json(garcomFloor.revoke());
   });
 
   // Sincroniza X-Agent-Token no browser (localhost ou código efêmero pós-ativação).
@@ -2908,12 +3075,14 @@ function iniciarServidor() {
           fila: true,
           mensagem: resultado.message,
           jobId: resultado.jobId,
+          deduplicado: !!resultado.deduplicado,
           job: resultado.job ? { id: resultado.job.id } : undefined,
         });
       }
       res.json({
         ok: true,
         jobId: resultado.jobId,
+        deduplicado: !!resultado.deduplicado,
         job: resultado.job ? { id: resultado.job.id } : undefined,
       });
     } catch (err) {
@@ -3281,7 +3450,7 @@ function iniciarServidor() {
   if (fs.existsSync(FRONTEND_INDEX)) {
     app.use(express.static(FRONTEND_DIST));
     app.get(
-      /^(?!\/api|\/api-proxy|\/status|\/health|\/venda|\/fila|\/mesa|\/impressora|\/acbr|\/ativar|\/auth|\/config|\/contingencia|\/diagnostico|\/updater|\/fiscal).*$/,
+      /^(?!\/api|\/api-proxy|\/status|\/health|\/venda|\/fila|\/mesa|\/impressora|\/acbr|\/ativar|\/auth|\/config|\/contingencia|\/diagnostico|\/updater|\/fiscal|\/lan|\/garcom).*$/,
       (req, res) => res.sendFile(FRONTEND_INDEX),
     );
   }
@@ -3439,7 +3608,9 @@ function iniciarServidor() {
     encerrarGracefully("SIGTERM", 0).catch(() => process.exit(1));
   });
 
-  const BIND_HOST = process.env.AGENT_BIND_HOST || "127.0.0.1";
+  const lanNetwork = require("./lanNetwork");
+  const BIND_HOST = lanNetwork.resolveBindHost(config);
+  const lanIpBoot = lanNetwork.detectLanIPv4();
   httpServer = app.listen(PORT, BIND_HOST, () => {
     try {
       require("./bootGuards").assertProductionGuards();
@@ -3451,6 +3622,12 @@ function iniciarServidor() {
     console.log(`║  Margin Engine — Agente Local v1.0       ║`);
     console.log(`║  ${AGENT_PUBLIC_BASE.padEnd(40)}║`);
     console.log(`╚══════════════════════════════════════════╝\n`);
+    if (BIND_HOST === "0.0.0.0" || BIND_HOST === "::") {
+      console.log(
+        `[LAN] Bind ${BIND_HOST}:${PORT}` +
+          (lanIpBoot ? ` — QR salão: http://${lanIpBoot}:${PORT}/pdv/mesas` : " — sem IPv4 privado detectado"),
+      );
+    }
     try {
       require("./print/factory").warnIfSelectedAtBoot();
       require("./print/printerBootstrap")
@@ -3468,7 +3645,11 @@ function iniciarServidor() {
   // Túnel WS /api-proxy/ws/* → backend (print-station, kitchen, etc.)
   anexarProxyWebSocket(httpServer, {
     lerConfigSync,
-    isAllowed: (req) => isLocalhost(req),
+    isAllowed: (req) => {
+      if (isLocalhost(req)) return true;
+      const { isLanStaffAccessEnabled } = require("./lanNetwork");
+      return isLanStaffAccessEnabled(lerConfigSync()) && isPrivateNetworkClient(req);
+    },
   });
 }
 

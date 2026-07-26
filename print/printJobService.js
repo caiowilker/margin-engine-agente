@@ -7,6 +7,10 @@ const store = require("./printJobStore");
 const printLog = require("./printJobLog");
 const { executarOp, classifyPrintError } = require("./printExecutor");
 const { resolverTipo, extrairMeta, STATUS } = require("./printJobTypes");
+const {
+  resolveIdempotencyKey,
+  deveDeduplicar,
+} = require("./printIdempotency");
 
 let workerTimer = null;
 let processando = false;
@@ -89,6 +93,24 @@ function enfileirar(op, args, opts = {}) {
   args = validado.args;
   const payload = args?.[0];
   const meta = extrairMeta(payload, opts);
+  const idempotencyKey = resolveIdempotencyKey(op, args, opts);
+
+  if (idempotencyKey) {
+    const existing = store.buscarPorIdempotencyKey(idempotencyKey);
+    if (existing && deveDeduplicar(existing)) {
+      store.registrarEvento(
+        existing.id,
+        "DEDUP",
+        `chave=${idempotencyKey} status=${existing.status}`,
+      );
+      log.info(
+        { jobId: existing.id, idempotencyKey, status: existing.status },
+        "[PrintJob] Deduplicado — sem reimpressão",
+      );
+      return { ...rowToJob(existing), deduplicado: true, idempotencyKey };
+    }
+  }
+
   const id = store.novoId();
   const c = cfg();
   const row = {
@@ -109,14 +131,33 @@ function enfileirar(op, args, opts = {}) {
     job_pai_id: opts.jobPaiId || null,
     criado_em: new Date().toISOString(),
     atualizado_em: new Date().toISOString(),
+    idempotency_key: idempotencyKey,
   };
-  store.inserirJob(row);
+  try {
+    store.inserirJob(row);
+  } catch (err) {
+    // Corrida: outro request inseriu a mesma chave.
+    if (idempotencyKey && /UNIQUE|constraint/i.test(String(err.message || ""))) {
+      const existing = store.buscarPorIdempotencyKey(idempotencyKey);
+      if (existing) {
+        log.info(
+          { jobId: existing.id, idempotencyKey },
+          "[PrintJob] Deduplicado (race UNIQUE)",
+        );
+        return { ...rowToJob(existing), deduplicado: true, idempotencyKey };
+      }
+    }
+    throw err;
+  }
   store.registrarEvento(id, "CRIADO", `${op} · ${row.tipo}`);
   store.registrarEvento(id, "VALIDADO", "payload ok");
+  if (idempotencyKey) {
+    store.registrarEvento(id, "IDEMPOTENCY", idempotencyKey);
+  }
   printLog.registrar({ jobId: id, op, tipo: row.tipo, status: STATUS.PENDENTE, evento: "enfileirado" });
-  log.info({ jobId: id, op, tipo: row.tipo }, "[PrintJob] Enfileirado");
+  log.info({ jobId: id, op, tipo: row.tipo, idempotencyKey }, "[PrintJob] Enfileirado");
   agendarWorker();
-  return rowToJob(store.buscarJob(id));
+  return { ...rowToJob(store.buscarJob(id)), deduplicado: false, idempotencyKey };
 }
 
 async function processarJobRow(row) {
@@ -280,11 +321,20 @@ function iniciarWorker() {
 
 /**
  * Submete impressão: enfileira e aguarda conclusão (ou fila de retry).
+ * Deduplica por idempotency key — retry/timeout não reimprime.
  */
 async function submitPrint(op, args, opts = {}) {
   const job = enfileirar(op, args, opts);
+  if (job.deduplicado && job.status === STATUS.IMPRESSO) {
+    return {
+      ok: true,
+      jobId: job.id,
+      job,
+      deduplicado: true,
+    };
+  }
   if (opts.async === true) {
-    return { jobId: job.id, job, async: true };
+    return { jobId: job.id, job, async: true, deduplicado: !!job.deduplicado };
   }
 
   const deadline = Date.now() + (opts.waitTimeoutMs || cfg().timeoutTotalMs * cfg().maxTentativas + 30000);
@@ -293,14 +343,19 @@ async function submitPrint(op, args, opts = {}) {
     const atual = store.buscarJob(job.id);
     if (!atual) break;
     if (atual.status === STATUS.IMPRESSO) {
-      return { ok: true, jobId: job.id, job: rowToJob(atual) };
+      return {
+        ok: true,
+        jobId: job.id,
+        job: rowToJob(atual),
+        deduplicado: !!job.deduplicado,
+      };
     }
     if (atual.status === STATUS.ERRO) {
       const e = new Error(atual.erro || "Falha na impressão");
       e.jobId = job.id;
       throw e;
     }
-    if (atual.status === STATUS.REPROCESSANDO || atual.status === STATUS.PENDENTE) {
+    if (atual.status === STATUS.REPROCESSANDO || atual.status === STATUS.PENDENTE || atual.status === STATUS.ENVIANDO) {
       await new Promise((r) => setTimeout(r, Math.min(cfg().pollMs, 500)));
       continue;
     }
@@ -308,12 +363,13 @@ async function submitPrint(op, args, opts = {}) {
   }
 
   const pendente = store.buscarJob(job.id);
-  if (pendente && (pendente.status === STATUS.REPROCESSANDO || pendente.status === STATUS.PENDENTE)) {
+  if (pendente && (pendente.status === STATUS.REPROCESSANDO || pendente.status === STATUS.PENDENTE || pendente.status === STATUS.ENVIANDO)) {
     return {
       ok: false,
       queued: true,
       jobId: job.id,
       job: rowToJob(pendente),
+      deduplicado: !!job.deduplicado,
       message: "Impressão na fila — será reenviada automaticamente.",
     };
   }
@@ -338,8 +394,10 @@ function reimprimir(jobId, opts = {}) {
   const row = store.buscarJob(jobId);
   if (!row) throw new Error("Job de impressão não encontrado.");
   const args = parsePayload(row.payload_json);
+  // force:true — reimpressão manual NÃO deve herdar idempotency_key do original.
   return enfileirar(row.op, args, {
     ...opts,
+    force: true,
     jobPaiId: jobId,
     motivo: opts.motivo || "reimpressao",
   });

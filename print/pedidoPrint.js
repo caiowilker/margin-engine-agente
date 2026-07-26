@@ -78,6 +78,12 @@ function normalizarPedidoPayload(raw) {
     createdAt: o.createdAt ?? o.created_at ?? null,
     copies: Math.max(1, parseInt(String(o.copies ?? 1), 10) || 1),
     items,
+    idempotencyKey:
+      o.idempotencyKey != null && String(o.idempotencyKey).trim()
+        ? String(o.idempotencyKey).trim()
+        : o.idempotency_key != null && String(o.idempotency_key).trim()
+          ? String(o.idempotency_key).trim()
+          : null,
     exibirLogo: typeof o.exibirLogo === "boolean" ? o.exibirLogo : undefined,
   };
 }

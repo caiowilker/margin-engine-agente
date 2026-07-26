@@ -46,6 +46,7 @@ test("chaves especiais alinhadas", () => {
   assert.strictEqual(catalog.chaveToEnv("cStat999RateWindowMin"), "CSTAT_999_RATE_WINDOW_MIN");
   assert.strictEqual(catalog.chaveToEnv("cStat999RateMax"), "CSTAT_999_RATE_MAX");
   assert.strictEqual(catalog.chaveToEnv("exibirImagensPdv"), "PDV_EXIBIR_IMAGENS");
+  assert.strictEqual(catalog.chaveToEnv("lanStaffAccess"), "AGENT_LAN_ENABLED");
 });
 
 console.log("\nOK");

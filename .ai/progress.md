@@ -1,7 +1,31 @@
 # PROGRESS — Agente Local
 
-**Última atualização:** 2026-07-18  
+**Última atualização:** 2026-07-26  
 **Versão:** `1.0.0` — certificada com a plataforma
+
+## Changelog (2026-07-26)
+
+### QR Garçom na LAN (IP + token sem senha) — hardening
+
+- Mint via IP LAN do PC (não só loopback); JWT obrigatório no body; rate limit floor.
+- CORS/`PNA` com `Authorization`; `lanStaffAccess` no catálogo JS↔Java; `/status-basico.lan`.
+- Front: stash do floor até exchange OK; retry pós-login; QR só com `operatorBound`.
+- Docs/ADR alinhados (sem senha no celular).
+
+### Anti-duplicata térmica (pré-conta / comanda)
+
+- Agente: `idempotency_key` em `print_jobs` — retry/timeout/duplo POST não reimprimem.
+- Pré-conta: chave `preconta:{orderId}:{hash}`; comanda nuvem: `cloud:{jobId}`.
+- Estação WS só no **localhost** do caixa (celular no IP LAN não imprime cozinha).
+- `MesaToolbar` trava síncrona; `usePrintStation` dedup in-memory por `jobId`.
+- Testes: `test/print-idempotency.test.js`.
+
+### QR Garçom na LAN (IP + token sem senha)
+
+- Problema: QR usava `localhost`; agente escutava só `127.0.0.1`; `/api-proxy` bloqueava celular.
+- Solução: `lanNetwork.js` + bind `0.0.0.0` com `lanStaffAccess`; `garcomFloor.js` (mint/exchange); QR `http://IP:9100/pdv/mesas?floor=…`.
+- Front: `StaffHubQrSection` mint com JWT do caixa; `AuthContext` exchange no boot; pré-conta térmica inalterada (`/impressora/pedido` + agentToken).
+- Testes: `test/lan-network.test.js`, `test/garcom-floor.test.js`; front `mesaStaffQr.test.ts`.
 
 ## Changelog (2026-07-18)
 

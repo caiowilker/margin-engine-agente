@@ -77,6 +77,16 @@ Authentication: `X-Agent-Token` após ativação PDV; rotas públicas mínimas (
 
 Authorization: token por dispositivo/caixa; CORS + `privateNetworkHeaders` nas rotas de impressão
 
+**QR Garçom (LAN do salão):**
+* Com agente ativado, bind padrão `0.0.0.0` (override: `AGENT_BIND_HOST` / `AGENT_LAN_ENABLED` / `lanStaffAccess` no catálogo operacional)
+* QR operacional: `http://{IPv4-LAN}:9100/pdv/mesas?floor=…` — nunca localhost; JWT nunca no QR
+* Mint aceita localhost **ou** IP privado do PC (painel aberto via LAN); exige JWT do operador no body
+* `POST /garcom/floor/exchange` (rede privada + rate limit) libera celular sem senha + `agentToken` para pré-conta
+* `/api-proxy` aceita loopback **ou** IP privado quando LAN staff está on; CORS inclui `Authorization`
+* Floor stash no browser até exchange OK (retry pós-login)
+* Atalhos do instalador permanecem `http://localhost:9100/`
+* Firewall Windows: porta 9100 (regra do instalador)
+
 Rules: certificado A1 e CSC ficam no ACBr, não no agente; credenciais backend no Credential Manager
 
 ---
