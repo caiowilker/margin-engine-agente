@@ -11,13 +11,17 @@ $checks = @(
     @{ Path = "dist\app\index.js"; Hint = "index.js" },
     @{ Path = "dist\app\apiProxy.js"; Hint = "api-proxy (login :9100)" },
     @{ Path = "dist\app\acbrlib\lib\ACBrNFe64.dll"; Hint = "ACBrLib NFe" },
+    @{ Path = "dist\app\acbrlib\lib\ACBrNFSe64.dll"; Hint = "ACBrLib NFS-e" },
+    @{ Path = "dist\app\fiscal\nfse\nfseLib.js"; Hint = "Modulo NFS-e (nfseLib)" },
     @{ Path = "dist\app\posprinter\lib\ACBrPosPrinter64.dll"; Hint = "ACBr PosPrinter" },
     @{ Path = "dist\app\print\printerBootstrap.js"; Hint = "printerBootstrap" },
     @{ Path = "dist\app\acbrlib\data\Schemas"; Hint = "Pasta Schemas" },
+    @{ Path = "dist\app\acbrlib\data\Schemas\NFSe"; Hint = "Schemas NFS-e" },
     @{ Path = "dist\app\frontend-dist\index.html"; Hint = "PDV offline" },
     @{ Path = "dist\app\frontend-dist\api-backend.json"; Hint = "api-backend.json" },
     @{ Path = "dist\app\BUILD_STAMP.json"; Hint = "BUILD_STAMP (prepare-build.ps1)" },
     @{ Path = "dist\app\node_modules\better-sqlite3\build\Release\better_sqlite3.node"; Hint = "better-sqlite3 nativo (rode prepare-build.ps1 sem -SkipNpm)" },
+    @{ Path = "dist\app\node_modules\@projetoacbr\acbrlib-nfse-node\package.json"; Hint = "@projetoacbr/acbrlib-nfse-node (npm ci)" },
     @{ Path = "dist\app\assets\margin-engine.ico"; Hint = "Icone instalador" },
     @{ Path = "sign-installer.ps1"; Hint = "Assinatura opcional" },
     @{ Path = "pdv-agente-installer.iss"; Hint = "Script Inno Setup" },
@@ -42,6 +46,14 @@ if ($xsd -ge 10) {
     Write-Host "[OK] Schemas XSD - $xsd arquivo(s)"
 } else {
     Write-Host "[FALHA] Schemas XSD - $xsd (esperado >= 10)"
+    $fail++
+}
+
+$nfseXsd = @(Get-ChildItem (Join-Path $App "acbrlib\data\Schemas\NFSe") -Filter "*.xsd" -Recurse -File -ErrorAction SilentlyContinue).Count
+if ($nfseXsd -ge 50) {
+    Write-Host "[OK] Schemas NFS-e - $nfseXsd arquivo(s)"
+} else {
+    Write-Host "[FALHA] Schemas NFS-e - $nfseXsd (esperado >= 50)"
     $fail++
 }
 

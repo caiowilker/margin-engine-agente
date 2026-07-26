@@ -95,12 +95,31 @@ function Require([string]$Path, [string]$Label) {
 }
 
 Require (Join-Path $AppDest "acbrlib\lib\ACBrNFe64.dll") "ACBrNFe64.dll"
+Require (Join-Path $AppDest "acbrlib\lib\ACBrNFSe64.dll") "ACBrNFSe64.dll (NFS-e)"
 Require (Join-Path $AppDest "posprinter\lib\ACBrPosPrinter64.dll") "ACBrPosPrinter64.dll"
 Require (Join-Path $AppDest "print\printerBootstrap.js") "printerBootstrap"
+Require (Join-Path $AppDest "fiscal\nfse\nfseLib.js") "fiscal/nfse/nfseLib.js"
+
+# Schemas: pasta data é excluída do robocopy principal — completa NFSe do repo
+$nfseSrc = Join-Path $AgentRoot "acbrlib\data\Schemas\NFSe"
+$nfseDst = Join-Path $AppDest "acbrlib\data\Schemas\NFSe"
+if (Test-Path $nfseSrc) {
+    Write-Host "==> Sincronizando schemas NFS-e"
+    New-Item -ItemType Directory -Force -Path $nfseDst | Out-Null
+    Sync-Tree -Source $nfseSrc -Dest $nfseDst -ExcludeDirNames @() -ExcludeFileGlobs @()
+}
 
 $xsd = @(Get-ChildItem (Join-Path $AppDest "acbrlib\data\Schemas") -Filter "*.xsd" -Recurse -File -ErrorAction SilentlyContinue).Count
 if ($xsd -ge 10) { Write-Host "OK — schemas XSD: $xsd" }
 else { Write-Host "ERRO — schemas XSD: $xsd"; $fail++ }
+
+$nfseXsd = @(Get-ChildItem $nfseDst -Filter "*.xsd" -Recurse -File -ErrorAction SilentlyContinue).Count
+if ($nfseXsd -ge 50) { Write-Host "OK — schemas NFS-e: $nfseXsd" }
+else { Write-Host "ERRO — schemas NFS-e: $nfseXsd (esperado >= 50)"; $fail++ }
+
+$pkgJson = Get-Content (Join-Path $AppDest "package.json") -Raw
+if ($pkgJson -match '@projetoacbr/acbrlib-nfse-node') { Write-Host "OK — package.json declara acbrlib-nfse-node" }
+else { Write-Host "ERRO — package.json sem @projetoacbr/acbrlib-nfse-node"; $fail++ }
 
 if (Test-Path (Join-Path $AppDest "frontend-dist\index.html")) { Write-Host "OK — frontend-dist" }
 else { Write-Warning "frontend-dist ausente" }

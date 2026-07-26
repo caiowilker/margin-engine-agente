@@ -36,8 +36,10 @@ Write-Host ""
 Assert-Path $App "Sincronize o repo: npm run sync:windows-build (WSL) ou .\scripts\sync-windows-build.ps1"
 Assert-Path (Join-Path $Node "node.exe") "Copie Node.js portatil x64 para dist\node\ (ou extraia node.zip)"
 Assert-Path (Join-Path $App "acbrlib\lib\ACBrNFe64.dll") "DLL fiscal em dist\app\acbrlib\lib\"
+Assert-Path (Join-Path $App "acbrlib\lib\ACBrNFSe64.dll") "DLL NFS-e em dist\app\acbrlib\lib\ACBrNFSe64.dll"
 Assert-Path (Join-Path $App "posprinter\lib\ACBrPosPrinter64.dll") "DLL impressora em dist\app\posprinter\lib\"
 Assert-Path (Join-Path $App "print\printerBootstrap.js") "printerBootstrap ausente - rode sync:windows-build"
+Assert-Path (Join-Path $App "fiscal\nfse\nfseLib.js") "modulo NFS-e ausente - rode sync:windows-build"
 Assert-Path (Join-Path $App "assets\margin-engine.ico") "Icone assets\margin-engine.ico - rode node scripts/build-installer-icon.js"
 Assert-Path $Iss "Execute sync - copia pdv-agente-installer.iss para esta pasta"
 
@@ -46,6 +48,12 @@ if ($schemaCount -lt 10) {
     Write-Error "Schemas XSD insuficientes ($schemaCount) em dist\app\acbrlib\data\Schemas - rode sync:windows-build"
 }
 Write-Host "[OK] Schemas XSD: $schemaCount arquivo(s)"
+
+$nfseSchemaCount = Count-Xsd (Join-Path $App "acbrlib\data\Schemas\NFSe")
+if ($nfseSchemaCount -lt 50) {
+    Write-Error "Schemas NFS-e insuficientes ($nfseSchemaCount) em dist\app\acbrlib\data\Schemas\NFSe - rode sync:windows-build"
+}
+Write-Host "[OK] Schemas NFS-e: $nfseSchemaCount arquivo(s)"
 
 $pkg = Get-Content (Join-Path $App "package.json") -Raw | ConvertFrom-Json
 $versionScript = Join-Path $App "scripts\sync-installer-version.js"

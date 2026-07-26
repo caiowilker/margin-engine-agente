@@ -100,10 +100,12 @@ check() {
 }
 
 check "$BUILD_ROOT/dist/app/acbrlib/lib/ACBrNFe64.dll" "ACBrNFe64.dll"
+check "$BUILD_ROOT/dist/app/acbrlib/lib/ACBrNFSe64.dll" "ACBrNFSe64.dll (NFS-e)"
 check "$BUILD_ROOT/dist/app/posprinter/lib/ACBrPosPrinter64.dll" "ACBrPosPrinter64.dll"
 check "$BUILD_ROOT/dist/app/print/printerBootstrap.js" "printerBootstrap (auto-detect)"
+check "$BUILD_ROOT/dist/app/fiscal/nfse/nfseLib.js" "fiscal/nfse/nfseLib.js"
 
-# Schemas ficam fora do git — se o destino estiver vazio, tenta recuperar da instalação local
+# Schemas ficam fora do git no rsync principal — preserva destino e completa do repo/instalação
 SCHEMA_DIR="$BUILD_ROOT/dist/app/acbrlib/data/Schemas"
 SCHEMA_COUNT="$(find "$SCHEMA_DIR" -maxdepth 2 -name '*.xsd' 2>/dev/null | wc -l | tr -d ' ')"
 if [[ "${SCHEMA_COUNT:-0}" -lt 10 ]]; then
@@ -124,6 +126,30 @@ if [[ "${SCHEMA_COUNT:-0}" -lt 10 ]]; then
   FAIL=1
 else
   echo "OK — schemas XSD: $SCHEMA_COUNT"
+fi
+
+# NFS-e: schemas municipais (excluídos do rsync principal por data/Schemas)
+NFSE_SRC="$AGENT_ROOT/acbrlib/data/Schemas/NFSe"
+NFSE_DST="$SCHEMA_DIR/NFSe"
+if [[ -d "$NFSE_SRC" ]]; then
+  echo "==> Sincronizando schemas NFS-e → dist/app/acbrlib/data/Schemas/NFSe"
+  mkdir -p "$NFSE_DST"
+  rsync -a "$NFSE_SRC/" "$NFSE_DST/"
+fi
+NFSE_XSD="$(find "$NFSE_DST" -name '*.xsd' 2>/dev/null | wc -l | tr -d ' ')"
+if [[ "${NFSE_XSD:-0}" -lt 50 ]]; then
+  echo "ERRO: schemas NFS-e incompletos ($NFSE_XSD .xsd) — esperado >= 50"
+  FAIL=1
+else
+  echo "OK — schemas NFS-e: $NFSE_XSD"
+fi
+
+# Pacote npm declarado (node_modules completo vem no prepare-build.ps1 / npm ci)
+if grep -q '"@projetoacbr/acbrlib-nfse-node"' "$BUILD_ROOT/dist/app/package.json" 2>/dev/null; then
+  echo "OK — package.json declara @projetoacbr/acbrlib-nfse-node"
+else
+  echo "ERRO: package.json sem @projetoacbr/acbrlib-nfse-node"
+  FAIL=1
 fi
 
 if [[ -f "$BUILD_ROOT/dist/app/frontend-dist/index.html" ]]; then
