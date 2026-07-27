@@ -20,8 +20,15 @@ const {
   tagBarcodesList,
 } = require("./acbrTags");
 const { corpo, destaque, ceDestaque, linhaCorpo, ceCorpo } = require("./cupomContraste");
-
-const COLS = 48;
+const {
+  getThermalCols,
+  sepEq,
+  sepDash,
+  col2,
+  formatChaveLines,
+  buildCupomItemLines,
+  buildCupomItemHeader,
+} = require("./thermalCols");
 
 const LABEL_PGTO = {
   dinheiro: "DINHEIRO",
@@ -32,24 +39,6 @@ const LABEL_PGTO = {
   voucher: "VOUCHER",
 };
 
-function padR(txt, len) {
-  return String(txt).slice(0, len).padEnd(len);
-}
-function padL(txt, len) {
-  return String(txt).slice(0, len).padStart(len);
-}
-function col2(esq, dir) {
-  const e = String(esq);
-  const d = String(dir);
-  const esp = Math.max(1, COLS - e.length - d.length);
-  return e + " ".repeat(esp) + d;
-}
-function sepEq() {
-  return "=".repeat(COLS);
-}
-function sepDash() {
-  return "-".repeat(COLS);
-}
 function fmtR$(v) {
   return (
     "R$ " +
@@ -70,14 +59,6 @@ function formatarLinhaEndereco(empresa) {
     return tx([log, e.numero, e.bairro].filter(Boolean).join(", "));
   }
   return e.endereco ? tx(String(e.endereco)) : "";
-}
-
-function formatarChave(chave) {
-  const d = String(chave || "").replace(/\D/g, "");
-  if (d.length !== 44) return [d];
-  const parts = [];
-  for (let i = 0; i < 44; i += 4) parts.push(d.slice(i, i + 4));
-  return parts;
 }
 
 function renderBarcodesPayload(payload) {
@@ -110,6 +91,7 @@ function renderCupomTags(rawPayload) {
   const payload = normalizarCupomPayload(rawPayload);
   const empresa = payload.empresa || {};
   const itens = payload.itens || [];
+  const COLS = getThermalCols();
   const isFiscal =
     !payload.naoFiscal &&
     !payload.cupomSemFiscal &&
@@ -158,12 +140,11 @@ function renderCupomTags(rawPayload) {
   if (payload.cnpjCliente) lines.push(corpo(col2("CNPJ:", toThermalDoc(payload.cnpjCliente))));
 
   lines.push(sepDash());
-  lines.push(linhaCorpo(padR("DESCRICAO", 26) + padL("UNIT", 8) + padL("TOTAL", 8)));
+  lines.push(linhaCorpo(buildCupomItemHeader(COLS)));
   lines.push(sepDash());
 
   itens.forEach((item, idx) => {
-    const num = String(idx + 1).padStart(2, "0");
-    const nome = tx(String(item.nome || "")).slice(0, 24);
+    const nome = tx(String(item.nome || ""));
     const total = item.total ?? Number(item.precoUnitario) * Number(item.quantidade);
     const valUnit = Number(item.precoUnitario).toLocaleString("pt-BR", {
       minimumFractionDigits: 2,
@@ -173,7 +154,15 @@ function renderCupomTags(rawPayload) {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
-    lines.push(corpo(num + " " + padR(nome, 23) + padL(valUnit, 9) + padL(valTotal, 9)));
+    for (const line of buildCupomItemLines({
+      cols: COLS,
+      idx,
+      nome,
+      valUnit,
+      valTotal,
+    })) {
+      lines.push(corpo(line));
+    }
     if (item.porPeso) {
       const kg = Number(item.quantidade).toLocaleString("pt-BR", {
         minimumFractionDigits: 3,
@@ -259,11 +248,8 @@ function renderCupomTags(rawPayload) {
     }
     lines.push("</linha_simples>");
     lines.push(ceCorpo("Chave de acesso"));
-    const gruposChave = formatarChave(payload.chaveNfe);
-    if (gruposChave.length === 11) {
-      lines.push(ceCorpo(gruposChave.join(" ")));
-    } else {
-      gruposChave.forEach((g) => lines.push(ceCorpo(g)));
+    for (const line of formatChaveLines(payload.chaveNfe, COLS)) {
+      lines.push(ceCorpo(line));
     }
 
     const qr = resolverQrCodeNfce(payload);
@@ -316,7 +302,7 @@ Driver: ${driver.label || driver.provider || "PosPrinter"}
 Modelo: ${cfg.modelo}
 Porta: ${cfg.porta}
 Contraste: ${modoContraste()}
-Largura: ${cfg.colunas || 48} colunas
+Largura: ${cfg.colunas || getThermalCols()} colunas (${Number(cfg.colunas) <= 32 ? "58mm" : "80mm"})
 ${logoLine}
 </linha_simples>
 Texto corpo — Ç Ã Á É Ê Ó Ú ° R$ acentuação UTF-8
@@ -343,5 +329,5 @@ module.exports = {
   renderPaginaTeste,
   renderBarcodesPayload,
   tagQrCodeSeguro,
-  COLS,
+  getThermalCols,
 };

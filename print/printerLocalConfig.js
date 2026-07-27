@@ -200,6 +200,15 @@ function salvar(updates) {
     vals.colunas = String(updates.colunas);
     envPatch.PRINTER_COLUNAS = vals.colunas;
   }
+  if (updates.paperMm != null || updates.larguraMm != null) {
+    const mm = Number(updates.paperMm ?? updates.larguraMm);
+    if (mm === 58 || mm === 80) {
+      const { paperMmToCols } = require("./thermalCols");
+      vals.colunas = String(paperMmToCols(mm));
+      envPatch.PRINTER_COLUNAS = vals.colunas;
+      envPatch.PRINTER_PAPER_MM = String(mm);
+    }
+  }
   if (updates.encoding) {
     envPatch.PRINTER_ENCODING = updates.encoding === "UTF8" ? "UTF8" : "CP860";
     vals.pageCode = updates.encoding === "UTF8" ? "65001" : "2";

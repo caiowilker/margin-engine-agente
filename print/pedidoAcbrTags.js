@@ -12,20 +12,14 @@ const {
   normalizarPedidoPayload,
   wrapThermalLines,
 } = require("./pedidoPrint");
+const { getThermalCols, sepEq, sepDash } = require("./thermalCols");
 
-const COLS = 48;
-
-function sepEq() {
-  return "=".repeat(COLS);
-}
-function sepDash() {
-  return "-".repeat(COLS);
-}
 function tx(v) {
   return toThermalText(v);
 }
 
 function appendDeliveryBlock(lines, payload) {
+  const COLS = getThermalCols();
   if (payload.customerPhone) {
     lines.push(`Tel    : ${tx(payload.customerPhone)}`);
   }

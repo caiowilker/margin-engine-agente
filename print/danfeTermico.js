@@ -12,23 +12,20 @@ const {
 } = require("./acbrTags");
 const { ceCorpo } = require("./cupomContraste");
 const { resolverQrCodeNfce } = require("./cupomValidate");
-
-const COLS = 48;
-
-function sep(c) {
-  return String(c).repeat(COLS);
-}
-function col2(a, b) {
-  const e = String(a);
-  const d = String(b);
-  return e + " ".repeat(Math.max(1, COLS - e.length - d.length)) + d;
-}
+const {
+  getThermalCols,
+  sepEq,
+  sepDash,
+  col2,
+  formatChaveLines,
+} = require("./thermalCols");
 
 /**
  * @param {object} payload
  * @returns {string}
  */
 function renderDanfeTermicoTags(payload) {
+  const COLS = getThermalCols();
   const empresa = payload.empresa || {};
   const dest = payload.destinatario || {};
   const lines = [];
@@ -40,7 +37,7 @@ function renderDanfeTermicoTags(payload) {
 
   lines.push("<ce><n>DANFE SIMPLIFICADO NF-e</n></ce>");
   lines.push("<ce>Documento Auxiliar — via térmica</ce>");
-  lines.push(sep("="));
+  lines.push(sepEq());
 
   const nome = toThermalText(empresa.nomeFantasia || empresa.razaoSocial || "ESTABELECIMENTO");
   lines.push(`<ce><n>${nome.toUpperCase()}</n></ce>`);
@@ -48,16 +45,16 @@ function renderDanfeTermicoTags(payload) {
   if (empresa.inscricaoEstadual) {
     lines.push(`IE: ${toThermalDoc(empresa.inscricaoEstadual)}`);
   }
-  lines.push(sep("-"));
+  lines.push(sepDash());
 
   lines.push(col2("Venda:", payload.numeroVenda || ""));
   if (payload.numeroNfe) {
     lines.push(col2("NF-e:", `${payload.numeroNfe}  Serie: ${payload.serieNfe || "1"}`));
   }
-  if (payload.protocolo) lines.push(`Protocolo: ${String(payload.protocolo).slice(0, 36)}`);
+  if (payload.protocolo) lines.push(`Protocolo: ${String(payload.protocolo).slice(0, Math.min(36, COLS))}`);
 
   if (dest.razaoSocial || dest.nome) {
-    lines.push(sep("-"));
+    lines.push(sepDash());
     lines.push("DESTINATARIO:");
     lines.push(toThermalText(dest.razaoSocial || dest.nome || "").slice(0, COLS));
     if (dest.cpfCnpj) lines.push(toThermalDoc(dest.cpfCnpj));
@@ -65,31 +62,32 @@ function renderDanfeTermicoTags(payload) {
 
   const itens = payload.itens || [];
   if (itens.length) {
-    lines.push(sep("-"));
+    lines.push(sepDash());
     lines.push("ITENS (resumo):");
     itens.slice(0, 15).forEach((it, i) => {
-      const nomeItem = toThermalText(String(it.nome || "")).slice(0, 28);
+      const nomeItem = toThermalText(String(it.nome || "")).slice(0, Math.max(12, COLS - 12));
       const total = Number(it.total ?? it.precoUnitario * it.quantidade).toLocaleString("pt-BR", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       });
-      lines.push(`${String(i + 1).padStart(2, "0")} ${nomeItem} ${total}`);
+      lines.push(`${String(i + 1).padStart(2, "0")} ${nomeItem}`.slice(0, COLS));
+      lines.push(col2("  ", total, COLS));
     });
     if (itens.length > 15) lines.push(`... +${itens.length - 15} item(ns)`);
   }
 
   const total = Number(payload.total || 0);
-  lines.push(sep("="));
+  lines.push(sepEq());
   lines.push(`<ce><n>TOTAL NF-e: R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</n></ce>`);
-  lines.push(sep("="));
+  lines.push(sepEq());
 
   const chave = String(payload.chaveNfe || payload.chave || "").replace(/\D/g, "");
   if (chave.length === 44) {
     lines.push("</linha_simples>");
     lines.push(ceCorpo("Chave de acesso"));
-    const grupos = [];
-    for (let i = 0; i < 44; i += 4) grupos.push(chave.slice(i, i + 4));
-    lines.push(ceCorpo(grupos.join(" ")));
+    for (const line of formatChaveLines(chave, COLS)) {
+      lines.push(ceCorpo(line));
+    }
     const bc = tagBarcode("CODE128", chave, { altura: 40, largura: 2, exibeCodigo: false });
     if (bc) lines.push(bc);
   }
@@ -114,5 +112,5 @@ function renderDanfeTermicoTags(payload) {
 
 module.exports = {
   renderDanfeTermicoTags,
-  COLS,
+  getThermalCols,
 };

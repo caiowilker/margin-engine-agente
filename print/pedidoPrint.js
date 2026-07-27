@@ -88,8 +88,9 @@ function normalizarPedidoPayload(raw) {
   };
 }
 
-/** Quebra texto longo para impressora térmica (cols padrão 48). */
-function wrapThermalLines(text, maxCols = 48) {
+/** Quebra texto longo para impressora térmica (cols da bobina ativa). */
+function wrapThermalLines(text, maxCols) {
+  const cols = maxCols ?? require("./thermalCols").getThermalCols();
   const raw = String(text || "").trim();
   if (!raw) return [];
   const words = raw.split(/\s+/);
@@ -97,16 +98,16 @@ function wrapThermalLines(text, maxCols = 48) {
   let current = "";
   for (const word of words) {
     const next = current ? `${current} ${word}` : word;
-    if (next.length <= maxCols) {
+    if (next.length <= cols) {
       current = next;
       continue;
     }
     if (current) lines.push(current);
-    if (word.length <= maxCols) {
+    if (word.length <= cols) {
       current = word;
     } else {
-      for (let i = 0; i < word.length; i += maxCols) {
-        lines.push(word.slice(i, i + maxCols));
+      for (let i = 0; i < word.length; i += cols) {
+        lines.push(word.slice(i, i + cols));
       }
       current = "";
     }

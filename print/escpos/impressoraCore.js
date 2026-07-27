@@ -50,10 +50,15 @@ const CACHE_TTL_MS = 30000;
 const AGENT_PORT = parseInt(process.env.PORT || "9100", 10);
 const IMPRIMIR_QR_NFCE =
   (process.env.IMPRIMIR_QR_NFCE ?? "true").toLowerCase() !== "false";
-const IMPRIMIR_QR_NFCE_SIZE = Math.min(
-  8,
-  Math.max(3, parseInt(process.env.IMPRIMIR_QR_NFCE_SIZE || "6", 10) || 6),
-);
+function qrNfceModuleSize() {
+  const env = parseInt(process.env.IMPRIMIR_QR_NFCE_SIZE || "", 10);
+  if (Number.isFinite(env) && env >= 3 && env <= 8) return env;
+  try {
+    return require("../thermalCols").suggestQrModuleSize();
+  } catch {
+    return 6;
+  }
+}
 
 const { portalConsultaDocumento, isNfceModelo65, tituloCupomFiscal, tituloBlocoDocumentoFiscal, linhaNumeroSerieDocumento } = require("../../documentosFiscais");
 const { normalizarCupomPayload, resolverQrCodeNfce, deveRelaxarQr } = require("../cupomValidate");
@@ -630,10 +635,10 @@ function formatarLinhaEnderecoEmpresa(empresa) {
 
 // ── Helpers de layout ─────────────────────────────────────────────────────────
 function helpers() {
-  const largura = 48;
+  const largura = getThermalCols();
   const linha = (txt) => txt.padEnd(largura, " ").slice(0, largura);
   const sep = () => "-".repeat(largura);
-  const centro = (txt) => {
+  const centroFn = (txt) => {
     const pad = Math.max(0, Math.floor((largura - txt.length) / 2));
     return " ".repeat(pad) + txt;
   };
@@ -651,25 +656,27 @@ function helpers() {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
-  return { largura, linha, sep, centro, moeda, direita, fmt };
+  return { largura, linha, sep, centro: centroFn, moeda, direita, fmt };
 }
 
-// ── Formatadores locais ───────────────────────────────────────────────────────
-const COLS = 48; // colunas da fonte "A" em 80 mm (48 colunas)
+// ── Formatadores locais (cols dinâmicos 58/80mm) ─────────────────────────────
+const {
+  getThermalCols,
+  sepEq: thermalSepEq,
+  sepDash: thermalSepDash,
+  padR,
+  padL,
+  col2: thermalCol2,
+  formatChaveLines,
+  buildCupomItemLines,
+  buildCupomItemHeader,
+  suggestQrModuleSize,
+} = require("../thermalCols");
 
-function padR(txt, len) {
-  return String(txt).slice(0, len).padEnd(len);
+function col2(esq, dir, total = getThermalCols()) {
+  return thermalCol2(esq, dir, total);
 }
-function padL(txt, len) {
-  return String(txt).slice(0, len).padStart(len);
-}
-function col2(esq, dir, total = COLS) {
-  const e = String(esq);
-  const d = String(dir);
-  const sp = Math.max(1, total - e.length - d.length);
-  return e + " ".repeat(sp) + d;
-}
-function centro(txt, total = COLS) {
+function centro(txt, total = getThermalCols()) {
   const t = String(txt).slice(0, total);
   const pad = Math.max(0, Math.floor((total - t.length) / 2));
   return " ".repeat(pad) + t;
@@ -684,10 +691,10 @@ function fmtR$(v) {
   );
 }
 function sepEq() {
-  return "=".repeat(COLS);
+  return thermalSepEq(getThermalCols());
 }
 function sepDash() {
-  return "-".repeat(COLS);
+  return thermalSepDash(getThermalCols());
 }
 
 // ── QR Code ESC/POS padrão (GS ( k) ──────────────────────────────────────────
@@ -705,7 +712,7 @@ const QR_GS_K_MAX_BYTES = 2331;
 /** Monta a sequência GS ( k completa (modelo 2, byte-safe, sem iconv). */
 function bytesQrGsK(conteudo, opts = {}) {
   const data = Buffer.from(String(conteudo), "utf8");
-  const moduleSize = Math.min(16, Math.max(1, Number(opts.moduleSize) || IMPRIMIR_QR_NFCE_SIZE));
+  const moduleSize = Math.min(16, Math.max(1, Number(opts.moduleSize) || qrNfceModuleSize()));
   const nivelCfg = String(
     opts.errorLevel || process.env.PRINTER_QR_ERROR_LEVEL || "M",
   ).toUpperCase();
@@ -925,16 +932,14 @@ async function renderCupomConteudo(printer, payload) {
     printer.text(col2("CNPJ:", toThermalDoc(payload.cnpjCliente)));
 
   // ── 4. Itens ─────────────────────────────────────────────────────────────────
+  const COLS = getThermalCols();
   printer.text(sepDash());
-  // Cabeçalho de coluna: DESCRICAO à esq, UNIT centralizado, TOTAL à dir
-  printer.text(padR("DESCRICAO", 26) + padL("UNIT", 8) + padL("TOTAL", 8));
+  printer.text(buildCupomItemHeader(COLS));
   printer.text(sepDash());
 
   itens.forEach((item, idx) => {
-    const num = String(idx + 1).padStart(2, "0");
-    const nome = tx(String(item.nome || "")).slice(0, COLS);
+    const nome = tx(String(item.nome || ""));
     const total = item.total ?? item.precoUnitario * item.quantidade;
-    // Valores sem "R$ " para economizar colunas na tabela
     const valUnit = Number(item.precoUnitario).toLocaleString("pt-BR", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -945,18 +950,16 @@ async function renderCupomConteudo(printer, payload) {
     });
     const fUnit = fmtR$(item.precoUnitario);
 
-    if (nome.length <= 24) {
-      // Nome curto: tudo em uma linha
-      printer.text(
-        num + " " + padR(nome, 23) + padL(valUnit, 9) + padL(valTotal, 9),
-      );
-    } else {
-      // Nome longo: nome em linha própria, valores na linha seguinte
-      printer.text(num + " " + nome.slice(0, COLS - 3));
-      printer.text("   " + padR("", 22) + padL(valUnit, 9) + padL(valTotal, 9));
+    for (const line of buildCupomItemLines({
+      cols: COLS,
+      idx,
+      nome,
+      valUnit,
+      valTotal,
+    })) {
+      printer.text(line);
     }
 
-    // Linha de detalhe de quantidade — discreta, indentada
     if (item.porPeso) {
       const kg = Number(item.quantidade).toLocaleString("pt-BR", {
         minimumFractionDigits: 3,
@@ -1075,14 +1078,10 @@ async function renderCupomConteudo(printer, payload) {
     if (payload.protocolo) {
       printer.text(`Protocolo: ${String(payload.protocolo).slice(0, 30)}`);
     }
-    const gruposChave = formatarChaveNfe(payload.chaveNfe);
-    if (gruposChave.length) {
+    const chaveLines = formatChaveLines(payload.chaveNfe, getThermalCols());
+    if (chaveLines.length) {
       printer.align("ct").text("Chave de acesso");
-      if (gruposChave.length === 11) {
-        printer.text(gruposChave.join(" "));
-      } else {
-        gruposChave.forEach((g) => printer.text(g));
-      }
+      chaveLines.forEach((line) => printer.text(line));
     }
     const qrConteudo = resolverQrCodeNfce(payload);
     printer
@@ -1370,8 +1369,9 @@ async function renderPedido(printer, payload) {
   if (p.customerName) printer.text("Cliente: " + tx(p.customerName));
   if (p.customerPhone) printer.text("Tel    : " + tx(p.customerPhone));
   if (p.deliveryAddress) {
-    const addrLines = wrapThermalLines(tx(p.deliveryAddress), 46);
-    if (addrLines.length === 1 && addrLines[0].length <= 39) {
+    const cols = getThermalCols();
+    const addrLines = wrapThermalLines(tx(p.deliveryAddress), cols - 2);
+    if (addrLines.length === 1 && addrLines[0].length <= cols - 9) {
       printer.text("Endere.: " + addrLines[0]);
     } else {
       printer.text("Endereco:");

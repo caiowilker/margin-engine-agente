@@ -1,17 +1,9 @@
 /**
- * Comprovantes de caixa em tags ACBr — mesma identidade visual do cupom (48 col).
+ * Comprovantes de caixa em tags ACBr — mesma identidade visual do cupom.
  */
 const { toThermalText, toThermalDoc } = require("../thermalText");
 const { tagLogoHeader, tagCorte } = require("./acbrTags");
-
-const COLS = 48;
-
-function sepEq() {
-  return "=".repeat(COLS);
-}
-function sepDash() {
-  return "-".repeat(COLS);
-}
+const { sepEq, sepDash, col2, getThermalCols } = require("./thermalCols");
 function fmtR$(v) {
   return (
     "R$ " +
@@ -66,6 +58,7 @@ function nomeEmpresaCaixa(empresa) {
 }
 
 function renderFechamentoTags(payload = {}) {
+  const COLS = getThermalCols();
   const lines = ["</zera>", tagLogoHeader(payload)];
   lines.push(`<ce><n>${nomeEmpresaCaixa(payload.empresa)}</n></ce>`);
   if (payload.empresa?.cnpj) {
