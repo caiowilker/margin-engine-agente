@@ -38,10 +38,12 @@ describe("mesaFila", () => {
       status: "ocupada",
       order_total: 15,
       order_items_count: 1,
+      closed_for_billing: true,
     });
     const merged = mesaFila.mesclarSnapshotComLocal();
     assert.equal(merged[0].status, "ocupada");
     assert.equal(merged[0].order_total, 15);
+    assert.equal(merged[0].closed_for_billing, true);
   });
 
   it("enfileira OPEN e conta pendentes", () => {

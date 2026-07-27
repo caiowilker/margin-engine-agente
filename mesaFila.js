@@ -368,6 +368,7 @@ function mesclarSnapshotComLocal() {
         open_order_id: null,
         order_total: 0,
         order_items_count: 0,
+        closed_for_billing: false,
       };
     }
     return {
@@ -376,6 +377,7 @@ function mesclarSnapshotComLocal() {
       open_order_id: local.server_order_id || local.order_id,
       order_total: local.order_total,
       order_items_count: local.order_items_count,
+      closed_for_billing: !!local.closed_for_billing,
     };
   });
 }
