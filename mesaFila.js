@@ -159,9 +159,33 @@ function upsertLocal(state) {
   return { ok: true };
 }
 
+function marcarLivreNoSnapshot(mesaId) {
+  const id = String(mesaId);
+  const snap = obterSnapshot();
+  if (!snap.some((m) => m.id === id)) return { ok: true, changed: false };
+  salvarSnapshot(
+    snap.map((m) =>
+      m.id === id
+        ? {
+            ...m,
+            status: "livre",
+            open_order_id: null,
+            order_total: 0,
+            order_items_count: 0,
+            closed_for_billing: false,
+          }
+        : m,
+    ),
+  );
+  return { ok: true, changed: true };
+}
+
 function removerLocal(mesaId) {
   if (!db) return { ok: true };
-  db.prepare(`DELETE FROM mesa_local WHERE mesa_id = ?`).run(String(mesaId));
+  const id = String(mesaId);
+  db.prepare(`DELETE FROM mesa_local WHERE mesa_id = ?`).run(id);
+  // Snapshot: marca livre para o mapa dos celulares (pós-faturar / liberar).
+  marcarLivreNoSnapshot(id);
   return { ok: true };
 }
 
@@ -361,6 +385,26 @@ function mesclarSnapshotComLocal() {
   return snapshot.map((m) => {
     const local = byId.get(m.id);
     if (!local) return m;
+
+    const snapLivre = m.status === "livre" && !m.open_order_id;
+    if (snapLivre) {
+      const liveConsumo =
+        local.status === "ocupada" &&
+        !local.closed_for_billing &&
+        ((Number(local.order_items_count) || 0) > 0 ||
+          (Number(local.order_total) || 0) > 0);
+      if (!liveConsumo) {
+        return {
+          ...m,
+          status: "livre",
+          open_order_id: null,
+          order_total: 0,
+          order_items_count: 0,
+          closed_for_billing: false,
+        };
+      }
+    }
+
     if (local.status === "livre" && !local.closed_for_billing) {
       return {
         ...m,
@@ -551,6 +595,7 @@ module.exports = {
   mesclarSnapshotComLocal,
   upsertLocal,
   removerLocal,
+  marcarLivreNoSnapshot,
   listarLocal,
   obterLocal,
   enfileirarOp,

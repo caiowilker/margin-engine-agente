@@ -38,12 +38,12 @@ describe("mesaFila", () => {
       status: "ocupada",
       order_total: 15,
       order_items_count: 1,
-      closed_for_billing: true,
+      closed_for_billing: false,
     });
     const merged = mesaFila.mesclarSnapshotComLocal();
     assert.equal(merged[0].status, "ocupada");
     assert.equal(merged[0].order_total, 15);
-    assert.equal(merged[0].closed_for_billing, true);
+    assert.equal(merged[0].closed_for_billing, false);
   });
 
   it("não zera consumo quando local=0 e snapshot tem itens", () => {
@@ -98,6 +98,62 @@ describe("mesaFila", () => {
     });
     const merged = mesaFila.mesclarSnapshotComLocal();
     assert.equal(merged[0].closed_for_billing, true);
+  });
+
+  it("removerLocal marca mesa livre no snapshot (pós-faturar)", () => {
+    mesaFila.salvarSnapshot([
+      {
+        id: "t1",
+        code: "1",
+        status: "ocupada",
+        display_order: 1,
+        open_order_id: "o1",
+        order_total: 50,
+        order_items_count: 2,
+        closed_for_billing: true,
+      },
+    ]);
+    mesaFila.upsertLocal({
+      mesa_id: "t1",
+      order_id: "o1",
+      client_order_number: "o1",
+      status: "ocupada",
+      order_total: 50,
+      order_items_count: 2,
+      closed_for_billing: true,
+    });
+    mesaFila.removerLocal("t1");
+    const merged = mesaFila.mesclarSnapshotComLocal();
+    assert.equal(merged[0].status, "livre");
+    assert.equal(merged[0].closed_for_billing, false);
+    assert.equal(merged[0].order_items_count, 0);
+  });
+
+  it("snapshot livre vence pré-conta local stale", () => {
+    mesaFila.salvarSnapshot([
+      {
+        id: "t1",
+        code: "1",
+        status: "livre",
+        display_order: 1,
+        open_order_id: null,
+        order_total: 0,
+        order_items_count: 0,
+        closed_for_billing: false,
+      },
+    ]);
+    mesaFila.upsertLocal({
+      mesa_id: "t1",
+      order_id: "o1",
+      client_order_number: "o1",
+      status: "ocupada",
+      order_total: 30,
+      order_items_count: 2,
+      closed_for_billing: true,
+    });
+    const merged = mesaFila.mesclarSnapshotComLocal();
+    assert.equal(merged[0].status, "livre");
+    assert.equal(merged[0].closed_for_billing, false);
   });
 
   it("não apaga draft_json existente quando upsert vem sem draft", () => {

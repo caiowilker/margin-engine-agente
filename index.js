@@ -3447,6 +3447,10 @@ function iniciarServidor() {
     res.json(mesaFila.removerLocal(req.params.mesaId));
   });
 
+  app.post("/mesa/local/:mesaId/marcar-livre", exigirAgentToken, (req, res) => {
+    res.json(mesaFila.marcarLivreNoSnapshot(req.params.mesaId));
+  });
+
   app.post("/mesa/ops/cancel", exigirAgentToken, (req, res) => {
     const mesaId = req.body?.mesa_id || req.body?.mesaId;
     if (!mesaId) return res.status(400).json({ erro: "mesa_id obrigatorio" });
