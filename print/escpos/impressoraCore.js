@@ -664,13 +664,10 @@ const {
   getThermalCols,
   sepEq: thermalSepEq,
   sepDash: thermalSepDash,
-  padR,
-  padL,
   col2: thermalCol2,
   formatChaveLines,
   buildCupomItemLines,
   buildCupomItemHeader,
-  suggestQrModuleSize,
 } = require("../thermalCols");
 
 function col2(esq, dir, total = getThermalCols()) {
