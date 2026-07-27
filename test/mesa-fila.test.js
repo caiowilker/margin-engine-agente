@@ -74,6 +74,57 @@ describe("mesaFila", () => {
     assert.equal(merged[0].status, "ocupada");
   });
 
+  it("preserva pré-conta do snapshot quando local ainda não fechou", () => {
+    mesaFila.salvarSnapshot([
+      {
+        id: "t1",
+        code: "1",
+        status: "ocupada",
+        display_order: 1,
+        open_order_id: "o1",
+        order_total: 20,
+        order_items_count: 1,
+        closed_for_billing: true,
+      },
+    ]);
+    mesaFila.upsertLocal({
+      mesa_id: "t1",
+      order_id: "o1",
+      client_order_number: "o1",
+      status: "ocupada",
+      order_total: 20,
+      order_items_count: 1,
+      closed_for_billing: false,
+    });
+    const merged = mesaFila.mesclarSnapshotComLocal();
+    assert.equal(merged[0].closed_for_billing, true);
+  });
+
+  it("não apaga draft_json existente quando upsert vem sem draft", () => {
+    mesaFila.upsertLocal({
+      mesa_id: "t1",
+      order_id: "o1",
+      client_order_number: "o1",
+      status: "ocupada",
+      order_total: 10,
+      order_items_count: 1,
+      draft_json: { carrinho: [{ id: "p1" }] },
+    });
+    mesaFila.upsertLocal({
+      mesa_id: "t1",
+      order_id: "o1",
+      client_order_number: "o1",
+      status: "ocupada",
+      order_total: 12,
+      order_items_count: 1,
+      draft_json: null,
+    });
+    const locais = mesaFila.listarLocal();
+    assert.equal(locais[0].order_total, 12);
+    assert.ok(locais[0].draft_json);
+    assert.equal(locais[0].draft_json.carrinho[0].id, "p1");
+  });
+
   it("enfileira OPEN e conta pendentes", () => {
     const r = mesaFila.enfileirarOp({
       tipo: "OPEN",

@@ -141,7 +141,7 @@ function upsertLocal(state) {
        closed_for_billing = excluded.closed_for_billing,
        order_total = excluded.order_total,
        order_items_count = excluded.order_items_count,
-       draft_json = excluded.draft_json,
+       draft_json = COALESCE(excluded.draft_json, mesa_local.draft_json),
        server_order_id = COALESCE(excluded.server_order_id, mesa_local.server_order_id),
        updated_at = excluded.updated_at`,
   ).run(
@@ -389,7 +389,7 @@ function mesclarSnapshotComLocal() {
       open_order_id: local.server_order_id || local.order_id,
       order_total: total,
       order_items_count: items,
-      closed_for_billing: !!local.closed_for_billing,
+      closed_for_billing: !!(local.closed_for_billing || m.closed_for_billing),
     };
   });
 }
