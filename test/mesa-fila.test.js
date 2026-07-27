@@ -46,6 +46,34 @@ describe("mesaFila", () => {
     assert.equal(merged[0].closed_for_billing, true);
   });
 
+  it("não zera consumo quando local=0 e snapshot tem itens", () => {
+    mesaFila.salvarSnapshot([
+      {
+        id: "t1",
+        code: "1",
+        status: "ocupada",
+        display_order: 1,
+        open_order_id: "srv",
+        order_total: 40,
+        order_items_count: 3,
+      },
+    ]);
+    mesaFila.upsertLocal({
+      mesa_id: "t1",
+      order_id: "stale",
+      client_order_number: "stale",
+      status: "ocupada",
+      order_total: 0,
+      order_items_count: 0,
+      closed_for_billing: false,
+      server_order_id: "srv",
+    });
+    const merged = mesaFila.mesclarSnapshotComLocal();
+    assert.equal(merged[0].order_items_count, 3);
+    assert.equal(merged[0].order_total, 40);
+    assert.equal(merged[0].status, "ocupada");
+  });
+
   it("enfileira OPEN e conta pendentes", () => {
     const r = mesaFila.enfileirarOp({
       tipo: "OPEN",

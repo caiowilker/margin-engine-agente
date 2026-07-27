@@ -371,12 +371,24 @@ function mesclarSnapshotComLocal() {
         closed_for_billing: false,
       };
     }
+    const snapItems = Number(m.order_items_count) || 0;
+    const snapTotal = Number(m.order_total) || 0;
+    let items = Number(local.order_items_count) || 0;
+    let total = Number(local.order_total) || 0;
+    // Local 0 + snapshot com itens = open stale (QR/nuvem à frente).
+    if (items === 0 && snapItems > 0) {
+      items = snapItems;
+      total = snapTotal;
+    } else if (snapItems > items || snapTotal > total) {
+      items = Math.max(items, snapItems);
+      total = Math.max(total, snapTotal);
+    }
     return {
       ...m,
       status: "ocupada",
       open_order_id: local.server_order_id || local.order_id,
-      order_total: local.order_total,
-      order_items_count: local.order_items_count,
+      order_total: total,
+      order_items_count: items,
       closed_for_billing: !!local.closed_for_billing,
     };
   });
