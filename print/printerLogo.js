@@ -5,11 +5,15 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const log = require("../logger").child({ modulo: "printer_logo" });
+const { FATOR_PADRAO, resolveLogoPrintSize } = require("./printerLogoSize");
 
 const AGENT_ROOT = path.resolve(__dirname, "..");
 const LOGO_DIR = path.join(AGENT_ROOT, "data", "printer");
 const LOGO_BMP = path.join(LOGO_DIR, "logo.bmp");
 const LOGO_META = path.join(LOGO_DIR, "logo.meta.json");
+/** PNG escalado para ESC/POS — regenerado sob demanda. */
+const LOGO_PRINT_CACHE = path.join(LOGO_DIR, "logo.print.png");
+const LOGO_PRINT_KEY = path.join(LOGO_DIR, "logo.print.key");
 
 /** Cache em memória — evita reler BMP a cada cupom. */
 let logoBufferCache = { sha256: null, buffer: null };
@@ -25,8 +29,8 @@ function lerMeta() {
       modo: "arquivo",
       kc1: process.env.PRINTER_LOGO_KC1 || "48",
       kc2: process.env.PRINTER_LOGO_KC2 || "49",
-      fatorX: process.env.PRINTER_LOGO_FATORX || "1",
-      fatorY: process.env.PRINTER_LOGO_FATORY || "1",
+      fatorX: process.env.PRINTER_LOGO_FATORX || String(FATOR_PADRAO),
+      fatorY: process.env.PRINTER_LOGO_FATORY || String(FATOR_PADRAO),
       atualizadoEm: null,
       sha256: null,
     };
@@ -51,6 +55,15 @@ function decodeBase64(input) {
   const raw = String(input || "").trim();
   const b64 = raw.includes(",") ? raw.split(",").pop() : raw;
   return Buffer.from(b64, "base64");
+}
+
+function invalidatePrintCache() {
+  try {
+    if (fs.existsSync(LOGO_PRINT_CACHE)) fs.unlinkSync(LOGO_PRINT_CACHE);
+  } catch (_) {}
+  try {
+    if (fs.existsSync(LOGO_PRINT_KEY)) fs.unlinkSync(LOGO_PRINT_KEY);
+  } catch (_) {}
 }
 
 /**
@@ -78,6 +91,11 @@ function salvar(opts = {}) {
     meta.ativo = opts.ativo !== false;
     meta.modo = opts.modo || "arquivo";
     meta.atualizadoEm = new Date().toISOString();
+    if (meta.fatorX == null || Number(meta.fatorX) <= 1) {
+      meta.fatorX = String(FATOR_PADRAO);
+      meta.fatorY = String(FATOR_PADRAO);
+    }
+    invalidatePrintCache();
     log.info({ bytes: buf.length }, "[PrinterLogo] Logo BMP salvo");
   }
 
@@ -90,14 +108,15 @@ function remover() {
   try {
     if (fs.existsSync(LOGO_BMP)) fs.unlinkSync(LOGO_BMP);
   } catch (_) {}
+  invalidatePrintCache();
   logoBufferCache = { sha256: null, buffer: null };
   salvarMeta({
     ativo: false,
     modo: "arquivo",
     kc1: process.env.PRINTER_LOGO_KC1 || "48",
     kc2: process.env.PRINTER_LOGO_KC2 || "49",
-    fatorX: "1",
-    fatorY: "1",
+    fatorX: String(FATOR_PADRAO),
+    fatorY: String(FATOR_PADRAO),
     atualizadoEm: new Date().toISOString(),
     sha256: null,
   });
@@ -110,6 +129,7 @@ function ler() {
   const explicitPath = process.env.PRINTER_LOGO_PATH;
   const caminhoAbsoluto =
     existe ? LOGO_BMP : explicitPath && fs.existsSync(explicitPath) ? explicitPath : null;
+  const size = resolveLogoPrintSize(meta);
   return {
     ...meta,
     ativo: meta.ativo && !!caminhoAbsoluto,
@@ -117,6 +137,9 @@ function ler() {
     caminhoAbsoluto,
     caminhoRelativo: existe ? path.relative(AGENT_ROOT, LOGO_BMP) : null,
     dir: LOGO_DIR,
+    printSize: size,
+    fatorXEfetivo: size.fatorX,
+    fatorYEfetivo: size.fatorY,
   };
 }
 
@@ -139,6 +162,40 @@ function lerBuffer() {
   return buf;
 }
 
+/**
+ * Gera PNG escalado para ESC/POS (get-pixels / escpos.Image).
+ * @returns {Promise<string|null>} caminho do arquivo de impressão
+ */
+async function prepararArquivoEscpos(metaOrInfo) {
+  const info = metaOrInfo?.caminhoAbsoluto ? metaOrInfo : ler();
+  if (!info.caminhoAbsoluto) return null;
+  const size = info.printSize || resolveLogoPrintSize(info);
+  const cacheKey = `${info.sha256 || info.caminhoAbsoluto}|${size.escposWidthDots}`;
+  try {
+    if (
+      fs.existsSync(LOGO_PRINT_CACHE) &&
+      fs.existsSync(LOGO_PRINT_KEY) &&
+      fs.readFileSync(LOGO_PRINT_KEY, "utf8") === cacheKey
+    ) {
+      return LOGO_PRINT_CACHE;
+    }
+  } catch (_) {}
+
+  ensureDir();
+  const sharp = require("sharp");
+  await sharp(info.caminhoAbsoluto)
+    .resize({
+      width: size.escposWidthDots,
+      fit: "inside",
+      withoutEnlargement: false,
+      kernel: sharp.kernel.nearest,
+    })
+    .png()
+    .toFile(LOGO_PRINT_CACHE);
+  fs.writeFileSync(LOGO_PRINT_KEY, cacheKey, "utf8");
+  return LOGO_PRINT_CACHE;
+}
+
 /** Toggle do painel PDV ou env — padrão true (só imprime se BMP existir). */
 function exibirLogoCupomHabilitado(payload) {
   if (payload && typeof payload.exibirLogo === "boolean") return payload.exibirLogo;
@@ -157,10 +214,13 @@ function deveExibirLogoCupom(payload) {
 module.exports = {
   LOGO_DIR,
   LOGO_BMP,
+  LOGO_PRINT_CACHE,
   salvar,
   remover,
   ler,
   isBmpBuffer,
   exibirLogoCupomHabilitado,
   deveExibirLogoCupom,
+  prepararArquivoEscpos,
+  resolveLogoPrintSize,
 };

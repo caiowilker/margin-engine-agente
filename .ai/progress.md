@@ -5,6 +5,13 @@
 
 ## Changelog (2026-07-28)
 
+### Logo térmica maior e estruturada
+
+- Política única `printerLogoSize.js`: fator padrão **2×** (legado 1 promove automaticamente).
+- ACBr: `logo_fatorx/y` + `<bmp Largura>` conforme papel 58/80mm.
+- ESC/POS: resize via sharp antes de `image()`; INI PosPrinter_Logo alinhado.
+- Preview HTML da 2ª via com logo maior; copy no painel de impressora.
+
 ### Impressão PDV — COLS TDZ (cupom/fechamento)
 
 - Causa: `renderCupomConteudo` / `renderFechamentoConteudo` usavam `COLS` antes de `const COLS = getThermalCols()` → `Cannot access 'COLS' before initialization`.

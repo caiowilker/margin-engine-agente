@@ -75,6 +75,7 @@ test("acbrTags — lista barcodes", () => {
 test("acbrTags — logo config KC", () => {
   const t = tagLogoConfig({ kc1: "48", kc2: "49" });
   assert.ok(t.includes("<logo_kc1>48</logo_kc1>"));
+  assert.ok(t.includes("<logo_fatorx>2</logo_fatorx>"));
 });
 
 test("segundaVia — marcar banner", () => {

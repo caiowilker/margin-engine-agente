@@ -821,14 +821,22 @@ async function imprimirLogoCupomEscpos(printer, payload) {
     if (!printerLogo.deveExibirLogoCupom(payload)) return;
     const info = printerLogo.ler();
     if (!info.caminhoAbsoluto) return;
+    const size = info.printSize || require("../printerLogoSize").resolveLogoPrintSize(info);
+    let caminho = info.caminhoAbsoluto;
+    try {
+      const scaled = await printerLogo.prepararArquivoEscpos(info);
+      if (scaled) caminho = scaled;
+    } catch (_) {
+      /* usa BMP original se sharp falhar */
+    }
     const image = await new Promise((resolve, reject) => {
-      escpos.Image.load(info.caminhoAbsoluto, (err, img) => {
+      escpos.Image.load(caminho, (err, img) => {
         if (err) reject(err);
         else resolve(img);
       });
     });
     await new Promise((resolve, reject) => {
-      printer.align("ct").image(image, "d24", (err) => {
+      printer.align("ct").image(image, size.density || "d24", (err) => {
         if (err) reject(err);
         else resolve();
       });

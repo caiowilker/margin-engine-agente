@@ -77,13 +77,14 @@ HardFlow=${process.env.PRINTER_SERIAL_HARDFLOW || "0"}
     try {
       const meta = require("./printerLogo").ler();
       if (!meta.ativo) return "";
+      const size = meta.printSize || require("./printerLogoSize").resolveLogoPrintSize(meta);
       return `
 [PosPrinter_Logo]
 IgnorarLogo=0
 KeyCode=${meta.kc1 || "48"}
 KeyCode2=${meta.kc2 || "49"}
-FatorX=${meta.fatorX || "1"}
-FatorY=${meta.fatorY || "1"}
+FatorX=${size.fatorX}
+FatorY=${size.fatorY}
 `;
     } catch (_) {
       return "";

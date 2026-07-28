@@ -78,17 +78,21 @@ function tagBmp(conteudo, opts = {}) {
 }
 
 function tagLogoConfig(opts = {}) {
+  const { resolveLogoFator } = require("./printerLogoSize");
+  const size = resolveLogoFator(opts);
   const kc1 = opts.kc1 ?? process.env.PRINTER_LOGO_KC1 ?? "48";
   const kc2 = opts.kc2 ?? process.env.PRINTER_LOGO_KC2 ?? "49";
-  const fx = opts.fatorX ?? process.env.PRINTER_LOGO_FATORX ?? "1";
-  const fy = opts.fatorY ?? process.env.PRINTER_LOGO_FATORY ?? "1";
+  const fx = opts.fatorXEfetivo ?? size.fatorX;
+  const fy = opts.fatorYEfetivo ?? size.fatorY;
   const imprimir = opts.imprimir !== false ? "1" : "0";
   return `<logo_imprimir>${imprimir}</logo_imprimir>\n<logo_kc1>${kc1}</logo_kc1>\n<logo_kc2>${kc2}</logo_kc2>\n<logo_fatorx>${fx}</logo_fatorx>\n<logo_fatory>${fy}</logo_fatory>`;
 }
 
-function tagLogoArquivo(filePath) {
+function tagLogoArquivo(filePath, opts = {}) {
   if (!filePath) return null;
-  return tagBmp(filePath.replace(/\\/g, "/"));
+  const pathNorm = filePath.replace(/\\/g, "/");
+  const largura = opts.largura;
+  return tagBmp(pathNorm, largura ? { largura } : {});
 }
 
 function tagLogoHeader(opts = {}) {
@@ -100,7 +104,8 @@ function tagLogoHeader(opts = {}) {
     if (info.modo === "kc") {
       return tagLogoConfig(info) + "\n";
     }
-    const bmp = tagLogoArquivo(info.caminhoAbsoluto);
+    const size = info.printSize || require("./printerLogoSize").resolveLogoPrintSize(info);
+    const bmp = tagLogoArquivo(info.caminhoAbsoluto, { largura: size.bmpLargura });
     return bmp ? `<ce>${bmp}</ce>\n</linha_simples>\n` : "";
   } catch (_) {
     return "";
