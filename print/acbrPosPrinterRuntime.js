@@ -84,7 +84,23 @@ function prepareRuntimePaths() {
 
 function canLoadNativeLib() {
   if (process.platform !== "win32") return false;
-  return !!resolveLibPath();
+  if (!resolveLibPath()) return false;
+  return canRequireFfiBindings();
+}
+
+/** Cache: DLL presente não basta — instalador Windows pode omitir ffi-napi. */
+let _ffiBindingsOk = undefined;
+
+function canRequireFfiBindings() {
+  if (_ffiBindingsOk !== undefined) return _ffiBindingsOk;
+  try {
+    require("ffi-napi");
+    require("ref-napi");
+    _ffiBindingsOk = true;
+  } catch (_) {
+    _ffiBindingsOk = false;
+  }
+  return _ffiBindingsOk;
 }
 
 function createBindings(ffi, ref, libPath) {
@@ -138,6 +154,7 @@ function loadLib() {
       staged: paths.staged,
     };
   } catch (err) {
+    _ffiBindingsOk = false;
     return { error: err.message };
   }
 }
@@ -620,6 +637,7 @@ async function invalidatePosPrinterSession() {
 
 module.exports = {
   canLoadNativeLib,
+  canRequireFfiBindings,
   resolveLibPath,
   resolveIniPath,
   prepareRuntimePaths,

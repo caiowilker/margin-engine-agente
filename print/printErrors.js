@@ -16,6 +16,18 @@ function classifyPrintError(err) {
     out.retryable = true;
     return out;
   }
+  // ffi-napi ausente no instalador → fallback ESC/POS nativo
+  if (/cannot find module ['"]ffi-napi['"]|cannot find module ['"]ref-napi['"]/i.test(msg)) {
+    out.fallbackSuggested = true;
+    out.retryable = false;
+    return out;
+  }
+  // Bug de layout (ex.: TDZ COLS) — tentar outro provider se houver
+  if (/COLS is not defined|before initialization/i.test(msg)) {
+    out.fallbackSuggested = true;
+    out.retryable = false;
+    return out;
+  }
   if (/biblioteca|dll|pos_inicializar|pos_ativar|unconfigured/i.test(msg)) {
     out.fallbackSuggested = true;
     out.permanente = false;

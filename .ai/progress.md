@@ -1,7 +1,16 @@
 # PROGRESS — Agente Local
 
-**Última atualização:** 2026-07-26  
+**Última atualização:** 2026-07-28  
 **Versão:** `1.0.0` — certificada com a plataforma
+
+## Changelog (2026-07-28)
+
+### Impressão PDV — COLS TDZ (cupom/fechamento)
+
+- Causa: `renderCupomConteudo` / `renderFechamentoConteudo` usavam `COLS` antes de `const COLS = getThermalCols()` → `Cannot access 'COLS' before initialization`.
+- Sintoma: teste de impressora OK; cupom do frente de caixa e fechamento falhavam (fallback native ESC/POS).
+- Fix: declarar `COLS` no início das funções; teste `impressora-core-cols.test.js`.
+- Extra: `canLoadNativeLib` exige `ffi-napi`/`ref-napi` (não só DLL) — evita falso "ready" e fallback ruidoso a cada cupom; `classifyPrintError` cobre ffi/COLS.
 
 ## Changelog (2026-07-26)
 

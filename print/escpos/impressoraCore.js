@@ -840,6 +840,7 @@ async function imprimirLogoCupomEscpos(printer, payload) {
 }
 
 async function renderCupomConteudo(printer, payload) {
+  const COLS = getThermalCols();
   const empresa = payload.empresa || {};
   const itens = payload.itens || [];
   const isFiscal =
@@ -929,7 +930,6 @@ async function renderCupomConteudo(printer, payload) {
     printer.text(col2("CNPJ:", toThermalDoc(payload.cnpjCliente)));
 
   // ── 4. Itens ─────────────────────────────────────────────────────────────────
-  const COLS = getThermalCols();
   printer.text(sepDash());
   printer.text(buildCupomItemHeader(COLS));
   printer.text(sepDash());
@@ -1137,6 +1137,7 @@ function renderFechamento(printer, payload) {
 }
 
 async function renderFechamentoConteudo(printer, payload) {
+  const COLS = getThermalCols();
   printer.font("a").align("ct");
   await imprimirLogoCupomEscpos(printer, payload);
 
@@ -1567,4 +1568,9 @@ module.exports = {
   imprimirFechamento,
   imprimirMovimentoCaixa,
   imprimirPedido,
+  /** @internal regressão COLS / TDZ no render nativo */
+  __test: {
+    renderCupomConteudo,
+    renderFechamentoConteudo,
+  },
 };
