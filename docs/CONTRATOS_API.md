@@ -314,6 +314,8 @@ Body: PayloadEmissaoNfse + { numeroRps, correlationId, modeloDocumento: "99" }
 
 **Response:** `{ "ok": boolean, "fiscal"?: boolean, "erro"?: string }`
 
+Falhas de validação (certificado, ACBr, SEFAZ) respondem **HTTP 200** com `ok: false` (não 400), para o PDV não tratar preflight como erro de rede.
+
 **Status:** ✓
 
 ---

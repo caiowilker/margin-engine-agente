@@ -708,6 +708,11 @@ function exigirMintGarcomFloor(req, res, next) {
   return exigirAgentToken(req, res, next);
 }
 
+/** Mint QR loja (storeFloor) — mesmos pré-requisitos de rede do garçom. */
+function exigirMintStoreFloor(req, res, next) {
+  return exigirMintGarcomFloor(req, res, next);
+}
+
 function securityHeaders(req, res, next) {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
@@ -1938,6 +1943,87 @@ function iniciarServidor() {
     res.json(garcomFloor.revoke());
   });
 
+  // ── QR funcionário loja (storeFloor) — hub Central, distinto do Garçom ──────
+  app.post(
+    "/store/floor/mint",
+    privateNetworkHeaders,
+    garcomFloorRateLimit,
+    exigirMintStoreFloor,
+    (req, res) => {
+      const lanNetwork = require("./lanNetwork");
+      const storeFloor = require("./storeFloor");
+      const cfg = lerConfigSync();
+      if (!lanNetwork.isLanStaffAccessEnabled(cfg)) {
+        return res.status(403).json({
+          erro: "Acesso LAN da loja desabilitado (lanStaffAccess / AGENT_LAN_ENABLED).",
+        });
+      }
+      const lanIp = lanNetwork.detectLanIPv4();
+      if (!lanIp) {
+        return res.status(503).json({
+          erro: "Nenhum IPv4 privado detectado. Conecte o PC ao Wi‑Fi/Ethernet da loja.",
+        });
+      }
+      const accessToken = req.body?.accessToken;
+      const refreshToken = req.body?.refreshToken;
+      if (!accessToken || !refreshToken) {
+        return res.status(400).json({
+          erro: "accessToken e refreshToken do operador são obrigatórios para gerar o QR.",
+        });
+      }
+      const operatorMe =
+        req.body?.operatorMe && typeof req.body.operatorMe === "object"
+          ? req.body.operatorMe
+          : null;
+      const result = storeFloor.mint({
+        accessToken,
+        refreshToken,
+        operatorMe,
+        forceNew: !!req.body?.forceNew,
+        lanIp,
+        port: PORT,
+      });
+      res.json(result);
+    },
+  );
+
+  app.post(
+    "/store/floor/exchange",
+    privateNetworkHeaders,
+    garcomFloorRateLimit,
+    exigirRedePrivada,
+    (req, res) => {
+      const lanNetwork = require("./lanNetwork");
+      const storeFloor = require("./storeFloor");
+      const cfg = lerConfigSync();
+      if (!lanNetwork.isLanStaffAccessEnabled(cfg)) {
+        return res.status(403).json({
+          erro: "Acesso LAN da loja desabilitado (lanStaffAccess / AGENT_LAN_ENABLED).",
+        });
+      }
+      const result = storeFloor.exchange(
+        req.body?.floorToken || req.query?.storeFloor || req.body?.storeFloor,
+        { agentToken: cfg.agentToken || null },
+      );
+      if (!result.ok) {
+        return res.status(result.status || 401).json({ erro: result.erro });
+      }
+      res.json({
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        agentToken: result.agentToken,
+        operatorMe: result.operatorMe || null,
+        expiresAt: result.expiresAt,
+        floorKind: "store",
+      });
+    },
+  );
+
+  app.post("/store/floor/revoke", privateNetworkHeaders, exigirLocalhostOuToken, (req, res) => {
+    const storeFloor = require("./storeFloor");
+    res.json(storeFloor.revoke());
+  });
+
   // Sincroniza X-Agent-Token no browser (localhost ou código efêmero pós-ativação).
   app.get("/auth/local-token", privateNetworkHeaders, exigirLocalhost, async (req, res) => {
     const authSync = require("./authSync");
@@ -2446,7 +2532,9 @@ function iniciarServidor() {
         req.query.completo === "1" || req.query.completo === "true";
       res.json(await fiscalPreflight.validarEmissao({ completo }));
     } catch (err) {
-      res.status(400).json({ ok: false, erro: err.message });
+      // 200 + ok:false: preflight é validação, não falha de HTTP — evita 400 no
+      // console do PDV quando certificado/ACBr falha (não-fiscal ou cert vencido).
+      res.status(200).json({ ok: false, erro: err.message || String(err) });
     }
   });
 
