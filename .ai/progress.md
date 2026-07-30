@@ -5,16 +5,25 @@
 
 ## Changelog (2026-07-30)
 
+### ACBr PosPrinter como caminho oficial (fim do cupom ~120s)
+
+- **Causa raiz real em produção:** a DLL `ACBrPosPrinter64.dll` estava instalada, mas **`ffi-napi`/`ref-napi` não estavam no `package.json`** → `canLoadNativeLib()=false` → factory caía sempre em ESC/POS nativo (`provider_nao_operacional`).
+- **Hang ~120s:** `enviarRawWindows` matava o PowerShell com `SIGTERM` (ineficaz no Windows) e **não rejeitava a Promise** no timeout → job só terminava quando o spooler soltava (~2 min); agente “off”, `signal is aborted without reason` no front.
+- **Fix:**
+  1. `ffi-napi` + `ref-napi` em `optionalDependencies`; `prepare-build.ps1` faz rebuild e **falha o build** se ausentes.
+  2. `PRINT_FAST_NATIVE=false` padrão → impressão via **ACBr tags**; native só retaguarda.
+  3. Timeout RAW: `taskkill /F /T` + reject imediato (máx. ~8s no fallback).
+  4. Export `detectarImpressora` (corrige `core.detectarImpressora is not a function` no bootstrap).
+- **Nota:** HTTP **402** em PIX/capability é plano/cobrança no backend — independente da impressora.
+
 ### Impressão térmica instantânea — fim da demora de minutos
 
-- **Causa raiz:** a cada cupom o pipeline fazia `invalidatePosPrinterSession` + `POS_Ativar` de novo na porta `RAW:` (spooler Windows). O Ativar travava minutos → UI dizia "enviado", papel só depois, agente sumia (threadpool FFI preso) e voltava.
-- **Fix:**
-  1. Cupom **não fiscal** / abertura / fechamento / pedido / teste → **ESC/POS nativo** (`PRINT_FAST_NATIVE=true`, padrão) — WritePrinter async, sem ACBr.
-  2. Sessão PosPrinter **quente**; sem re-Ativar por job; invalidação só após fiscal.
-  3. Timeout duro em `callPos` (8s) + hard-drain no executor (não espera minutos).
-  4. Probe `/impressora` não abre sessão ACBr no caminho quente.
+- **Causa raiz (sessão RAW):** a cada cupom o pipeline fazia `invalidatePosPrinterSession` + `POS_Ativar` de novo na porta `RAW:` (spooler Windows). O Ativar travava minutos → UI dizia "enviado", papel só depois, agente sumia (threadpool FFI preso) e voltava.
+- **Fix (mantido):**
+  1. Sessão PosPrinter **quente**; sem re-Ativar por job; invalidação só após fiscal.
+  2. Timeout duro em `callPos` (8s) + hard-drain no executor.
+  3. `PRINT_FAST_NATIVE=true` permanece como escape hatch (não é mais o padrão).
 - **Hardening (mesma data):**
-  - Fast-path **não toca** PosPrinter (prep zero ACBr).
   - Porta `RAW:` não varre rede/USB em fallback.
   - Timeout dedicado `PRINT_JOB_TIMEOUT_FAST_MS=8000` para tipos comerciais.
   - Probe de status pula enquanto `impressaoEmAndamento`.

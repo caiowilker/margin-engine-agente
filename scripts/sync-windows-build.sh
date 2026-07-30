@@ -102,6 +102,12 @@ check() {
 check "$BUILD_ROOT/dist/app/acbrlib/lib/ACBrNFe64.dll" "ACBrNFe64.dll"
 check "$BUILD_ROOT/dist/app/acbrlib/lib/ACBrNFSe64.dll" "ACBrNFSe64.dll (NFS-e)"
 check "$BUILD_ROOT/dist/app/posprinter/lib/ACBrPosPrinter64.dll" "ACBrPosPrinter64.dll"
+if ! grep -q '"ffi-napi"' "$BUILD_ROOT/dist/app/package.json"; then
+  echo "ERRO: package.json sem ffi-napi (ACBr PosPrinter)"
+  FAIL=1
+else
+  echo "OK — ffi-napi declarado no package.json"
+fi
 check "$BUILD_ROOT/dist/app/print/printerBootstrap.js" "printerBootstrap (auto-detect)"
 check "$BUILD_ROOT/dist/app/fiscal/nfse/nfseLib.js" "fiscal/nfse/nfseLib.js"
 

@@ -21,6 +21,8 @@ $checks = @(
     @{ Path = "dist\app\frontend-dist\api-backend.json"; Hint = "api-backend.json" },
     @{ Path = "dist\app\BUILD_STAMP.json"; Hint = "BUILD_STAMP (prepare-build.ps1)" },
     @{ Path = "dist\app\node_modules\better-sqlite3\build\Release\better_sqlite3.node"; Hint = "better-sqlite3 nativo (rode prepare-build.ps1 sem -SkipNpm)" },
+    @{ Path = "dist\app\node_modules\ffi-napi\package.json"; Hint = "ffi-napi (ACBr PosPrinter — prepare-build.ps1)" },
+    @{ Path = "dist\app\node_modules\ref-napi\package.json"; Hint = "ref-napi (ACBr PosPrinter — prepare-build.ps1)" },
     @{ Path = "dist\app\node_modules\@projetoacbr\acbrlib-nfse-node\package.json"; Hint = "@projetoacbr/acbrlib-nfse-node (npm ci)" },
     @{ Path = "dist\app\assets\margin-engine.ico"; Hint = "Icone instalador" },
     @{ Path = "sign-installer.ps1"; Hint = "Assinatura opcional" },

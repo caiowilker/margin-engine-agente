@@ -231,7 +231,15 @@ async function runDiagnostic() {
 
   const printerModule = path.join(appDir, "posprinter", "lib");
   const printerReady = fs.existsSync(printerModule) && fs.readdirSync(printerModule).length > 0;
-  report.checks.printer = { modulePresent: printerReady };
+  let ffiReady = false;
+  try {
+    require.resolve("ffi-napi");
+    require.resolve("ref-napi");
+    ffiReady = true;
+  } catch (_) {
+    ffiReady = false;
+  }
+  report.checks.printer = { modulePresent: printerReady, ffiBindings: ffiReady };
   if (!printerReady) {
     addIssue(
       report,
@@ -239,6 +247,15 @@ async function runDiagnostic() {
       "ME-011",
       "Módulo de impressão não encontrado na instalação.",
       "Reinstale o pacote completo ou conecte uma impressora compatível via painel.",
+    );
+  }
+  if (printerReady && !ffiReady) {
+    addIssue(
+      report,
+      "critical",
+      "ME-011b",
+      "Módulo de impressão térmica incompleto nesta instalação — o cupom pode demorar ou falhar.",
+      "Reinstale o Margin Engine com o instalador completo (prepare-build com bindings nativos) e reinicie o serviço.",
     );
   }
 

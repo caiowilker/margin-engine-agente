@@ -76,9 +76,9 @@ function fiscalAcabouDeUsar(janelaMs) {
 function isFastNativePath(opts = {}) {
   if (opts.fastNative === true) return true;
   if (opts.fastNative === false) return false;
-  if (String(process.env.PRINT_FAST_NATIVE || "true").toLowerCase() === "false") {
-    return false;
-  }
+  // Padrão produção: ACBr — native só com PRINT_FAST_NATIVE=true/always
+  const flag = String(process.env.PRINT_FAST_NATIVE || "false").toLowerCase();
+  if (flag === "false" || flag === "0") return false;
   if (opts.op && OPS_FAST_NATIVE.has(opts.op)) return true;
   const payload = opts.payload;
   if (payload && typeof payload === "object") {

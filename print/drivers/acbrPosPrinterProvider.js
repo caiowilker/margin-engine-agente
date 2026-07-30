@@ -1,9 +1,8 @@
 /**
  * AcbrPosPrinterProvider — ACBrLib PosPrinter (padrão 1.0).
  *
- * Caminho rápido: cupom NÃO fiscal e ops comerciais usam ESC/POS nativo
- * (WritePrinter async) — instantâneo. ACBr PosPrinter fica para DANFE fiscal
- * (QR BMP / tags). Evita POS_Ativar em loop no spooler RAW.
+ * Caminho oficial: tags ACBr via DLL (ffi-napi). ESC/POS nativo fica só como
+ * retaguarda (PRINTER_FALLBACK / PRINT_FAST_NATIVE=true / lib ausente).
  */
 const log = require("../../logger").child({ modulo: "acbr_posprinter" });
 const runtime = require("../acbrPosPrinterRuntime");
@@ -15,16 +14,17 @@ const caixaTags = require("../caixaAcbrTags");
 const pedidoTags = require("../pedidoAcbrTags");
 
 /**
- * Prefere ESC/POS nativo (rápido) vs ACBr tags.
- * Fiscal com chave → ACBr. Não-fiscal / comercial → native (padrão).
+ * Prefere ESC/POS nativo vs ACBr tags.
+ * Padrão: ACBr (PRINT_FAST_NATIVE=false). Native só com flag explícita
+ * ou como retaguarda quando a DLL/ffi não carrega.
  */
 function preferNativeEscPos(payload) {
-  const flag = String(process.env.PRINT_FAST_NATIVE || "true").toLowerCase();
-  if (flag === "false" || flag === "0") return false;
+  const flag = String(process.env.PRINT_FAST_NATIVE || "false").toLowerCase();
+  if (flag === "false" || flag === "0" || flag === "") return false;
   if (flag === "always") return true;
+  // PRINT_FAST_NATIVE=true → só ops comerciais no native; fiscal com chave no ACBr
   if (!payload || typeof payload !== "object") return true;
   if (payload.naoFiscal === true || payload.cupomSemFiscal === true) return true;
-  // DANFE / NFC-e fiscal precisa de tags ACBr (QR BMP, layout fiscal)
   if (payload.chaveNfe && !payload.naoFiscal && !payload.cupomSemFiscal) return false;
   if (payload.somenteDanfeTermico || payload.danfeTermico) return false;
   if (payload.layout === "danfe-termico") return false;
@@ -69,7 +69,7 @@ function getDriverInfo() {
     libPath: runtime.resolveLibPath(),
     iniPath: runtime.resolveIniPath(),
     ready: mode === "native" || mode === "parity",
-    fastNative: String(process.env.PRINT_FAST_NATIVE || "true"),
+    fastNative: String(process.env.PRINT_FAST_NATIVE || "false"),
   };
 }
 

@@ -1,6 +1,6 @@
 {
   "versao": "1.0.1",
-  "geradoEm": "2026-07-30T17:01:34.259Z",
+  "geradoEm": "2026-07-30T17:38:53.626Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -5108,7 +5108,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "d69e84471ecbb484b17c57085da59aae61f9608b03f9e429db7433369c764a25"
+      "sha256": "fcf73d53a3e81dca53ae414986da8916e67038d0a137384a6d1ef06c79d3b69e"
     },
     {
       "arquivo": "print/acbrPosPrinterErrors.js",
@@ -5152,7 +5152,7 @@
     },
     {
       "arquivo": "print/drivers/acbrPosPrinterProvider.js",
-      "sha256": "7c7e0c0c58e89110cd46c4aa43cc68a2e72c7918f8980087cb9137e245662aa6"
+      "sha256": "855a9166d6701a5720e090f5d3f9a1f5b6ed3dccc10a8eba6effd27398c70c57"
     },
     {
       "arquivo": "print/drivers/mockPrinterProvider.js",
@@ -5164,11 +5164,11 @@
     },
     {
       "arquivo": "print/escpos/impressoraCore.js",
-      "sha256": "36c5449838ed2fb2316ce16b71fe8e346ebb71cabd20340432d63a504f52dd33"
+      "sha256": "c36eef3d72d63563ff92963affba574c17c21d226d881a16c5ac9d0870131633"
     },
     {
       "arquivo": "print/factory.js",
-      "sha256": "4c2c224d70e5daf00cfcd321f0285b993de503dcb9d37ab40e3429f428462336"
+      "sha256": "f7866a0d17b07b0293fd818c20bd9da4ec3d2f9776b9bc30776a75f91f160c67"
     },
     {
       "arquivo": "print/pedidoAcbrTags.js",
@@ -5212,7 +5212,7 @@
     },
     {
       "arquivo": "print/printFiscalCoordination.js",
-      "sha256": "207a475f9a79aa106d8a50bb7cf4761b3dac09483bf200f1429e012a80615e41"
+      "sha256": "4616803e7625dce03e863491bc352a62ea14f6a8d14e1e4e6a3351f180bc3918"
     },
     {
       "arquivo": "print/printIdempotency.js",

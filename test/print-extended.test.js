@@ -274,14 +274,24 @@ test("printFiscalCoord — fiscalEmUso sem lock ativo", () => {
   } = require("../print/printFiscalCoordination");
   assert.strictEqual(fiscalEmUso(), false);
   assert.strictEqual(fiscalAcabouDeUsar(1), false);
-  assert.strictEqual(isFastNativePath({ payload: { naoFiscal: true } }), true);
-  assert.strictEqual(isFastNativePath({ op: "imprimirPedido" }), true);
-  assert.strictEqual(
-    isFastNativePath({
-      payload: { chaveNfe: "3526" + "0".repeat(40), naoFiscal: false },
-    }),
-    false,
-  );
+  // Padrão: tudo via ACBr (não fast-native)
+  assert.strictEqual(isFastNativePath({ payload: { naoFiscal: true } }), false);
+  assert.strictEqual(isFastNativePath({ op: "imprimirPedido" }), false);
+  const prev = process.env.PRINT_FAST_NATIVE;
+  process.env.PRINT_FAST_NATIVE = "true";
+  try {
+    assert.strictEqual(isFastNativePath({ payload: { naoFiscal: true } }), true);
+    assert.strictEqual(isFastNativePath({ op: "imprimirPedido" }), true);
+    assert.strictEqual(
+      isFastNativePath({
+        payload: { chaveNfe: "3526" + "0".repeat(40), naoFiscal: false },
+      }),
+      false,
+    );
+  } finally {
+    if (prev === undefined) delete process.env.PRINT_FAST_NATIVE;
+    else process.env.PRINT_FAST_NATIVE = prev;
+  }
 });
 
 test("preferNativeEscPos — naoFiscal rápido; fiscal com chave fica no ACBr", () => {
@@ -297,6 +307,19 @@ test("preferNativeEscPos — naoFiscal rápido; fiscal com chave fica no ACBr", 
     );
     assert.strictEqual(preferNativeEscPos({ layout: "danfe-termico" }), false);
     assert.strictEqual(preferNativeEscPos({}), true);
+  } finally {
+    if (prev === undefined) delete process.env.PRINT_FAST_NATIVE;
+    else process.env.PRINT_FAST_NATIVE = prev;
+  }
+});
+
+test("preferNativeEscPos — padrão ACBr (PRINT_FAST_NATIVE=false)", () => {
+  const { preferNativeEscPos } = require("../print/drivers/acbrPosPrinterProvider");
+  const prev = process.env.PRINT_FAST_NATIVE;
+  delete process.env.PRINT_FAST_NATIVE;
+  try {
+    assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), false);
+    assert.strictEqual(preferNativeEscPos({}), false);
   } finally {
     if (prev === undefined) delete process.env.PRINT_FAST_NATIVE;
     else process.env.PRINT_FAST_NATIVE = prev;

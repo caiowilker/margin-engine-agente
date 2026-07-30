@@ -145,8 +145,10 @@ function warnIfSelectedAtBoot() {
   if (process.env.PRINT_POS_ALWAYS_INVALIDATE === "true") {
     dangerous.push("PRINT_POS_ALWAYS_INVALIDATE=true (Desativar a cada cupom)");
   }
-  if (String(process.env.PRINT_FAST_NATIVE || "true").toLowerCase() === "false") {
-    dangerous.push("PRINT_FAST_NATIVE=false (todo cupom via ACBr tags)");
+  if (String(process.env.PRINT_FAST_NATIVE || "false").toLowerCase() === "true") {
+    dangerous.push(
+      "PRINT_FAST_NATIVE=true (bypass ACBr → ESC/POS nativo/PowerShell — lento se spooler travar)",
+    );
   }
   if (dangerous.length) {
     log.error(

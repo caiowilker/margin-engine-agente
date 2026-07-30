@@ -356,6 +356,25 @@ function enviarRawWindows(nomeImpressora, buffer) {
       fn(val);
     };
 
+    /** SIGTERM/SIGKILL não derrubam árvore PowerShell no Windows — taskkill /T. */
+    const killTree = (pid) => {
+      if (!pid) return;
+      if (process.platform === "win32") {
+        try {
+          execFile(
+            "taskkill",
+            ["/F", "/T", "/PID", String(pid)],
+            { windowsHide: true, timeout: 5000 },
+            () => {},
+          );
+        } catch (_) {}
+        return;
+      }
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch (_) {}
+    };
+
     const child = execFile(
       "powershell",
       [
@@ -366,12 +385,13 @@ function enviarRawWindows(nomeImpressora, buffer) {
         RAW_PRINT_SCRIPT,
         tmpCfg,
       ],
-      { timeout: RAW_PRINT_TIMEOUT_MS, windowsHide: true, killSignal: "SIGTERM" },
+      { windowsHide: true },
       (err) => {
+        if (settled) return;
         if (err) {
           const timedOut =
             err.killed ||
-            /SIGKILL|SIGTERM|ETIMEDOUT|timeout/i.test(
+            /SIGKILL|SIGTERM|ETIMEDOUT|timeout|taskkill/i.test(
               String(err.signal || "") + String(err.message || ""),
             );
           return finish(
@@ -387,17 +407,22 @@ function enviarRawWindows(nomeImpressora, buffer) {
       },
     );
 
-    // Soft → hard: dá chance ao PowerShell de EndDocPrinter/ClosePrinter
+    // Soft: rejeita na hora + mata árvore (antes o kill não rejeitava → ~120s hang)
     const softKill = setTimeout(() => {
+      killTree(child.pid);
       try {
-        child.kill("SIGTERM");
+        child.kill();
       } catch (_) {}
+      finish(
+        reject,
+        new Error(
+          `RAW Windows timeout (${RAW_PRINT_TIMEOUT_MS}ms): ${nomeImpressora}`,
+        ),
+      );
     }, RAW_PRINT_TIMEOUT_MS);
     const hardKill = setTimeout(() => {
-      try {
-        child.kill("SIGKILL");
-      } catch (_) {}
-    }, RAW_PRINT_TIMEOUT_MS + 2000);
+      killTree(child.pid);
+    }, RAW_PRINT_TIMEOUT_MS + 1500);
     child.on("exit", () => {
       clearTimeout(softKill);
       clearTimeout(hardKill);
@@ -1733,6 +1758,7 @@ module.exports = {
   getInfo,
   listar,
   detectar: () => detectarImpressora(true),
+  detectarImpressora,
   bytesQrGsK,
   imprimirCupom,
   imprimirTeste,

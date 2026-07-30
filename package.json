@@ -62,6 +62,10 @@
     "qr-image": "^3.2.0",
     "sharp": "^0.33.5"
   },
+  "optionalDependencies": {
+    "ffi-napi": "^4.0.3",
+    "ref-napi": "^3.0.3"
+  },
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
