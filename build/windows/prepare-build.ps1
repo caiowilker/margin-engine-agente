@@ -86,9 +86,9 @@ if (-not $SkipNpm) {
 
     $koffi = Join-Path $App "node_modules\koffi\package.json"
     if (-not (Test-Path $koffi)) {
-        Write-Error "koffi ausente apos npm ci — ACBr PosPrinter nao carrega (prebuild Windows)"
+        Write-Error "koffi ausente apos npm ci - ACBr PosPrinter nao carrega (prebuild Windows)"
     }
-    Write-Host "[OK] koffi presente (FFI PosPrinter sem VS Build Tools)"
+    Write-Host '[OK] koffi presente (FFI PosPrinter sem VS Build Tools)'
 
     Write-Host "==> npm run manifest"
     & (Join-Path $Node "npm.cmd") run manifest

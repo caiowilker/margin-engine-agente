@@ -128,12 +128,34 @@ function writeBootstrapFailure(err) {
 function nativeDepsReady() {
   const base = path.join(appDir, "node_modules");
   if (!fs.existsSync(base)) return false;
-  const required = ["better-sqlite3", "node-windows", "express"];
+  // koffi = FFI ACBr PosPrinter (prebuild Windows). Sem ele → ME-011b e cupom lento.
+  const required = ["better-sqlite3", "node-windows", "express", "koffi"];
   for (const name of required) {
     if (!fs.existsSync(path.join(base, name, "package.json"))) return false;
   }
   const sqliteBinding = path.join(base, "better-sqlite3", "build", "Release", "better_sqlite3.node");
   return fs.existsSync(sqliteBinding);
+}
+
+/** Garante koffi mesmo quando o restante do node_modules já veio no .exe antigo. */
+function ensureKoffi() {
+  const koffiPkg = path.join(appDir, "node_modules", "koffi", "package.json");
+  if (fs.existsSync(koffiPkg)) {
+    initBootstrapLog().info({ acao: "koffi_ok" }, "koffi presente");
+    return;
+  }
+  initBootstrapLog().info(
+    { acao: "npm_install_koffi" },
+    "koffi ausente — instalando (necessário para impressão térmica ACBr)",
+  );
+  runNpm(["install", "koffi@^2.9.0", "--omit=dev", "--no-fund", "--no-audit"], {
+    inherit: true,
+  });
+  if (!fs.existsSync(koffiPkg)) {
+    throw new Error(
+      "koffi não foi instalado — impressão térmica ACBr ficará incompleta (ME-011b). Verifique rede/npm e reinstale.",
+    );
+  }
 }
 
 function writeDefaultConfigs() {
@@ -296,11 +318,13 @@ function npmInstallIfNeeded() {
   if (mode === "repair") return;
   if (nativeDepsReady()) {
     initBootstrapLog().info({ acao: "skip_npm_ci" }, "Dependências nativas já empacotadas no instalador");
+    ensureKoffi();
     return;
   }
   initBootstrapLog().info({ acao: "npm_ci" }, "Instalando dependências (primeira execução ou pacote sem node_modules)");
   runNpm(["ci", "--omit=dev"], { inherit: true });
   runNpm(["rebuild", "better-sqlite3"], { inherit: true });
+  ensureKoffi();
 }
 
 function stopAgentService() {
@@ -335,10 +359,12 @@ function backupPreUpdate() {
 function npmRepairSteps() {
   if (nativeDepsReady()) {
     initBootstrapLog().info({ acao: "skip_npm_repair" }, "node_modules presente — reparo sem npm ci");
+    ensureKoffi();
     return;
   }
   runNpm(["ci", "--omit=dev"], { inherit: true });
   runNpm(["rebuild", "better-sqlite3"], { inherit: true });
+  ensureKoffi();
 }
 
 function validatePostUpdate() {

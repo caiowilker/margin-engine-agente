@@ -113,6 +113,7 @@ Preserva: `.env`, `data\`, `acbrlib.ini`, `node_modules` da instalação.
 | ACBr PosPrinter | Sim |
 | PDV offline (frontend-dist) | Sim |
 | node_modules (npm ci no build) | Sim — obrigatório em prepare-build.ps1 |
+| **koffi** (FFI PosPrinter) | Sim — prebuild Windows; sem ele o Diagnóstico mostra ME-011b |
 | Impressora | Auto-detect (configuração no painel :9100) |
 | Certificado / CSC | Painel do agente após instalação (não no wizard) |
 
