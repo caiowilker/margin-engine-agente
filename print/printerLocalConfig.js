@@ -105,7 +105,13 @@ TraduzirTags=1
 IgnorarTags=0
 LinhasBuffer=${process.env.PRINTER_BUFFER_LINES || "0"}
 ControlePorta=${resolveControlePorta(vals.porta)}
-VerificarImpressora=${/^RAW:/i.test(String(vals.porta || "")) ? "1" : "0"}
+VerificarImpressora=${
+    process.env.PRINTER_VERIFICAR === "true"
+      ? "1"
+      : process.env.PRINTER_VERIFICAR === "false"
+        ? "0"
+        : "0"
+  }
 GavetaSinalInvertido=${process.env.PRINTER_DRAWER_INVERTED === "true" ? "1" : "0"}
 GavetaTempoON=${process.env.PRINTER_DRAWER_ON_MS || "120"}
 GavetaTempoOFF=${process.env.PRINTER_DRAWER_OFF_MS || "240"}

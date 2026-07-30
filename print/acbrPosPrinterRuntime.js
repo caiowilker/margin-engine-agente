@@ -329,9 +329,7 @@ function buildRuntimeValues() {
   const verificarImpressora =
     process.env.PRINTER_VERIFICAR === "true"
       ? "1"
-      : /^RAW:/i.test(porta)
-        ? "1"
-        : "0";
+      : "0";
 
   const values = {
     PosPrinter: {

@@ -1,7 +1,36 @@
 # PROGRESS — Agente Local
 
-**Última atualização:** 2026-07-28  
+**Última atualização:** 2026-07-30  
 **Versão:** `1.0.0` — certificada com a plataforma
+
+## Changelog (2026-07-30)
+
+### Agente sempre rápido — probes e event loop
+
+- `Get-Printer` virou **async** (`execFile` + single-flight + cache 30s) — nunca mais congela o Node.
+- `/status` e `/status-basico` usam probe leve: impressão recente / memória fiscal; live só no cold start ou `?probe=1`.
+- `/impressora/status` não chama Get-Printer/POS se houve impressão recente.
+- Heartbeat com timeout 5s; `mesaFila` alinhado a 5s.
+
+### 1ª via impressa como "*** SEGUNDA VIA ***"
+
+- Causa: `imprimirCupomFiscalPreferido` defaultava `segundaVia: true`; `reimprimirDanfce` sempre usava `montarPayloadSegundaVia`.
+- Fix: 1ª via sem banner; banner só com `reimpressao`/`motivo`; endpoint `/acbr/nfce/reimprimir` respeita `segundaVia`/`reimpressao`.
+
+### Impressão térmica — regressão de latência (~140s) e AbortError
+
+- **Causa:** `enviarRawWindows` usava `execFileSync` (PowerShell + `WritePrinter`). Quando o spooler demorava, o event loop do agente congelava ~2 min — timeouts da fila não disparavam; o front abortava aos 25s (`signal is aborted without reason`) e retentava, enfileirando duplicatas.
+- **Fix (rodada 1):**
+  - RAW Windows **async** (`execFile` + soft/hard kill).
+  - Caminho rápido `windows-raw-config` quando `PRINTER_PORTA=RAW:…`.
+  - HTTP **202/fila** imediato em todas as rotas `/impressora/*`.
+  - Idempotência de cupom; espera fiscal curta; `VerificarImpressora=0`.
+- **Fix (rodada 2 — solidez):**
+  - Timeout **cooperativo**: no deadline, drena o invoke (não abandona) — se concluir tarde, aceita; evita dupla impressão e lock preso.
+  - Libera sessão ACBr só **depois** do invoke terminar (nunca no meio do `POS_Imprimir`).
+  - Front: `montarPayloadCupomNaoFiscal` **não** marca `segundaVia` na 1ª via; 2ª via usa `reimpressao`/`motivo`.
+  - TTL cupom 180s (anti-retry); pedido/comanda mantém 24h.
+  - Reclaim periódico de jobs `ENVIANDO` presos; RAW soft-kill → hard-kill; timeout HTTP front 8s.
 
 ## Changelog (2026-07-28)
 

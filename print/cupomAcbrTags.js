@@ -102,7 +102,7 @@ function renderCupomTags(rawPayload) {
   lines.push("</zera>");
   const logoHdr = tagLogoHeader(payload);
   if (logoHdr) lines.push(logoHdr);
-  if (payload.segundaVia || payload.reimpressao) lines.push(tagSegundaViaBanner());
+  if (require("./segundaVia").deveExibirBannerSegundaVia(payload)) lines.push(tagSegundaViaBanner());
 
   lines.push("<ce>");
   lines.push(`<e><n>${tx((empresa.nomeFantasia || empresa.razaoSocial || "ESTABELECIMENTO").toUpperCase())}</n></e>`);

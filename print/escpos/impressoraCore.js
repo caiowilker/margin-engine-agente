@@ -15,7 +15,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const net = require("net");
-const { execFileSync } = require("child_process");
+const { execFile } = require("child_process");
 
 const escpos = require("escpos");
 
@@ -76,6 +76,7 @@ if (IS_WIN) {
       RAW_PRINT_SCRIPT,
       `$cfg = Get-Content -Raw $args[0] | ConvertFrom-Json
 $bytes = [System.IO.File]::ReadAllBytes($cfg.file)
+if (-not ("RawPrinterHelper" -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
@@ -98,6 +99,7 @@ public class RawPrinterHelper {
   public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);
 }
 '@
+}
 $h = [IntPtr]::Zero
 if (-not [RawPrinterHelper]::OpenPrinter($cfg.printer, [ref]$h, [IntPtr]::Zero)) {
   throw "Nao foi possivel abrir a impressora: $($cfg.printer)"
@@ -192,23 +194,90 @@ function gerarBuffer(renderFn) {
 }
 
 // ── Listar impressoras Windows ────────────────────────────────────────────────
-function listarImpressorasWindows() {
-  if (!IS_WIN) return [];
-  try {
-    const raw = execFileSync(
+const LISTAR_PRINTERS_TIMEOUT_MS = parseInt(
+  process.env.PRINTER_LIST_TIMEOUT_MS || "5000",
+  10,
+);
+const RAW_PRINT_TIMEOUT_MS = parseInt(
+  process.env.PRINTER_RAW_TIMEOUT_MS || "10000",
+  10,
+);
+
+let printersWinCache = { list: [], at: 0 };
+let printersWinInflight = null;
+
+/**
+ * Lista impressoras Windows sem congelar o event loop.
+ * Single-flight + cache 30s — Get-Printer via execFile (nunca execFileSync).
+ */
+function listarImpressorasWindowsAsync(force = false) {
+  if (!IS_WIN) return Promise.resolve([]);
+  const agora = Date.now();
+  if (
+    !force &&
+    printersWinCache.at > 0 &&
+    agora - printersWinCache.at < CACHE_TTL_MS
+  ) {
+    return Promise.resolve(printersWinCache.list);
+  }
+  if (printersWinInflight) return printersWinInflight;
+
+  printersWinInflight = new Promise((resolve) => {
+    execFile(
       "powershell",
       [
         "-NoProfile",
         "-Command",
         "Get-Printer | Select-Object Name,PortName,DriverName,Default | ConvertTo-Json -Compress",
       ],
-      { encoding: "utf8", timeout: 15000, windowsHide: true },
+      {
+        encoding: "utf8",
+        timeout: LISTAR_PRINTERS_TIMEOUT_MS,
+        windowsHide: true,
+      },
+      (err, raw) => {
+        printersWinInflight = null;
+        if (err) {
+          return resolve(printersWinCache.list);
+        }
+        try {
+          const parsed = JSON.parse(raw || "[]");
+          const list = Array.isArray(parsed) ? parsed : parsed ? [parsed] : [];
+          printersWinCache = { list, at: Date.now() };
+          resolve(list);
+        } catch (_) {
+          resolve(printersWinCache.list);
+        }
+      },
     );
-    const parsed = JSON.parse(raw || "[]");
-    return Array.isArray(parsed) ? parsed : parsed ? [parsed] : [];
+  });
+  return printersWinInflight;
+}
+
+/** Somente cache — nunca bloqueia. Usado em listar() síncrono. */
+function listarImpressorasWindowsCached() {
+  return printersWinCache.list;
+}
+
+/** @deprecated use listarImpressorasWindowsAsync — sync só devolve cache */
+function listarImpressorasWindows() {
+  return listarImpressorasWindowsCached();
+}
+
+/** Nome Windows da porta RAW configurada (PRINTER_PORTA / local config). */
+function resolverNomeRawConfigurado() {
+  try {
+    const porta =
+      require("../printerLocalConfig").ler()?.porta ||
+      process.env.PRINTER_PORTA ||
+      "";
+    const m = /^RAW:(.+)$/i.exec(String(porta).trim());
+    if (m && m[1].trim()) return m[1].trim();
   } catch (_) {
-    return [];
+    /* ignore */
   }
+  if (PRINTER_NAME) return PRINTER_NAME;
+  return null;
 }
 
 function escolherImpressoraWindows(lista) {
@@ -247,9 +316,20 @@ function escolherImpressoraWindows(lista) {
   return termicas[0] || padrao || lista[0];
 }
 
+/**
+ * Envia bytes RAW via spooler Windows.
+ * IMPORTANTE: async (execFile) — execFileSync bloqueava o event loop do agente
+ * quando WritePrinter/spooler demorava (sintoma: cupom ~140s + AbortError no front).
+ */
 function enviarRawWindows(nomeImpressora, buffer) {
-  const tmpBin = path.join(os.tmpdir(), `pdv-print-${Date.now()}.bin`);
-  const tmpCfg = path.join(os.tmpdir(), `pdv-print-${Date.now()}.json`);
+  const tmpBin = path.join(
+    os.tmpdir(),
+    `pdv-print-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.bin`,
+  );
+  const tmpCfg = path.join(
+    os.tmpdir(),
+    `pdv-print-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`,
+  );
   fs.writeFileSync(tmpBin, buffer);
   fs.writeFileSync(
     tmpCfg,
@@ -257,8 +337,26 @@ function enviarRawWindows(nomeImpressora, buffer) {
     "utf8",
   );
 
-  try {
-    execFileSync(
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      try {
+        fs.unlinkSync(tmpCfg);
+      } catch (_) {}
+      try {
+        fs.unlinkSync(tmpBin);
+      } catch (_) {}
+    };
+    const finish = (fn, val) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(softKill);
+      clearTimeout(hardKill);
+      cleanup();
+      fn(val);
+    };
+
+    const child = execFile(
       "powershell",
       [
         "-NoProfile",
@@ -268,17 +366,43 @@ function enviarRawWindows(nomeImpressora, buffer) {
         RAW_PRINT_SCRIPT,
         tmpCfg,
       ],
-      { timeout: 15000, windowsHide: true },
+      { timeout: RAW_PRINT_TIMEOUT_MS, windowsHide: true, killSignal: "SIGTERM" },
+      (err) => {
+        if (err) {
+          const timedOut =
+            err.killed ||
+            /SIGKILL|SIGTERM|ETIMEDOUT|timeout/i.test(
+              String(err.signal || "") + String(err.message || ""),
+            );
+          return finish(
+            reject,
+            new Error(
+              timedOut
+                ? `RAW Windows timeout (${RAW_PRINT_TIMEOUT_MS}ms): ${nomeImpressora}`
+                : `RAW Windows falhou: ${err.message}`,
+            ),
+          );
+        }
+        finish(resolve, true);
+      },
     );
-    return true;
-  } finally {
-    try {
-      fs.unlinkSync(tmpCfg);
-    } catch (_) {}
-    try {
-      fs.unlinkSync(tmpBin);
-    } catch (_) {}
-  }
+
+    // Soft → hard: dá chance ao PowerShell de EndDocPrinter/ClosePrinter
+    const softKill = setTimeout(() => {
+      try {
+        child.kill("SIGTERM");
+      } catch (_) {}
+    }, RAW_PRINT_TIMEOUT_MS);
+    const hardKill = setTimeout(() => {
+      try {
+        child.kill("SIGKILL");
+      } catch (_) {}
+    }, RAW_PRINT_TIMEOUT_MS + 2000);
+    child.on("exit", () => {
+      clearTimeout(softKill);
+      clearTimeout(hardKill);
+    });
+  });
 }
 
 function enviarRede(host, port, buffer, timeoutMs = 8000) {
@@ -337,12 +461,12 @@ function extrairIpPorta(portName) {
   return ipMatch[1];
 }
 
-function obterHostsRede() {
+async function obterHostsRede() {
   const hosts = [];
   if (PRINTER_HOST) hosts.push(PRINTER_HOST);
 
-  // Extrai IP de impressoras Windows (ex: IP_192.168.1.50, 192.168.1.50)
-  for (const p of listarImpressorasWindows()) {
+  const lista = await listarImpressorasWindowsAsync();
+  for (const p of lista) {
     const ip = extrairIpPorta(p.PortName);
     if (ip) hosts.push(ip);
   }
@@ -352,7 +476,7 @@ function obterHostsRede() {
 }
 
 async function detectarRede() {
-  const hosts = obterHostsRede();
+  const hosts = await obterHostsRede();
   if (!hosts.length) return null;
 
   const portas = [
@@ -393,8 +517,8 @@ function detectarUsb() {
   }
 }
 
-function detectarWindows() {
-  const lista = listarImpressorasWindows();
+async function detectarWindows(force = false) {
+  const lista = await listarImpressorasWindowsAsync(force);
   const escolhida = escolherImpressoraWindows(lista);
   if (!escolhida) return null;
   return {
@@ -421,11 +545,14 @@ async function detectarImpressora(force = false) {
   }
 
   const candidatos = [];
-  const win = detectarWindows();
+  const win = await detectarWindows(force);
   if (win) candidatos.push(win);
   const usb = detectarUsb();
   if (usb) candidatos.push(usb);
-  const rede = await detectarRede();
+  // Com RAW configurado, não gasta tempo em scan de rede na descoberta
+  const rede = resolverNomeRawConfigurado()
+    ? null
+    : await detectarRede();
   if (rede) candidatos.push(rede);
 
   let escolhida = null;
@@ -487,6 +614,8 @@ async function enviarBuffer(buffer) {
     /* ignore */
   }
 
+  const rawConfigurado = resolverNomeRawConfigurado();
+
   if (stationOverride && /^TCP:/i.test(stationOverride)) {
     const { parsePortaTcp } = require("../printerModelMap");
     const tcp = parsePortaTcp(stationOverride);
@@ -500,10 +629,16 @@ async function enviarBuffer(buffer) {
     const nome = stationOverride.replace(/^RAW:/i, "").trim();
     if (nome) {
       add("windows-station", async () => {
-        enviarRawWindows(nome, buffer);
+        await enviarRawWindows(nome, buffer);
         ultimaImpressoraUsada = { metodo: "windows", nome };
       });
     }
+  } else if (rawConfigurado && IS_WIN) {
+    // Caminho rápido: porta RAW já configurada — sem Get-Printer / scan de rede
+    add("windows-raw-config", async () => {
+      await enviarRawWindows(rawConfigurado, buffer);
+      ultimaImpressoraUsada = { metodo: "windows", nome: rawConfigurado };
+    });
   }
 
   if (PRINTER_TYPE === "windows" || PRINTER_TYPE === "auto") {
@@ -511,9 +646,9 @@ async function enviarBuffer(buffer) {
       const win =
         cacheImpressoraEscolhida?.resultado?.impressora?.metodo === "windows"
           ? cacheImpressoraEscolhida.resultado.impressora
-          : detectarWindows();
+          : await detectarWindows();
       if (!win) throw new Error("Nenhuma impressora Windows encontrada.");
-      enviarRawWindows(win.nome, buffer);
+      await enviarRawWindows(win.nome, buffer);
       ultimaImpressoraUsada = { metodo: "windows", nome: win.nome };
     });
   }
@@ -531,7 +666,10 @@ async function enviarBuffer(buffer) {
         }
       }
       if (!rede && (PRINTER_TYPE === "network" || PRINTER_TYPE === "auto")) {
-        rede = await detectarRede();
+        // Com RAW configurado, não gastar tempo em scan de rede
+        if (!rawConfigurado) {
+          rede = await detectarRede();
+        }
       }
       if (!rede) throw new Error("Impressora de rede inacessivel.");
       await enviarRede(rede.host, rede.porta || rede.port, buffer);
@@ -577,8 +715,13 @@ async function enviarBuffer(buffer) {
           : IS_WIN
             ? ["windows", "network", "usb"]
             : ["usb", "network", "windows"];
-  // Rotas por estação (mesmo PC) têm prioridade absoluta sobre a porta padrão
-  const ordem = ["network-station", "windows-station", ...ordemBase];
+  // Rotas por estação e RAW configurado têm prioridade absoluta
+  const ordem = [
+    "network-station",
+    "windows-station",
+    "windows-raw-config",
+    ...ordemBase,
+  ];
 
   for (const metodo of ordem) {
     const t = tentativas.find((x) => x.metodo === metodo);
@@ -594,6 +737,14 @@ async function enviarBuffer(buffer) {
           `Impressora da estação indisponível (${metodo}).\n` +
             erros.map((e) => `  - ${e}`).join("\n"),
         );
+      }
+      // RAW configurado falhou: tenta descoberta Windows uma vez (nome desatualizado)
+      if (metodo === "windows-raw-config") {
+        console.warn(
+          "[Impressora] RAW configurado falhou — tentando descoberta Windows:",
+          err.message,
+        );
+        continue;
       }
     }
   }
@@ -872,7 +1023,7 @@ async function renderCupomConteudo(printer, payload) {
 
   await imprimirLogoCupomEscpos(printer, payload);
 
-  if (payload.segundaVia || payload.reimpressao) {
+  if (require("../segundaVia").deveExibirBannerSegundaVia(payload)) {
     printer.style("b").text("*** SEGUNDA VIA ***").style("normal");
     printer.text(sepDash());
   }
@@ -1483,7 +1634,9 @@ async function getInfo(force = false) {
 }
 
 function listar() {
-  const windows = listarImpressorasWindows().map((p) => ({
+  // Cache only — nunca Get-Printer síncrono. Refresh em background.
+  void listarImpressorasWindowsAsync();
+  const windows = listarImpressorasWindowsCached().map((p) => ({
     nome: p.Name,
     porta: p.PortName,
     driver: p.DriverName,

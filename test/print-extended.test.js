@@ -91,6 +91,19 @@ test("segundaVia — payload direto", () => {
   assert.strictEqual(p.segundaVia, true);
 });
 
+test("segundaVia — banner só com reimpressao/motivo", () => {
+  const { deveExibirBannerSegundaVia, montarPayloadCupomFiscalLocal } = require("../print/segundaVia");
+  assert.strictEqual(deveExibirBannerSegundaVia({ segundaVia: true }), false);
+  assert.strictEqual(deveExibirBannerSegundaVia({ reimpressao: true }), true);
+  assert.strictEqual(deveExibirBannerSegundaVia({ motivo: "segunda_via" }), true);
+  const local = montarPayloadCupomFiscalLocal({
+    payload: { numeroVenda: "V3", total: 1, itens: [], empresa: {} },
+  });
+  assert.strictEqual(local.segundaVia, false);
+  assert.strictEqual(local.reimpressao, false);
+  assert.strictEqual(deveExibirBannerSegundaVia(local), false);
+});
+
 test("danfeTermico — tags NF-e 55", () => {
   const tags = renderDanfeTermicoTags({
     chaveNfe: "35260611222333000181550010000000301025012345",

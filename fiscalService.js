@@ -1214,13 +1214,17 @@ async function reimprimirDanfceCompleto(chave, numeroVenda, opts = {}) {
     }
   }
 
-  async function imprimirTermicoComRetry(payload) {
+  async function imprimirTermicoComRetry(payload, primeiraVia) {
     const printerService = require("./printerService");
     const max = parseInt(process.env.REIMPRIMIR_PRINT_RETRIES || "3", 10);
     let lastErr;
     for (let i = 0; i < max; i++) {
       try {
-        await printerService.imprimirSegundaVia(payload);
+        if (primeiraVia) {
+          await printerService.imprimirCupom(payload);
+        } else {
+          await printerService.imprimirSegundaVia(payload);
+        }
         return;
       } catch (err) {
         lastErr = err;
@@ -1253,11 +1257,21 @@ async function reimprimirDanfceCompleto(chave, numeroVenda, opts = {}) {
     (opts.qrcode && String(opts.qrcode).trim()) ||
     null;
 
-  const { montarPayloadSegundaVia } = require("./print/segundaVia");
-  let payload = montarPayloadSegundaVia({
-    chave: chaveDoc,
-    numeroVenda: doc.numero_venda || numeroVenda,
-  });
+  const { isSegundaViaIntencional } = require("./print/printIdempotency");
+  const segundaViaIntencional =
+    isSegundaViaIntencional(opts) ||
+    /segunda_via|reimpressao|reimprimir/i.test(String(opts.motivo || ""));
+
+  const { montarPayloadSegundaVia, montarPayloadCupomFiscalLocal } = require("./print/segundaVia");
+  let payload = segundaViaIntencional
+    ? montarPayloadSegundaVia({
+        chave: chaveDoc,
+        numeroVenda: doc.numero_venda || numeroVenda,
+      })
+    : montarPayloadCupomFiscalLocal({
+        chave: chaveDoc,
+        numeroVenda: doc.numero_venda || numeroVenda,
+      });
   if (qrInformado && !require("./print/cupomValidate").resolverQrCodeNfce(payload)) {
     payload = { ...payload, qrcodeNfe: qrInformado, qrcode: qrInformado };
   }
@@ -1267,31 +1281,37 @@ async function reimprimirDanfceCompleto(chave, numeroVenda, opts = {}) {
   if (modelo === "55") {
     payload = { ...payload, danfeTermico: true, layout: "danfe-termico" };
   }
-  await imprimirTermicoComRetry(payload);
+  await imprimirTermicoComRetry(payload, !segundaViaIntencional);
 
+  // PDF é opcional e não deve atrasar a resposta da térmica (já enfileirada).
   let pdfPath = doc.pdf_path;
-  if (!docs.isPdfValid(pdfPath) && chaveDoc) {
-    try {
-      pdfPath = await gerarPdfParaModelo(chaveDoc, doc.xml_path, modelo);
-      filaFiscal.salvarDocumento({
-        chave: chaveDoc,
-        numeroVenda: doc.numero_venda || numeroVenda,
-        correlationId: doc.correlation_id,
-        serieNfe: doc.serie_nfe,
-        numeroNfe: doc.numero_nfe,
-        cStat: doc.c_stat,
-        protocolo: doc.protocolo,
-        xmlPath: doc.xml_path,
-        pdfPath,
-        tipo: doc.tipo || "AUTORIZADA",
-        modeloDocumento: modelo,
-      });
-    } catch (pdfErr) {
-      log.warn(
-        { err: pdfErr.message, chave: chaveDoc, numeroVenda: doc.numero_venda || numeroVenda },
-        "[Reimprimir] Impressão térmica OK — PDF opcional indisponível",
-      );
-    }
+  const chaveParaPdf = chaveDoc;
+  const docSnap = doc;
+  const numVendaSnap = doc.numero_venda || numeroVenda;
+  if (!docs.isPdfValid(pdfPath) && chaveParaPdf) {
+    void (async () => {
+      try {
+        const novoPdf = await gerarPdfParaModelo(chaveParaPdf, docSnap.xml_path, modelo);
+        filaFiscal.salvarDocumento({
+          chave: chaveParaPdf,
+          numeroVenda: numVendaSnap,
+          correlationId: docSnap.correlation_id,
+          serieNfe: docSnap.serie_nfe,
+          numeroNfe: docSnap.numero_nfe,
+          cStat: docSnap.c_stat,
+          protocolo: docSnap.protocolo,
+          xmlPath: docSnap.xml_path,
+          pdfPath: novoPdf,
+          tipo: docSnap.tipo || "AUTORIZADA",
+          modeloDocumento: modelo,
+        });
+      } catch (pdfErr) {
+        log.warn(
+          { err: pdfErr.message, chave: chaveParaPdf, numeroVenda: numVendaSnap },
+          "[Reimprimir] Impressão térmica OK — PDF opcional indisponível",
+        );
+      }
+    })();
   }
   return {
     ok: true,

@@ -33,7 +33,7 @@ function renderDanfeTermicoTags(payload) {
   lines.push("</zera>");
   const logo = tagLogoHeader(payload);
   if (logo) lines.push(logo);
-  if (payload.segundaVia) lines.push(tagSegundaViaBanner());
+  if (require("./segundaVia").deveExibirBannerSegundaVia(payload)) lines.push(tagSegundaViaBanner());
 
   lines.push("<ce><n>DANFE SIMPLIFICADO NF-e</n></ce>");
   lines.push("<ce>Documento Auxiliar — via térmica</ce>");

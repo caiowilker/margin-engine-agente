@@ -51,6 +51,18 @@ function isBmpBuffer(buf) {
   return Buffer.isBuffer(buf) && buf.length > 2 && buf[0] === 0x42 && buf[1] === 0x4d;
 }
 
+/** BMP com dimensões utilizáveis na térmica (rejeita placeholder corrompido 0×0). */
+function isBmpPrintable(buf) {
+  if (!isBmpBuffer(buf) || buf.length < 26) return false;
+  try {
+    const width = buf.readInt32LE(18);
+    const height = Math.abs(buf.readInt32LE(22));
+    return width > 0 && height > 0 && width <= 4096 && height <= 4096;
+  } catch (_) {
+    return false;
+  }
+}
+
 function decodeBase64(input) {
   const raw = String(input || "").trim();
   const b64 = raw.includes(",") ? raw.split(",").pop() : raw;
@@ -208,7 +220,17 @@ function exibirLogoCupomHabilitado(payload) {
 function deveExibirLogoCupom(payload) {
   if (!exibirLogoCupomHabilitado(payload)) return false;
   const info = ler();
-  return !!(info.ativo && info.caminhoAbsoluto);
+  if (!(info.ativo && info.caminhoAbsoluto)) return false;
+  try {
+    const buf = fs.readFileSync(info.caminhoAbsoluto);
+    if (!isBmpPrintable(buf)) {
+      log.warn("[PrinterLogo] BMP inválido/corrompido — logo omitida no cupom");
+      return false;
+    }
+  } catch (_) {
+    return false;
+  }
+  return true;
 }
 
 module.exports = {
@@ -219,6 +241,7 @@ module.exports = {
   remover,
   ler,
   isBmpBuffer,
+  isBmpPrintable,
   exibirLogoCupomHabilitado,
   deveExibirLogoCupom,
   prepararArquivoEscpos,

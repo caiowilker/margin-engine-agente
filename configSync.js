@@ -261,6 +261,11 @@ async function enviarHeartbeat(backendUrl, backendToken) {
   } catch {
     /* ignore */
   }
+  const timeoutMs = parseInt(process.env.BACKEND_TIMEOUT_MS || "5000", 10);
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = controller
+    ? setTimeout(() => controller.abort(), timeoutMs)
+    : null;
   try {
     const payload = montarPayloadHeartbeat(filaStatus);
     const resp = await fetch(`${backendUrl}/pdv/agente/heartbeat`, {
@@ -270,6 +275,8 @@ async function enviarHeartbeat(backendUrl, backendToken) {
         Authorization: `Bearer ${backendToken}`,
       },
       body: JSON.stringify(payload),
+      ...(controller ? { signal: controller.signal } : {}),
+      timeout: timeoutMs,
     });
     if (!resp.ok) {
       const txt = await resp.text().catch(() => "");
@@ -286,6 +293,8 @@ async function enviarHeartbeat(backendUrl, backendToken) {
   } catch (err) {
     fiscalTrace.warn("Heartbeat", "Falha ao enviar heartbeat", { err: err.message });
     log.debug({ err: err.message }, "[ConfigSync] heartbeat falhou");
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

@@ -75,24 +75,26 @@ async function detectar() {
 
 function wrap(name) {
   return (...args) => {
-    const meta = {};
+    const meta = { async: true };
     const payload = args[0];
     if (payload && typeof payload === "object") {
       meta.usuario = payload.operador || payload.usuario;
       meta.caixa = payload.caixa || payload.terminal;
     }
+    // Resposta imediata (fila) — PDV não pode esperar WritePrinter/spooler
     return submit(name, args, meta);
   };
 }
 
 async function imprimirTeste() {
-  return submit("imprimirTeste", [], { motivo: "teste_operador" });
+  return submit("imprimirTeste", [], { motivo: "teste_operador", async: true });
 }
 
 async function imprimirSegundaVia(opts = {}) {
   return submit("imprimirSegundaVia", [opts], {
     motivo: opts.motivo || "segunda_via",
     documento: opts.chave || opts.numeroVenda,
+    async: true,
   });
 }
 

@@ -18,7 +18,7 @@ const { getDirectoryManager } = require("./runtime/directoryManager");
 
 const DB_PATH = process.env.DB_PATH || getDirectoryManager().file("agent", "fila.db");
 const CONFIG_PATH = getDirectoryManager().file("agent", "config.json");
-const TIMEOUT_MS = parseInt(process.env.BACKEND_TIMEOUT_MS || "15000", 10);
+const TIMEOUT_MS = parseInt(process.env.BACKEND_TIMEOUT_MS || "5000", 10);
 
 let BACKEND_URL = process.env.BACKEND_URL || "";
 let BACKEND_TOKEN = process.env.BACKEND_TOKEN || "";

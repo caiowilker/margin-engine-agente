@@ -1476,14 +1476,14 @@ function iniciarServidor() {
   });
 
   /** Probe fiscal leve — não bloqueia no mutex ACBr durante emissão/PDF. */
-  async function probeStatusFiscal() {
+  async function probeStatusFiscal(opts = {}) {
     const acbrOcupado = fiscalDriver.isAcbrBusy() || filaFiscal.estaProcessando();
     const wd = watchdog.statusWatchdog();
-    if (acbrOcupado) {
+    if (acbrOcupado || opts.memoryOnly) {
       const mem = fiscalDriver.obterStatusMemoria(wd.degraded);
       return {
         acbrOk: mem === "online" || mem === "degradado",
-        acbrOcupado: true,
+        acbrOcupado: !!acbrOcupado,
         fiscalProcessando: filaFiscal.estaProcessando(),
         acbrEstadoMemoria: mem,
       };
@@ -1499,6 +1499,29 @@ function iniciarServidor() {
     };
   }
 
+  /** Probe impressora leve — prioriza impressão recente; evita Get-Printer no poll. */
+  async function probeImpressoraLeve(opts = {}) {
+    const fiscalOcupado =
+      fiscalDriver.isAcbrBusy() || filaFiscal.estaProcessando();
+    if (fiscalOcupado && !opts.force) {
+      const recente =
+        typeof impressora.printJobService?.impressaoRecenteOk === "function" &&
+        impressora.printJobService.impressaoRecenteOk();
+      return { ok: recente ? true : null, info: null, skipped: true };
+    }
+    const recente =
+      typeof impressora.printJobService?.impressaoRecenteOk === "function" &&
+      impressora.printJobService.impressaoRecenteOk();
+    if (recente && !opts.force) {
+      return { ok: true, info: null, skipped: true, recente: true };
+    }
+    const [ok, info] = await Promise.all([
+      impressora.testar().catch(() => false),
+      impressora.getInfo().catch(() => null),
+    ]);
+    return { ok, info, skipped: false };
+  }
+
   // Status reduzido e PÚBLICO — alimenta a página "/" (status.html).
   // Mostra apenas informações não sensíveis (sem backendUrl, tenantId,
   // dispositivoId, hostname ou caminhos de arquivo). Pensado para o instalador
@@ -1506,21 +1529,32 @@ function iniciarServidor() {
   app.get("/status-basico", privateNetworkHeaders, async (req, res) => {
     config = await lerConfig();
 
-    // Durante emissão/PDF fiscal, não bloqueia em testar() da impressora —
-    // resposta rápida evita falso "agente offline" no painel.
+    const forceProbe =
+      req.query.probe === "1" ||
+      req.query.probe === "true" ||
+      req.query.force === "1";
+
     const fiscalOcupado =
       fiscalDriver.isAcbrBusy() || filaFiscal.estaProcessando();
-    const [impressoraOk, impressoraInfo, fiscalProbe] = fiscalOcupado
-      ? [
-          null,
-          null,
-          await probeStatusFiscal(),
-        ]
-      : await Promise.all([
-          impressora.testar().catch(() => false),
-          impressora.getInfo().catch(() => null),
-          probeStatusFiscal(),
-        ]);
+    let memoryOnlyFiscal = fiscalOcupado || !forceProbe;
+    if (!forceProbe && !fiscalOcupado) {
+      try {
+        const mem = fiscalDriver.obterStatusMemoria(
+          watchdog.statusWatchdog().degraded,
+        );
+        // Cold start (memória desconhecida) — um probe vivo; depois só memória
+        memoryOnlyFiscal = mem === "online" || mem === "degradado";
+      } catch (_) {
+        memoryOnlyFiscal = false;
+      }
+    }
+
+    const [impProbe, fiscalProbe] = await Promise.all([
+      probeImpressoraLeve({ force: forceProbe }),
+      probeStatusFiscal({ memoryOnly: memoryOnlyFiscal }),
+    ]);
+    const impressoraOk = impProbe.ok;
+    const impressoraInfo = impProbe.info;
 
     const { pendentes, falhas } = await fila.contadores();
     const contingencia = lerContingencia();
@@ -1569,6 +1603,7 @@ function iniciarServidor() {
         ok: fiscalDriver.EMISSAO_FISCAL ? fiscalProbe.acbrOk : null,
         ocupado: fiscalProbe.acbrOcupado,
         processando: fiscalProbe.fiscalProcessando,
+        estadoMemoria: fiscalProbe.acbrEstadoMemoria,
         ambienteSefaz: (() => {
           if (!fiscalDriver.EMISSAO_FISCAL) return null;
           try {
@@ -1629,10 +1664,32 @@ function iniciarServidor() {
     exigirAgentToken,
     async (req, res) => {
       config = await lerConfig();
-      const [impressoraOk, fiscalProbe] = await Promise.all([
-        impressora.testar().catch(() => false),
-        probeStatusFiscal(),
+      const forceProbe =
+        req.query.probe === "1" ||
+        req.query.probe === "true" ||
+        req.query.force === "1";
+      const fiscalOcupado =
+        fiscalDriver.isAcbrBusy() || filaFiscal.estaProcessando();
+      let memoryOnlyFiscal = fiscalOcupado || !forceProbe;
+      if (!forceProbe && !fiscalOcupado) {
+        try {
+          const mem = fiscalDriver.obterStatusMemoria(
+            watchdog.statusWatchdog().degraded,
+          );
+          memoryOnlyFiscal = mem === "online" || mem === "degradado";
+        } catch (_) {
+          memoryOnlyFiscal = false;
+        }
+      }
+      const [impProbe, fiscalProbe] = await Promise.all([
+        probeImpressoraLeve({ force: forceProbe }),
+        probeStatusFiscal({ memoryOnly: memoryOnlyFiscal }),
       ]);
+      const impressoraOk =
+        impProbe.ok === true ||
+        (impProbe.ok === null
+          ? null
+          : impProbe.ok);
       const { pendentes, falhas } = await fila.contadores();
       const contingencia = lerContingencia();
 
@@ -1648,7 +1705,12 @@ function iniciarServidor() {
 
       res.json({
         online: true,
-        impressoraConectada: impressoraOk,
+        impressoraConectada:
+          impressoraOk === null
+            ? typeof impressora.printJobService?.impressaoRecenteOk === "function"
+              ? impressora.printJobService.impressaoRecenteOk()
+              : null
+            : impressoraOk,
         acbrConectado: fiscalDriver.EMISSAO_FISCAL ? fiscalProbe.acbrOk : false,
         acbrOcupado: fiscalProbe.acbrOcupado,
         fiscalProcessando: fiscalProbe.fiscalProcessando,
@@ -2677,12 +2739,12 @@ function iniciarServidor() {
 
   app.post("/acbr/nfce/reimprimir", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     const body = req.body || {};
-    const { chave, numeroVenda, qrcodeNfe, qrcode, exibirLogo } = body;
+    const { chave, numeroVenda, qrcodeNfe, qrcode, exibirLogo, segundaVia, reimpressao, motivo } = body;
     try {
       const resultado = await fiscalService.reimprimirDanfceCompleto(
         chave,
         numeroVenda,
-        { qrcodeNfe, qrcode, exibirLogo },
+        { qrcodeNfe, qrcode, exibirLogo, segundaVia, reimpressao, motivo },
       );
       res.json(resultado);
     } catch (err) {
@@ -3164,13 +3226,14 @@ function iniciarServidor() {
   async function imprimirCupomHandler(req, res) {
     try {
       const resultado = await impressora.imprimirCupom(req.body);
-      if (resultado?.queued) {
+      if (resultado?.queued || resultado?.async) {
         return res.status(202).json({
-          ok: false,
+          ok: true,
           fila: true,
-          mensagem: resultado.message,
+          mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
           jobId: resultado.jobId,
           job: resultado.job,
+          deduplicado: !!resultado.deduplicado,
         });
       }
       res.json({ ok: true, jobId: resultado.jobId, ...resultado });
@@ -3185,11 +3248,11 @@ function iniciarServidor() {
   app.post("/impressora/abertura", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       const resultado = await impressora.imprimirAbertura(req.body);
-      if (resultado?.queued) {
+      if (resultado?.queued || resultado?.async) {
         return res.status(202).json({
-          ok: false,
+          ok: true,
           fila: true,
-          mensagem: resultado.message,
+          mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
           jobId: resultado.jobId,
         });
       }
@@ -3201,8 +3264,16 @@ function iniciarServidor() {
 
   app.post("/impressora/fechamento", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
-      await impressora.imprimirFechamento(req.body);
-      res.json({ ok: true });
+      const resultado = await impressora.imprimirFechamento(req.body);
+      if (resultado?.queued || resultado?.async) {
+        return res.status(202).json({
+          ok: true,
+          fila: true,
+          jobId: resultado.jobId,
+          mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
+        });
+      }
+      res.json({ ok: true, jobId: resultado?.jobId || null });
     } catch (err) {
       responderErroImpressao(res, err);
     }
@@ -3214,8 +3285,16 @@ function iniciarServidor() {
     exigirAgentToken,
     async (req, res) => {
       try {
-        await impressora.imprimirMovimentoCaixa(req.body);
-        res.json({ ok: true });
+        const resultado = await impressora.imprimirMovimentoCaixa(req.body);
+        if (resultado?.queued || resultado?.async) {
+          return res.status(202).json({
+            ok: true,
+            fila: true,
+            jobId: resultado.jobId,
+            mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
+          });
+        }
+        res.json({ ok: true, jobId: resultado?.jobId || null });
       } catch (err) {
         responderErroImpressao(res, err);
       }
@@ -3225,11 +3304,11 @@ function iniciarServidor() {
   app.post("/impressora/pedido", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       const resultado = await impressora.imprimirPedido(req.body);
-      if (resultado?.queued) {
+      if (resultado?.queued || resultado?.async) {
         return res.status(202).json({
-          ok: false,
+          ok: true,
           fila: true,
-          mensagem: resultado.message,
+          mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
           jobId: resultado.jobId,
           deduplicado: !!resultado.deduplicado,
           job: resultado.job ? { id: resultado.job.id } : undefined,
@@ -3248,8 +3327,15 @@ function iniciarServidor() {
 
   app.post("/impressora/gaveta", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
-      await impressora.abrirGaveta();
-      res.json({ ok: true });
+      const resultado = await impressora.abrirGaveta();
+      if (resultado?.queued || resultado?.async) {
+        return res.status(202).json({
+          ok: true,
+          fila: true,
+          jobId: resultado.jobId,
+        });
+      }
+      res.json({ ok: true, jobId: resultado?.jobId || null });
     } catch (err) {
       responderErroImpressao(res, err);
     }
@@ -3265,14 +3351,17 @@ function iniciarServidor() {
         await impressora.detectar(true);
       } catch (_) {}
     }
-    // Serializa probe + getInfo: Promise.all contende a sessão ACBr PosPrinter
-    // e fazia testar() falhar mesmo com impressão ok → badge Offline falso.
     const recente =
       typeof impressora.printJobService?.impressaoRecenteOk === "function"
         ? impressora.printJobService.impressaoRecenteOk() === true
         : false;
-    const ok = await impressora.testar().catch(() => false);
-    const info = await impressora.getInfo().catch(() => null);
+    // Poll rápido: se imprimiu há pouco, não dispara Get-Printer/POS
+    let ok = recente;
+    let info = null;
+    if (!recente || forceDetect) {
+      ok = await impressora.testar(forceDetect).catch(() => false);
+      info = await impressora.getInfo(forceDetect).catch(() => null);
+    }
     const conectada =
       recente ||
       ok === true ||
@@ -3288,6 +3377,7 @@ function iniciarServidor() {
           : null,
       driver:
         typeof impressora.getDriverInfo === "function" ? impressora.getDriverInfo() : null,
+      recente,
       detectada:
         info?.impressora?.nome ||
         (info?.impressora?.host
@@ -3297,12 +3387,21 @@ function iniciarServidor() {
         null,
       ultimaUsada: info?.ultimaUsada || null,
       jobs: impressora.printJobService?.observabilidade?.() || null,
+      ...(info ? { info } : {}),
     });
   });
 
   app.post("/impressora/teste", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       const resultado = await impressora.imprimirTeste();
+      if (resultado?.queued || resultado?.async) {
+        return res.status(202).json({
+          ok: true,
+          fila: true,
+          jobId: resultado.jobId,
+          mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
+        });
+      }
       res.json({ ok: true, ...resultado });
     } catch (err) {
       responderErroImpressao(res, err);
@@ -3313,6 +3412,15 @@ function iniciarServidor() {
     try {
       const body = req.body || {};
       const resultado = await impressora.imprimirSegundaVia(body);
+      if (resultado?.queued || resultado?.async) {
+        return res.status(202).json({
+          ok: true,
+          fila: true,
+          segundaVia: true,
+          jobId: resultado.jobId,
+          mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
+        });
+      }
       res.json({ ok: true, segundaVia: true, ...resultado });
     } catch (err) {
       responderErroImpressao(res, err);

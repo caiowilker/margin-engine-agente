@@ -10,9 +10,33 @@ function marcarSegundaVia(payload, extra = {}) {
     ...payload,
     segundaVia: true,
     reimpressao: true,
+    motivo: extra.motivo || payload.motivo || "segunda_via",
     emitidoEm: payload.emitidoEm || new Date().toISOString(),
     ...extra,
   };
+}
+
+/** Monta cupom fiscal a partir do XML/local SEM banner de 2ª via (1ª impressão pós-autorização). */
+function montarPayloadCupomFiscalLocal(opts = {}) {
+  const base = montarPayloadSegundaVia(opts);
+  const { segundaVia: _sv, reimpressao: _r, motivo: _m, ...rest } = base;
+  return {
+    ...rest,
+    segundaVia: false,
+    reimpressao: false,
+  };
+}
+
+/**
+ * Banner "*** SEGUNDA VIA ***" só em reimpressão intencional.
+ * `segundaVia` sozinho (legado do checkout) NÃO basta.
+ */
+function deveExibirBannerSegundaVia(payload) {
+  if (!payload || typeof payload !== "object") return false;
+  if (payload.reimpressao === true) return true;
+  const motivo = String(payload.motivo || "").toLowerCase();
+  if (/segunda_via|reimpressao|reimprimir/.test(motivo)) return true;
+  return false;
 }
 
 function lerXmlDoc(doc) {
@@ -131,6 +155,8 @@ function isDanfeTermico(payload) {
 module.exports = {
   marcarSegundaVia,
   montarPayloadSegundaVia,
+  montarPayloadCupomFiscalLocal,
+  deveExibirBannerSegundaVia,
   enriquecerComDocumento,
   isDanfeTermico,
 };

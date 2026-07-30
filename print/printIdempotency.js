@@ -10,11 +10,35 @@ const DEDUP_STATUSES = new Set([
   "IMPRESSO",
 ]);
 
-/** Janela em que um job IMPRESSO ainda bloqueia reenvio com a mesma chave. */
+/** Janela em que um job IMPRESSO de pedido/comanda ainda bloqueia reenvio. */
 const IMPRESSO_TTL_MS = parseInt(
   process.env.PRINT_IDEMPOTENCY_TTL_MS || String(24 * 60 * 60 * 1000),
   10,
 );
+
+/**
+ * TTL curto para cupom/caixa — só anti-retry do front (AbortError ~25s).
+ * 2ª via intencional após isso deve imprimir de novo.
+ */
+const CUPOM_IMPRESSO_TTL_MS = parseInt(
+  process.env.PRINT_CUPOM_IDEMPOTENCY_TTL_MS || "180000",
+  10,
+);
+
+const CUPOM_TIPOS = new Set([
+  "cupom_fiscal",
+  "cupom_nao_fiscal",
+  "segunda_via",
+  "danfe_termico",
+  "abertura_caixa",
+  "fechamento_caixa",
+  "movimento_caixa",
+  "sangria",
+  "suprimento",
+  "reimpressao",
+  "teste",
+  "gaveta",
+]);
 
 function stableHash(obj) {
   return crypto.createHash("sha256").update(JSON.stringify(obj)).digest("hex").slice(0, 24);
@@ -41,8 +65,36 @@ function fingerprintPedido(payload) {
   });
 }
 
+function fingerprintCupom(payload) {
+  if (!payload || typeof payload !== "object") return "empty";
+  const itens = Array.isArray(payload.itens)
+    ? payload.itens.map((it) => ({
+        c: String(it.codigo ?? it.code ?? ""),
+        n: String(it.nome ?? it.name ?? ""),
+        q: Number(it.quantidade ?? it.quantity ?? 0),
+        t: Number(it.total ?? it.lineTotal ?? 0),
+      }))
+    : [];
+  return stableHash({
+    total: Number(payload.total ?? 0),
+    emitidoEm: String(payload.emitidoEm || "").slice(0, 19),
+    forma: String(payload.formaPagamento || ""),
+    itens,
+  });
+}
+
+function isSegundaViaIntencional(payload) {
+  if (!payload || typeof payload !== "object") return false;
+  if (payload.reimpressao === true) return true;
+  const motivo = String(payload.motivo || "").toLowerCase();
+  if (/segunda_via|reimpressao|reimprimir/.test(motivo)) return true;
+  // segundaVia sozinho NÃO basta — cupom auxiliar do checkout já usava o flag
+  // por engano; exige reimpressao/motivo explícito OU op dedicada.
+  return false;
+}
+
 /**
- * Resolve chave estável. Sem chave → sem dedup (ex.: teste manual).
+ * Resolve chave estável. Sem chave → sem dedup (ex.: teste manual sem número).
  * @returns {string | null}
  */
 function resolveIdempotencyKey(op, args, opts = {}) {
@@ -57,11 +109,52 @@ function resolveIdempotencyKey(op, args, opts = {}) {
     return String(explicit).trim().slice(0, 190);
   }
 
-  if (op !== "imprimirPedido") return null;
   const payload = args?.[0];
   if (!payload || typeof payload !== "object") return null;
 
-  // Job da nuvem (comanda) — uma via física por jobId.
+  if (
+    op === "imprimirCupom" ||
+    op === "imprimirSegundaVia" ||
+    op === "imprimirAbertura" ||
+    op === "imprimirFechamento" ||
+    op === "imprimirMovimentoCaixa"
+  ) {
+    const numero =
+      payload.numeroVenda ||
+      payload.numero ||
+      payload.idVenda ||
+      payload.vendaId ||
+      payload.correlationId ||
+      null;
+    const sv = op === "imprimirSegundaVia" || isSegundaViaIntencional(payload);
+    const tipo = sv
+      ? "sv"
+      : payload.naoFiscal || payload.cupomSemFiscal
+        ? "nf"
+        : "cupom";
+
+    if (numero != null && String(numero).trim()) {
+      // 2ª via intencional: inclui hash curto do horário para permitir várias vias
+      // sem bloquear, mas ainda deduplica retries no mesmo segundo
+      if (sv) {
+        const slot = String(payload.emitidoEm || Date.now()).slice(0, 16);
+        return `${op}:${tipo}:${String(numero).trim()}:${slot}`.slice(0, 190);
+      }
+      return `${op}:${tipo}:${String(numero).trim()}`.slice(0, 190);
+    }
+
+    if (op === "imprimirAbertura" || op === "imprimirFechamento") {
+      const caixa = String(payload.caixa || payload.numeroCaixa || "main");
+      const ts = String(payload.emitidoEm || payload.aberturaEm || "").slice(0, 16);
+      if (ts) return `${op}:${caixa}:${ts}`.slice(0, 190);
+    }
+
+    // Sem número — fingerprint anti-retry (AbortError) sem bloquear 2ª via por 24h
+    return `${op}:${tipo}:fp:${fingerprintCupom(payload)}`.slice(0, 190);
+  }
+
+  if (op !== "imprimirPedido") return null;
+
   const cloudJobId = payload.jobId || payload.job_id;
   if (cloudJobId != null && String(cloudJobId).trim()) {
     return `cloud:${String(cloudJobId).trim()}`.slice(0, 190);
@@ -83,7 +176,7 @@ function resolveIdempotencyKey(op, args, opts = {}) {
 }
 
 /**
- * @param {{ status: string, impresso_em?: string | null, criado_em?: string }} row
+ * @param {{ status: string, tipo?: string, impresso_em?: string | null, criado_em?: string }} row
  */
 function deveDeduplicar(row) {
   if (!row || !DEDUP_STATUSES.has(row.status)) return false;
@@ -91,13 +184,20 @@ function deveDeduplicar(row) {
   const ts = row.impresso_em || row.criado_em;
   if (!ts) return true;
   const age = Date.now() - new Date(ts).getTime();
-  return age >= 0 && age < IMPRESSO_TTL_MS;
+  if (age < 0) return true;
+  const ttl = CUPOM_TIPOS.has(String(row.tipo || ""))
+    ? CUPOM_IMPRESSO_TTL_MS
+    : IMPRESSO_TTL_MS;
+  return age < ttl;
 }
 
 module.exports = {
   resolveIdempotencyKey,
   fingerprintPedido,
+  fingerprintCupom,
+  isSegundaViaIntencional,
   deveDeduplicar,
   DEDUP_STATUSES,
   IMPRESSO_TTL_MS,
+  CUPOM_IMPRESSO_TTL_MS,
 };

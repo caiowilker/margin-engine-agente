@@ -56,6 +56,40 @@ test("resolveIdempotencyKey — cloud jobId e PRE_CONTA", () => {
   );
 });
 
+test("resolveIdempotencyKey — cupom por numeroVenda (anti-retry front)", () => {
+  assert.equal(
+    resolveIdempotencyKey("imprimirCupom", [{ numeroVenda: "V-100", naoFiscal: true }], {}),
+    "imprimirCupom:nf:V-100",
+  );
+  assert.equal(
+    resolveIdempotencyKey("imprimirCupom", [{ numeroVenda: "V-100", chaveNfe: "35..." }], {}),
+    "imprimirCupom:cupom:V-100",
+  );
+  // segundaVia sozinho NÃO muda a chave (checkout legado) — precisa reimpressao/motivo
+  assert.equal(
+    resolveIdempotencyKey(
+      "imprimirCupom",
+      [{ numeroVenda: "V-100", naoFiscal: true, segundaVia: true }],
+      {},
+    ),
+    "imprimirCupom:nf:V-100",
+  );
+  const sv = resolveIdempotencyKey(
+    "imprimirCupom",
+    [
+      {
+        numeroVenda: "V-100",
+        naoFiscal: true,
+        reimpressao: true,
+        motivo: "segunda_via",
+        emitidoEm: "2026-07-30T12:00:00.000Z",
+      },
+    ],
+    {},
+  );
+  assert.ok(sv.startsWith("imprimirCupom:sv:V-100:"));
+});
+
 test("fingerprint estável — createdAt não entra", () => {
   const a = fingerprintPedido({
     orderId: "o",

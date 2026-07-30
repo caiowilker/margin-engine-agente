@@ -68,7 +68,10 @@ async function run() {
   const mock = factory.getPrintProvider();
   mock._clearJobs();
   const r = await ps.imprimirTeste();
-  assert.strictEqual(r.ok, true);
+  assert.ok(r.jobId || r.async === true || r.ok === true);
+  // async:true enfileira e o worker processa
+  await pjs.processarFila();
+  assert.ok(mock._jobs.length >= 1);
   assert.strictEqual(mock._jobs[0].tipo, "teste");
 
   cleanup();

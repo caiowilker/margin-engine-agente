@@ -13,14 +13,27 @@ function fiscalEmUso() {
   return false;
 }
 
-async function aguardarFiscalLivre(maxMs = 120000) {
-  const deadline = Date.now() + maxMs;
+/**
+ * Aguarda fiscal liberar a sessão.
+ * Default curto: impressão térmica não pode travar 120s — PDV precisa ser instantâneo.
+ */
+async function aguardarFiscalLivre(maxMs) {
+  const limite = Number.isFinite(maxMs)
+    ? maxMs
+    : parseInt(process.env.PRINT_FISCAL_WAIT_MS || "5000", 10);
+  const started = Date.now();
+  const deadline = started + Math.max(0, limite);
   while (Date.now() < deadline) {
-    if (!fiscalEmUso()) return { aguardouMs: 0 };
-    await new Promise((r) => setTimeout(r, 300));
+    if (!fiscalEmUso()) {
+      return { aguardouMs: Date.now() - started, timeout: false };
+    }
+    await new Promise((r) => setTimeout(r, 100));
   }
-  log.warn("[PrintFiscalCoord] Timeout aguardando fiscal — prosseguindo com impressão");
-  return { aguardouMs: maxMs, timeout: true };
+  log.warn(
+    { aguardouMs: Date.now() - started, maxMs: limite },
+    "[PrintFiscalCoord] Timeout aguardando fiscal — prosseguindo com impressão",
+  );
+  return { aguardouMs: Date.now() - started, timeout: true };
 }
 
 function precisaPortaAcbrNativa() {
@@ -34,12 +47,19 @@ function precisaPortaAcbrNativa() {
 }
 
 async function prepararImpressaoAposFiscal() {
-  const wait = await aguardarFiscalLivre();
+  // Native ESC/POS não compartilha sessão FFI — espera mínima só se fiscal estiver ativo
   const acbrNativo = precisaPortaAcbrNativa();
+  const waitMs = acbrNativo
+    ? parseInt(process.env.PRINT_FISCAL_WAIT_MS || "5000", 10)
+    : parseInt(process.env.PRINT_FISCAL_WAIT_NATIVE_MS || "1500", 10);
+  const wait = fiscalEmUso()
+    ? await aguardarFiscalLivre(waitMs)
+    : { aguardouMs: 0, timeout: false };
+
   if (process.platform === "win32" && acbrNativo) {
     try {
       await require("./acbrPosPrinterRuntime").invalidatePosPrinterSession();
-      const cooldownMs = parseInt(process.env.PRINT_POS_COOLDOWN_MS || "400", 10);
+      const cooldownMs = parseInt(process.env.PRINT_POS_COOLDOWN_MS || "200", 10);
       if (cooldownMs > 0) {
         await new Promise((r) => setTimeout(r, cooldownMs));
       }

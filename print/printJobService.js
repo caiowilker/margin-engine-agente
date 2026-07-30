@@ -26,7 +26,7 @@ const stats = {
 function cfg() {
   return {
     maxTentativas: parseInt(process.env.PRINT_JOB_MAX_TENTATIVAS || "5", 10),
-    timeoutTotalMs: parseInt(process.env.PRINT_JOB_TIMEOUT_TOTAL_MS || "20000", 10),
+    timeoutTotalMs: parseInt(process.env.PRINT_JOB_TIMEOUT_TOTAL_MS || "15000", 10),
     backoffBaseMs: parseInt(process.env.PRINT_JOB_BACKOFF_MS || "2000", 10),
     pollMs: parseInt(process.env.PRINT_JOB_POLL_MS || "1000", 10),
     retentionDias: parseInt(process.env.PRINT_JOB_RETENTION_DIAS || "90", 10),
@@ -314,6 +314,11 @@ function iniciarWorker() {
   } catch (_) {}
   if (process.env.PRINT_JOB_WORKER === "false") return;
   setInterval(() => {
+    try {
+      store.recuperarJobsEnviandoPresos(
+        parseInt(process.env.PRINT_ENVIANDO_STALE_MS || "90000", 10),
+      );
+    } catch (_) {}
     processarFila().catch(() => {});
   }, cfg().pollMs);
   processarFila().catch(() => {});
