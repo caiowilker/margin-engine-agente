@@ -21,7 +21,7 @@ $checks = @(
     @{ Path = "dist\app\frontend-dist\api-backend.json"; Hint = "api-backend.json" },
     @{ Path = "dist\app\BUILD_STAMP.json"; Hint = "BUILD_STAMP (prepare-build.ps1)" },
     @{ Path = "dist\app\node_modules\better-sqlite3\build\Release\better_sqlite3.node"; Hint = "better-sqlite3 nativo (rode prepare-build.ps1 sem -SkipNpm)" },
-    @{ Path = "dist\app\node_modules\koffi\package.json"; Hint = "koffi (ACBr PosPrinter FFI — prepare-build.ps1)" },
+    @{ Path = "dist\app\node_modules\koffi\package.json"; Hint = "koffi (ACBr PosPrinter FFI - prepare-build.ps1)" },
     @{ Path = "dist\app\node_modules\koffi\build\koffi\win32_x64\koffi.node"; Hint = "koffi.node win32_x64 (sem VS Build Tools)" },
     @{ Path = "dist\app\node_modules\@projetoacbr\acbrlib-nfse-node\package.json"; Hint = "@projetoacbr/acbrlib-nfse-node (npm ci)" },
     @{ Path = "dist\app\assets\margin-engine.ico"; Hint = "Icone instalador" },
