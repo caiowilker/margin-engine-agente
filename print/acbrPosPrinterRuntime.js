@@ -196,8 +196,32 @@ async function readStringOut(libBundle, fn, ...args) {
   return ultimoRetorno(libBundle);
 }
 
+/**
+ * Chama FFI PosPrinter com timeout duro.
+ * Sem isso, POS_Ativar/POS_Imprimir em RAW: pode prender o threadpool por minutos
+ * (agente "off", cupom só imprime depois).
+ *
+ * Nota: Promise.race não cancela a FFI nativa — só deixa de esperar.
+ * Por isso teardown usa timeout curto e abandona a sessão (ver callPosBestEffort).
+ */
 async function callPos(libBundle, fn, ...args) {
-  const ret = await promisify(fn.bind(libBundle.lib), ...args);
+  const timeoutMs = parseInt(process.env.ACBR_POS_CALL_TIMEOUT_MS || "8000", 10);
+  const invoke = promisify(fn.bind(libBundle.lib), ...args);
+  let timer;
+  const ret = await Promise.race([
+    invoke,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        const e = new Error(
+          `Timeout ACBr PosPrinter (${timeoutMs}ms) em ${fn.name || "POS_*"}`,
+        );
+        e.code = "ACBR_POS_TIMEOUT";
+        e.printTimedOut = true;
+        reject(e);
+      }, Math.max(1000, timeoutMs));
+    }),
+  ]).finally(() => clearTimeout(timer));
+
   if (ret !== 0) {
     const msg = await ultimoRetorno(libBundle);
     const values = buildRuntimeValues();
@@ -207,6 +231,27 @@ async function callPos(libBundle, fn, ...args) {
     });
   }
   return ret;
+}
+
+/**
+ * Desativar/Finalizar com deadline curto — NUNCA esperar minutos no teardown.
+ * Se estourar, abandona a await (FFI pode continuar no worker) e o caller dropa a sessão.
+ */
+async function callPosBestEffort(libBundle, fn, ...args) {
+  const timeoutMs = parseInt(process.env.ACBR_POS_TEARDOWN_TIMEOUT_MS || "2000", 10);
+  let timer;
+  try {
+    await Promise.race([
+      promisify(fn.bind(libBundle.lib), ...args),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("teardown timeout")), Math.max(500, timeoutMs));
+      }),
+    ]);
+  } catch (_) {
+    /* abandonado de propósito */
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function gravarConfigIni(libBundle, iniPath, values) {
@@ -263,7 +308,7 @@ async function ativarComConfig(bundle, iniForLib, iniPathDisk) {
   await gravarConfigIni(bundle, iniForLib, values);
   if (iniPathDisk) syncIniToSource(bundle, iniPathDisk);
   try {
-    await promisify(bundle.lib.POS_Desativar.async.bind(bundle.lib.POS_Desativar));
+    await callPosBestEffort(bundle, bundle.lib.POS_Desativar.async);
   } catch (_) {
     /* primeira ativação */
   }
@@ -374,10 +419,10 @@ async function withPosPrinterSession(fn, opts = {}) {
   async function teardownSession(sess) {
     if (!sess?.bundle) return;
     try {
-      await promisify(sess.bundle.lib.POS_Desativar.async.bind(sess.bundle.lib.POS_Desativar));
+      await callPosBestEffort(sess.bundle, sess.bundle.lib.POS_Desativar.async);
     } catch (_) {}
     try {
-      await promisify(sess.bundle.lib.POS_Finalizar.async.bind(sess.bundle.lib.POS_Finalizar));
+      await callPosBestEffort(sess.bundle, sess.bundle.lib.POS_Finalizar.async);
     } catch (_) {}
     try {
       if (sess.cwdBefore) process.chdir(sess.cwdBefore);
@@ -387,10 +432,17 @@ async function withPosPrinterSession(fn, opts = {}) {
     }
   }
 
+  /**
+   * Sessão curta por job em RAW era o padrão antigo — cada cupom fazia
+   * Finalizar+Inicializar+Ativar e travava o spooler. Agora: sessão quente
+   * (idle timeout). Opt-in: ACBR_POS_SESSION_PER_JOB=true.
+   */
   function sessaoCurtaRaw() {
-    if (process.env.ACBR_POS_SESSION_PER_JOB === "false") return false;
-    const porta = buildRuntimeValues().PosPrinter?.Porta || "";
-    return /^RAW:/i.test(porta);
+    if (process.env.ACBR_POS_SESSION_PER_JOB === "true") {
+      const porta = buildRuntimeValues().PosPrinter?.Porta || "";
+      return /^RAW:/i.test(porta);
+    }
+    return false;
   }
 
   function scheduleIdle(sess) {
@@ -494,8 +546,11 @@ async function assertPortaLegivel(bundle) {
 }
 
 async function imprimirTagsNativeOnce(bundle, tags) {
+  // NÃO re-chamar POS_Ativar a cada cupom — sessão já ativa em withPosPrinterSession.
+  // Re-Ativar em RAW:Windows prende o spooler por minutos.
+  const forceReativar = process.env.ACBR_POS_REATIVAR_POR_JOB === "true";
   const sess = withPosPrinterSession._session;
-  if (sess?.iniForLib) {
+  if (forceReativar && sess?.iniForLib) {
     await ativarComConfig(bundle, sess.iniForLib, sess.iniPath);
   }
   await assertPortaLegivel(bundle);
@@ -510,7 +565,7 @@ function erroPortaRecuperavel(err) {
 }
 
 async function imprimirTagsNative(tags) {
-  const maxTentativas = parseInt(process.env.ACBR_POS_PRINT_RETRIES || "3", 10);
+  const maxTentativas = parseInt(process.env.ACBR_POS_PRINT_RETRIES || "2", 10);
   let lastErr;
 
   for (let attempt = 1; attempt <= maxTentativas; attempt++) {
@@ -617,20 +672,21 @@ async function invalidatePosPrinterSession() {
   const sess = withPosPrinterSession._session;
   if (!sess?.bundle) return;
   withPosPrinterSession._refCount = 0;
-  try {
-    await promisify(sess.bundle.lib.POS_Desativar.async.bind(sess.bundle.lib.POS_Desativar));
-  } catch (_) {}
-  try {
-    await promisify(sess.bundle.lib.POS_Finalizar.async.bind(sess.bundle.lib.POS_Finalizar));
-  } catch (_) {}
-  try {
-    if (sess.cwdBefore) process.chdir(sess.cwdBefore);
-  } catch (_) {}
+  // Dropa referência ANTES do teardown — próximo job não reusa sessão zumbi
   withPosPrinterSession._session = null;
   if (withPosPrinterSession._idleTimer) {
     clearTimeout(withPosPrinterSession._idleTimer);
     withPosPrinterSession._idleTimer = null;
   }
+  try {
+    await callPosBestEffort(sess.bundle, sess.bundle.lib.POS_Desativar.async);
+  } catch (_) {}
+  try {
+    await callPosBestEffort(sess.bundle, sess.bundle.lib.POS_Finalizar.async);
+  } catch (_) {}
+  try {
+    if (sess.cwdBefore) process.chdir(sess.cwdBefore);
+  } catch (_) {}
 }
 
 module.exports = {

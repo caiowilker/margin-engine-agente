@@ -15,6 +15,8 @@ const {
 let workerTimer = null;
 let processando = false;
 let printLock = Promise.resolve();
+/** Jobs físicos em voo — probes de status não devem abrir sessão/ACBr nesse momento. */
+let jobsEmVoo = 0;
 
 const stats = {
   jobsProcessados: 0,
@@ -26,11 +28,33 @@ const stats = {
 function cfg() {
   return {
     maxTentativas: parseInt(process.env.PRINT_JOB_MAX_TENTATIVAS || "5", 10),
-    timeoutTotalMs: parseInt(process.env.PRINT_JOB_TIMEOUT_TOTAL_MS || "15000", 10),
-    backoffBaseMs: parseInt(process.env.PRINT_JOB_BACKOFF_MS || "2000", 10),
-    pollMs: parseInt(process.env.PRINT_JOB_POLL_MS || "1000", 10),
+    // Soft deadline curto: native RAW ~10s; ACBr call 8s. Nunca minutos.
+    timeoutTotalMs: parseInt(process.env.PRINT_JOB_TIMEOUT_TOTAL_MS || "12000", 10),
+    timeoutFastMs: parseInt(process.env.PRINT_JOB_TIMEOUT_FAST_MS || "8000", 10),
+    backoffBaseMs: parseInt(process.env.PRINT_JOB_BACKOFF_MS || "1500", 10),
+    pollMs: parseInt(process.env.PRINT_JOB_POLL_MS || "400", 10),
     retentionDias: parseInt(process.env.PRINT_JOB_RETENTION_DIAS || "90", 10),
   };
+}
+
+function isTipoRapido(tipo) {
+  return (
+    tipo === "cupom_nao_fiscal" ||
+    tipo === "abertura_caixa" ||
+    tipo === "fechamento_caixa" ||
+    tipo === "movimento_caixa" ||
+    tipo === "sangria" ||
+    tipo === "suprimento" ||
+    tipo === "pedido_comanda" ||
+    tipo === "teste" ||
+    tipo === "gaveta"
+  );
+}
+
+function timeoutParaJob(row) {
+  const c = cfg();
+  if (isTipoRapido(row.tipo)) return c.timeoutFastMs;
+  return c.timeoutTotalMs;
 }
 
 function serializarPayload(args) {
@@ -165,8 +189,9 @@ async function processarJobRow(row) {
   store.atualizarJob(row.id, { status: STATUS.ENVIANDO, tentativas: row.tentativas + 1 });
   store.registrarEvento(row.id, "ENVIANDO", `tentativa ${row.tentativas + 1}`);
 
+  jobsEmVoo += 1;
   try {
-    const exec = await executarOp(row.op, args, cfg().timeoutTotalMs);
+    const exec = await executarOp(row.op, args, timeoutParaJob(row));
     store.atualizarJob(row.id, {
       status: STATUS.IMPRESSO,
       provider: exec.provider,
@@ -252,6 +277,8 @@ async function processarJobRow(row) {
       if (cls.retryable) factory.resetPrintProvider();
     } catch (_) {}
     return { ok: false, retry: false, job: rowToJob(store.buscarJob(row.id)), erro: err.message };
+  } finally {
+    jobsEmVoo = Math.max(0, jobsEmVoo - 1);
   }
 }
 
@@ -315,9 +342,15 @@ function iniciarWorker() {
   if (process.env.PRINT_JOB_WORKER === "false") return;
   setInterval(() => {
     try {
-      store.recuperarJobsEnviandoPresos(
-        parseInt(process.env.PRINT_ENVIANDO_STALE_MS || "90000", 10),
-      );
+      // Não reclaim enquanto envio físico abandonado ainda pode estar vivo
+      const busy =
+        typeof require("./printExecutor").physicalSendAbandonedInFlight === "function" &&
+        require("./printExecutor").physicalSendAbandonedInFlight();
+      if (!busy) {
+        store.recuperarJobsEnviandoPresos(
+          parseInt(process.env.PRINT_ENVIANDO_STALE_MS || "90000", 10),
+        );
+      }
     } catch (_) {}
     processarFila().catch(() => {});
   }, cfg().pollMs);
@@ -458,6 +491,15 @@ function impressaoRecenteOk(windowMs) {
   return false;
 }
 
+function impressaoEmAndamento() {
+  if (jobsEmVoo > 0 || processando) return true;
+  try {
+    return require("./printExecutor").physicalSendAbandonedInFlight();
+  } catch (_) {
+    return false;
+  }
+}
+
 module.exports = {
   cfg,
   iniciarWorker,
@@ -471,5 +513,6 @@ module.exports = {
   buscarJob: (id) => rowToJob(store.buscarJob(id)),
   observabilidade,
   impressaoRecenteOk,
+  impressaoEmAndamento,
   STATUS,
 };

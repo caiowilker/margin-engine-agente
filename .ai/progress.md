@@ -5,6 +5,24 @@
 
 ## Changelog (2026-07-30)
 
+### Impressão térmica instantânea — fim da demora de minutos
+
+- **Causa raiz:** a cada cupom o pipeline fazia `invalidatePosPrinterSession` + `POS_Ativar` de novo na porta `RAW:` (spooler Windows). O Ativar travava minutos → UI dizia "enviado", papel só depois, agente sumia (threadpool FFI preso) e voltava.
+- **Fix:**
+  1. Cupom **não fiscal** / abertura / fechamento / pedido / teste → **ESC/POS nativo** (`PRINT_FAST_NATIVE=true`, padrão) — WritePrinter async, sem ACBr.
+  2. Sessão PosPrinter **quente**; sem re-Ativar por job; invalidação só após fiscal.
+  3. Timeout duro em `callPos` (8s) + hard-drain no executor (não espera minutos).
+  4. Probe `/impressora` não abre sessão ACBr no caminho quente.
+- **Hardening (mesma data):**
+  - Fast-path **não toca** PosPrinter (prep zero ACBr).
+  - Porta `RAW:` não varre rede/USB em fallback.
+  - Timeout dedicado `PRINT_JOB_TIMEOUT_FAST_MS=8000` para tipos comerciais.
+  - Probe de status pula enquanto `impressaoEmAndamento`.
+  - RAW timeout padrão 8s; retries ACBr PosPrinter 2.
+  - Follow-up auditoria: Desativar/Finalizar com timeout 2s; hard-drain sem retry de fila; station route sem invalidate no native; `resetPrintProvider` não dispara Desativar; aviso de flags perigosas no boot; gate de reclaim com envio abandonado vivo.
+  - **Cache `printerLocalConfig.ler()` (5s):** render ia de ~1.7s → ~0.3ms por cupom (INI lido dezenas de vezes). Crítico p/ produção.
+  - Benchmark CI sem logo + iterações reduzidas; auditoria T00 usa versão do `package.json`.
+
 ### Agente sempre rápido — probes e event loop
 
 - `Get-Printer` virou **async** (`execFile` + single-flight + cache 30s) — nunca mais congela o Node.

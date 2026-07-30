@@ -199,7 +199,7 @@ const LISTAR_PRINTERS_TIMEOUT_MS = parseInt(
   10,
 );
 const RAW_PRINT_TIMEOUT_MS = parseInt(
-  process.env.PRINTER_RAW_TIMEOUT_MS || "10000",
+  process.env.PRINTER_RAW_TIMEOUT_MS || "8000",
   10,
 );
 
@@ -705,8 +705,17 @@ async function enviarBuffer(buffer) {
     );
   }
 
-  const ordemBase =
-    PRINTER_TYPE === "windows"
+  // RAW configurado: NÃO varrer rede/USB (segundos a mais + agente “pesado”).
+  // Só RAW → rediscovery Windows (cache/Get-Printer). Strict = falha na hora.
+  const rawStrict =
+    String(process.env.PRINT_RAW_STRICT || "false").toLowerCase() === "true";
+  const rawOnlyPath = !!(rawConfigurado && IS_WIN && !stationOverride);
+
+  const ordemBase = rawOnlyPath
+    ? rawStrict
+      ? []
+      : ["windows"]
+    : PRINTER_TYPE === "windows"
       ? ["windows"]
       : PRINTER_TYPE === "network"
         ? ["network", "windows", "usb"]
@@ -715,7 +724,7 @@ async function enviarBuffer(buffer) {
           : IS_WIN
             ? ["windows", "network", "usb"]
             : ["usb", "network", "windows"];
-  // Rotas por estação e RAW configurado têm prioridade absoluta
+
   const ordem = [
     "network-station",
     "windows-station",
@@ -731,17 +740,20 @@ async function enviarBuffer(buffer) {
       return { ok: true, metodo, ultima: ultimaImpressoraUsada };
     } catch (err) {
       erros.push(`${metodo}: ${err.message}`);
-      // Se a rota de estação falhou, não cai na impressora padrão (evita comanda no lugar errado)
       if (metodo === "network-station" || metodo === "windows-station") {
         throw new Error(
           `Impressora da estação indisponível (${metodo}).\n` +
             erros.map((e) => `  - ${e}`).join("\n"),
         );
       }
-      // RAW configurado falhou: tenta descoberta Windows uma vez (nome desatualizado)
       if (metodo === "windows-raw-config") {
+        if (rawStrict) {
+          throw new Error(
+            `RAW configurado falhou (PRINT_RAW_STRICT): ${err.message}`,
+          );
+        }
         console.warn(
-          "[Impressora] RAW configurado falhou — tentando descoberta Windows:",
+          "[Impressora] RAW configurado falhou — rediscovery Windows (sem scan rede/USB):",
           err.message,
         );
         continue;

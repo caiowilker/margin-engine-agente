@@ -267,8 +267,63 @@ test("renderCupomTags — corpo principal sem negrito simulado (contraste)", () 
 });
 
 test("printFiscalCoord — fiscalEmUso sem lock ativo", () => {
-  const { fiscalEmUso } = require("../print/printFiscalCoordination");
+  const {
+    fiscalEmUso,
+    fiscalAcabouDeUsar,
+    isFastNativePath,
+  } = require("../print/printFiscalCoordination");
   assert.strictEqual(fiscalEmUso(), false);
+  assert.strictEqual(fiscalAcabouDeUsar(1), false);
+  assert.strictEqual(isFastNativePath({ payload: { naoFiscal: true } }), true);
+  assert.strictEqual(isFastNativePath({ op: "imprimirPedido" }), true);
+  assert.strictEqual(
+    isFastNativePath({
+      payload: { chaveNfe: "3526" + "0".repeat(40), naoFiscal: false },
+    }),
+    false,
+  );
+});
+
+test("preferNativeEscPos — naoFiscal rápido; fiscal com chave fica no ACBr", () => {
+  const { preferNativeEscPos } = require("../print/drivers/acbrPosPrinterProvider");
+  const prev = process.env.PRINT_FAST_NATIVE;
+  process.env.PRINT_FAST_NATIVE = "true";
+  try {
+    assert.strictEqual(preferNativeEscPos({ naoFiscal: true, numeroVenda: "V1" }), true);
+    assert.strictEqual(preferNativeEscPos({ cupomSemFiscal: true }), true);
+    assert.strictEqual(
+      preferNativeEscPos({ chaveNfe: "3526" + "0".repeat(40), naoFiscal: false }),
+      false,
+    );
+    assert.strictEqual(preferNativeEscPos({ layout: "danfe-termico" }), false);
+    assert.strictEqual(preferNativeEscPos({}), true);
+  } finally {
+    if (prev === undefined) delete process.env.PRINT_FAST_NATIVE;
+    else process.env.PRINT_FAST_NATIVE = prev;
+  }
+});
+
+test("printExecutor — hardDrainMs limitado", () => {
+  const { hardDrainMs } = require("../print/printExecutor");
+  const prev = process.env.PRINT_HARD_DRAIN_MS;
+  delete process.env.PRINT_HARD_DRAIN_MS;
+  try {
+    assert.ok(hardDrainMs(12000) <= 8000);
+    assert.ok(hardDrainMs(1000) >= 2000);
+  } finally {
+    if (prev === undefined) delete process.env.PRINT_HARD_DRAIN_MS;
+    else process.env.PRINT_HARD_DRAIN_MS = prev;
+  }
+});
+
+test("printErrors — hard drain sugere fallback sem martelar fila", () => {
+  const { classifyPrintError } = require("../print/printErrors");
+  const err = new Error("Timeout hard");
+  err.code = "PRINT_HARD_DRAIN";
+  err.printTimedOut = true;
+  const cls = classifyPrintError(err);
+  assert.strictEqual(cls.retryable, false);
+  assert.strictEqual(cls.fallbackSuggested, true);
 });
 
 test("printerBootstrap — porta RAW configurada não exige detecção", () => {

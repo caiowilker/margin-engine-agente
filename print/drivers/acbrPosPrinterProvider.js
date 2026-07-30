@@ -1,5 +1,9 @@
 /**
  * AcbrPosPrinterProvider — ACBrLib PosPrinter (padrão 1.0).
+ *
+ * Caminho rápido: cupom NÃO fiscal e ops comerciais usam ESC/POS nativo
+ * (WritePrinter async) — instantâneo. ACBr PosPrinter fica para DANFE fiscal
+ * (QR BMP / tags). Evita POS_Ativar em loop no spooler RAW.
  */
 const log = require("../../logger").child({ modulo: "acbr_posprinter" });
 const runtime = require("../acbrPosPrinterRuntime");
@@ -10,9 +14,26 @@ const native = require("./nativeEscPosProvider");
 const caixaTags = require("../caixaAcbrTags");
 const pedidoTags = require("../pedidoAcbrTags");
 
+/**
+ * Prefere ESC/POS nativo (rápido) vs ACBr tags.
+ * Fiscal com chave → ACBr. Não-fiscal / comercial → native (padrão).
+ */
+function preferNativeEscPos(payload) {
+  const flag = String(process.env.PRINT_FAST_NATIVE || "true").toLowerCase();
+  if (flag === "false" || flag === "0") return false;
+  if (flag === "always") return true;
+  if (!payload || typeof payload !== "object") return true;
+  if (payload.naoFiscal === true || payload.cupomSemFiscal === true) return true;
+  // DANFE / NFC-e fiscal precisa de tags ACBr (QR BMP, layout fiscal)
+  if (payload.chaveNfe && !payload.naoFiscal && !payload.cupomSemFiscal) return false;
+  if (payload.somenteDanfeTermico || payload.danfeTermico) return false;
+  if (payload.layout === "danfe-termico") return false;
+  return true;
+}
+
 async function imprimirViaTags(renderFn, payload, fallbackNative) {
   const mode = getIntegrationMode();
-  if (mode === "parity") {
+  if (mode === "parity" || preferNativeEscPos(payload)) {
     return fallbackNative(payload);
   }
   const tags = renderFn(payload || {});
@@ -48,6 +69,7 @@ function getDriverInfo() {
     libPath: runtime.resolveLibPath(),
     iniPath: runtime.resolveIniPath(),
     ready: mode === "native" || mode === "parity",
+    fastNative: String(process.env.PRINT_FAST_NATIVE || "true"),
   };
 }
 
@@ -73,7 +95,16 @@ async function imprimirPayloadTags(payload) {
     relaxQr: deveRelaxarQr(payload),
   });
   const mode = getIntegrationMode();
-  if (mode === "parity") {
+  if (mode === "parity" || preferNativeEscPos(normalizado)) {
+    if (preferNativeEscPos(normalizado) && mode === "native") {
+      log.info(
+        {
+          numeroVenda: normalizado?.numeroVenda,
+          naoFiscal: !!normalizado?.naoFiscal,
+        },
+        "[ACBrPosPrinter] Fast-path ESC/POS nativo",
+      );
+    }
     return native.imprimirCupom(normalizado);
   }
   const { resolverQrBmpPlaceholders } = require("../qrCodeAcbrBmp");
@@ -101,7 +132,7 @@ async function imprimirSegundaVia(payload) {
 
 async function imprimirTeste() {
   const mode = getIntegrationMode();
-  if (mode === "parity") {
+  if (mode === "parity" || preferNativeEscPos({ naoFiscal: true })) {
     return native.imprimirTeste();
   }
   const tags = renderPaginaTeste();
@@ -118,15 +149,16 @@ async function imprimirTeste() {
 
 async function abrirGaveta() {
   const mode = getIntegrationMode();
-  if (mode === "native") {
-    return runtime.abrirGavetaNative();
+  if (mode !== "native" || preferNativeEscPos({ naoFiscal: true })) {
+    return native.abrirGaveta();
   }
-  return native.abrirGaveta();
+  return runtime.abrirGavetaNative();
 }
 
 module.exports = {
   getProviderName,
   getDriverInfo,
+  preferNativeEscPos,
   testar: async (force) => {
     try {
       const det = await native.detectar(force);
@@ -136,20 +168,18 @@ module.exports = {
           require("../factory").resetPrintProvider();
         } catch (_) {}
       }
-      if (getIntegrationMode() === "native") {
-        // Usa leitura de status (POS_LerStatusImpressoraFormatado) sem imprimir.
-        // Evita avançar papel e contender a sessão ACBr durante emissão fiscal.
-        // Alinhado a getInfo: ausência de falha explícita = online (não exige ok===true).
+      // Com fast-native: não abrir sessão ACBr só para probe (Ativar lento / agente off)
+      if (getIntegrationMode() === "native" && !preferNativeEscPos({ naoFiscal: true })) {
         try {
           const status = await runtime.lerStatusFormatadoNative(2);
           if (status?.ok === false) return false;
           if (status?.ok === true) return true;
           return !!det?.impressora;
         } catch (_) {
-          // Sessão não inicializada ainda (DLL não carregada) — usa detecção
           return !!det?.impressora;
         }
       }
+      if (det?.impressora) return true;
       return native.testar(force);
     } catch (_) {
       return false;
@@ -162,7 +192,8 @@ module.exports = {
     try {
       local = require("../printerLocalConfig").ler();
     } catch (_) {}
-    if (mode === "native") {
+    // Live status ACBr só sob demanda — evita hang no boot/poll do PDV
+    if (mode === "native" && process.env.PRINTER_ACBR_LIVE_STATUS === "true") {
       try {
         const [versao, status] = await Promise.all([
           runtime.lerVersaoNative().catch(() => null),
@@ -192,6 +223,7 @@ module.exports = {
       provider: "acbr-posprinter",
       mode,
       acbrPorta: local?.porta || process.env.PRINTER_PORTA || null,
+      ...getDriverInfo(),
     };
   },
   listar: () => ({ ...native.listar(), provider: "acbr-posprinter", ...getDriverInfo() }),
@@ -212,8 +244,12 @@ module.exports = {
   imprimirPedido: (p) => {
     const routes = require("../printerStationRoutes");
     const porta = routes.resolvePortaForPrintType(p?.printType ?? p?.print_type);
-    return routes.withPortaOverride(porta, () =>
-      imprimirViaTags(pedidoTags.renderPedidoTags, p, native.imprimirPedido),
+    // Native ESC/POS lê override em enviarBuffer — sem Desativar×2 por comanda
+    const invalidateAcbr = !preferNativeEscPos(p || {});
+    return routes.withPortaOverride(
+      porta,
+      () => imprimirViaTags(pedidoTags.renderPedidoTags, p, native.imprimirPedido),
+      { invalidateAcbr },
     );
   },
   abrirGaveta,

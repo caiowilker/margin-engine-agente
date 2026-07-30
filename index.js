@@ -1503,11 +1503,15 @@ function iniciarServidor() {
   async function probeImpressoraLeve(opts = {}) {
     const fiscalOcupado =
       fiscalDriver.isAcbrBusy() || filaFiscal.estaProcessando();
-    if (fiscalOcupado && !opts.force) {
+    const printBusy =
+      typeof impressora.printJobService?.impressaoEmAndamento === "function" &&
+      impressora.printJobService.impressaoEmAndamento();
+    // Durante envio físico: não abrir sessão/ACBr nem Get-Printer
+    if ((fiscalOcupado || printBusy) && !opts.force) {
       const recente =
         typeof impressora.printJobService?.impressaoRecenteOk === "function" &&
         impressora.printJobService.impressaoRecenteOk();
-      return { ok: recente ? true : null, info: null, skipped: true };
+      return { ok: recente || printBusy ? true : null, info: null, skipped: true };
     }
     const recente =
       typeof impressora.printJobService?.impressaoRecenteOk === "function" &&

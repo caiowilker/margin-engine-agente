@@ -1,7 +1,25 @@
 /**
  * Coordena impressão térmica com emissão fiscal ACBr — evita -10 e fila presa no Windows RAW.
+ *
+ * Regra de ouro: impressão térmica NÃO pode invalidar/reativar a sessão PosPrinter
+ * a cada cupom. POS_Ativar em porta RAW: (spooler) trava minutos se chamado em loop
+ * — sintoma: "enviado" na hora, papel só depois, agente some e volta.
+ *
+ * Fast-path (não fiscal / ESC/POS nativo): zero ACBr — só espera curta se fiscal
+ * estiver usando o hardware USB no mesmo momento.
  */
 const log = require("../logger").child({ modulo: "print_fiscal_coord" });
+
+let _ultimaVezFiscalOcupadoEm = 0;
+
+const OPS_FAST_NATIVE = new Set([
+  "imprimirTeste",
+  "abrirGaveta",
+  "imprimirAbertura",
+  "imprimirFechamento",
+  "imprimirMovimentoCaixa",
+  "imprimirPedido",
+]);
 
 function fiscalEmUso() {
   try {
@@ -27,7 +45,8 @@ async function aguardarFiscalLivre(maxMs) {
     if (!fiscalEmUso()) {
       return { aguardouMs: Date.now() - started, timeout: false };
     }
-    await new Promise((r) => setTimeout(r, 100));
+    _ultimaVezFiscalOcupadoEm = Date.now();
+    await new Promise((r) => setTimeout(r, 40));
   }
   log.warn(
     { aguardouMs: Date.now() - started, maxMs: limite },
@@ -46,25 +65,79 @@ function precisaPortaAcbrNativa() {
   }
 }
 
-async function prepararImpressaoAposFiscal() {
-  // Native ESC/POS não compartilha sessão FFI — espera mínima só se fiscal estiver ativo
+function fiscalAcabouDeUsar(janelaMs) {
+  const janela = Number.isFinite(janelaMs)
+    ? janelaMs
+    : parseInt(process.env.PRINT_POS_INVALIDATE_AFTER_FISCAL_MS || "3000", 10);
+  if (fiscalEmUso()) return true;
+  return _ultimaVezFiscalOcupadoEm > 0 && Date.now() - _ultimaVezFiscalOcupadoEm < janela;
+}
+
+function isFastNativePath(opts = {}) {
+  if (opts.fastNative === true) return true;
+  if (opts.fastNative === false) return false;
+  if (String(process.env.PRINT_FAST_NATIVE || "true").toLowerCase() === "false") {
+    return false;
+  }
+  if (opts.op && OPS_FAST_NATIVE.has(opts.op)) return true;
+  const payload = opts.payload;
+  if (payload && typeof payload === "object") {
+    try {
+      return require("./drivers/acbrPosPrinterProvider").preferNativeEscPos(payload);
+    } catch (_) {
+      if (payload.naoFiscal || payload.cupomSemFiscal) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Prepara impressão sem martelar Ativar/Desativar.
+ * Fast-path: não toca em PosPrinter.
+ * ACBr tags (fiscal): invalida só após fiscal; garante porta.
+ */
+async function prepararImpressaoAposFiscal(opts = {}) {
+  if (fiscalEmUso()) {
+    _ultimaVezFiscalOcupadoEm = Date.now();
+  }
+
+  const fast = isFastNativePath(opts);
+  if (fast) {
+    if (!fiscalEmUso()) {
+      return { aguardouMs: 0, timeout: false, fastNative: true };
+    }
+    const waitMs = parseInt(process.env.PRINT_FISCAL_WAIT_NATIVE_MS || "800", 10);
+    const wait = await aguardarFiscalLivre(waitMs);
+    return { ...wait, fastNative: true };
+  }
+
   const acbrNativo = precisaPortaAcbrNativa();
   const waitMs = acbrNativo
     ? parseInt(process.env.PRINT_FISCAL_WAIT_MS || "5000", 10)
     : parseInt(process.env.PRINT_FISCAL_WAIT_NATIVE_MS || "1500", 10);
+
   const wait = fiscalEmUso()
     ? await aguardarFiscalLivre(waitMs)
     : { aguardouMs: 0, timeout: false };
 
-  if (process.platform === "win32" && acbrNativo) {
+  const always = process.env.PRINT_POS_ALWAYS_INVALIDATE === "true";
+  const deveInvalidar =
+    process.platform === "win32" && acbrNativo && (always || fiscalAcabouDeUsar());
+
+  if (deveInvalidar) {
     try {
       await require("./acbrPosPrinterRuntime").invalidatePosPrinterSession();
-      const cooldownMs = parseInt(process.env.PRINT_POS_COOLDOWN_MS || "200", 10);
+      const cooldownMs = parseInt(process.env.PRINT_POS_COOLDOWN_MS || "100", 10);
       if (cooldownMs > 0) {
         await new Promise((r) => setTimeout(r, cooldownMs));
       }
+      log.info(
+        { aguardouMs: wait.aguardouMs, always },
+        "[PrintFiscalCoord] Sessão PosPrinter invalidada pós-fiscal",
+      );
     } catch (_) {}
   }
+
   if (acbrNativo) {
     try {
       await require("./printerBootstrap").garantirPortaImpressao({ skipDetect: true });
@@ -73,7 +146,13 @@ async function prepararImpressaoAposFiscal() {
       throw err;
     }
   }
-  return wait;
+  return { ...wait, fastNative: false };
 }
 
-module.exports = { fiscalEmUso, aguardarFiscalLivre, prepararImpressaoAposFiscal };
+module.exports = {
+  fiscalEmUso,
+  aguardarFiscalLivre,
+  prepararImpressaoAposFiscal,
+  fiscalAcabouDeUsar,
+  isFastNativePath,
+};

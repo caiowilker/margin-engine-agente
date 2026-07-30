@@ -114,28 +114,34 @@ function getPortaOverride() {
 }
 
 /**
- * Executa fn com porta ACBr temporária (ex.: job de bar neste PC).
- * Invalida a sessão ACBr antes/depois para forçar reativação na porta certa.
+ * Executa fn com porta temporária (ex.: job de bar neste PC).
+ * Por padrão NÃO invalida PosPrinter — ESC/POS nativo usa a override via enviarBuffer.
+ * Só passe invalidateAcbr:true quando o job for imprimir via tags ACBr nessa porta.
  */
-async function withPortaOverride(porta, fn) {
+async function withPortaOverride(porta, fn, opts = {}) {
   if (!porta || !portaAcbrValida(porta)) {
     return fn();
   }
   const prev = portaOverride;
   portaOverride = porta;
+  const invalidateAcbr = opts.invalidateAcbr === true;
   try {
-    try {
-      await require("./acbrPosPrinterRuntime").invalidatePosPrinterSession();
-    } catch (_) {
-      /* sessão ainda não existia */
+    if (invalidateAcbr) {
+      try {
+        await require("./acbrPosPrinterRuntime").invalidatePosPrinterSession();
+      } catch (_) {
+        /* sessão ainda não existia */
+      }
     }
     return await fn();
   } finally {
     portaOverride = prev;
-    try {
-      await require("./acbrPosPrinterRuntime").invalidatePosPrinterSession();
-    } catch (_) {
-      /* ignore */
+    if (invalidateAcbr) {
+      try {
+        await require("./acbrPosPrinterRuntime").invalidatePosPrinterSession();
+      } catch (_) {
+        /* ignore */
+      }
     }
   }
 }

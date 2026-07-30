@@ -1,16 +1,30 @@
 /**
  * Execução física de impressão — chamada apenas pelo PrintJobService.
  *
- * Contrato de timeout (anti-dupla-impressão):
- * - Não abandona invoke em andamento para iniciar fallback/retry.
- * - Se o deadline estoura, AGUARDA o invoke terminar (drain).
- * - Se o invoke completar com sucesso após o deadline → aceita (late ok).
- * - Só então classifica erro / libera sessão ACBr / permite fallback.
+ * Contrato de timeout (anti-dupla-impressão + anti-hang):
+ * - Não inicia segundo envio físico enquanto o primeiro ainda corre.
+ * - Se o soft-deadline estoura, aguarda o invoke por mais HARD_DRAIN_MS.
+ * - Se ainda não terminou → falha (não espera minutos). Sessão ACBr invalidada.
+ * - Late success dentro do drain → aceita (sem reimpressão).
  */
 const log = require("../logger").child({ modulo: "print_executor" });
 const factory = require("./factory");
 const { classifyPrintError } = require("./printErrors");
 const { prepararImpressaoAposFiscal } = require("./printFiscalCoordination");
+
+/** Invokes abandonados pelo hard-drain ainda rodando no worker — não retentar/reclaim. */
+let abandonedPhysicalSends = 0;
+
+function physicalSendAbandonedInFlight() {
+  return abandonedPhysicalSends > 0;
+}
+
+function trackAbandonedInvoke(invokePromise) {
+  abandonedPhysicalSends += 1;
+  Promise.resolve(invokePromise).finally(() => {
+    abandonedPhysicalSends = Math.max(0, abandonedPhysicalSends - 1);
+  });
+}
 
 async function liberarSessaoPosAposFalha() {
   try {
@@ -26,7 +40,6 @@ async function withProvider(fn, opts = {}) {
   } catch (err) {
     const cls = classifyPrintError(err);
     const fallbackName = factory.resolveFallbackName();
-    // Invoke já terminou (drain) — seguro liberar sessão antes do fallback
     await liberarSessaoPosAposFalha();
     if (
       !opts.noFallback &&
@@ -56,9 +69,15 @@ function driverSnapshot(provider) {
   };
 }
 
+function hardDrainMs(timeoutMs) {
+  return parseInt(
+    process.env.PRINT_HARD_DRAIN_MS || String(Math.min(8000, Math.max(2000, timeoutMs || 8000))),
+    10,
+  );
+}
+
 /**
- * Executa op no provider com deadline cooperativo.
- * Nunca inicia segundo envio físico enquanto o primeiro ainda corre.
+ * Executa op no provider com deadline cooperativo + hard drain.
  */
 async function executarProviderOp(provider, op, args, timeoutMs) {
   const payload = args?.[0];
@@ -129,17 +148,31 @@ async function executarProviderOp(provider, op, args, timeoutMs) {
     };
   }
 
-  // Deadline estourou — NÃO dispara fallback. Drena o invoke para liberar lock/porta.
+  const drainMs = hardDrainMs(timeoutMs);
   log.warn(
-    { op, timeoutMs, provider: provider.getProviderName() },
-    "[PrintExecutor] Deadline — aguardando conclusão do envio em andamento (anti-dupla)",
+    { op, timeoutMs, drainMs, provider: provider.getProviderName() },
+    "[PrintExecutor] Deadline — drain curto (anti-hang); sem segundo envio",
   );
+
+  let drainTimer;
   try {
-    const result = await invokePromise;
+    const result = await Promise.race([
+      invokePromise,
+      new Promise((_, reject) => {
+        drainTimer = setTimeout(() => {
+          const e = new Error(
+            `Timeout de impressão (${timeoutMs}+${drainMs}ms) — envio não concluiu`,
+          );
+          e.printTimedOut = true;
+          e.code = "PRINT_HARD_DRAIN";
+          reject(e);
+        }, drainMs);
+      }),
+    ]);
     const durationMs = Date.now() - t0;
     log.info(
       { op, durationMs, late: true },
-      "[PrintExecutor] Envio concluiu após deadline — aceito sem reimpressão",
+      "[PrintExecutor] Envio concluiu no drain — aceito sem reimpressão",
     );
     return {
       result,
@@ -150,19 +183,27 @@ async function executarProviderOp(provider, op, args, timeoutMs) {
     };
   } catch (err) {
     const durationMs = Date.now() - t0;
-    const base = String(err?.message || err || "falha");
-    const e = new Error(`Timeout de impressão (${timeoutMs}ms): ${base}`);
+    // Invoke ainda pode estar vivo no FFI/PowerShell — rastreia até settled
+    trackAbandonedInvoke(invokePromise);
+    await liberarSessaoPosAposFalha();
+    if (err?.printTimedOut || err?.code === "PRINT_HARD_DRAIN") {
+      err.durationMs = durationMs;
+      throw err;
+    }
+    const e = new Error(`Timeout de impressão (${timeoutMs}ms): ${err?.message || err}`);
     e.cause = err;
     e.acbrRet = err?.acbrRet;
-    e.code = err?.code;
+    e.code = err?.code || "PRINT_TIMEOUT";
     e.printTimedOut = true;
     e.durationMs = durationMs;
     throw e;
+  } finally {
+    clearTimeout(drainTimer);
   }
 }
 
 async function executarOp(op, args, timeoutMs) {
-  const wait = await prepararImpressaoAposFiscal();
+  const wait = await prepararImpressaoAposFiscal({ op, payload: args?.[0] });
   try {
     const exec = await withProvider((provider) =>
       executarProviderOp(provider, op, args, timeoutMs),
@@ -194,4 +235,10 @@ async function executarOp(op, args, timeoutMs) {
   }
 }
 
-module.exports = { executarOp, classifyPrintError, executarProviderOp };
+module.exports = {
+  executarOp,
+  classifyPrintError,
+  executarProviderOp,
+  hardDrainMs,
+  physicalSendAbandonedInFlight,
+};

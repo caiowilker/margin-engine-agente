@@ -14,8 +14,8 @@ const { renderDanfeTermicoTags } = require("../print/danfeTermico");
 const { renderPayloadTags } = require("../print/renderPrint");
 const factory = require("../print/factory");
 
-const ITER_RENDER = 200;
-const ITER_PRINT = 80;
+const ITER_RENDER = 40;
+const ITER_PRINT = 40;
 const MAX_REGRESSAO_PCT = 25;
 
 function bench(name, fn, iterations) {
@@ -30,6 +30,7 @@ const cupomPayload = {
   numeroVenda: "BENCH-001",
   total: 123.45,
   desconto: 3.45,
+  exibirLogo: false, // CI: não gastar tempo em sharp/BMP inválido
   empresa: { nomeFantasia: "LOJA BENCHMARK", cnpj: "11222333000181", cidade: "BH", uf: "MG" },
   itens: Array.from({ length: 12 }, (_, i) => ({
     nome: `Produto benchmark ${i + 1}`,

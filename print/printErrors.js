@@ -12,6 +12,13 @@ function classifyPrintError(err) {
     out.fallbackSuggested = false;
     return out;
   }
+  // Hard drain / hang: fallback native UMA vez no executor — NÃO martelar fila
+  // (FFI pode ainda estar viva; retry reabre sessão → dupla impressão / deadlock).
+  if (err?.code === "PRINT_HARD_DRAIN" || err?.code === "ACBR_POS_TIMEOUT" || err?.printTimedOut) {
+    out.retryable = false;
+    out.fallbackSuggested = true;
+    return out;
+  }
   if (RETRYABLE.test(msg)) {
     out.retryable = true;
     return out;

@@ -9,11 +9,12 @@ const path = require("path");
 const appDir = path.resolve(__dirname, "..");
 const live = process.argv.includes("--live");
 const agentUrl = process.env.AGENTE_URL || "http://127.0.0.1:9100";
+const releaseVersion = require(path.join(appDir, "package.json")).version;
 
 const steps = [
   {
     id: "T00",
-    nome: "Alinhamento de versão release (1.0.0)",
+    nome: `Alinhamento de versão release (${releaseVersion})`,
     cmd: "node scripts/check-release-alignment.js",
     cwd: appDir,
     required: true,

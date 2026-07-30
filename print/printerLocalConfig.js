@@ -119,6 +119,7 @@ ${deviceBlock}${logo}`;
 }
 
 function patchEnv(map) {
+  invalidateLerCache();
   const envPath = resolveEnvPath();
   let content = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
   for (const [key, val] of Object.entries(map)) {
@@ -136,14 +137,26 @@ function patchEnvPublic(map) {
   return patchEnv(map);
 }
 
+/** Cache curto — getThermalCols/render chamam ler() dezenas de vezes por cupom. */
+let _lerCache = { at: 0, value: null };
+const LER_CACHE_MS = parseInt(process.env.PRINTER_CONFIG_CACHE_MS || "5000", 10);
+
+function invalidateLerCache() {
+  _lerCache = { at: 0, value: null };
+}
+
 function ler() {
+  const agora = Date.now();
+  if (_lerCache.value && agora - _lerCache.at < LER_CACHE_MS) {
+    return _lerCache.value;
+  }
   const iniPath = resolveIniPath();
   const ini = lerIniValores(iniPath);
   let logo = null;
   try {
     logo = require("./printerLogo").ler();
   } catch (_) {}
-  return {
+  const value = {
     provider: process.env.PRINTER_PROVIDER || "acbr-posprinter",
     fallback: process.env.PRINTER_FALLBACK || "native",
     tipo: process.env.PRINTER_TYPE || "auto",
@@ -171,10 +184,13 @@ function ler() {
         ? "parity"
         : "unconfigured",
   };
+  _lerCache = { at: agora, value };
+  return value;
 }
 
 function salvar(updates) {
   if (!updates || typeof updates !== "object") throw new Error("Payload inválido");
+  invalidateLerCache();
 
   const envPatch = {};
   const iniPath = resolveIniPath();
@@ -269,6 +285,7 @@ function salvar(updates) {
 
 function salvarSemPorta(updates) {
   if (!updates || typeof updates !== "object") throw new Error("Payload inválido");
+  invalidateLerCache();
 
   const envPatch = {
     PRINTER_PROVIDER: String(updates.provider || "acbr-posprinter"),
@@ -325,6 +342,8 @@ module.exports = {
   salvarSemPorta,
   sincronizarDeDeteccao,
   gerarIniContent,
-  resolveIniPath,
   patchEnvPublic,
+  resolveIniPath,
+  resolveEnvPath,
+  invalidateLerCache,
 };

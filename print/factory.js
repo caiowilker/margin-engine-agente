@@ -129,16 +129,31 @@ function resetPrintProvider() {
   cachedProvider = null;
   cachedName = null;
   cachedEffectiveName = null;
-  try {
-    const runtime = require("./acbrPosPrinterRuntime");
-    if (typeof runtime.invalidatePosPrinterSession === "function") {
-      runtime.invalidatePosPrinterSession();
-    }
-  } catch (_) {}
+  // Não invalidar PosPrinter aqui — corrida com Desativar enquanto próximo job Ativa.
+  // Invalidação fica só em falha de porta / pós-fiscal / override ACBr explícito.
 }
 
 function warnIfSelectedAtBoot() {
   const requested = resolveProviderName();
+  const dangerous = [];
+  if (process.env.ACBR_POS_REATIVAR_POR_JOB === "true") {
+    dangerous.push("ACBR_POS_REATIVAR_POR_JOB=true (Ativar a cada cupom — demora em RAW)");
+  }
+  if (process.env.ACBR_POS_SESSION_PER_JOB === "true") {
+    dangerous.push("ACBR_POS_SESSION_PER_JOB=true (teardown a cada job RAW)");
+  }
+  if (process.env.PRINT_POS_ALWAYS_INVALIDATE === "true") {
+    dangerous.push("PRINT_POS_ALWAYS_INVALIDATE=true (Desativar a cada cupom)");
+  }
+  if (String(process.env.PRINT_FAST_NATIVE || "true").toLowerCase() === "false") {
+    dangerous.push("PRINT_FAST_NATIVE=false (todo cupom via ACBr tags)");
+  }
+  if (dangerous.length) {
+    log.error(
+      { flags: dangerous },
+      "[PrintFactory] Flags perigosas para latência em Windows RAW — remova em produção",
+    );
+  }
   if (requested !== "acbr-posprinter") return;
   const info = createProvider("acbr-posprinter").getDriverInfo();
   if (info.mode === "native") {
