@@ -1,7 +1,7 @@
 /**
  * AcbrPosPrinterProvider — ACBrLib PosPrinter (padrão 1.0).
  *
- * Caminho oficial: tags ACBr via DLL (ffi-napi). ESC/POS nativo fica só como
+ * Caminho oficial: tags ACBr via DLL (koffi). ESC/POS nativo fica só como
  * retaguarda (PRINTER_FALLBACK / PRINT_FAST_NATIVE=true / lib ausente).
  */
 const log = require("../../logger").child({ modulo: "acbr_posprinter" });

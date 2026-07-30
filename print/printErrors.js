@@ -23,8 +23,8 @@ function classifyPrintError(err) {
     out.retryable = true;
     return out;
   }
-  // ffi-napi ausente no instalador → fallback ESC/POS nativo
-  if (/cannot find module ['"]ffi-napi['"]|cannot find module ['"]ref-napi['"]/i.test(msg)) {
+  // koffi / ffi ausente no instalador → fallback ESC/POS nativo
+  if (/cannot find module ['"]koffi['"]|cannot find module ['"]ffi-napi['"]|cannot find module ['"]ref-napi['"]/i.test(msg)) {
     out.fallbackSuggested = true;
     out.retryable = false;
     return out;

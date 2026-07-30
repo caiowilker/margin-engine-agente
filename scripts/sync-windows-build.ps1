@@ -98,8 +98,8 @@ Require (Join-Path $AppDest "acbrlib\lib\ACBrNFe64.dll") "ACBrNFe64.dll"
 Require (Join-Path $AppDest "acbrlib\lib\ACBrNFSe64.dll") "ACBrNFSe64.dll (NFS-e)"
 Require (Join-Path $AppDest "posprinter\lib\ACBrPosPrinter64.dll") "ACBrPosPrinter64.dll"
 $pkgText = Get-Content (Join-Path $AppDest "package.json") -Raw
-if ($pkgText -match '"ffi-napi"') { Write-Host "OK — ffi-napi declarado no package.json" }
-else { Write-Host "ERRO — package.json sem ffi-napi (ACBr PosPrinter)"; $fail++ }
+if ($pkgText -match '"koffi"') { Write-Host "OK — koffi declarado no package.json" }
+else { Write-Host "ERRO — package.json sem koffi (ACBr PosPrinter)"; $fail++ }
 Require (Join-Path $AppDest "print\printerBootstrap.js") "printerBootstrap"
 Require (Join-Path $AppDest "fiscal\nfse\nfseLib.js") "fiscal/nfse/nfseLib.js"
 

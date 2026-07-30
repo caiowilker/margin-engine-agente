@@ -84,23 +84,11 @@ if (-not $SkipNpm) {
     & (Join-Path $Node "npm.cmd") rebuild better-sqlite3
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-    Write-Host "==> npm rebuild ffi-napi ref-napi (ACBr PosPrinter)"
-    & (Join-Path $Node "npm.cmd") rebuild ffi-napi ref-napi
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "ffi-napi/ref-napi falhou no rebuild — ACBr PosPrinter nao carrega sem eles (VS Build Tools + Python)"
+    $koffi = Join-Path $App "node_modules\koffi\package.json"
+    if (-not (Test-Path $koffi)) {
+        Write-Error "koffi ausente apos npm ci — ACBr PosPrinter nao carrega (prebuild Windows)"
     }
-    $ffiPkg = Join-Path $App "node_modules\ffi-napi\package.json"
-    $refPkg = Join-Path $App "node_modules\ref-napi\package.json"
-    if (-not (Test-Path $ffiPkg) -or -not (Test-Path $refPkg)) {
-        Write-Error "ffi-napi/ref-napi ausentes apos npm ci — PosPrinter ficaria em fallback native (~2min/cupom)"
-    }
-    # Binding nativo obrigatório (package.json sozinho nao basta)
-    $ffiNode = Get-ChildItem -Path (Join-Path $App "node_modules\ffi-napi") -Filter "ffi_bindings.node" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-    $refNode = Get-ChildItem -Path (Join-Path $App "node_modules\ref-napi") -Filter "binding.node" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $ffiNode -or -not $refNode) {
-        Write-Error "Bindings .node de ffi-napi/ref-napi ausentes — rode prepare-build com VS Build Tools (nao use -SkipNpm)"
-    }
-    Write-Host "[OK] ffi-napi + ref-napi presentes ($($ffiNode.FullName))"
+    Write-Host "[OK] koffi presente (FFI PosPrinter sem VS Build Tools)"
 
     Write-Host "==> npm run manifest"
     & (Join-Path $Node "npm.cmd") run manifest

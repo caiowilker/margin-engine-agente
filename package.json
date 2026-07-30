@@ -56,15 +56,12 @@
     "escpos-network": "^3.0.0-alpha.5",
     "escpos-usb": "^3.0.0-alpha.4",
     "express": "^4.18.2",
+    "koffi": "^2.16.3",
     "node-fetch": "^2.7.0",
     "node-windows": "^1.0.0-beta.8",
     "pino": "^8.20.0",
     "qr-image": "^3.2.0",
     "sharp": "^0.33.5"
-  },
-  "optionalDependencies": {
-    "ffi-napi": "^4.0.3",
-    "ref-napi": "^3.0.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

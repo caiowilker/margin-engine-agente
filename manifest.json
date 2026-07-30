@@ -1,6 +1,6 @@
 {
   "versao": "1.0.1",
-  "geradoEm": "2026-07-30T17:38:53.626Z",
+  "geradoEm": "2026-07-30T17:55:51.173Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -5108,7 +5108,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "fcf73d53a3e81dca53ae414986da8916e67038d0a137384a6d1ef06c79d3b69e"
+      "sha256": "0e10372a28655eddefe4a17f3b3675416475b80b6f91c3d0c49ee0fe9d86a046"
     },
     {
       "arquivo": "print/acbrPosPrinterErrors.js",
@@ -5116,7 +5116,7 @@
     },
     {
       "arquivo": "print/acbrPosPrinterRuntime.js",
-      "sha256": "d0d990c1dd254903ae4bb0423d22112e04d79bfcf05d8890e234daf450b0ba45"
+      "sha256": "cba71ac39358957113de526d59ec44f603864e277536c734d85d84c8ac5c8e00"
     },
     {
       "arquivo": "print/acbrTags.js",
@@ -5152,7 +5152,7 @@
     },
     {
       "arquivo": "print/drivers/acbrPosPrinterProvider.js",
-      "sha256": "855a9166d6701a5720e090f5d3f9a1f5b6ed3dccc10a8eba6effd27398c70c57"
+      "sha256": "b3b6a804c393ed0a896cd123f2020d02e5b8ee7059e0976834e1a81871b579b6"
     },
     {
       "arquivo": "print/drivers/mockPrinterProvider.js",
@@ -5200,7 +5200,7 @@
     },
     {
       "arquivo": "print/printErrors.js",
-      "sha256": "b0a622c9dba4814546e29e0e8a8965d52faf9c0d63f158944c65fcf2f2a830d9"
+      "sha256": "6b71cb6c0b09b8b8967bf84047a7a0045234767ff419eec172b3b181ae16c09d"
     },
     {
       "arquivo": "print/printerStationRoutes.js",

@@ -7,14 +7,14 @@
 
 ### ACBr PosPrinter como caminho oficial (fim do cupom ~120s)
 
-- **Causa raiz real em produção:** a DLL `ACBrPosPrinter64.dll` estava instalada, mas **`ffi-napi`/`ref-napi` não estavam no `package.json`** → `canLoadNativeLib()=false` → factory caía sempre em ESC/POS nativo (`provider_nao_operacional`).
+- **Causa raiz real em produção:** a DLL `ACBrPosPrinter64.dll` estava instalada, mas **bindings FFI ausentes** → `canLoadNativeLib()=false` → factory caía sempre em ESC/POS nativo (`provider_nao_operacional`).
 - **Hang ~120s:** `enviarRawWindows` matava o PowerShell com `SIGTERM` (ineficaz no Windows) e **não rejeitava a Promise** no timeout → job só terminava quando o spooler soltava (~2 min); agente “off”, `signal is aborted without reason` no front.
 - **Fix:**
-  1. `ffi-napi` + `ref-napi` em `optionalDependencies`; `prepare-build.ps1` faz rebuild e **falha o build** se ausentes.
+  1. FFI via **`koffi`** (prebuild Windows — sem VS Build Tools; `ffi-napi` exigia compile no reparo e falhava).
   2. `PRINT_FAST_NATIVE=false` padrão → impressão via **ACBr tags**; native só retaguarda.
   3. Timeout RAW: `taskkill /F /T` + reject imediato (máx. ~8s no fallback).
   4. Export `detectarImpressora` (corrige `core.detectarImpressora is not a function` no bootstrap).
-- **Nota:** HTTP **402** em PIX/capability é plano/cobrança no backend — independente da impressora.
+- **Nota:** HTTP **402** em PIX/capability era gate `DELIVERY_PLUS` indevido — corrigido no backend.
 
 ### Impressão térmica instantânea — fim da demora de minutos
 

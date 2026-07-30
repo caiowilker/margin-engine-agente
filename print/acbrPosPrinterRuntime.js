@@ -88,14 +88,16 @@ function canLoadNativeLib() {
   return canRequireFfiBindings();
 }
 
-/** Cache: DLL presente não basta — instalador Windows pode omitir ffi-napi. */
+/**
+ * koffi traz prebuild Windows — não exige VS Build Tools (ao contrário de ffi-napi).
+ * Instalador/Reparar passam a funcionar com `npm ci` simples.
+ */
 let _ffiBindingsOk = undefined;
 
 function canRequireFfiBindings() {
   if (_ffiBindingsOk !== undefined) return _ffiBindingsOk;
   try {
-    require("ffi-napi");
-    require("ref-napi");
+    require("koffi");
     _ffiBindingsOk = true;
   } catch (_) {
     _ffiBindingsOk = false;
@@ -103,51 +105,75 @@ function canRequireFfiBindings() {
   return _ffiBindingsOk;
 }
 
-function createBindings(ffi, ref, libPath) {
-  const CString = ref.refType(ref.types.CString);
-  const tInt = ref.refType("int");
-  const tLong = ref.refType("int");
+/**
+ * Expõe `.async(...args, cb)` no estilo ffi-napi para reutilizar callPos/promisify.
+ * Internamente usa Promise do koffi (`fn.async(...)`).
+ */
+function wrapKoffiFunc(nativeFn) {
+  const sync = (...args) => nativeFn(...args);
+  sync.async = (...args) => {
+    const maybeCb = args[args.length - 1];
+    const hasCb = typeof maybeCb === "function";
+    const callArgs = hasCb ? args.slice(0, -1) : args;
+    const promise = nativeFn.async(...callArgs);
+    if (!hasCb) return promise;
+    Promise.resolve(promise)
+      .then((ret) => maybeCb(null, ret))
+      .catch((err) => maybeCb(err));
+  };
+  return sync;
+}
 
-  return ffi.Library(libPath, {
-    POS_Inicializar: ["int", ["string", "string"]],
-    POS_Finalizar: ["int", []],
-    POS_Nome: ["int", [CString, tInt]],
-    POS_Versao: ["int", [CString, tInt]],
-    POS_UltimoRetorno: ["int", [CString, tInt]],
-    POS_ConfigLer: ["int", ["string"]],
-    POS_ConfigGravar: ["int", ["string"]],
-    POS_ConfigGravarValor: ["int", ["string", "string", "string"]],
-    POS_Ativar: ["int", []],
-    POS_Desativar: ["int", []],
-    POS_Zerar: ["int", []],
-    POS_InicializarPos: ["int", []],
-    POS_Reset: ["int", []],
-    POS_PularLinhas: ["int", ["int"]],
-    POS_CortarPapel: ["int", ["bool"]],
-    POS_AbrirGaveta: ["int", []],
-    POS_LerInfoImpressora: ["int", [CString, tInt]],
-    POS_LerStatusImpressoraFormatado: ["int", ["int", CString, tInt]],
-    POS_AcharPortas: ["int", [CString, tInt]],
-    POS_PodeLerDaPorta: ["int", []],
-    POS_LerCaracteristicas: ["int", [CString, tInt]],
-    POS_GravarLogoArquivo: ["int", ["string", "int", "int"]],
-    POS_ImprimirLogo: ["int", ["int", "int", "int", "int"]],
-    POS_Imprimir: ["int", ["string", "bool", "bool", "bool", "int"]],
-    POS_ImprimirLinha: ["int", ["string"]],
-    POS_ImprimirCmd: ["int", ["string"]],
-  });
+function createBindings(libPath) {
+  const koffi = require("koffi");
+  const dll = koffi.load(libPath);
+
+  // ACBrLib PosPrinter — cdecl; buffers de saída via Buffer + int[1] (_Inout_)
+  const defs = {
+    POS_Inicializar: "int POS_Inicializar(str eArqConfig, str eChaveCrypt)",
+    POS_Finalizar: "int POS_Finalizar()",
+    POS_Nome: "int POS_Nome(_Out_ uint8 *sNome, _Inout_ int *esTamanho)",
+    POS_Versao: "int POS_Versao(_Out_ uint8 *sVersao, _Inout_ int *esTamanho)",
+    POS_UltimoRetorno: "int POS_UltimoRetorno(_Out_ uint8 *sMensagem, _Inout_ int *esTamanho)",
+    POS_ConfigLer: "int POS_ConfigLer(str eArqConfig)",
+    POS_ConfigGravar: "int POS_ConfigGravar(str eArqConfig)",
+    POS_ConfigGravarValor: "int POS_ConfigGravarValor(str eSessao, str eChave, str sValor)",
+    POS_Ativar: "int POS_Ativar()",
+    POS_Desativar: "int POS_Desativar()",
+    POS_Zerar: "int POS_Zerar()",
+    POS_InicializarPos: "int POS_InicializarPos()",
+    POS_Reset: "int POS_Reset()",
+    POS_PularLinhas: "int POS_PularLinhas(int NumLinhas)",
+    POS_CortarPapel: "int POS_CortarPapel(bool Parcial)",
+    POS_AbrirGaveta: "int POS_AbrirGaveta()",
+    POS_LerInfoImpressora: "int POS_LerInfoImpressora(_Out_ uint8 *sInfo, _Inout_ int *esTamanho)",
+    POS_LerStatusImpressoraFormatado:
+      "int POS_LerStatusImpressoraFormatado(int Tentativas, _Out_ uint8 *sStatus, _Inout_ int *esTamanho)",
+    POS_AcharPortas: "int POS_AcharPortas(_Out_ uint8 *sPortas, _Inout_ int *esTamanho)",
+    POS_PodeLerDaPorta: "int POS_PodeLerDaPorta()",
+    POS_LerCaracteristicas:
+      "int POS_LerCaracteristicas(_Out_ uint8 *sCaracteristicas, _Inout_ int *esTamanho)",
+    POS_GravarLogoArquivo: "int POS_GravarLogoArquivo(str eArquivo, int nKC1, int nKC2)",
+    POS_ImprimirLogo: "int POS_ImprimirLogo(int nKC1, int nKC2, int nFatorX, int nFatorY)",
+    POS_Imprimir: "int POS_Imprimir(str aString, bool PulaLinha, bool DecodescTags, bool CortaPapel, int Temporizar)",
+    POS_ImprimirLinha: "int POS_ImprimirLinha(str aString)",
+    POS_ImprimirCmd: "int POS_ImprimirCmd(str aString)",
+  };
+
+  const lib = {};
+  for (const [name, sig] of Object.entries(defs)) {
+    lib[name] = wrapKoffiFunc(dll.func(sig));
+  }
+  return lib;
 }
 
 function loadLib() {
   if (!canLoadNativeLib()) return null;
   try {
-    const ffi = require("ffi-napi");
-    const ref = require("ref-napi");
     const paths = prepareRuntimePaths();
     if (!paths.libPath) return null;
     return {
-      lib: createBindings(ffi, ref, paths.libPath),
-      ref,
+      lib: createBindings(paths.libPath),
       libPath: paths.libPath,
       iniPath: paths.iniPath,
       root: paths.root,
@@ -169,19 +195,22 @@ function promisify(fn, ...args) {
 }
 
 function trimBuf(buf) {
-  return Buffer.isBuffer(buf) ? buf.toString().replace(/\0+$/, "").trim() : String(buf || "");
+  return Buffer.isBuffer(buf) ? buf.toString("latin1").replace(/\0+$/, "").trim() : String(buf || "");
+}
+
+/** Buffer + tamanho InOut no formato koffi (`int[1]`). */
+function allocOutBuffer(size = 8192) {
+  return { buf: Buffer.alloc(size), tam: [size] };
 }
 
 async function ultimoRetorno(libBundle) {
-  const buf = Buffer.alloc(8192);
-  const tam = libBundle.ref.alloc("int", 8192);
+  const { buf, tam } = allocOutBuffer(8192);
   await promisify(libBundle.lib.POS_UltimoRetorno.async.bind(libBundle.lib.POS_UltimoRetorno), buf, tam);
   return trimBuf(buf);
 }
 
 async function readStringOut(libBundle, fn, ...args) {
-  const buf = Buffer.alloc(8192);
-  const tam = libBundle.ref.alloc("int", 8192);
+  const { buf, tam } = allocOutBuffer(8192);
   const ret = await promisify(fn.bind(libBundle.lib), ...args, buf, tam);
   if (ret !== 0) {
     const msg = await ultimoRetorno(libBundle);

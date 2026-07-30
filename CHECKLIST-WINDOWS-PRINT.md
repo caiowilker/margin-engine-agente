@@ -7,7 +7,7 @@ Homologação física no Windows. CI/Linux cobre contratos, benchmark e layout o
 - [ ] Windows 10/11 x64
 - [ ] Impressora térmica ESC/POS instalada (driver Windows ou rede TCP)
 - [ ] `ACBrPosPrinter64.dll` em `agente-local/posprinter/lib/` ou `ACBR_POSPRINTER_LIB_PATH`
-- [ ] **`ffi-napi` + `ref-napi` compilados** no instalador (`prepare-build.ps1` sem `-SkipNpm`, VS Build Tools)
+- [ ] **`koffi` instalado** no `node_modules` do instalador (`prepare-build.ps1` / `npm ci` — prebuild Windows, sem VS Build Tools)
 - [ ] Agente ativado (`http://localhost:9100`)
 
 ## Configuração
@@ -41,4 +41,4 @@ Homologação física no Windows. CI/Linux cobre contratos, benchmark e layout o
 - [ ] ≥ 1 impressora real homologada (marca/modelo documentados)
 - [ ] `npm run test:agent-print` verde
 - [ ] Evidência em `RESULTADO-HOMOLOG-PRODUCAO.md` (após homolog)
-- [ ] Instalação em `Program Files` contém `node_modules\ffi-napi` e `ref-napi`
+- [ ] Instalação em `Program Files` contém `node_modules\koffi`

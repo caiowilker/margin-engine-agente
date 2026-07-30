@@ -233,8 +233,7 @@ async function runDiagnostic() {
   const printerReady = fs.existsSync(printerModule) && fs.readdirSync(printerModule).length > 0;
   let ffiReady = false;
   try {
-    require.resolve("ffi-napi");
-    require.resolve("ref-napi");
+    require.resolve("koffi");
     ffiReady = true;
   } catch (_) {
     ffiReady = false;
@@ -255,7 +254,7 @@ async function runDiagnostic() {
       "critical",
       "ME-011b",
       "Módulo de impressão térmica incompleto nesta instalação — o cupom pode demorar ou falhar.",
-      "Reinstale o Margin Engine com o instalador completo (prepare-build com bindings nativos) e reinicie o serviço.",
+      "Reinstale o Margin Engine com o instalador gerado por prepare-build.ps1 (inclui koffi) e reinicie o serviço.",
     );
   }
 

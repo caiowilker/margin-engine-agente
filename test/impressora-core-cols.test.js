@@ -143,7 +143,7 @@ async function run() {
   assert.ok(tagsAbre.includes("ABERTURA"));
   console.log("  ✓ renderAberturaTags ACBr");
 
-  const ffiCls = classifyPrintError(new Error("Cannot find module 'ffi-napi'"));
+  const ffiCls = classifyPrintError(new Error("Cannot find module 'koffi'"));
   assert.equal(ffiCls.fallbackSuggested, true);
   const colsCls = classifyPrintError(new Error("Cannot access 'COLS' before initialization"));
   assert.equal(colsCls.fallbackSuggested, true);

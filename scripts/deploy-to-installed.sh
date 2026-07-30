@@ -48,6 +48,17 @@ if [[ -d "$SRC/frontend-dist" ]]; then
   rsync -a --delete "$SRC/frontend-dist/" "$DEST/frontend-dist/"
 fi
 
+# koffi (prebuild win32) — necessário para ACBr PosPrinter
+NODE_DIR="$(dirname "$DEST")/node"
+if [[ -f "$NODE_DIR/npm.cmd" ]]; then
+  echo "==> Garantindo koffi no node_modules da instalação (Windows)..."
+  DEST_WIN="$(wslpath -w "$DEST")"
+  NPM_WIN="$(wslpath -w "$NODE_DIR/npm.cmd")"
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \
+    "Set-Location -LiteralPath '$DEST_WIN'; & '$NPM_WIN' install koffi@'^2.9.0' --omit=dev --no-fund --no-audit" \
+    || echo "AVISO: falha ao instalar koffi — execute manualmente: cd '$DEST_WIN'; npm install koffi"
+fi
+
 # Restaura INI fiscal se o rsync tocou na pasta config
 if [[ -f "$BACKUP_DIR/acbrlib-config/acbrlib.ini" ]]; then
   mkdir -p "$DEST/acbrlib/data/config"
