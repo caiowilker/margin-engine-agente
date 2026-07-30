@@ -234,7 +234,13 @@ async function runDiagnostic() {
   let ffiReady = false;
   try {
     require.resolve("koffi");
-    ffiReady = true;
+    if (process.platform === "win32") {
+      const koffiRoot = path.dirname(require.resolve("koffi/package.json"));
+      const winNode = path.join(koffiRoot, "build", "koffi", "win32_x64", "koffi.node");
+      ffiReady = fs.existsSync(winNode);
+    } else {
+      ffiReady = true;
+    }
   } catch (_) {
     ffiReady = false;
   }

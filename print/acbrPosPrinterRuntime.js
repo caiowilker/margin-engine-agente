@@ -21,11 +21,17 @@ function defaultLibName() {
 
 function resolveLibPath() {
   const explicit = process.env.ACBR_POSPRINTER_LIB_PATH;
-  if (explicit && fs.existsSync(explicit)) return explicit;
   const candidates = [
+    explicit && fs.existsSync(explicit) ? explicit : null,
     path.join(AGENT_ROOT, "posprinter", "lib", defaultLibName()),
     path.join(AGENT_ROOT, "lib", defaultLibName()),
-  ];
+  ].filter(Boolean);
+
+  // Em Windows, nunca preferir UNC/WSL se houver DLL local (spooler/FFI quebram).
+  if (process.platform === "win32") {
+    const local = candidates.find((p) => fs.existsSync(p) && !isUncPath(p));
+    if (local) return local;
+  }
   return candidates.find((p) => fs.existsSync(p)) || null;
 }
 
@@ -98,6 +104,15 @@ function canRequireFfiBindings() {
   if (_ffiBindingsOk !== undefined) return _ffiBindingsOk;
   try {
     require("koffi");
+    // Em produção Windows, garante prebuild win32_x64 (ME-011b falso-negativo).
+    if (process.platform === "win32") {
+      const koffiRoot = path.dirname(require.resolve("koffi/package.json"));
+      const winNode = path.join(koffiRoot, "build", "koffi", "win32_x64", "koffi.node");
+      if (!fs.existsSync(winNode)) {
+        _ffiBindingsOk = false;
+        return false;
+      }
+    }
     _ffiBindingsOk = true;
   } catch (_) {
     _ffiBindingsOk = false;

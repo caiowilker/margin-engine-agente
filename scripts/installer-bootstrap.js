@@ -125,22 +125,14 @@ function writeBootstrapFailure(err) {
   }
 }
 
-function nativeDepsReady() {
-  const base = path.join(appDir, "node_modules");
-  if (!fs.existsSync(base)) return false;
-  // koffi = FFI ACBr PosPrinter (prebuild Windows). Sem ele → ME-011b e cupom lento.
-  const required = ["better-sqlite3", "node-windows", "express", "koffi"];
-  for (const name of required) {
-    if (!fs.existsSync(path.join(base, name, "package.json"))) return false;
-  }
-  const sqliteBinding = path.join(base, "better-sqlite3", "build", "Release", "better_sqlite3.node");
-  return fs.existsSync(sqliteBinding);
-}
-
 /** Garante koffi mesmo quando o restante do node_modules já veio no .exe antigo. */
 function ensureKoffi() {
   const koffiPkg = path.join(appDir, "node_modules", "koffi", "package.json");
-  if (fs.existsSync(koffiPkg)) {
+  const winNode = path.join(appDir, "node_modules", "koffi", "build", "koffi", "win32_x64", "koffi.node");
+  const ok =
+    fs.existsSync(koffiPkg) &&
+    (process.platform !== "win32" || fs.existsSync(winNode));
+  if (ok) {
     initBootstrapLog().info({ acao: "koffi_ok" }, "koffi presente");
     return;
   }
@@ -156,6 +148,28 @@ function ensureKoffi() {
       "koffi não foi instalado — impressão térmica ACBr ficará incompleta (ME-011b). Verifique rede/npm e reinstale.",
     );
   }
+  if (process.platform === "win32" && !fs.existsSync(winNode)) {
+    throw new Error(
+      "koffi instalado sem prebuild win32_x64 — reinstale o pacote koffi no Windows (npm install koffi).",
+    );
+  }
+}
+
+function nativeDepsReady() {
+  const base = path.join(appDir, "node_modules");
+  if (!fs.existsSync(base)) return false;
+  // koffi = FFI ACBr PosPrinter (prebuild Windows). Sem ele → ME-011b e cupom lento.
+  const required = ["better-sqlite3", "node-windows", "express", "koffi"];
+  for (const name of required) {
+    if (!fs.existsSync(path.join(base, name, "package.json"))) return false;
+  }
+  const sqliteBinding = path.join(base, "better-sqlite3", "build", "Release", "better_sqlite3.node");
+  if (!fs.existsSync(sqliteBinding)) return false;
+  if (process.platform === "win32") {
+    const winNode = path.join(base, "koffi", "build", "koffi", "win32_x64", "koffi.node");
+    if (!fs.existsSync(winNode)) return false;
+  }
+  return true;
 }
 
 function writeDefaultConfigs() {
