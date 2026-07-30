@@ -15,19 +15,33 @@ const pedidoTags = require("../pedidoAcbrTags");
 
 /**
  * Prefere ESC/POS nativo vs ACBr tags.
- * Padrão: ACBr (PRINT_FAST_NATIVE=false). Native só com flag explícita
- * ou como retaguarda quando a DLL/ffi não carrega.
+ * Padrão: ACBr (PRINT_FAST_NATIVE=false). Native só com flag explícita,
+ * circuito RAW aberto (Ativar -10 / arity) ou como retaguarda.
  */
+function isFiscalPayload(payload) {
+  if (!payload || typeof payload !== "object") return false;
+  if (payload.naoFiscal === true || payload.cupomSemFiscal === true) return false;
+  if (payload.chaveNfe) return true;
+  if (payload.somenteDanfeTermico || payload.danfeTermico) return true;
+  if (payload.layout === "danfe-termico") return true;
+  return false;
+}
+
 function preferNativeEscPos(payload) {
+  try {
+    if (runtime.isAcbrPosCircuitOpen() && !isFiscalPayload(payload)) {
+      return true;
+    }
+  } catch (_) {
+    /* runtime opcional em testes */
+  }
   const flag = String(process.env.PRINT_FAST_NATIVE || "false").toLowerCase();
   if (flag === "false" || flag === "0" || flag === "") return false;
   if (flag === "always") return true;
   // PRINT_FAST_NATIVE=true → só ops comerciais no native; fiscal com chave no ACBr
   if (!payload || typeof payload !== "object") return true;
   if (payload.naoFiscal === true || payload.cupomSemFiscal === true) return true;
-  if (payload.chaveNfe && !payload.naoFiscal && !payload.cupomSemFiscal) return false;
-  if (payload.somenteDanfeTermico || payload.danfeTermico) return false;
-  if (payload.layout === "danfe-termico") return false;
+  if (isFiscalPayload(payload)) return false;
   return true;
 }
 
@@ -70,6 +84,13 @@ function getDriverInfo() {
     iniPath: runtime.resolveIniPath(),
     ready: mode === "native" || mode === "parity",
     fastNative: String(process.env.PRINT_FAST_NATIVE || "false"),
+    acbrCircuitOpen: (() => {
+      try {
+        return runtime.isAcbrPosCircuitOpen();
+      } catch (_) {
+        return false;
+      }
+    })(),
   };
 }
 
@@ -159,6 +180,7 @@ module.exports = {
   getProviderName,
   getDriverInfo,
   preferNativeEscPos,
+  isFiscalPayload,
   testar: async (force) => {
     try {
       const det = await native.detectar(force);
@@ -235,6 +257,11 @@ module.exports = {
   detectar: async () => {
     const bootstrap = require("../printerBootstrap");
     const result = await bootstrap.autoDetectarESincronizar({ force: true });
+    try {
+      runtime.resetAcbrPosCircuit();
+    } catch (_) {
+      /* ignore */
+    }
     return result.info || { ok: false };
   },
   imprimirCupom,

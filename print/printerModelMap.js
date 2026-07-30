@@ -1,28 +1,40 @@
 /**
- * Mapeamento fabricante → código modelo ACBr PosPrinter.
- * 0=Genérica | 1=Bematech | 2=Daruma | 3=Epson | 4=Custom | 5=Elgin | ...
+ * Mapeamento fabricante → código modelo ACBr PosPrinter (TACBrPosPrinterModelo).
+ *
+ * Enum oficial (ACBrPosPrinter.pas):
+ *  0=ppTexto | 1=ppEscPosEpson | 2=ppEscBematech | 3=ppEscDaruma |
+ *  4=ppEscVox | 5=ppEscDiebold | 6=ppEscEpsonP2 | 7=ppCustomPos |
+ *  8=ppEscPosStar | 9=ppEscZJiang | 10=ppEscGPrinter | 11=ppEscDatecs |
+ *  12=ppEscSunmi | 13=ppExterno
+ *
+ * Marcas ESC/POS sem entrada própria (Elgin, Tanca, POS80, Control ID…) → Epson (1).
  */
 const MARCAS = [
-  { rx: /bematech|mp-4200|mp4200/i, modelo: "1", label: "Bematech" },
-  { rx: /daruma|dr700|dr800/i, modelo: "2", label: "Daruma" },
-  { rx: /epson|tm-t|tm t/i, modelo: "3", label: "Epson" },
-  { rx: /elgin|i9|i7|fit/i, modelo: "5", label: "Elgin" },
-  { rx: /control\s?id|idprint/i, modelo: "6", label: "Control ID" },
-  { rx: /citizen/i, modelo: "7", label: "Citizen" },
-  { rx: /tanca|tp-|tp650/i, modelo: "8", label: "Tanca" },
-  { rx: /star|tsp/i, modelo: "9", label: "Star" },
-  { rx: /sunmi/i, modelo: "10", label: "Sunmi" },
-  { rx: /gprinter|gp-/i, modelo: "11", label: "GPrinter" },
-  { rx: /datecs/i, modelo: "12", label: "Datecs" },
-  { rx: /zjiang|zj-/i, modelo: "13", label: "ZJiang" },
-  { rx: /vox/i, modelo: "14", label: "Vox" },
-  { rx: /diebold|nixdorf/i, modelo: "15", label: "Diebold" },
+  { rx: /bematech|mp-4200|mp4200/i, modelo: "2", label: "Bematech" },
+  { rx: /daruma|dr700|dr800/i, modelo: "3", label: "Daruma" },
+  { rx: /epson|tm-t|tm t|tm-m/i, modelo: "1", label: "Epson" },
+  { rx: /diebold|nixdorf/i, modelo: "5", label: "Diebold" },
+  { rx: /vox/i, modelo: "4", label: "Vox" },
+  { rx: /custom/i, modelo: "7", label: "Custom" },
+  { rx: /star|tsp/i, modelo: "8", label: "Star" },
+  { rx: /zjiang|zj-/i, modelo: "9", label: "ZJiang" },
+  { rx: /gprinter|gp-/i, modelo: "10", label: "GPrinter" },
+  { rx: /datecs/i, modelo: "11", label: "Datecs" },
+  { rx: /sunmi/i, modelo: "12", label: "Sunmi" },
+  // Clones ESC/POS Epson-compatíveis (sem enum dedicado)
+  {
+    rx: /elgin|i9|i7|fit|tanca|tp-|tp650|control\s?id|idprint|citizen|jetway|pos\s*80|pos80|posprinter|thermal|termica|cupom|nfce|receipt/i,
+    modelo: "1",
+    label: "Epson-compativel",
+  },
 ];
 
-function inferirModeloAcbr(nomeImpressora, driverName) {
-  const explicit = process.env.PRINTER_MODEL;
-  if (explicit && explicit !== "auto" && /^\d+$/.test(String(explicit))) {
-    return String(explicit);
+function inferirModeloAcbr(nomeImpressora, driverName, opts = {}) {
+  if (!opts.ignoreEnv) {
+    const explicit = process.env.PRINTER_MODEL;
+    if (explicit && explicit !== "auto" && /^\d+$/.test(String(explicit))) {
+      return String(explicit);
+    }
   }
   const texto = `${nomeImpressora || ""} ${driverName || ""}`;
   if (!texto.trim()) return "0";

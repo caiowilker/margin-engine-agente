@@ -58,7 +58,7 @@ test("salvar — inferir modelo a partir do nome da impressora", () => {
     nomeImpressora: "EPSON TM-T20 Receipt",
     modeloAuto: true,
   });
-  assert.strictEqual(saved.modelo, "3");
+  assert.strictEqual(saved.modelo, "1");
 });
 
 test("sincronizarDeDeteccao — ignora sem impressora", () => {

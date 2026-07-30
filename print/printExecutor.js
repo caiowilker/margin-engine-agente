@@ -41,6 +41,14 @@ async function withProvider(fn, opts = {}) {
     const cls = classifyPrintError(err);
     const fallbackName = factory.resolveFallbackName();
     await liberarSessaoPosAposFalha();
+    try {
+      const runtime = require("./acbrPosPrinterRuntime");
+      if (runtime.shouldOpenCircuitFromError?.(err)) {
+        runtime.openAcbrPosCircuit?.(err.message);
+      }
+    } catch (_) {
+      /* ignore */
+    }
     if (
       !opts.noFallback &&
       cls.fallbackSuggested &&

@@ -315,15 +315,43 @@ test("preferNativeEscPos — naoFiscal rápido; fiscal com chave fica no ACBr", 
 
 test("preferNativeEscPos — padrão ACBr (PRINT_FAST_NATIVE=false)", () => {
   const { preferNativeEscPos } = require("../print/drivers/acbrPosPrinterProvider");
+  const runtime = require("../print/acbrPosPrinterRuntime");
   const prev = process.env.PRINT_FAST_NATIVE;
   delete process.env.PRINT_FAST_NATIVE;
+  runtime.resetAcbrPosCircuit();
   try {
     assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), false);
     assert.strictEqual(preferNativeEscPos({}), false);
   } finally {
     if (prev === undefined) delete process.env.PRINT_FAST_NATIVE;
     else process.env.PRINT_FAST_NATIVE = prev;
+    runtime.resetAcbrPosCircuit();
   }
+});
+
+test("preferNativeEscPos — circuito RAW aberto usa native em comercial", () => {
+  const { preferNativeEscPos } = require("../print/drivers/acbrPosPrinterProvider");
+  const runtime = require("../print/acbrPosPrinterRuntime");
+  const prev = process.env.PRINT_FAST_NATIVE;
+  delete process.env.PRINT_FAST_NATIVE;
+  runtime.resetAcbrPosCircuit();
+  try {
+    runtime.openAcbrPosCircuit("POS_Ativar (-10)");
+    assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), true);
+    assert.strictEqual(preferNativeEscPos({}), true);
+    assert.strictEqual(preferNativeEscPos({ chaveNfe: "35" + "0".repeat(42) }), false);
+  } finally {
+    if (prev === undefined) delete process.env.PRINT_FAST_NATIVE;
+    else process.env.PRINT_FAST_NATIVE = prev;
+    runtime.resetAcbrPosCircuit();
+  }
+});
+
+test("printerModelMap — Epson/POS80 → modelo 1 (enum ACBr oficial)", () => {
+  const { inferirModeloAcbr } = require("../print/printerModelMap");
+  assert.strictEqual(inferirModeloAcbr("EPSON TM-T20", ""), "1");
+  assert.strictEqual(inferirModeloAcbr("POSPrinter POS80", ""), "1");
+  assert.strictEqual(inferirModeloAcbr("Bematech MP-4200", ""), "2");
 });
 
 test("printExecutor — hardDrainMs limitado", () => {

@@ -8,6 +8,7 @@ const path = require("path");
 const { resolveStagingDir } = require("../runtime/windowsEnv");
 const { formatAcbrPosError } = require("./acbrPosPrinterErrors");
 const { resolveControlePorta } = require("./printerModelMap");
+const log = require("../logger").child({ modulo: "acbr_posprinter_runtime" });
 
 const AGENT_ROOT = path.resolve(__dirname, "..");
 
@@ -893,6 +894,52 @@ async function invalidatePosPrinterSession() {
   } catch (_) {}
 }
 
+/**
+ * Circuito aberto: ACBr PosPrinter falhou nesta máquina (ex.: POS_Ativar -10 em RAW).
+ * Cupons comerciais passam a ir direto no ESC/POS nativo (sem WARN a cada job).
+ * Fiscal/DANFE ainda tenta ACBr. Desligar: PRINT_ACBR_CIRCUIT=false. Reset: reinício.
+ */
+let _acbrPosCircuit = { open: false, reason: null, openedAt: null };
+
+function isAcbrPosCircuitOpen() {
+  if (String(process.env.PRINT_ACBR_CIRCUIT || "true").toLowerCase() === "false") {
+    return false;
+  }
+  return !!_acbrPosCircuit.open;
+}
+
+function getAcbrPosCircuit() {
+  return { ..._acbrPosCircuit };
+}
+
+function openAcbrPosCircuit(reason) {
+  if (_acbrPosCircuit.open) return false;
+  _acbrPosCircuit = {
+    open: true,
+    reason: String(reason || "acbr_unreliable").slice(0, 240),
+    openedAt: Date.now(),
+  };
+  log.warn(
+    { reason: _acbrPosCircuit.reason },
+    "[ACBrPosPrinter] Circuito RAW aberto — comerciais via ESC/POS nativo (sem tentar Ativar a cada cupom)",
+  );
+  return true;
+}
+
+function resetAcbrPosCircuit() {
+  _acbrPosCircuit = { open: false, reason: null, openedAt: null };
+}
+
+function shouldOpenCircuitFromError(err) {
+  const msg = String(err?.message || err || "");
+  if (err?.code === "PRINTER_NOT_THERMAL" || err?.permanente) return false;
+  if (err?.acbrRet === -10 || /\(-10\)/.test(msg)) return true;
+  if (/expected \d+ arguments, got \d+/i.test(msg)) return true;
+  if (err?.code === "ACBR_POS_TIMEOUT" || err?.code === "ACBR_POS_FN_MISSING") return true;
+  if (/POS_Ativar|erro de comunica[cç][aã]o com a impressora/i.test(msg)) return true;
+  return false;
+}
+
 module.exports = {
   canLoadNativeLib,
   canRequireFfiBindings,
@@ -911,6 +958,11 @@ module.exports = {
   gravarLogoArquivoNative,
   lerVersaoNative,
   buildRuntimeValues,
+  isAcbrPosCircuitOpen,
+  getAcbrPosCircuit,
+  openAcbrPosCircuit,
+  resetAcbrPosCircuit,
+  shouldOpenCircuitFromError,
   /** @internal testes — simula contrato async do koffi */
   __wrapKoffiFunc: wrapKoffiFunc,
 };

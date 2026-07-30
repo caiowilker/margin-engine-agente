@@ -1,6 +1,6 @@
 {
   "versao": "1.0.1",
-  "geradoEm": "2026-07-30T20:13:25.648Z",
+  "geradoEm": "2026-07-30T20:33:26.989Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -244,7 +244,7 @@
     },
     {
       "arquivo": "frontend-dist/api-backend.json",
-      "sha256": "f375d08da0a49d0cd935e7da343ab1ef93cbe53af8d01366f21393717bce898d"
+      "sha256": "62f77b9fb1e8f02a0f024e6386d96a9bab7340e3d446f959eed0ba05ac96b5b2"
     },
     {
       "arquivo": "frontend-dist/apple-touch-icon.png",
@@ -5040,7 +5040,7 @@
     },
     {
       "arquivo": "frontend-dist/version.json",
-      "sha256": "d522eb6e1175fcd448491598631e784f9fd4f623d9dad954a3b8c7756e5c8694"
+      "sha256": "e7a4d97f2d8210f42cef2966c75774eff6d81970f5277f72a984e41da5674143"
     },
     {
       "arquivo": "frontend-dist/workbox-3147e214.js",
@@ -5116,7 +5116,7 @@
     },
     {
       "arquivo": "print/acbrPosPrinterRuntime.js",
-      "sha256": "8f51a0813b55d1a3e4cd32e221a799164bbbbd7bbccd2319f328244729ebfaf7"
+      "sha256": "5c5c3c9966aeb537b51ef93bad4d40b31ff5cd9338f4da5db025d85ef27adff8"
     },
     {
       "arquivo": "print/acbrTags.js",
@@ -5152,7 +5152,7 @@
     },
     {
       "arquivo": "print/drivers/acbrPosPrinterProvider.js",
-      "sha256": "b02efd6dd75eaca407c948e22e3fc8f01a6cb7d6e0ab741b56cf4a0c5ef0a14f"
+      "sha256": "73e6675ba8cd23637d7952bbb25c06f142ebb8c3b8d30bdd46ada63e987d474c"
     },
     {
       "arquivo": "print/drivers/mockPrinterProvider.js",
@@ -5184,7 +5184,7 @@
     },
     {
       "arquivo": "print/printerLocalConfig.js",
-      "sha256": "2d11584f62c8434a72fc9efec3bf018eea9788859abf1f4262462c419ca24327"
+      "sha256": "955a59c82eaa5ac133d53216c40bafc32fd908458320d8c999dd0398d5e716dd"
     },
     {
       "arquivo": "print/printerLogo.js",
@@ -5196,7 +5196,7 @@
     },
     {
       "arquivo": "print/printerModelMap.js",
-      "sha256": "974c0a780455885072c91445373a6e507da44a023e46359a0c39bc9764eb5cad"
+      "sha256": "613e607e8f164524bf89b8c2c9169f84bc3899fd7ac55841110f0d409227a28a"
     },
     {
       "arquivo": "print/printErrors.js",
@@ -5208,7 +5208,7 @@
     },
     {
       "arquivo": "print/printExecutor.js",
-      "sha256": "06b11c4f7e1fda20fdbd8963fb9f7e674736f56c366b37bc8ef8c9342dc569c0"
+      "sha256": "0fcb583a5fe358eb608c30bbf37bda058cd13d9dc4d8535c2bcba91a50711ae1"
     },
     {
       "arquivo": "print/printFiscalCoordination.js",

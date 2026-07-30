@@ -255,7 +255,8 @@ function salvar(updates) {
   if (updates.nomeImpressora) {
     envPatch.PRINTER_NAME = String(updates.nomeImpressora);
     if (!updates.modelo && updates.modeloAuto !== false) {
-      vals.modelo = inferirModeloAcbr(updates.nomeImpressora, "");
+      // ignoreEnv: modeloAuto deve seguir o nome, não o PRINTER_MODEL antigo do .env
+      vals.modelo = inferirModeloAcbr(updates.nomeImpressora, "", { ignoreEnv: true });
       envPatch.PRINTER_MODEL = vals.modelo;
     }
   }
