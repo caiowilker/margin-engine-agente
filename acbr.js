@@ -726,11 +726,19 @@ function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
   const cfop = cfopDigits;
   const nome = sanitizeAcbrText(item.nome, 120);
 
+  const fator = Number(item.fatorParaEstoque || 0);
+  const usaTribUn =
+    Number.isFinite(fator) && fator > 1 && String(un).toUpperCase() !== "UN";
+  const uTrib = usaTribUn ? "UN" : un;
+  const qTrib = usaTribUn ? qtd * fator : qtd;
+  const vUnTrib = usaTribUn && qTrib > 0 ? brutoLinha / qTrib : pu;
+  const ceanTrib = usaTribUn ? "SEM GTIN" : gtin || "SEM GTIN";
+
   let bloco = `[Produto${nn}]\n`;
   bloco += `CFOP=${cfop}\n`;
   bloco += `cProd=${sanitizeAcbrText(item.codigo || String(n), 60)}\n`;
   bloco += `cEAN=${gtin || "SEM GTIN"}\n`;
-  bloco += `cEANTrib=${gtin || "SEM GTIN"}\n`;
+  bloco += `cEANTrib=${ceanTrib}\n`;
   bloco += `xProd=${nome}\n`;
   bloco += `NCM=${ncm}\n`;
   const cest = String(item.cest || "")
@@ -741,9 +749,9 @@ function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
   bloco += `qCom=${fmtQty(qtd)}\n`;
   bloco += `vUnCom=${fmtQty(pu)}\n`;
   bloco += `vProd=${fmtMoney(brutoLinha)}\n`;
-  bloco += `uTrib=${un}\n`;
-  bloco += `qTrib=${fmtQty(qtd)}\n`;
-  bloco += `vUnTrib=${fmtQty(pu)}\n`;
+  bloco += `uTrib=${uTrib}\n`;
+  bloco += `qTrib=${fmtQty(qTrib)}\n`;
+  bloco += `vUnTrib=${fmtQty(vUnTrib)}\n`;
   if (desc > 0) bloco += `vDesc=${fmtMoney(desc)}\n`;
   if (Number(vTotTribItem) > 0) {
     bloco += `vTotTrib=${fmtMoney(vTotTribItem)}\n`;

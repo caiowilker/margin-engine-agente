@@ -21,7 +21,13 @@ function gtinValido(raw) {
  * @returns {string} dígitos válidos ou "" → SEM GTIN
  */
 function resolverGtin(item) {
-  const candidatos = [item?.gtin, item?.codigoBarras, item?.ean, item?.ean13];
+  const candidatos = [
+    item?.gtinComercial,
+    item?.gtin,
+    item?.codigoBarras,
+    item?.ean,
+    item?.ean13,
+  ];
   for (const raw of candidatos) {
     const gtin = String(raw || "").replace(/\D/g, "");
     if (gtinValido(gtin)) return gtin;
