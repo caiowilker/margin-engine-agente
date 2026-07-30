@@ -160,29 +160,86 @@ function getFfiBindingsError() {
 }
 
 /**
- * Expõe `.async(...args, cb)` no estilo ffi-napi para reutilizar callPos/promisify.
- * Internamente usa Promise do koffi (`fn.async(...)`).
+ * Expõe `.async(...args, cb)` compatível com promisify/callPos.
+ *
+ * IMPORTANTE (koffi ≥2): `fn.async` NÃO retorna Promise — exige callback
+ * `(err, res)` como último argumento. Remover o callback gera
+ * "Expected N+1 arguments, got N" (ex.: POS_Inicializar → Expected 3, got 2)
+ * e o executor cai no fallback native.
+ *
+ * @see https://koffi.dev/functions#asynchronous-calls
  */
-function wrapKoffiFunc(nativeFn) {
+function wrapKoffiFunc(nativeFn, exportName = "POS") {
   const sync = (...args) => nativeFn(...args);
-  sync.async = (...args) => {
+  try {
+    Object.defineProperty(sync, "name", { value: exportName, configurable: true });
+  } catch (_) {
+    /* ignore */
+  }
+  sync.async = function posAsync(...args) {
     const maybeCb = args[args.length - 1];
-    const hasCb = typeof maybeCb === "function";
-    const callArgs = hasCb ? args.slice(0, -1) : args;
-    const promise = nativeFn.async(...callArgs);
-    if (!hasCb) return promise;
-    Promise.resolve(promise)
-      .then((ret) => maybeCb(null, ret))
-      .catch((err) => maybeCb(err));
+    if (typeof maybeCb === "function") {
+      // Caminho principal: repassa args + callback para o async nativo do koffi
+      try {
+        return nativeFn.async(...args);
+      } catch (e) {
+        // Erro síncrono (arity etc.) → callback no próximo tick (padrão Node)
+        setImmediate(() => maybeCb(e));
+        return undefined;
+      }
+    }
+    // Conveniência: await fn.async(...args) sem callback
+    return new Promise((resolve, reject) => {
+      try {
+        nativeFn.async(...args, (err, ret) => {
+          if (err) reject(err);
+          else resolve(ret);
+        });
+      } catch (e) {
+        reject(e);
+      }
+    });
   };
+  try {
+    Object.defineProperty(sync.async, "name", {
+      value: `${exportName}.async`,
+      configurable: true,
+    });
+  } catch (_) {
+    /* ignore */
+  }
   return sync;
 }
+
+/** Símbolos essenciais — falha ao carregar qualquer um inviabiliza o provider. */
+const POS_REQUIRED_EXPORTS = new Set([
+  "POS_Inicializar",
+  "POS_Finalizar",
+  "POS_UltimoRetorno",
+  "POS_ConfigLer",
+  "POS_ConfigGravar",
+  "POS_ConfigGravarValor",
+  "POS_Ativar",
+  "POS_Desativar",
+  "POS_InicializarPos",
+  "POS_Imprimir",
+  "POS_ImprimirLinha",
+  "POS_ImprimirCmd",
+  "POS_CortarPapel",
+  "POS_PularLinhas",
+  "POS_AbrirGaveta",
+  "POS_Zerar",
+  "POS_Reset",
+  "POS_Nome",
+  "POS_Versao",
+]);
 
 function createBindings(libPath) {
   const koffi = require("koffi");
   const dll = koffi.load(libPath);
 
-  // ACBrLib PosPrinter — cdecl; buffers de saída via Buffer + int[1] (_Inout_)
+  // ACBrLib PosPrinter — cdecl (default da lib); buffers via Buffer + int[1] (_Inout_)
+  // POS_Imprimir: (eString, PulaLinha, DecodificarTags, CodificarPagina, Copias)
   const defs = {
     POS_Inicializar: "int POS_Inicializar(str eArqConfig, str eChaveCrypt)",
     POS_Finalizar: "int POS_Finalizar()",
@@ -209,14 +266,24 @@ function createBindings(libPath) {
       "int POS_LerCaracteristicas(_Out_ uint8 *sCaracteristicas, _Inout_ int *esTamanho)",
     POS_GravarLogoArquivo: "int POS_GravarLogoArquivo(str eArquivo, int nKC1, int nKC2)",
     POS_ImprimirLogo: "int POS_ImprimirLogo(int nKC1, int nKC2, int nFatorX, int nFatorY)",
-    POS_Imprimir: "int POS_Imprimir(str aString, bool PulaLinha, bool DecodescTags, bool CortaPapel, int Temporizar)",
+    POS_Imprimir:
+      "int POS_Imprimir(str eString, bool PulaLinha, bool DecodificarTags, bool CodificarPagina, int Copias)",
     POS_ImprimirLinha: "int POS_ImprimirLinha(str aString)",
     POS_ImprimirCmd: "int POS_ImprimirCmd(str aString)",
   };
 
   const lib = {};
   for (const [name, sig] of Object.entries(defs)) {
-    lib[name] = wrapKoffiFunc(dll.func(sig));
+    try {
+      lib[name] = wrapKoffiFunc(dll.func(sig), name);
+    } catch (err) {
+      if (POS_REQUIRED_EXPORTS.has(name)) {
+        throw new Error(
+          `[ACBrPosPrinter] Export obrigatório ausente (${name}): ${err.message || err}`,
+        );
+      }
+      lib[name] = null;
+    }
   }
   return lib;
 }
@@ -241,10 +308,19 @@ function loadLib() {
 
 function promisify(fn, ...args) {
   return new Promise((resolve, reject) => {
-    fn(...args, (err, ret) => {
-      if (err) return reject(err);
-      resolve(ret);
-    });
+    try {
+      if (typeof fn !== "function") {
+        reject(new TypeError("[ACBrPosPrinter] promisify: fn inválida"));
+        return;
+      }
+      fn(...args, (err, ret) => {
+        if (err) return reject(err);
+        resolve(ret);
+      });
+    } catch (e) {
+      // koffi lança TypeError síncrono (ex.: arity) — sem isso a Promise fica pendente
+      reject(e);
+    }
   });
 }
 
@@ -288,6 +364,11 @@ async function readStringOut(libBundle, fn, ...args) {
  * Por isso teardown usa timeout curto e abandona a sessão (ver callPosBestEffort).
  */
 async function callPos(libBundle, fn, ...args) {
+  if (typeof fn !== "function") {
+    const e = new Error("[ACBrPosPrinter] Função FFI indisponível nesta DLL");
+    e.code = "ACBR_POS_FN_MISSING";
+    throw e;
+  }
   const timeoutMs = parseInt(process.env.ACBR_POS_CALL_TIMEOUT_MS || "8000", 10);
   const invoke = promisify(fn.bind(libBundle.lib), ...args);
   let timer;
@@ -321,6 +402,7 @@ async function callPos(libBundle, fn, ...args) {
  * Se estourar, abandona a await (FFI pode continuar no worker) e o caller dropa a sessão.
  */
 async function callPosBestEffort(libBundle, fn, ...args) {
+  if (typeof fn !== "function") return;
   const timeoutMs = parseInt(process.env.ACBR_POS_TEARDOWN_TIMEOUT_MS || "2000", 10);
   let timer;
   try {
@@ -338,6 +420,7 @@ async function callPosBestEffort(libBundle, fn, ...args) {
 }
 
 async function gravarConfigIni(libBundle, iniPath, values) {
+  const criticalKeys = new Set(["Porta", "Modelo"]);
   for (const [sec, keys] of Object.entries(values)) {
     for (const [key, val] of Object.entries(keys)) {
       try {
@@ -347,8 +430,12 @@ async function gravarConfigIni(libBundle, iniPath, values) {
           key,
           String(val),
         );
-      } catch (_) {
-        /* opcional por versão */
+      } catch (err) {
+        // Porta/Modelo errados = Ativar/Imprimir no destino errado — não engolir
+        if (sec === "PosPrinter" && criticalKeys.has(key)) {
+          throw err;
+        }
+        /* demais chaves: opcional por versão da DLL */
       }
     }
   }
@@ -606,8 +693,8 @@ async function withPosPrinterSession(fn, opts = {}) {
   } catch (err) {
     const invalidate =
       opts.invalidateOnError ||
-      /porta|offline|inicializar|ativar|desativar|finalizar|pos_imprimir/i.test(
-        String(err?.message || ""),
+      /porta|offline|inicializar|ativar|desativar|finalizar|pos_imprimir|expected \d+ arguments|acbr_pos_timeout|acbr_pos_fn_missing/i.test(
+        String(err?.message || err?.code || ""),
       );
     if (invalidate && _activeSession) {
       await teardownSession(_activeSession);
@@ -634,8 +721,11 @@ async function withPosPrinterSession(fn, opts = {}) {
 
 async function assertPortaLegivel(bundle) {
   const porta = buildRuntimeValues().PosPrinter?.Porta || "";
+  // RAW:Windows e exports opcionais ausentes — não bloqueia impressão
   if (/^RAW:/i.test(porta) || !bundle?.lib?.POS_PodeLerDaPorta?.async) return;
-  const ret = await promisify(bundle.lib.POS_PodeLerDaPorta.async.bind(bundle.lib.POS_PodeLerDaPorta));
+  const ret = await promisify(
+    bundle.lib.POS_PodeLerDaPorta.async.bind(bundle.lib.POS_PodeLerDaPorta),
+  );
   if (ret === 0) return;
   const msg = await ultimoRetorno(bundle);
   const values = buildRuntimeValues();
@@ -655,7 +745,9 @@ async function imprimirTagsNativeOnce(bundle, tags) {
   }
   await assertPortaLegivel(bundle);
   await callPos(bundle, bundle.lib.POS_InicializarPos.async);
-  await callPos(bundle, bundle.lib.POS_Imprimir.async, tags, true, true, false, 1);
+  // POS_Imprimir(eString, PulaLinha, DecodificarTags, CodificarPagina, Copias)
+  // CodificarPagina=true alinha com PaginaDeCodigo do INI (CP850/1252/UTF8).
+  await callPos(bundle, bundle.lib.POS_Imprimir.async, String(tags || ""), true, true, true, 1);
   return { ok: true, native: true };
 }
 
@@ -702,6 +794,9 @@ async function abrirGavetaNative() {
 
 async function lerStatusFormatadoNative(tentativas = 3) {
   return withPosPrinterSession(async (bundle) => {
+    if (!bundle?.lib?.POS_LerStatusImpressoraFormatado?.async) {
+      return { raw: "", status: {}, ok: true, unsupported: true };
+    }
     const raw = await readStringOut(
       bundle,
       bundle.lib.POS_LerStatusImpressoraFormatado.async,
@@ -741,6 +836,9 @@ async function lerStatusFormatadoNative(tentativas = 3) {
 
 async function acharPortasNative() {
   return withPosPrinterSession(async (bundle) => {
+    if (!bundle?.lib?.POS_AcharPortas?.async) {
+      return { portas: [], raw: "", unsupported: true };
+    }
     const raw = await readStringOut(bundle, bundle.lib.POS_AcharPortas.async);
     return { portas: String(raw || "").split("|").filter(Boolean), raw };
   });
@@ -748,6 +846,9 @@ async function acharPortasNative() {
 
 async function lerInfoImpressoraNative() {
   return withPosPrinterSession(async (bundle) => {
+    if (!bundle?.lib?.POS_LerInfoImpressora?.async) {
+      return { raw: "", unsupported: true };
+    }
     const raw = await readStringOut(bundle, bundle.lib.POS_LerInfoImpressora.async);
     return { raw };
   });
@@ -755,6 +856,9 @@ async function lerInfoImpressoraNative() {
 
 async function gravarLogoArquivoNative(bmpPath, kc1, kc2) {
   return withPosPrinterSession(async (bundle) => {
+    if (!bundle?.lib?.POS_GravarLogoArquivo?.async) {
+      throw new Error("[ACBrPosPrinter] POS_GravarLogoArquivo não disponível nesta DLL");
+    }
     await callPos(bundle, bundle.lib.POS_GravarLogoArquivo.async, bmpPath, kc1, kc2);
     return { ok: true, native: true };
   });
@@ -807,4 +911,6 @@ module.exports = {
   gravarLogoArquivoNative,
   lerVersaoNative,
   buildRuntimeValues,
+  /** @internal testes — simula contrato async do koffi */
+  __wrapKoffiFunc: wrapKoffiFunc,
 };

@@ -25,6 +25,12 @@ function classifyPrintError(err) {
     out.fallbackSuggested = true;
     return out;
   }
+  // Bug de binding koffi (arity) — fallback native uma vez; não reprocessar em loop
+  if (/expected \d+ arguments, got \d+/i.test(msg) || err?.code === "ACBR_POS_FN_MISSING") {
+    out.retryable = false;
+    out.fallbackSuggested = true;
+    return out;
+  }
   if (RETRYABLE.test(msg)) {
     out.retryable = true;
     return out;

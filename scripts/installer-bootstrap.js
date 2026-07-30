@@ -557,21 +557,43 @@ async function main() {
   }
 
   const serviceResult = registerService();
-  if (serviceResult.ok) {
-    try {
-      const ctl = require(path.join(appDir, "scripts", "installer-service-control"));
-      ctl.startService();
-    } catch {
-      /* ignore */
-    }
+  // Sempre força start + espera RUNNING (install-service com --no-open antes saía cedo demais)
+  let startResult = { ok: false };
+  try {
+    const ctl = require(path.join(appDir, "scripts", "installer-service-control"));
+    startResult = ctl.startService({ waitMs: 60000 });
+    initBootstrapLog().info({ acao: "service_start", ...startResult }, "Start do serviço pós-registro");
+  } catch (err) {
+    initBootstrapLog().warn({ err: err.message }, "startService pós-registro falhou");
+    startResult = { ok: false, error: err.message };
   }
   if (needsServiceCycle) {
     startAgentService();
   }
-  const online = waitForOnline();
+
+  let online = waitForOnline();
+  if (!online.ok && withService) {
+    initBootstrapLog().warn({ acao: "wait_online_retry" }, "Agente offline — novo start + espera");
+    try {
+      const ctl = require(path.join(appDir, "scripts", "installer-service-control"));
+      ctl.startService({ waitMs: 45000 });
+    } catch {
+      /* ignore */
+    }
+    online = waitForOnline();
+  }
+
   createShortcuts();
-  if (online.ok) {
+  // Abre painel se online; se serviço rodando mas health atrasou, ainda tenta abrir
+  if (online.ok || startResult.ok) {
     openPanel();
+  }
+
+  if (!startResult.ok && withService && process.platform === "win32") {
+    initBootstrapLog().error(
+      { startResult, serviceResult },
+      "Serviço Margin Engine NÃO ficou RUNNING — abra services.msc ou execute Reparar",
+    );
   }
 
   let report = { ok: true, issues: [] };
@@ -590,11 +612,16 @@ async function main() {
       issues: report.issues.length,
       agentOnline: online.ok,
       serviceOk: serviceResult.ok,
+      serviceRunning: startResult.ok,
     },
     "Bootstrap concluído",
   );
 
-  if (!serviceResult.ok && !nativeDepsReady()) {
+  if ((!serviceResult.ok || !startResult.ok) && !nativeDepsReady()) {
+    process.exit(1);
+  }
+  // Serviço registrado mas não iniciou — ainda assim exit 0 se deps ok, mas marca atenção no diagnóstico
+  if (withService && process.platform === "win32" && !startResult.ok && !online.ok) {
     process.exit(1);
   }
   process.exit(0);

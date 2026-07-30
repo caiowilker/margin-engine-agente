@@ -160,16 +160,84 @@ const svc = new Service({
 const { removeLegacyServices } = require("./scripts/installer-service-control");
 
 svc.on("install", () => {
-  svc.start();
-  console.log("\n✓ Serviço instalado e iniciado.");
+  console.log("\n✓ Serviço instalado — iniciando...");
   console.log(`  PDV disponível em: ${AGENT_PUBLIC_BASE}`);
-  console.log("  Acesse para ativar o terminal de caixa.\n");
-
+  try {
+    svc.start();
+  } catch (e) {
+    console.error("✗ Falha ao solicitar start:", e.message || e);
+  }
+  // Com --no-open (Inno): não depender só do evento 'start' do node-windows
   if (noOpen) {
+    setTimeout(() => {
+      if (finished) return;
+      const r = tryStartViaScm();
+      finishInstall(r?.ok ? 0 : 1);
+    }, 4000);
+  }
+});
+
+svc.on("alreadyinstalled", () => {
+  console.log("\n⚠  Serviço já instalado. Iniciando...");
+  try {
+    svc.start();
+  } catch (e) {
+    console.error("✗ Falha ao solicitar start:", e.message || e);
+  }
+  if (noOpen) {
+    setTimeout(() => {
+      if (finished) return;
+      const r = tryStartViaScm();
+      finishInstall(r?.ok ? 0 : 1);
+    }, 4000);
+  }
+});
+
+svc.on("uninstall", () => {
+  console.log("✓ Serviço Margin Engine removido.");
+  finishInstall(0);
+});
+
+svc.on("start", () => {
+  console.log(`✓ Serviço iniciado — PDV disponível em ${AGENT_PUBLIC_BASE}`);
+  openPanelIfNeeded();
+  finishInstall(0);
+});
+
+svc.on("stop", () => {
+  console.log("✓ Serviço parado.");
+});
+
+svc.on("error", (e) => {
+  console.error("✗ Erro no serviço:", e);
+  // Última chance via sc.exe antes de falhar o instalador
+  const r = tryStartViaScm();
+  if (r?.ok) {
+    openPanelIfNeeded();
     finishInstall(0);
     return;
   }
+  finishInstall(1);
+});
 
+function tryStartViaScm() {
+  try {
+    const ctl = require("./scripts/installer-service-control");
+    const r = ctl.startService({ waitMs: 45000 });
+    console.log(
+      r.ok
+        ? `✓ Serviço confirmado via SCM (${r.scmName})`
+        : `⚠ SCM start: ${r.error || r.state}`,
+    );
+    return r;
+  } catch (err) {
+    console.error("✗ SCM start falhou:", err.message);
+    return { ok: false, error: err.message };
+  }
+}
+
+function openPanelIfNeeded() {
+  if (noOpen) return;
   setTimeout(() => {
     const url = `${AGENT_PUBLIC_BASE}/`;
     if (process.platform === "win32") {
@@ -179,51 +247,36 @@ svc.on("install", () => {
     } else {
       exec(`xdg-open "${url}"`);
     }
-  }, 2000);
-});
-
-svc.on("alreadyinstalled", () => {
-  console.log("\n⚠  Serviço já instalado. Reiniciando...");
-  svc.start();
-  if (noOpen) finishInstall(0);
-});
-
-svc.on("uninstall", () => {
-  console.log("✓ Serviço Margin Engine removido.");
-});
-
-svc.on("start", () => {
-  console.log(`✓ Serviço iniciado — PDV disponível em ${AGENT_PUBLIC_BASE}`);
-});
-
-svc.on("stop", () => {
-  console.log("✓ Serviço parado.");
-});
-
-svc.on("error", (e) => {
-  console.error("✗ Erro no serviço:", e);
-  if (noOpen) finishInstall(1);
-});
+  }, 1500);
+}
 
 // ── Executar ──────────────────────────────────────────────────────────────────
 const INSTALL_TIMEOUT_MS = 120000;
+let finished = false;
 
 function finishInstall(code) {
-  setTimeout(() => process.exit(code), 300);
+  if (finished) return;
+  finished = true;
+  setTimeout(() => process.exit(code), 400);
 }
 
 if (uninstall) {
   console.log("\nRemovendo serviço Margin Engine...");
   svc.uninstall();
+  setTimeout(() => {
+    if (!finished) finishInstall(0);
+  }, 30000);
 } else {
   console.log("\nInstalando serviço Margin Engine...");
   console.log(`  Node do serviço: ${serviceNode}`);
   removeLegacyServices(__dirname);
-  if (noOpen) {
-    setTimeout(() => {
-      console.error("✗ Timeout ao instalar o serviço Windows (120s)");
-      process.exit(1);
-    }, INSTALL_TIMEOUT_MS);
-  }
+  // Se 'start' não emitir (bug/race node-windows), confirma via sc e encerra
+  setTimeout(() => {
+    if (finished) return;
+    console.warn("⚠ Timeout aguardando evento start — confirmando via SCM...");
+    const r = tryStartViaScm();
+    if (r?.ok) openPanelIfNeeded();
+    finishInstall(r?.ok ? 0 : 1);
+  }, INSTALL_TIMEOUT_MS);
   svc.install();
 }

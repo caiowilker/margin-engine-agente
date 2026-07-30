@@ -1,6 +1,6 @@
 {
   "versao": "1.0.1",
-  "geradoEm": "2026-07-30T19:00:17.306Z",
+  "geradoEm": "2026-07-30T20:13:25.648Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -244,7 +244,7 @@
     },
     {
       "arquivo": "frontend-dist/api-backend.json",
-      "sha256": "235ac23df473098732cb56a2dcce5ae3ca0cd9f127188d476e8410cb46c19017"
+      "sha256": "f375d08da0a49d0cd935e7da343ab1ef93cbe53af8d01366f21393717bce898d"
     },
     {
       "arquivo": "frontend-dist/apple-touch-icon.png",
@@ -5040,7 +5040,7 @@
     },
     {
       "arquivo": "frontend-dist/version.json",
-      "sha256": "c95f440290f9abe49b80aedcdce9cc7349ec0498cfcd6a3ab32f0f8d20b86784"
+      "sha256": "d522eb6e1175fcd448491598631e784f9fd4f623d9dad954a3b8c7756e5c8694"
     },
     {
       "arquivo": "frontend-dist/workbox-3147e214.js",
@@ -5076,7 +5076,7 @@
     },
     {
       "arquivo": "install-service.js",
-      "sha256": "25be7b2e72015f4114f760f5e82caebe11871239883ddf2527f3384c39d908b4"
+      "sha256": "45a1d8265d7aad22b79a1395a1db9b4bc1e36daccb5a1e65dc333e28bc376706"
     },
     {
       "arquivo": "lanDiagnostics.js",
@@ -5108,7 +5108,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "0e10372a28655eddefe4a17f3b3675416475b80b6f91c3d0c49ee0fe9d86a046"
+      "sha256": "90cd8710583827c0d8950fe1c2c5c09e87a7b26f973ee48ba75ca7834bb0e463"
     },
     {
       "arquivo": "print/acbrPosPrinterErrors.js",
@@ -5116,7 +5116,7 @@
     },
     {
       "arquivo": "print/acbrPosPrinterRuntime.js",
-      "sha256": "5d7b58f096d9863fa0a85b95cf5be8a8bed741462196ea99b48aead494caf2ce"
+      "sha256": "8f51a0813b55d1a3e4cd32e221a799164bbbbd7bbccd2319f328244729ebfaf7"
     },
     {
       "arquivo": "print/acbrTags.js",
@@ -5164,7 +5164,7 @@
     },
     {
       "arquivo": "print/escpos/impressoraCore.js",
-      "sha256": "512e3f694fec7b5505d81a44824ad2dad8a1459cd303f2ba961b044b9ecc2298"
+      "sha256": "02745b00105ec9dae3991f65a8470f5959c771bf08d5ae543c8d197d82531d27"
     },
     {
       "arquivo": "print/factory.js",
@@ -5176,11 +5176,11 @@
     },
     {
       "arquivo": "print/pedidoPrint.js",
-      "sha256": "b229f07d487cac0056bad7c3212ed078fec6f175a3bb9bb5cdf14c102995fdf6"
+      "sha256": "7f111daa9325fcf7c91d294cbde635718bd1bf930b2d24920bdeddcb906a090f"
     },
     {
       "arquivo": "print/printerBootstrap.js",
-      "sha256": "edc7bfb28569c3395220efdc81cc2b4064e2ae2591e69610b2a35e5b558e17ae"
+      "sha256": "8164352abe08bdef3a76e99c0b5e6aba783a9db8ad309afcdaba682e1d2497cd"
     },
     {
       "arquivo": "print/printerLocalConfig.js",
@@ -5200,7 +5200,7 @@
     },
     {
       "arquivo": "print/printErrors.js",
-      "sha256": "dcaecd3e200b46b9e2abbf30396f1bac89d2a3aa2e12790ef873d7ad578fb23d"
+      "sha256": "0ef0c1a7f0eca7bc07c1aa4fba8cb24e0a24db62a350dda62e94676b9c2d9bf5"
     },
     {
       "arquivo": "print/printerStationRoutes.js",

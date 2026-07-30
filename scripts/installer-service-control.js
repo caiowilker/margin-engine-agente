@@ -165,17 +165,66 @@ function stopService() {
   };
 }
 
-function startService() {
+function startService(opts = {}) {
   if (!isWindows()) return { ok: true, skipped: true };
+  const waitMs = parseInt(
+    process.env.INSTALLER_START_WAIT_MS || String(opts.waitMs || 60000),
+    10,
+  );
   const scmName = resolveActiveScmName(SERVICE_DISPLAY_NAME);
-  const st = queryStateForScm(scmName);
+  let st = queryStateForScm(scmName);
   if (st === "running") return { ok: true, state: st, scmName };
+
+  if (st === "missing") {
+    // Tenta variantes legadas / sem .exe antes de desistir
+    for (const alt of [
+      ...scmNameVariants(SERVICE_DISPLAY_NAME),
+      ...LEGACY_SCM_NAMES,
+      ...LEGACY_DISPLAY_NAMES.flatMap(scmNameVariants),
+    ]) {
+      if (queryStateForScm(alt) !== "missing") {
+        return startServiceForScm(alt, waitMs);
+      }
+    }
+    return {
+      ok: false,
+      state: "missing",
+      scmName,
+      error: `Serviço "${SERVICE_DISPLAY_NAME}" (${scmName}) não encontrado no SCM`,
+    };
+  }
+
+  return startServiceForScm(scmName, waitMs);
+}
+
+function startServiceForScm(scmName, waitMs) {
+  let st = queryStateForScm(scmName);
+  if (st === "running") return { ok: true, state: st, scmName };
+
   try {
     execSync(`sc.exe start "${scmName}"`, { stdio: "pipe", encoding: "utf8" });
-    return { ok: true, state: queryStateForScm(scmName), scmName };
   } catch (err) {
-    return { ok: false, state: queryStateForScm(scmName), scmName, error: err.message };
+    const msg = String(err.stdout || "") + String(err.stderr || "") + String(err.message || "");
+    // 1056 = serviço já em start; 1053 = não respondeu a tempo (ainda pode subir)
+    const soft =
+      /1056|already been started|PENDING|1053|did not respond|não respondeu/i.test(msg);
+    if (!soft && queryStateForScm(scmName) !== "running" && queryStateForScm(scmName) !== "starting") {
+      return { ok: false, state: queryStateForScm(scmName), scmName, error: err.message };
+    }
   }
+
+  const deadline = Date.now() + Math.max(5000, waitMs);
+  while (Date.now() < deadline) {
+    st = queryStateForScm(scmName);
+    if (st === "running") return { ok: true, state: st, scmName };
+    sleep(POLL_MS);
+  }
+  return {
+    ok: false,
+    state: queryStateForScm(scmName),
+    scmName,
+    error: `Timeout aguardando início do serviço (${waitMs}ms)`,
+  };
 }
 
 if (require.main === module) {

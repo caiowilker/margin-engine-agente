@@ -46,7 +46,17 @@ async function autoDetectarESincronizar(opts = {}) {
   }
 
   const core = require("./escpos/impressoraCore");
-  const info = await core.detectarImpressora(force);
+  const detectar =
+    typeof core.detectarImpressora === "function"
+      ? core.detectarImpressora
+      : typeof core.detectar === "function"
+        ? (force) => core.detectar(force)
+        : null;
+  if (!detectar) {
+    log.warn("[PrinterBootstrap] impressoraCore sem detectarImpressora — skip auto-detecção");
+    return { ok: false, skipped: true, motivo: "detectar_indisponivel" };
+  }
+  const info = await detectar(force);
   if (!info?.impressora) {
     log.warn(
       { candidatos: info?.candidatos?.length ?? 0 },

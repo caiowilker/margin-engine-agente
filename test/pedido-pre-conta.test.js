@@ -28,7 +28,9 @@ console.log("pedido-pre-conta.test.js\n");
 test("PRE_CONTA → título PRE-CONTA e exibe total", () => {
   assert.strictEqual(tituloPedidoTermico("cliente", "PRE_CONTA"), "PRE-CONTA");
   assert.strictEqual(deveExibirTotalPedido("cliente", "PRE_CONTA"), true);
-  assert.strictEqual(labelEventType("PRE_CONTA"), "Pré-conta — cobrança");
+  assert.strictEqual(labelEventType("PRE_CONTA"), "Pre-conta - cobranca");
+  assert.ok(!labelEventType("PRE_CONTA").includes("?"));
+  assert.ok(!/[^\x20-\x7E]/.test(labelEventType("PRE_CONTA")));
 });
 
 test("cozinha não exibe total", () => {

@@ -24,4 +24,9 @@ describe("installer-service-control — nomes SCM node-windows", () => {
   it("tenta .exe antes do nome sem sufixo", () => {
     assert.deepEqual(scmNameVariants("Margin Engine"), ["marginengine.exe", "marginengine"]);
   });
+
+  it("exporta startService como função", () => {
+    const ctl = require("../scripts/installer-service-control");
+    assert.equal(typeof ctl.startService, "function");
+  });
 });

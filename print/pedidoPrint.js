@@ -11,6 +11,7 @@ const PRINT_TYPE_LABELS = Object.freeze({
   entrega: "ENTREGA",
 });
 
+/** Rótulos ASCII — térmicas ESC/POS sem code page UTF-8 imprimem "?" em acentos/travessão. */
 const EVENT_TYPE_LABELS = Object.freeze({
   ORDER_CREATED: "Pedido criado",
   ORDER_UPDATED: "Pedido atualizado",
@@ -20,8 +21,8 @@ const EVENT_TYPE_LABELS = Object.freeze({
   ORDER_READY: "Pedido pronto",
   ORDER_DELIVERED: "Em entrega",
   ORDER_FINISHED: "Pedido finalizado",
-  PRE_CONTA: "Pré-conta — cobrança",
-  BILL_REQUESTED: "Pré-conta — cobrança",
+  PRE_CONTA: "Pre-conta - cobranca",
+  BILL_REQUESTED: "Pre-conta - cobranca",
 });
 
 function mapItem(raw) {
@@ -131,7 +132,9 @@ function labelPrintType(printType) {
 }
 
 function labelEventType(eventType) {
-  return EVENT_TYPE_LABELS[String(eventType || "").toUpperCase()] || String(eventType || "Pedido");
+  const raw =
+    EVENT_TYPE_LABELS[String(eventType || "").toUpperCase()] || String(eventType || "Pedido");
+  return toThermalText(raw);
 }
 
 function fmtQty(qty, unit) {
@@ -143,12 +146,12 @@ function fmtQty(qty, unit) {
 
 function fmtTotal(total) {
   if (total == null || Number.isNaN(total)) return null;
-  return (
+  return toThermalText(
     "R$ " +
-    Number(total).toLocaleString("pt-BR", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })
+      Number(total).toLocaleString("pt-BR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
   );
 }
 

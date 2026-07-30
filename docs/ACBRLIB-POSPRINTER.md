@@ -125,5 +125,9 @@ POS_Finalizar()
 | `ACBR_POSPRINTER_INI` | INI (padrão: `data/posprinter.ini`) |
 | `PRINTER_ALLOW_PARITY` | `true` = fallback ESC/POS legado (só dev/CI) |
 
+Runtime FFI: `print/acbrPosPrinterRuntime.js` (koffi). O `fn.async` do koffi
+exige callback `(err, res)` — não retorna Promise. O wrapper interno preserva
+esse contrato; quebrá-lo gera `Expected N arguments, got N-1` e fallback native.
+
 Homologação Windows: `CHECKLIST-WINDOWS-PRINT.md`  
 Tags de cupom: `print/acbrTags.js`, `print/cupomAcbrTags.js`

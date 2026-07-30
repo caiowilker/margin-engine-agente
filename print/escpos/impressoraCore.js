@@ -1613,7 +1613,7 @@ async function renderPedido(printer, payload) {
     .text(tituloPedidoTermico(p.printType, p.eventType))
     .style("normal")
     .size(0, 0)
-    .text(labelEventType(p.eventType));
+    .text(tx(labelEventType(p.eventType)));
 
   if (cancelado) {
     printer.style("b").text("*** CANCELADO ***").style("normal");
