@@ -168,7 +168,20 @@ function warnIfSelectedAtBoot() {
     );
     return;
   }
+  let ffiErr = null;
+  let libPath = null;
+  try {
+    const runtime = require("./acbrPosPrinterRuntime");
+    libPath = runtime.resolveLibPath();
+    ffiErr =
+      typeof runtime.getFfiBindingsError === "function"
+        ? runtime.getFfiBindingsError()
+        : null;
+  } catch (e) {
+    ffiErr = String(e && e.message ? e.message : e);
+  }
   log.error(
+    { libPath, ffiErr, canLoad: !!info.native, mode: info.mode },
     "[ACBrPosPrinter] Biblioteca não encontrada — fallback automático para native",
   );
 }

@@ -2,11 +2,17 @@
  * Classificação de erros de impressão — fallback e observabilidade.
  */
 const RETRYABLE = /timeout|ocupad|busy|offline|desconect|unavailable|econnrefused|econnreset|sem papel|tampa|buffer/i;
-const PERMANENT = /payload|obrigat|invalid|qr code|nfc-e autorizada/i;
+const PERMANENT = /payload|obrigat|invalid|qr code|nfc-e autorizada|n[aã]o [eé] t[eé]rmica|PRINTER_NOT_THERMAL|jato\/laser/i;
 
 function classifyPrintError(err) {
   const msg = String(err?.message || err || "");
   const out = { message: msg, retryable: false, permanente: false, fallbackSuggested: true };
+  if (err?.code === "PRINTER_NOT_THERMAL" || err?.permanente) {
+    out.permanente = true;
+    out.retryable = false;
+    out.fallbackSuggested = false;
+    return out;
+  }
   if (PERMANENT.test(msg)) {
     out.permanente = true;
     out.fallbackSuggested = false;

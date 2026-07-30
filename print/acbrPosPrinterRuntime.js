@@ -99,25 +99,64 @@ function canLoadNativeLib() {
  * Instalador/Reparar passam a funcionar com `npm ci` simples.
  */
 let _ffiBindingsOk = undefined;
+let _ffiBindingsErr = null;
+let _ffiLoading = false;
 
 function canRequireFfiBindings() {
   if (_ffiBindingsOk !== undefined) return _ffiBindingsOk;
+  // Reentrada durante o load do koffi — NÃO cachear false (senão envenena o processo)
+  if (_ffiLoading) return false;
+  _ffiLoading = true;
+  const cwdBefore = process.cwd();
   try {
+    // Serviço node-windows inicia com cwd=System32 — koffi/cnoke estoura stack
+    try {
+      if (cwdBefore.toLowerCase() !== AGENT_ROOT.toLowerCase()) {
+        process.chdir(AGENT_ROOT);
+      }
+    } catch (_) {}
     require("koffi");
-    // Em produção Windows, garante prebuild win32_x64 (ME-011b falso-negativo).
     if (process.platform === "win32") {
       const koffiRoot = path.dirname(require.resolve("koffi/package.json"));
       const winNode = path.join(koffiRoot, "build", "koffi", "win32_x64", "koffi.node");
       if (!fs.existsSync(winNode)) {
         _ffiBindingsOk = false;
+        _ffiBindingsErr = `koffi.node ausente: ${winNode}`;
         return false;
       }
     }
     _ffiBindingsOk = true;
-  } catch (_) {
+    _ffiBindingsErr = null;
+  } catch (e) {
     _ffiBindingsOk = false;
+    _ffiBindingsErr = String(e && e.message ? e.message : e);
+    try {
+      const dump = path.join(
+        process.env.PROGRAMDATA || "C:\\ProgramData",
+        "MarginEngine",
+        "Logs",
+        "koffi-load-error.txt",
+      );
+      fs.mkdirSync(path.dirname(dump), { recursive: true });
+      fs.writeFileSync(
+        dump,
+        `${new Date().toISOString()}\n${_ffiBindingsErr}\n${e && e.stack ? e.stack : ""}\n` +
+          `main=${process.mainModule && process.mainModule.filename}\ncwd=${process.cwd()}\nagentRoot=${AGENT_ROOT}\n`,
+        "utf8",
+      );
+    } catch (_) {}
+  } finally {
+    _ffiLoading = false;
+    try {
+      if (cwdBefore && process.cwd() !== cwdBefore) process.chdir(cwdBefore);
+    } catch (_) {}
   }
   return _ffiBindingsOk;
+}
+
+function getFfiBindingsError() {
+  canRequireFfiBindings();
+  return _ffiBindingsErr;
 }
 
 /**
@@ -348,6 +387,23 @@ async function ativarComConfig(bundle, iniForLib, iniPathDisk) {
       porta: porta || "(vazio)",
       modelo: values.PosPrinter?.Modelo,
     });
+  }
+  // Bloqueia jato/laser em RAW — Ativar/Imprimir prende threadpool e agente fica Offline
+  if (/^RAW:/i.test(porta)) {
+    const nome = porta.replace(/^RAW:/i, "").trim();
+    const NAO =
+      /l4260|l3250|l3210|l1250|l3150|l4150|l5290|inkjet|deskjet|officejet|laserjet|ecosys|brother\s*hl|dcp-|mfc-|onenote|microsoft\s*print\s*to\s*pdf|fax|xps|pdf/i;
+    const SIM =
+      /elgin|bematech|daruma|tanca|jetway|thermal|tm-|mp-|i9|i7|pos\s*80|pos80|posprinter|cupom|nfce|receipt|termica|tm-t|tm-m/i;
+    if (nome && !SIM.test(nome) && NAO.test(nome)) {
+      const err = new Error(
+        `Impressora "${nome}" não é térmica ESC/POS (jato/laser/virtual). ` +
+          `Configure a POS80/térmica ou TCP:IP:9100.`,
+      );
+      err.code = "PRINTER_NOT_THERMAL";
+      err.permanente = true;
+      throw err;
+    }
   }
   await gravarConfigIni(bundle, iniForLib, values);
   if (iniPathDisk) syncIniToSource(bundle, iniPathDisk);
@@ -736,6 +792,7 @@ async function invalidatePosPrinterSession() {
 module.exports = {
   canLoadNativeLib,
   canRequireFfiBindings,
+  getFfiBindingsError,
   resolveLibPath,
   resolveIniPath,
   prepareRuntimePaths,

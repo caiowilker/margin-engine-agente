@@ -88,7 +88,11 @@ if (-not $SkipNpm) {
     if (-not (Test-Path $koffi)) {
         Write-Error "koffi ausente apos npm ci - ACBr PosPrinter nao carrega (prebuild Windows)"
     }
-    Write-Host '[OK] koffi presente (FFI PosPrinter sem VS Build Tools)'
+    $koffiNode = Join-Path $App "node_modules\koffi\build\koffi\win32_x64\koffi.node"
+    if (-not (Test-Path $koffiNode)) {
+        Write-Error "koffi.node win32_x64 ausente - npm ci incompleto; PosPrinter cai no fallback native"
+    }
+    Write-Host '[OK] koffi + win32_x64/koffi.node (FFI PosPrinter sem VS Build Tools)'
 
     Write-Host "==> npm run manifest"
     & (Join-Path $Node "npm.cmd") run manifest

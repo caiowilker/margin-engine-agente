@@ -43,7 +43,10 @@ const PRINTER_NAME = (process.env.PRINTER_NAME || "").trim();
 const PRINTER_PATH = (process.env.PRINTER_PATH || "").trim();
 
 const TERMICA_RX =
-  /epson|elgin|bematech|daruma|tanca|jetway|thermal|tm-|mp-|i9|i7|pos|cupom|nfce|receipt|termica/i;
+  /elgin|bematech|daruma|tanca|jetway|thermal|tm-|mp-|i9|i7|pos\s*80|pos80|posprinter|cupom|nfce|receipt|termica|tm-t|tm-m/i;
+/** Jato/laser — ESC/POS RAW trava spooler ~2min e derruba o agente. */
+const NAO_TERMICA_RX =
+  /l4260|l3250|l3210|l1250|l3150|l4150|l5290|inkjet|deskjet|officejet|laserjet|ecosys|brother\s*hl|dcp-|mfc-|et-2|et-2[78]|workforce|stylus|pixma|onenote|microsoft\s*print\s*to\s*pdf|fax|xps|onenote|send\s*to\s*onenote|pdf|microsoft\s*xps|anydesk|snagit|adobe\s*pdf/i;
 
 const REDE_PORTAS = [9100, 9101, 515];
 const CACHE_TTL_MS = 30000;
@@ -223,7 +226,17 @@ function listarImpressorasWindowsAsync(force = false) {
   if (printersWinInflight) return printersWinInflight;
 
   printersWinInflight = new Promise((resolve) => {
-    execFile(
+    let settled = false;
+    const finish = (list) => {
+      if (settled) return;
+      settled = true;
+      printersWinInflight = null;
+      clearTimeout(softKill);
+      clearTimeout(hardKill);
+      resolve(list);
+    };
+
+    const child = execFile(
       "powershell",
       [
         "-NoProfile",
@@ -232,24 +245,46 @@ function listarImpressorasWindowsAsync(force = false) {
       ],
       {
         encoding: "utf8",
-        timeout: LISTAR_PRINTERS_TIMEOUT_MS,
         windowsHide: true,
       },
       (err, raw) => {
-        printersWinInflight = null;
+        if (settled) return;
         if (err) {
-          return resolve(printersWinCache.list);
+          return finish(printersWinCache.list);
         }
         try {
           const parsed = JSON.parse(raw || "[]");
           const list = Array.isArray(parsed) ? parsed : parsed ? [parsed] : [];
           printersWinCache = { list, at: Date.now() };
-          resolve(list);
+          finish(list);
         } catch (_) {
-          resolve(printersWinCache.list);
+          finish(printersWinCache.list);
         }
       },
     );
+
+    const killTree = (pid) => {
+      if (!pid) return;
+      try {
+        execFile(
+          "taskkill",
+          ["/F", "/T", "/PID", String(pid)],
+          { windowsHide: true, timeout: 5000 },
+          () => {},
+        );
+      } catch (_) {}
+    };
+
+    const softKill = setTimeout(() => {
+      killTree(child.pid);
+      try {
+        child.kill();
+      } catch (_) {}
+      finish(printersWinCache.list);
+    }, LISTAR_PRINTERS_TIMEOUT_MS);
+    const hardKill = setTimeout(() => {
+      killTree(child.pid);
+    }, LISTAR_PRINTERS_TIMEOUT_MS + 1500);
   });
   return printersWinInflight;
 }
@@ -283,37 +318,64 @@ function resolverNomeRawConfigurado() {
 function escolherImpressoraWindows(lista) {
   if (!lista.length) return null;
 
-  // 1. Busca por nome exato ou parcial (PRINTER_NAME)
+  const usaveis = lista.filter(
+    (p) => !pareceNaoTermica(p.Name || "") && !pareceNaoTermica(p.DriverName || ""),
+  );
+
+  // 1. Busca por nome exato ou parcial (PRINTER_NAME) — só se não for jato/virtual
   if (PRINTER_NAME) {
-    const exata = lista.find(
+    const pool = usaveis.length ? usaveis : lista;
+    const exata = pool.find(
       (p) => p.Name && p.Name.toLowerCase() === PRINTER_NAME.toLowerCase(),
     );
-    if (exata) return exata;
-    const parcial = lista.find(
+    if (exata && !pareceNaoTermica(exata.Name)) return exata;
+    const parcial = pool.find(
       (p) =>
         p.Name && p.Name.toLowerCase().includes(PRINTER_NAME.toLowerCase()),
     );
-    if (parcial) return parcial;
+    if (parcial && !pareceNaoTermica(parcial.Name)) return parcial;
   }
 
   // 2. Busca pela porta física (PRINTER_PATH: USB001, USB002, COM3...)
   if (PRINTER_PATH) {
-    const porta = lista.find(
+    const porta = usaveis.find(
       (p) =>
         p.PortName && p.PortName.toLowerCase() === PRINTER_PATH.toLowerCase(),
     );
     if (porta) return porta;
   }
 
-  const termicas = lista.filter(
+  // Só térmicas reais — NÃO promover L4260/OneNote/PDF via PortName USB/WSD
+  const termicas = usaveis.filter(
     (p) =>
-      TERMICA_RX.test(p.Name || "") ||
-      TERMICA_RX.test(p.DriverName || "") ||
-      /USB|COM|WSD|TCP|IP_/i.test(p.PortName || ""),
+      TERMICA_RX.test(p.Name || "") || TERMICA_RX.test(p.DriverName || ""),
   );
+  if (termicas.length) return termicas[0];
 
-  const padrao = lista.find((p) => p.Default);
-  return termicas[0] || padrao || lista[0];
+  const padrao = usaveis.find((p) => p.Default);
+  if (padrao && TERMICA_RX.test(padrao.Name || "")) return padrao;
+
+  // Sem térmica: não inventar porta (evita gravar OneNote/L4260 e derrubar o agente)
+  return null;
+}
+
+function pareceNaoTermica(nome) {
+  const n = String(nome || "");
+  if (!n) return false;
+  if (TERMICA_RX.test(n)) return false;
+  return NAO_TERMICA_RX.test(n);
+}
+
+function assertPortaTermicaOuFalhar(nomeImpressora) {
+  if (!pareceNaoTermica(nomeImpressora)) return;
+  const err = new Error(
+    `Impressora "${nomeImpressora}" não é térmica ESC/POS (jato/laser). ` +
+      `Configure a POS80/térmica neste PC ou use TCP:IP:9100. ` +
+      `Enviar RAW nesta impressora trava o spooler (~2 min) e deixa o agente Offline.`,
+  );
+  err.code = "PRINTER_NOT_THERMAL";
+  err.permanente = true;
+  throw err;
 }
 
 /**
@@ -322,6 +384,7 @@ function escolherImpressoraWindows(lista) {
  * quando WritePrinter/spooler demorava (sintoma: cupom ~140s + AbortError no front).
  */
 function enviarRawWindows(nomeImpressora, buffer) {
+  assertPortaTermicaOuFalhar(nomeImpressora);
   const tmpBin = path.join(
     os.tmpdir(),
     `pdv-print-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.bin`,
@@ -1679,8 +1742,24 @@ function listar() {
     driver: p.DriverName,
     padrao: !!p.Default,
     termicaProvavel:
-      TERMICA_RX.test(p.Name || "") || TERMICA_RX.test(p.DriverName || ""),
+      !pareceNaoTermica(p.Name || "") &&
+      !pareceNaoTermica(p.DriverName || "") &&
+      (TERMICA_RX.test(p.Name || "") || TERMICA_RX.test(p.DriverName || "")),
   }));
+
+  // Sempre inclui a porta RAW configurada — UI não fica vazia se Get-Printer
+  // falhou/hangueou ou a térmica ainda não entrou no spooler.
+  const rawNome = resolverNomeRawConfigurado();
+  if (rawNome && !windows.some((w) => String(w.nome).toLowerCase() === rawNome.toLowerCase())) {
+    windows.unshift({
+      nome: rawNome,
+      porta: `RAW:${rawNome}`,
+      driver: "configurada",
+      padrao: true,
+      termicaProvavel: TERMICA_RX.test(rawNome),
+      configurada: true,
+    });
+  }
 
   let usb = [];
   if (escposUSB) {
@@ -1692,7 +1771,7 @@ function listar() {
 
   return {
     tipoConfigurado: PRINTER_TYPE,
-    nomeConfigurado: PRINTER_NAME || null,
+    nomeConfigurado: PRINTER_NAME || rawNome || null,
     hostConfigurado: PRINTER_HOST || null,
     portaConfigurada: PRINTER_PORT,
     windows,
@@ -1767,6 +1846,8 @@ module.exports = {
   imprimirFechamento,
   imprimirMovimentoCaixa,
   imprimirPedido,
+  assertPortaTermicaOuFalhar,
+  pareceNaoTermica,
   /** @internal regressão COLS / TDZ no render nativo */
   __test: {
     renderCupomConteudo,

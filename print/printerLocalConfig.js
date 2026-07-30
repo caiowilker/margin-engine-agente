@@ -4,7 +4,9 @@
 const fs = require("fs");
 const path = require("path");
 const log = require("../logger").child({ modulo: "printer_local_config" });
-const runtime = require("./acbrPosPrinterRuntime");
+function runtime() {
+  return require("./acbrPosPrinterRuntime");
+}
 const { inferirModeloAcbr, inferirPortaAcbr, normalizarPortaAcbr, parsePortaTcp, resolveControlePorta } = require("./printerModelMap");
 
 const AGENT_ROOT = path.resolve(__dirname, "..");
@@ -14,7 +16,7 @@ function escapeReg(s) {
 }
 
 function resolveIniPath() {
-  return runtime.resolveIniPath();
+  return runtime().resolveIniPath();
 }
 
 function resolveEnvPath() {
@@ -174,11 +176,13 @@ function ler() {
       timeout: ini.timeout,
     },
     logo,
-    libPath: runtime.resolveLibPath(),
+    libPath: runtime().resolveLibPath(),
     iniPath,
     iniExiste: !!(iniPath && fs.existsSync(iniPath)),
-    nativeReady: runtime.canLoadNativeLib(),
-    mode: runtime.canLoadNativeLib()
+    // Não carregar koffi dentro de ler() — no boot do serviço (cwd System32)
+    // require("koffi") estoura stack e envenena canLoad=false para sempre.
+    nativeReady: !!runtime().resolveLibPath(),
+    mode: runtime().resolveLibPath()
       ? "native"
       : process.env.PRINTER_ALLOW_PARITY === "true"
         ? "parity"
@@ -318,17 +322,29 @@ function salvarSemPorta(updates) {
 function sincronizarDeDeteccao(info) {
   if (!info?.impressora) return ler();
   const imp = info.impressora;
+  const nome = imp.nome || imp.name || "";
+  // Não gravar jato/laser como porta térmica — reinfecta config e derruba o agente.
+  try {
+    const core = require("./escpos/impressoraCore");
+    if (typeof core.pareceNaoTermica === "function" && core.pareceNaoTermica(nome)) {
+      log.warn(
+        { nome },
+        "[PrinterLocalConfig] Ignorando auto-detecção de impressora não térmica",
+      );
+      return ler();
+    }
+  } catch (_) {}
   const payload = {
-    nomeImpressora: imp.nome || imp.name,
-    modelo: inferirModeloAcbr(imp.nome || imp.name, imp.driver || imp.driverName),
+    nomeImpressora: nome,
+    modelo: inferirModeloAcbr(nome, imp.driver || imp.driverName),
     modeloAuto: true,
     portaWindows: imp.porta || imp.port,
   };
   if (imp.metodo === "network" && imp.host) {
     payload.porta = `TCP:${imp.host}:${imp.porta || imp.port || process.env.PRINTER_PORT || "9100"}`;
     payload.tipo = "network";
-  } else if (imp.metodo === "windows" && (imp.nome || imp.name)) {
-    payload.porta = `RAW:${imp.nome || imp.name}`;
+  } else if (imp.metodo === "windows" && nome) {
+    payload.porta = `RAW:${nome}`;
     payload.tipo = "windows";
   } else if (imp.porta) {
     payload.porta = imp.porta;

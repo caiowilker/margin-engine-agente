@@ -39,6 +39,15 @@
 
 require("dotenv").config();
 
+// node-windows / serviço Windows inicia com cwd=System32 — quebra native addons (koffi).
+try {
+  const path = require("path");
+  const appRoot = path.resolve(__dirname);
+  if (process.cwd().toLowerCase() !== appRoot.toLowerCase()) {
+    process.chdir(appRoot);
+  }
+} catch (_) {}
+
 const { initLogging } = require("./runtime/loggingService");
 const { version: VERSAO_BOOT } = require("./package.json");
 initLogging({
@@ -1519,11 +1528,19 @@ function iniciarServidor() {
     if (recente && !opts.force) {
       return { ok: true, info: null, skipped: true, recente: true };
     }
-    const [ok, info] = await Promise.all([
+    // Deadline duro — poll do PDV não pode esperar spooler/ACBr (Offline + AbortError).
+    const probeMs = parseInt(process.env.PRINTER_STATUS_PROBE_MS || "1500", 10);
+    const work = Promise.all([
       impressora.testar().catch(() => false),
       impressora.getInfo().catch(() => null),
-    ]);
-    return { ok, info, skipped: false };
+    ]).then(([ok, info]) => ({ ok, info, skipped: false }));
+    const timed = new Promise((resolve) =>
+      setTimeout(
+        () => resolve({ ok: null, info: null, skipped: true, timedOut: true }),
+        Math.max(400, probeMs),
+      ),
+    );
+    return Promise.race([work, timed]);
   }
 
   // Status reduzido e PÚBLICO — alimenta a página "/" (status.html).
@@ -3927,7 +3944,12 @@ function iniciarServidor() {
       );
     }
     try {
-      require("./print/factory").warnIfSelectedAtBoot();
+      // Depois do listen — evita require(koffi) no meio do grafo de boot (stack overflow)
+      setImmediate(() => {
+        try {
+          require("./print/factory").warnIfSelectedAtBoot();
+        } catch (_) {}
+      });
       require("./print/printerBootstrap")
         .noBoot()
         .catch(() => {});

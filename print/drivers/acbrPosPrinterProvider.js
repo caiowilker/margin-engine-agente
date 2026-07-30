@@ -168,8 +168,13 @@ module.exports = {
           require("../factory").resetPrintProvider();
         } catch (_) {}
       }
-      // Com fast-native: não abrir sessão ACBr só para probe (Ativar lento / agente off)
-      if (getIntegrationMode() === "native" && !preferNativeEscPos({ naoFiscal: true })) {
+      // NUNCA abrir sessão ACBr no poll de status — POS_*/threadpool prende o agente
+      // ("Offline", lista vazia). Live status só com flag explícita.
+      if (
+        getIntegrationMode() === "native" &&
+        process.env.PRINTER_ACBR_LIVE_STATUS === "true" &&
+        !preferNativeEscPos({ naoFiscal: true })
+      ) {
         try {
           const status = await runtime.lerStatusFormatadoNative(2);
           if (status?.ok === false) return false;

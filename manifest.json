@@ -1,6 +1,6 @@
 {
   "versao": "1.0.1",
-  "geradoEm": "2026-07-30T17:55:51.173Z",
+  "geradoEm": "2026-07-30T19:00:17.306Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -5072,7 +5072,7 @@
     },
     {
       "arquivo": "index.js",
-      "sha256": "6f042b7bbb700d6b0fac6defd85574ce61d8243771074f319249905665c95e97"
+      "sha256": "a33fb19c57f7635076cf59abbb68a18f25bc2696ee72fd5c9c7fe3a820f8f2b0"
     },
     {
       "arquivo": "install-service.js",
@@ -5116,7 +5116,7 @@
     },
     {
       "arquivo": "print/acbrPosPrinterRuntime.js",
-      "sha256": "cba71ac39358957113de526d59ec44f603864e277536c734d85d84c8ac5c8e00"
+      "sha256": "5d7b58f096d9863fa0a85b95cf5be8a8bed741462196ea99b48aead494caf2ce"
     },
     {
       "arquivo": "print/acbrTags.js",
@@ -5152,7 +5152,7 @@
     },
     {
       "arquivo": "print/drivers/acbrPosPrinterProvider.js",
-      "sha256": "b3b6a804c393ed0a896cd123f2020d02e5b8ee7059e0976834e1a81871b579b6"
+      "sha256": "b02efd6dd75eaca407c948e22e3fc8f01a6cb7d6e0ab741b56cf4a0c5ef0a14f"
     },
     {
       "arquivo": "print/drivers/mockPrinterProvider.js",
@@ -5164,11 +5164,11 @@
     },
     {
       "arquivo": "print/escpos/impressoraCore.js",
-      "sha256": "c36eef3d72d63563ff92963affba574c17c21d226d881a16c5ac9d0870131633"
+      "sha256": "512e3f694fec7b5505d81a44824ad2dad8a1459cd303f2ba961b044b9ecc2298"
     },
     {
       "arquivo": "print/factory.js",
-      "sha256": "f7866a0d17b07b0293fd818c20bd9da4ec3d2f9776b9bc30776a75f91f160c67"
+      "sha256": "03adc9170daf13f78c42c9b04fc6d73f387230a0206e1525c1863a477eb62740"
     },
     {
       "arquivo": "print/pedidoAcbrTags.js",
@@ -5184,7 +5184,7 @@
     },
     {
       "arquivo": "print/printerLocalConfig.js",
-      "sha256": "3aa5e0fdc671a30762f3f2911dfd790c87031393867e1a61b648faddf15c3b71"
+      "sha256": "2d11584f62c8434a72fc9efec3bf018eea9788859abf1f4262462c419ca24327"
     },
     {
       "arquivo": "print/printerLogo.js",
@@ -5200,7 +5200,7 @@
     },
     {
       "arquivo": "print/printErrors.js",
-      "sha256": "6b71cb6c0b09b8b8967bf84047a7a0045234767ff419eec172b3b181ae16c09d"
+      "sha256": "dcaecd3e200b46b9e2abbf30396f1bac89d2a3aa2e12790ef873d7ad578fb23d"
     },
     {
       "arquivo": "print/printerStationRoutes.js",
