@@ -259,7 +259,9 @@ async function montarIniLib(payload, numeracao, modeloDf, empresa) {
 
 async function emitirDocumentoLib(payload, modeloDf) {
   const mode = assertEmitivel();
-  const empresa = await acbr.enriquecerEmpresa(payload.empresa || {});
+  const empresa = await acbr.enriquecerEmpresa(payload.empresa || {}, {
+    permitirRede: false,
+  });
   acbr.validarEmpresaFiscal(empresa);
 
   const serie =

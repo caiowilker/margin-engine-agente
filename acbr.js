@@ -164,9 +164,21 @@ function isAcbrBusy() {
  * Valor para NFE.SetAmbiente no ACBr Monitor (TACBrTipoAmbiente):
  * 0 = produção · 1 = homologação.
  * Diferente do tpAmb SEFAZ no XML/INI do documento (1 = produção · 2 = homologação).
+ * SSOT: fiscalLocalConfig.ambienteSefaz (mesmo do preflight), com fallback ao env.
  */
+function ambienteSefazEfetivo() {
+  try {
+    const fiscalLocalConfig = require("./fiscalLocalConfig");
+    const amb = fiscalLocalConfig.ler()?.ambienteSefaz;
+    if (amb) return String(amb).toLowerCase().trim();
+  } catch {
+    /* ignore */
+  }
+  return String(process.env.AMBIENTE_SEFAZ || "homologacao").toLowerCase().trim();
+}
+
 function resolverTpAmbAcbr() {
-  const amb = String(process.env.AMBIENTE_SEFAZ || "homologacao").toLowerCase();
+  const amb = ambienteSefazEfetivo();
   // AMBIENTE_SEFAZ=1 (legado) = produção → enum Monitor/Lib 0
   if (amb === "producao" || amb === "1" || amb === "0") return "0";
   return "1";
@@ -613,7 +625,7 @@ function formatarDhEmi(data = new Date()) {
 }
 
 function resolverTpAmb() {
-  const amb = String(process.env.AMBIENTE_SEFAZ || "homologacao").toLowerCase();
+  const amb = ambienteSefazEfetivo();
   if (amb === "producao" || amb === "1") return "1";
   return "2";
 }
@@ -925,8 +937,9 @@ function normalizarIbge(codigo) {
 const viacepCache = new Map();
 const VIACEP_TTL_MS = 24 * 60 * 60 * 1000;
 
-async function enriquecerEmpresa(empresa = {}) {
+async function enriquecerEmpresa(empresa = {}, opts = {}) {
   const e = { ...empresa };
+  const permitirRede = opts.permitirRede === true;
   if (!limparTexto(e.logradouro) && limparTexto(e.endereco)) {
     e.logradouro = e.endereco;
   }
@@ -943,7 +956,8 @@ async function enriquecerEmpresa(empresa = {}) {
     const cached = viacepCache.get(cep);
     if (cached && Date.now() - cached.em < VIACEP_TTL_MS) {
       Object.assign(e, cached.data);
-    } else {
+    } else if (permitirRede) {
+      // Rede só em onboarding/preflight — nunca no hot path de autorização SEFAZ.
       try {
         const fetch = require("node-fetch");
         const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`, {
@@ -1640,7 +1654,8 @@ async function emitirNfceCore(payload) {
   }
 
   validarPayloadNfce(payload);
-  const empresa = await enriquecerEmpresa(payload.empresa || {});
+  // Hot path: nunca espera ViaCEP — documentIni/backend já deve trazer emitente completo.
+  const empresa = await enriquecerEmpresa(payload.empresa || {}, { permitirRede: false });
   validarEmpresaFiscal(empresa);
 
   const serie = payload.serieNfe || fiscalNumeracao.SERIE_PADRAO;
@@ -1693,7 +1708,7 @@ async function emitirNfe(payload) {
 
 async function emitirNfeCore(payload) {
   const destinatario = validarPayloadNfe(payload);
-  const empresa = await enriquecerEmpresa(payload.empresa || {});
+  const empresa = await enriquecerEmpresa(payload.empresa || {}, { permitirRede: false });
   validarEmpresaFiscal(empresa);
 
   const serie = payload.serieNfe || fiscalNumeracao.SERIE_NFE_55;
@@ -2624,4 +2639,5 @@ module.exports = {
   /** @internal testes / diagnóstico */
   resolverTpAmb,
   resolverTpAmbAcbr,
+  ambienteSefazEfetivo,
 };

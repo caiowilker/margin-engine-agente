@@ -3,6 +3,15 @@
 **Última atualização:** 2026-07-31  
 **Versão:** `1.0.5` — fail-fast worker + TCP válido + config UI sólida
 
+## Changelog (2026-07-31) — Emissão NFC-e rápida e sólida
+
+- `tpAmb`/`SetAmbiente` usam o mesmo SSOT do preflight (`fiscalLocalConfig.ambienteSefaz`).
+- Preflight rápido: TTL 180s, grace sob ACBr busy, single-flight StatusServico.
+- Emissão sem ViaCEP no hot path (só cache local; falha rápida se IBGE ausente).
+- Mutex de emissão com AsyncLocalStorage (reentrante só no mesmo contexto).
+- Backend: prepare com `SELECT FOR UPDATE` + idempotência por correlação.
+- Front: single-flight por venda; timeout UI não incentiva reemissão.
+
 ## Changelog (2026-07-31) — Consulta NF-e entrada por chave (produção)
 
 - Validação XML: protNFe 100/150, chave coerente, rejeita cancelada/denegada/divergente.

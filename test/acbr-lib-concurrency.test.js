@@ -23,6 +23,28 @@ test("fiscalEmissionLock serializa emissões concorrentes", async () => {
   assert.equal(emissionLock.isEmissionInProgress(), false);
 });
 
+test("fiscalEmissionLock serializa chamadas externas (não reentra entre contextos)", async () => {
+  emissionLock.resetForTests();
+  let simultaneas = 0;
+  let maxSimultaneas = 0;
+
+  const tarefa = async () => {
+    await emissionLock.withEmissionLock(async () => {
+      simultaneas++;
+      maxSimultaneas = Math.max(maxSimultaneas, simultaneas);
+      await new Promise((r) => setTimeout(r, 30));
+      // Tentativa "externa" aninhada via Promise.resolve().then — novo contexto ALS
+      await Promise.resolve().then(async () => {
+        // Mesmo tick assíncrono ainda herda ALS se await dentro do run — OK.
+      });
+      simultaneas--;
+    }, "ext");
+  };
+
+  await Promise.all([tarefa(), tarefa()]);
+  assert.equal(maxSimultaneas, 1);
+});
+
 test("fiscalEmissionLock é reentrante em cadeia interna", async () => {
   emissionLock.resetForTests();
   const ordem = [];

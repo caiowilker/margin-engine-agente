@@ -6,7 +6,12 @@ const fiscalLocalConfig = require("./fiscalLocalConfig");
 const factory = require("./fiscal/factory");
 
 const PREFLIGHT_TTL_MS = parseInt(
-  process.env.FISCAL_PREFLIGHT_TTL_MS || "90000",
+  process.env.FISCAL_PREFLIGHT_TTL_MS || "180000",
+  10,
+);
+/** Após o TTL, ainda reutiliza o último StatusServico ok se o ACBr estiver ocupado (evita fila). */
+const PREFLIGHT_GRACE_MS = parseInt(
+  process.env.FISCAL_PREFLIGHT_GRACE_MS || "120000",
   10,
 );
 const PREFLIGHT_RAPIDO =
@@ -14,6 +19,7 @@ const PREFLIGHT_RAPIDO =
 
 let cacheRapido = null;
 let cacheCompleto = null;
+let statusInFlight = null;
 
 function extrairValor(resposta, chave) {
   const re = new RegExp(`^${chave}\\s*[=:]\\s*(.+)$`, "im");
@@ -69,6 +75,13 @@ function ambienteAcbrProducao(valor, campo = "auto") {
 
 function cacheValido(entry) {
   return entry && Date.now() - entry.em < PREFLIGHT_TTL_MS;
+}
+
+function cacheAceitavelComGrace(entry) {
+  return (
+    entry &&
+    Date.now() - entry.em < PREFLIGHT_TTL_MS + Math.max(0, PREFLIGHT_GRACE_MS)
+  );
 }
 
 function ambienteConfigurado() {
@@ -152,39 +165,64 @@ function validarAmbiente(ambienteEsperado, resposta, p) {
   return ambAcbr;
 }
 
-/** Caminho quente: 1 round-trip TCP (StatusServico). Usado antes de cada emissão. */
+/** Caminho quente: StatusServico com cache + single-flight (não martela SEFAZ). */
 async function validarEmissaoRapida() {
   if (!fiscalDriver.EMISSAO_FISCAL) {
     return { ok: true, fiscal: false, motivo: "EMISSAO_FISCAL desabilitado" };
   }
   if (cacheValido(cacheRapido)) return cacheRapido.resultado;
 
-  const ambienteEsperado = ambienteConfigurado();
-  validarAmbienteConfigurado(ambienteEsperado);
-
-  let resposta;
-  let p;
+  // ACBr ocupado + cache recente em grace → não enfileira StatusServico na frente da emissão.
   try {
-    ({ resposta, p } = await validarSefazOperacional());
-  } catch (err) {
-    cacheRapido = null;
-    throw new Error(`Emissor fiscal indisponível: ${err.message}`);
+    if (
+      typeof fiscalDriver.isAcbrBusy === "function" &&
+      fiscalDriver.isAcbrBusy() &&
+      cacheAceitavelComGrace(cacheRapido)
+    ) {
+      return cacheRapido.resultado;
+    }
+  } catch {
+    /* ignore */
   }
 
-  const ambAcbr = validarAmbiente(ambienteEsperado, resposta, p);
+  if (statusInFlight) return statusInFlight;
 
-  const resultado = {
-    ok: true,
-    fiscal: true,
-    modo: "rapido",
-    ambienteEsperado,
-    ambienteAcbr: ambAcbr || null,
-    cStat: p.cStat,
-    xMotivo: p.xMotivo,
-  };
+  statusInFlight = (async () => {
+    const ambienteEsperado = ambienteConfigurado();
+    validarAmbienteConfigurado(ambienteEsperado);
 
-  cacheRapido = { em: Date.now(), resultado };
-  return resultado;
+    let resposta;
+    let p;
+    try {
+      ({ resposta, p } = await validarSefazOperacional());
+    } catch (err) {
+      // Se StatusServico falhar mas há grace cache, não derruba venda por glitch transitório.
+      if (cacheAceitavelComGrace(cacheRapido)) {
+        return cacheRapido.resultado;
+      }
+      cacheRapido = null;
+      throw new Error(`Emissor fiscal indisponível: ${err.message}`);
+    }
+
+    const ambAcbr = validarAmbiente(ambienteEsperado, resposta, p);
+
+    const resultado = {
+      ok: true,
+      fiscal: true,
+      modo: "rapido",
+      ambienteEsperado,
+      ambienteAcbr: ambAcbr || null,
+      cStat: p.cStat,
+      xMotivo: p.xMotivo,
+    };
+
+    cacheRapido = { em: Date.now(), resultado };
+    return resultado;
+  })().finally(() => {
+    statusInFlight = null;
+  });
+
+  return statusInFlight;
 }
 
 /** Diagnóstico completo: certificado, INI, checklist CSC/URLs. */
