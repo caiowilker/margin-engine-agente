@@ -2219,25 +2219,32 @@ function imprimirCupom(payload) {
   const normalizado = normalizarCupomPayload(payload, {
     relaxQr: deveRelaxarQr(payload),
   });
-  return imprimirRender((printer) => renderCupom(printer, normalizado));
+  return imprimirComGavetaOpcional(
+    (printer) => renderCupom(printer, normalizado),
+    normalizado,
+  );
 }
 
 function imprimirTeste() {
-  return imprimirRender(async (printer) => {
-    printer.font("a").align("ct").style("b").text("TESTE IMPRESSORA").style("normal");
-    printer.text("Margin Platform 1.0");
-    printer.text(sepDash());
-    printer.align("lt").text("Texto: C A E O U R$ acentuacao");
-    printer.align("ct").text("QR Code teste");
-    await imprimirQrNfce(printer, "https://marginengine.com.br/teste-impressora");
-    printer.align("ct").text("PIX Copia e Cola teste");
-    await imprimirQrNfce(
-      printer,
-      "00020126580014br.gov.bcb.pix0136123e4567-e12b-12d1-a456-426655440000",
-    );
-    printer.align("ct").text("Fim do teste — corte abaixo");
-    printer.feed(2);
-  });
+  return imprimirComGavetaOpcional(
+    async (printer) => {
+      printer.font("a").align("ct").style("b").text("TESTE IMPRESSORA").style("normal");
+      printer.text("Margin Platform 1.0");
+      printer.text(sepDash());
+      printer.align("lt").text("Texto: C A E O U R$ acentuacao");
+      printer.align("ct").text("QR Code teste");
+      await imprimirQrNfce(printer, "https://marginengine.com.br/teste-impressora");
+      printer.align("ct").text("PIX Copia e Cola teste");
+      await imprimirQrNfce(
+        printer,
+        "00020126580014br.gov.bcb.pix0136123e4567-e12b-12d1-a456-426655440000",
+      );
+      printer.align("ct").text("Fim do teste — corte abaixo");
+      printer.feed(2);
+    },
+    { abrirGaveta: true },
+    { sempre: true },
+  );
 }
 
 function imprimirFechamento(payload) {
@@ -2245,11 +2252,19 @@ function imprimirFechamento(payload) {
 }
 
 function imprimirAbertura(payload) {
-  return imprimirRender((printer) => renderAbertura(printer, payload));
+  return imprimirComGavetaOpcional(
+    (printer) => renderAbertura(printer, payload),
+    payload,
+    { sempre: true },
+  );
 }
 
 function imprimirMovimentoCaixa(payload) {
-  return imprimirRender((printer) => renderMovimentoCaixa(printer, payload));
+  return imprimirComGavetaOpcional(
+    (printer) => renderMovimentoCaixa(printer, payload),
+    payload,
+    { sempre: true },
+  );
 }
 
 function imprimirPedido(payload) {
@@ -2262,9 +2277,78 @@ function imprimirPedido(payload) {
   });
 }
 
+function drawerEnabled() {
+  return (process.env.PRINTER_DRAWER || "true").toLowerCase() !== "false";
+}
+
+function clampDrawerByte(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return 1;
+  return Math.max(0, Math.min(255, Math.round(v)));
+}
+
+/**
+ * Pulso ESC/POS: ESC p m t1 t2 (unidade = 2ms).
+ * Defaults 50ms/500ms → 0x19 / 0xFA (compatível com POS80).
+ */
+function drawerPulseBuffer() {
+  const onMs = parseInt(process.env.PRINTER_DRAWER_ON_MS || "50", 10);
+  const offMs = parseInt(process.env.PRINTER_DRAWER_OFF_MS || "500", 10);
+  const pinRaw = String(process.env.PRINTER_DRAWER_PIN || "0").trim();
+  const inverted = String(process.env.PRINTER_DRAWER_INVERTED || "").toLowerCase() === "true";
+  let pin = pinRaw === "1" ? 1 : 0;
+  if (inverted) pin = pin === 0 ? 1 : 0;
+  const t1 = clampDrawerByte(Math.max(1, onMs / 2));
+  const t2 = clampDrawerByte(Math.max(1, offMs / 2));
+  return Buffer.from([0x1b, 0x70, pin, t1, t2]);
+}
+
+/**
+ * Decide se o job deve anexar pulso de gaveta.
+ * - abrirGaveta true/false no payload manda
+ * - PRINTER_DRAWER=false desliga tudo
+ * - auto: dinheiro / espécie / cash
+ */
+function deveAbrirGavetaNoPayload(payload, opts = {}) {
+  if (!drawerEnabled()) return false;
+  if (payload && payload.abrirGaveta === false) return false;
+  if (payload && payload.abrirGaveta === true) return true;
+  if (opts.sempre === true) return true;
+  const forma = String(payload?.formaPagamento || payload?.labelPagamento || "").toLowerCase();
+  if (/dinheiro|cash|esp[eé]cie/.test(forma)) return true;
+  const pags = payload?.pagamentos;
+  if (Array.isArray(pags)) {
+    for (const p of pags) {
+      const f = String(p?.forma || p?.tipo || p?.formaPagamento || "").toLowerCase();
+      if (/dinheiro|cash|esp[eé]cie/.test(f)) return true;
+    }
+  }
+  return false;
+}
+
+async function imprimirComGavetaOpcional(renderFn, payload, opts = {}) {
+  return comLockImpressao(async () => {
+    let buffer = await gerarBuffer(renderFn);
+    if (deveAbrirGavetaNoPayload(payload, opts)) {
+      buffer = Buffer.concat([buffer, drawerPulseBuffer()]);
+    }
+    return enviarBuffer(buffer);
+  });
+}
+
 function abrirGaveta() {
-  const buffer = Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa]);
-  return comLockImpressao(() => enviarBuffer(buffer));
+  if (!drawerEnabled()) {
+    return Promise.resolve({ ok: true, skipped: true, motivo: "PRINTER_DRAWER=false" });
+  }
+  const buffer = drawerPulseBuffer();
+  return comLockImpressao(() =>
+    enviarBuffer(buffer).then(() => ({
+      ok: true,
+      gaveta: true,
+      bytes: buffer.length,
+      provider: "native",
+    })),
+  );
 }
 
 module.exports = {
@@ -2305,7 +2389,7 @@ module.exports = {
   imprimirPedido,
   assertPortaTermicaOuFalhar,
   pareceNaoTermica,
-  /** @internal regressão COLS / TDZ no render nativo + P2a */
+  /** @internal regressão COLS / TDZ no render nativo + P2a + gaveta */
   __test: {
     renderCupomConteudo,
     renderFechamentoConteudo,
@@ -2314,5 +2398,8 @@ module.exports = {
     makeRawTimeoutError,
     parseRawTimingFromStdout,
     logRawWin32Timing,
+    drawerPulseBuffer,
+    deveAbrirGavetaNoPayload,
+    drawerEnabled,
   },
 };

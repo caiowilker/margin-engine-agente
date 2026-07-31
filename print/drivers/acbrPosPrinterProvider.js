@@ -198,11 +198,8 @@ async function imprimirTeste() {
 }
 
 async function abrirGaveta() {
-  const mode = getIntegrationMode();
-  if (mode !== "native" || preferNativeEscPos({ naoFiscal: true })) {
-    return native.abrirGaveta();
-  }
-  return runtime.abrirGavetaNative();
+  // Gaveta nunca é fiscal — sempre ESC/POS nativo (evita Ativar -10 em RAW).
+  return native.abrirGaveta();
 }
 
 module.exports = {
