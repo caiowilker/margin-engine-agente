@@ -76,26 +76,19 @@ function loadDll() {
   } catch (_) {}
   const koffi = require("koffi");
   const dll = koffi.load(dllPath);
-  const defs = {
-    POS_Inicializar: "int POS_Inicializar(str eArqConfig, str eChaveCrypt)",
-    POS_Finalizar: "int POS_Finalizar()",
-    POS_UltimoRetorno: "int POS_UltimoRetorno(_Out_ uint8 *sMensagem, _Inout_ int *esTamanho)",
-    POS_ConfigGravar: "int POS_ConfigGravar(str eArqConfig)",
-    POS_ConfigGravarValor: "int POS_ConfigGravarValor(str eSessao, str eChave, str sValor)",
-    POS_Ativar: "int POS_Ativar()",
-    POS_Desativar: "int POS_Desativar()",
-    POS_InicializarPos: "int POS_InicializarPos()",
-    POS_Imprimir: "int POS_Imprimir(str eString, bool PulaLinha, bool DecodificarTags, bool CodificarPagina, int Copias)",
-    POS_AbrirGaveta: "int POS_AbrirGaveta()",
-  };
+  const {
+    POS_FFI_SIGNATURES,
+    POS_WORKER_EXPORTS,
+    POS_WORKER_REQUIRED,
+  } = require("../acbrPosExports");
   lib = {};
-  for (const [name, sig] of Object.entries(defs)) {
+  for (const name of POS_WORKER_EXPORTS) {
+    const sig = POS_FFI_SIGNATURES[name];
+    if (!sig) continue;
     try {
       lib[name] = dll.func(sig);
     } catch (e) {
-      if (["POS_Inicializar", "POS_Ativar", "POS_Imprimir", "POS_Finalizar"].includes(name)) {
-        throw e;
-      }
+      if (POS_WORKER_REQUIRED.has(name)) throw e;
     }
   }
 }
@@ -136,6 +129,16 @@ function ensureSession(values) {
       lib.POS_Finalizar();
     } catch (_) {}
     ready = false;
+  }
+
+  const porta = values?.PosPrinter?.Porta || "";
+  if (/^RAW:/i.test(porta)) {
+    const nome = porta.replace(/^RAW:/i, "").trim();
+    try {
+      require("../escpos/impressoraCore").assertPortaTermicaOuFalhar(nome);
+    } catch (err) {
+      throw err;
+    }
   }
 
   const ini = iniPath || "";

@@ -61,10 +61,39 @@ async function run() {
   });
 
   test("normalizarPortaAcbr — TCP para rede", () => {
-    const { normalizarPortaAcbr, parsePortaTcp } = require("../print/printerModelMap");
+    const { normalizarPortaAcbr, parsePortaTcp, portaAcbrValida } = require("../print/printerModelMap");
     assert.strictEqual(normalizarPortaAcbr("192.168.0.10:9100"), "TCP:192.168.0.10:9100");
     assert.strictEqual(normalizarPortaAcbr("TCP:10.0.0.5:9100"), "TCP:10.0.0.5:9100");
     assert.deepStrictEqual(parsePortaTcp("TCP:10.0.0.5:9100"), { host: "10.0.0.5", port: 9100 });
+    assert.strictEqual(portaAcbrValida("TCP:10.0.0.5:9100"), true);
+  });
+
+  test("normalizarPortaAcbr — rejeita TCP sem pontos (192168150)", () => {
+    const {
+      normalizarPortaAcbr,
+      parsePortaTcp,
+      portaAcbrValida,
+      isValidIpv4Host,
+    } = require("../print/printerModelMap");
+    assert.strictEqual(isValidIpv4Host("192168150"), false);
+    assert.strictEqual(isValidIpv4Host("192.168.1.50"), true);
+    assert.strictEqual(parsePortaTcp("TCP:192168150:9100"), null);
+    assert.strictEqual(portaAcbrValida("TCP:192168150:9100"), false);
+    // Sem fallback → USB (não propaga host inválido)
+    assert.strictEqual(normalizarPortaAcbr("TCP:192168150:9100"), "USB");
+    // Com nome Windows → RAW
+    assert.strictEqual(
+      normalizarPortaAcbr("TCP:192168150:9100", { nomeWindows: "POSPrinter POS80" }),
+      "RAW:POSPrinter POS80",
+    );
+  });
+
+  test("inferirModeloAcbr — POS80 → Epson (1)", () => {
+    const { inferirModeloAcbr } = require("../print/printerModelMap");
+    assert.strictEqual(
+      inferirModeloAcbr("POSPrinter POS80", "", { ignoreEnv: true }),
+      "1",
+    );
   });
 
   test("printerBootstrap — porta vazia precisa detecção", () => {

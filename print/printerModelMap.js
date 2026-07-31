@@ -44,42 +44,89 @@ function inferirModeloAcbr(nomeImpressora, driverName, opts = {}) {
   return "0";
 }
 
+/** IPv4 dotted decimal (ex.: 192.168.1.50) — rejeita 192168150. */
+function isValidIpv4Host(host) {
+  const h = String(host || "").trim();
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!m) return false;
+  return m.slice(1).every((o) => {
+    const n = Number(o);
+    return Number.isInteger(n) && n >= 0 && n <= 255;
+  });
+}
+
+function isValidTcpHost(host) {
+  const h = String(host || "").trim();
+  if (!h) return false;
+  // Hostname simples (não IP colado sem pontos)
+  if (/^[a-zA-Z][a-zA-Z0-9.-]*[a-zA-Z0-9]$/.test(h) && h.includes(".")) return true;
+  if (/^[a-zA-Z][a-zA-Z0-9-]*$/.test(h)) return true; // localhost-style single label
+  return isValidIpv4Host(h);
+}
+
 /** Extrai host/porta de Porta ACBr no formato TCP:ip:porta */
 function parsePortaTcp(porta) {
   const m = String(porta || "").trim().match(/^TCP:([^:]+):(\d+)$/i);
   if (!m) return null;
-  return { host: m[1], port: Number(m[2]) };
+  const host = m[1].trim();
+  const port = Number(m[2]);
+  if (!isValidTcpHost(host) || !Number.isFinite(port) || port < 1 || port > 65535) {
+    return null;
+  }
+  return { host, port };
 }
 
-/** Porta ACBr utilizável para impressão física (evita RAW: vazio herdado de INI padrão). */
+/** Porta ACBr utilizável para impressão física (evita RAW: vazio e TCP sem IP válido). */
 function portaAcbrValida(porta) {
   const p = String(porta || "").trim();
   if (!p || /^USB$/i.test(p)) return false;
   if (/^RAW:\s*$/i.test(p)) return false;
   if (/^RAW:$/i.test(p)) return false;
+  if (/^TCP:/i.test(p)) {
+    return !!parsePortaTcp(p);
+  }
+  // Host digit-only colado (192168150) sem prefixo
+  if (/^\d{8,12}(?::\d+)?$/.test(p) && !isValidIpv4Host(p.split(":")[0])) {
+    return false;
+  }
   return true;
 }
 
 /**
  * Normaliza porta para ACBr PosPrinter: TCP:ip:porta | RAW:nome | USB | COMn
+ * Rejeita TCP com host inválido (ex.: TCP:192168150:9100).
  */
 function normalizarPortaAcbr(porta, opts = {}) {
   const p = String(porta || "").trim();
   if (!p) {
-    if (opts.host) {
+    if (opts.host && isValidTcpHost(opts.host)) {
       return `TCP:${opts.host}:${opts.port || process.env.PRINTER_PORT || "9100"}`;
     }
     return "USB";
   }
-  if (/^(TCP|RAW|USB|COM)/i.test(p)) return p;
+
+  if (/^TCP:/i.test(p)) {
+    const tcp = parsePortaTcp(p);
+    if (tcp) return `TCP:${tcp.host}:${tcp.port}`;
+    // TCP malformado — não propagar; tenta opts.host
+    if (opts.host && isValidTcpHost(opts.host)) {
+      return `TCP:${opts.host}:${opts.port || process.env.PRINTER_PORT || "9100"}`;
+    }
+    if (opts.nomeWindows) return `RAW:${opts.nomeWindows}`;
+    return "USB";
+  }
+
+  if (/^(RAW|USB|COM)/i.test(p)) return p;
+
   const ipPort = p.match(/^(\d{1,3}(?:\.\d{1,3}){3})(?::(\d+))?$/);
-  if (ipPort) {
+  if (ipPort && isValidIpv4Host(ipPort[1])) {
     return `TCP:${ipPort[1]}:${ipPort[2] || opts.port || process.env.PRINTER_PORT || "9100"}`;
   }
-  if (/^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(p)) {
-    const [host, port] = p.split(":");
-    return `TCP:${host}:${port}`;
+
+  if (opts.host && isValidTcpHost(opts.host)) {
+    return `TCP:${opts.host}:${opts.port || process.env.PRINTER_PORT || "9100"}`;
   }
+
   if (opts.nomeWindows && !/^COM/i.test(p)) {
     return `RAW:${opts.nomeWindows}`;
   }
@@ -109,12 +156,12 @@ function inferirPortaAcbr(opts = {}) {
   if (process.env.PRINTER_HOST) {
     return normalizarPortaAcbr(
       `${process.env.PRINTER_HOST}:${process.env.PRINTER_PORT || "9100"}`,
-      opts,
+      { ...opts, host: process.env.PRINTER_HOST, port: process.env.PRINTER_PORT || "9100" },
     );
   }
   if (opts.portaWindows) {
     const ip = String(opts.portaWindows).match(/(\d{1,3}(?:\.\d{1,3}){3})/);
-    if (ip) {
+    if (ip && isValidIpv4Host(ip[1])) {
       return `TCP:${ip[1]}:${process.env.PRINTER_PORT || "9100"}`;
     }
     return normalizarPortaAcbr(opts.portaWindows, opts);
@@ -132,4 +179,6 @@ module.exports = {
   parsePortaTcp,
   portaAcbrValida,
   resolveControlePorta,
+  isValidIpv4Host,
+  isValidTcpHost,
 };

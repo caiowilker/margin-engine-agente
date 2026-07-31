@@ -16,9 +16,21 @@ Homologação física no Windows. CI/Linux cobre contratos, benchmark e layout o
 - [ ] `PRINTER_FALLBACK=native`
 - [ ] `PRINT_FAST_NATIVE` **ausente ou false** (padrão = ACBr; native só retaguarda)
 - [ ] Remover `PRINTER_ALLOW_PARITY` em produção
+- [ ] `npm run check:posprinter-deps` → OK (`ACBrPosPrinter64.dll` + side DLLs + koffi)
+- [ ] INI: `ControlePorta=0` (RAW), `BytesCount=512`, `BytesInterval=10`, `LogNivel=0`
+- [ ] Modelo POS80/Elgin = **1** (Epson), não `0`
 - [ ] Log de boot: `[ACBrPosPrinter] Modo nativo — biblioteca PosPrinter carregada`
 - [ ] `GET /config/impressora` → `mode: native`, `nativeReady: true`
+- [ ] Windows: propriedades da térmica → Avançado → **Imprimir diretamente na impressora**
+- [ ] Windows: desmarcar suporte bidirecional se status hanguear
 - [ ] Instalador: `node scripts/installer-apply-print-config.js <appDir> print-config.json`
+
+## Erro -10 / hang ~120s
+
+- [ ] Porta salva válida (`RAW:nome` ou `TCP:192.168.x.x:9100`) — sem host de teste
+- [ ] Nenhum ACBr Monitor / utilitário do fabricante segurando a fila
+- [ ] Circuito: após -10, cupom comercial vai native (&lt; 5s); Detectar force retenta ACBr
+- [ ] Alternativa: COM virtual do fabricante ou TCP:9100 se USB/spooler continuar lento
 
 ## Testes funcionais
 

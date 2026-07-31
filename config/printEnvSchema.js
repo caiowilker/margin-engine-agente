@@ -83,7 +83,8 @@ const PRINT_ENV_FIELDS = [
     env: "ACBR_POS_WORKER",
     kind: "bool",
     default: true,
-    comment: "Isola PosPrinter em worker_thread (terminate real); fallback in-process se falhar",
+    comment:
+      "Isola PosPrinter em worker_thread (terminate real). Falha → ESC/POS nativo (não FFI no main)",
   },
   {
     env: "ACBR_POS_WORKER_KILL_COOLDOWN_MS",
@@ -111,9 +112,16 @@ const PRINT_ENV_FIELDS = [
     kind: "int",
     min: 0,
     max: 86400000,
-    default: 900000,
+    default: 0,
     comment:
-      "TTL do circuito (0=nunca). Após expirar, retenta ACBr/Epson/QR tags (half-open)",
+      "TTL do circuito (0=nunca; só Salvar/Detectar reabre ACBr). >0 = half-open após ms",
+  },
+  {
+    env: "ACBR_POS_ALLOW_INPROCESS",
+    kind: "bool",
+    default: false,
+    comment:
+      "Permite FFI PosPrinter no processo principal (perigoso no Windows). Padrão: só worker ou ACBR_POS_WORKER=false",
   },
 ];
 

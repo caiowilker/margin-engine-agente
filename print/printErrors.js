@@ -18,8 +18,8 @@ function classifyPrintError(err) {
     out.fallbackSuggested = false;
     return out;
   }
-  // Hard drain / hang: fallback native UMA vez no executor — NÃO martelar fila
-  // (FFI pode ainda estar viva; retry reabre sessão → dupla impressão / deadlock).
+  // Hard drain / hang: NÃO sugerir fallback no mesmo job (FFI pode ainda imprimir).
+  // Circuito abre → próximo cupom vai native.
   if (
     err?.code === "PRINT_HARD_DRAIN" ||
     err?.code === "ACBR_POS_TIMEOUT" ||
@@ -28,7 +28,27 @@ function classifyPrintError(err) {
     err?.printTimedOut
   ) {
     out.retryable = false;
+    out.fallbackSuggested = false;
+    return out;
+  }
+  // Worker morto / in-process bloqueado no Windows → native UMA vez neste job
+  if (
+    err?.code === "ACBR_POS_INPROCESS_BLOCKED" ||
+    err?.fallbackNative === true
+  ) {
+    out.retryable = false;
     out.fallbackSuggested = true;
+    return out;
+  }
+  // Erro ACBr após tentativa de envio — anti-dupla (sem segundo provider no mesmo job)
+  if (err?.code === "ACBR_POS_ERROR" || err?.acbrRet != null) {
+    out.retryable = false;
+    // -10 em Ativar (antes de Imprimir): fallback native UMA vez é seguro
+    const msgLow = msg.toLowerCase();
+    const beforePrint =
+      err?.acbrRet === -10 ||
+      /pos_ativar|ativar|porta|n[aã]o definida|inicializar/i.test(msgLow);
+    out.fallbackSuggested = beforePrint && !/pos_imprimir|imprimir/i.test(msgLow);
     return out;
   }
   // Bug de binding koffi (arity) — fallback native uma vez; não reprocessar em loop
@@ -56,12 +76,6 @@ function classifyPrintError(err) {
   if (/biblioteca|dll|pos_inicializar|pos_ativar|unconfigured/i.test(msg)) {
     out.fallbackSuggested = true;
     out.permanente = false;
-    return out;
-  }
-  if (err?.acbrRet === -10 || /\(-10\)/.test(msg)) {
-    // Ativar -10 neste hardware: fallback native uma vez; não martelar fila.
-    out.retryable = false;
-    out.fallbackSuggested = true;
     return out;
   }
   if (err?.code === "PRINTER_PORTA_INDEFINIDA" || /porta da impressora n[aã]o configurada/i.test(msg)) {

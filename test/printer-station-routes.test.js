@@ -31,16 +31,27 @@ test("vazio por padrão", () => {
 });
 
 test("salva e resolve porta por printType", () => {
-  routes.salvar({
+  const saved = routes.salvar({
     byPrintType: {
       cozinha: "RAW:EPSON Cozinha",
       bar: "TCP:192.168.1.50:9100",
     },
   });
+  assert.strictEqual(saved.unchanged, false);
   assert.strictEqual(routes.resolvePortaForPrintType("cozinha"), "RAW:EPSON Cozinha");
   assert.strictEqual(routes.resolvePortaForPrintType("BAR"), "TCP:192.168.1.50:9100");
   assert.strictEqual(routes.resolvePortaForPrintType("cliente"), null);
   assert.ok(routes.hasAnyStationRoute());
+});
+
+test("salvar rotas — idempotente", () => {
+  const again = routes.salvar({
+    byPrintType: {
+      cozinha: "RAW:EPSON Cozinha",
+      bar: "TCP:192.168.1.50:9100",
+    },
+  });
+  assert.strictEqual(again.unchanged, true);
 });
 
 test("withPortaOverride restaura estado", async () => {

@@ -1,39 +1,39 @@
 # ACBrLibPosPrinter — Referência de Implementação
 
-> Fonte: https://acbr.sourceforge.io/ACBrLib/ACBrLibPosPrinter1.html  
-> Copyright © 2018-2025 ACBr - Automação Comercial Brasil
-
-No agente Margin Engine, o provider oficial é `acbr-posprinter` (`print/acbrPosPrinterRuntime.js` + `print/drivers/acbrPosPrinterProvider.js`).
-
----
-
-## O que é a ACBrLibPosPrinter?
-
-Biblioteca (DLL/SO) do componente **ACBrPosPrinter** do Projeto ACBr. Comunicação direta com impressoras **EscPos**: fontes, formatação, corte, QR Code, logotipo, CMC7, gaveta, etc.
+> Compilado a partir da documentação oficial
+> ([ACBrLibPosPrinter](https://acbr.sourceforge.io/ACBrLib/ACBrLibPosPrinter1.html))
+> e do código-fonte (`Projetos/ACBrLib/Fontes/PosPrinter/`, exports em `ACBrLibPosPrinter.lpr`).
+>
+> No agente: provider `acbr-posprinter` —
+> `print/acbrPosPrinterRuntime.js`, `print/workers/acbrPosWorker.js`,
+> catálogo FFI `print/acbrPosExports.js`.
 
 ---
 
-## Como usar (sequência oficial)
+## O que é
 
-1. Instalar/copiar a ACBrLib conforme documentação do Projeto ACBr
-2. Configurar o INI (`data/posprinter.ini` no agente)
-3. `POS_Inicializar(eArqConfig, eChaveCrypt)`
-4. `POS_Ativar()`
-5. `POS_InicializarPos()` → imprimir (`POS_Imprimir` / `POS_ImprimirLinha`)
-6. `POS_CortarPapel` / `POS_PularLinhas` conforme layout
-7. `POS_Desativar()` → `POS_Finalizar()`
+DLL/SO sobre o componente **ACBrPosPrinter**. Comunicação com impressoras
+não fiscais ESC/POS (formatação, corte, QRCode, gaveta, CMC7, etc.) a partir
+de qualquer linguagem que chame DLL/SO.
 
----
-
-## Convenções de parâmetros
-
-- Strings entre aspas duplas; aspas internas duplicadas; quebra de linha longa com `|`
-- Numéricos sem aspas, decimal com `.`
-- Booleano: `1` = true, `0` = false
+Windows (.dll) e Linux (.so), 32/64 bits, StdCall e Cdecl.
+No agente Margin usamos **Cdecl 64-bit** (`ACBrPosPrinter64.dll`) via **koffi**.
 
 ---
 
-## Códigos de retorno globais
+## Fluxo oficial (ciclo de vida)
+
+1. `POS_Inicializar(eArqConfig, eChaveCrypt)` — carrega a lib (+ INI opcional)
+2. Configurar via `POS_ConfigGravarValor` / `POS_ConfigLer` / `POS_ConfigGravar`
+3. `POS_Ativar` → `POS_InicializarPos` → impressão (`POS_Imprimir`, …)
+4. `POS_Desativar` → `POS_Finalizar`
+
+No agente: **sessão quente** (worker) — Inicializar+Ativar 1×; cada cupom só
+`InicializarPos` + `Imprimir`. Timeout soft ~5s; hang → terminate do worker.
+
+---
+
+## Códigos de retorno
 
 | Valor | Descrição |
 |-------|-----------|
@@ -43,29 +43,87 @@ Biblioteca (DLL/SO) do componente **ACBrPosPrinter** do Projeto ACBr. Comunicaç
 | -3 | INI com propriedade(s) inválida(s) |
 | -5 | Arquivo INI não encontrado |
 | -6 | Diretório do INI não encontrado |
-| -10 | Erro genérico |
+| -10 | Erro genérico (ex.: Ativar / comunicação) |
+
+Detalhe da mensagem: `POS_UltimoRetorno`.
 
 ---
 
-## Métodos principais (resumo)
+## Catálogo dos 42 métodos × uso no agente
 
-| Método | Uso |
-|--------|-----|
-| `POS_Inicializar` | Obrigatório antes de qualquer chamada |
-| `POS_Finalizar` | Encerra a lib |
-| `POS_Ativar` / `POS_Desativar` | Abre/fecha conexão com a impressora |
-| `POS_InicializarPos` | Prepara buffer de impressão |
-| `POS_Zerar` | Limpa buffer |
-| `POS_Imprimir` | Texto + tags ACBr |
-| `POS_ImprimirLinha` | Uma linha simples |
-| `POS_CortarPapel(Parcial)` | Guilhotina (`1` parcial, `0` total) |
-| `POS_AbrirGaveta` | Gaveta de dinheiro |
-| `POS_LerStatusImpressoraFormatado` | Status legível (`0\|0\|0\|...`) — serial/USB/TCP |
-| `POS_AcharPortas` | Lista portas do sistema |
-| `POS_GravarLogoArquivo` / `POS_ImprimirLogo` | Logo BMP na memória da impressora |
-| `POS_UltimoRetorno` | Mensagem quando buffer de saída é pequeno |
+Legenda de uso: **hot** = caminho de cupom/sessão · **support** = API/diagnóstico ·
+**unused** = bind opcional (se existir na DLL), sem chamada no PDV.
 
-Métodos de configuração seguem o padrão ACBrLib: `POS_ConfigLer`, `POS_ConfigGravar`, `POS_ConfigGravarValor`, `POS_Nome`, `POS_Versao`.
+### 1. Núcleo / ciclo de vida e configuração
+
+| Método | Assinatura (Pascal) | Uso | Notas no agente |
+|--------|---------------------|-----|-----------------|
+| `POS_Inicializar` | `(eArqConfig, eChaveCrypt): integer` | hot | Primeiro método |
+| `POS_Finalizar` | `: integer` | hot | Teardown / kill worker |
+| `POS_Inicializada` | — | unused | Bind opcional |
+| `POS_Nome` | `(sNome; var esTamanho)` | support | Diagnóstico |
+| `POS_Versao` | `(sVersao; var esTamanho)` | support | Diagnóstico |
+| `POS_OpenSSLInfo` | `(sOpenSSLInfo; var esTamanho)` | unused | Bind opcional |
+| `POS_UltimoRetorno` | — | hot | Após ret ≠ 0 |
+| `POS_ConfigImportar` | — | unused | Assinatura best-effort |
+| `POS_ConfigExportar` | — | unused | Assinatura best-effort |
+| `POS_ConfigLer` | `(eArqConfig)` | support | |
+| `POS_ConfigGravar` | `(eArqConfig)` | hot | Persiste INI após ConfigGravarValor |
+| `POS_ConfigLerValor` | `(eSessao, eChave; sValor; var esTamanho)` | unused | |
+| `POS_ConfigGravarValor` | `(eSessao, eChave, eValor)` | hot | Modelo, Porta, Device… |
+
+### 2. Ativação
+
+| Método | Uso | Notas |
+|--------|-----|-------|
+| `POS_Ativar` | hot | Uma vez por sessão; `-10` comum se spooler/RAW mal configurado |
+| `POS_Desativar` | hot | Idle timeout / teardown |
+
+### 3. Impressão
+
+| Método | Assinatura | Uso | Notas |
+|--------|------------|-----|-------|
+| `POS_Imprimir` | `(eString; PulaLinha, DecodificarTags, CodificarPagina; Copias)` | hot | Tags ACBr (`<b>`, `</corte>`, QR…) |
+| `POS_ImprimirLinha` | `(eString)` | support | |
+| `POS_ImprimirCmd` | `(eComando)` | support | ESC/POS bruto |
+| `POS_ImprimirTags` | — | unused | Lista tags na impressora |
+| `POS_ImprimirImagemArquivo` | — | unused | BMP sem gravar na memória |
+| `POS_ImprimirLogo` | — | support | KC1/KC2 + fator |
+| `POS_ImprimirCheque` / `TextoCheque` | — | unused | Fora do escopo PDV |
+
+### 4. Diversos
+
+| Método | Uso | Notas |
+|--------|-----|-------|
+| `POS_TxRx` | unused | |
+| `POS_Zerar` | support | Limpa buffers internos |
+| `POS_InicializarPos` | hot | Antes de cada `Imprimir` na sessão quente |
+| `POS_Reset` | support | |
+| `POS_PularLinhas` | support | Também via tags |
+| `POS_CortarPapel` | support | Também via `</corte>` no Imprimir |
+| `POS_AbrirGaveta` | hot | |
+| `POS_LerInfoImpressora` | support | **Não funciona em RAW** |
+| `POS_LerStatusImpressora` | unused | Bits (`stSemPapel`, …) |
+| `POS_LerStatusImpressoraFormatado` | support | Serial/TCP; RAW limitado |
+| `POS_RetornarTags` | unused | |
+| `POS_AcharPortas` | support | UI Detectar |
+| `POS_GravarLogoArquivo` / `POS_ApagarLogo` | support / unused | BMP |
+| `POS_LeituraCheque` / `LerCMC7` / `EjetarCheque` | unused | |
+| `POS_PodeLerDaPorta` | support | Não chamar em RAW |
+| `POS_LerCaracteristicas` | support | |
+
+Assinaturas koffi: `print/acbrPosExports.js`, conferidas com
+`ACBrLibPosPrinterST.pas` / `ACBrLibPosPrinter.lpr`. Se a DLL do pacote for
+mais antiga e faltar um export opcional, o bind fica `null` e o agente segue
+(caminho crítico = hot + required).
+
+---
+
+## Status bits (`POS_LerStatusImpressora`)
+
+`stErro`, `stNaoSerial`, `stPoucoPapel`, `stSemPapel`, `stGavetaAberta`,
+`stImprimindo`, `stOffLine`, `stTampaAberta`, `stErroLeitura`, `stSlip`,
+`stMICR`, `stAguardandoSlip`, `stTOF`, `stBOF` — cada um um bit do valor.
 
 ---
 
@@ -75,44 +133,40 @@ Métodos de configuração seguem o padrão ACBrLib: `POS_ConfigLer`, `POS_Confi
 
 | Chave | Descrição |
 |-------|-----------|
-| Modelo | Protocolo: `0`=ppTexto, `1`=Epson, `2`=Bematech, `3`=Daruma, … |
+| Modelo | `0`=ppTexto, `1`=Epson, … — POS80 → `1` |
 | Porta | `COM1`, `TCP:192.168.1.100:9100`, `RAW:Nome da Impressora` |
-| PaginaDeCodigo | `2`=850 (padrão), `5`=UTF8 |
-| ColunasFonteNormal | Colunas modo normal |
-| CortaPapel | `1` = cortar ao usar tag `</corte>` |
-| TraduzirTags | `1` = decodificar tags ACBr |
-| ControlePorta | `1` = controle exclusivo da porta; **`0` recomendado para `RAW:` no Windows** (evita erro -10) |
-| VerificarImpressora | `1` = checar impressora antes de imprimir (útil em RAW) |
+| PaginaDeCodigo | `2`=850, `5`=UTF8 |
+| CortaPapel / TraduzirTags | `1` típico |
+| ControlePorta | **`0` em RAW Windows** (obrigatório) |
+| VerificarImpressora | `0` em produção RAW |
 
-### [PosPrinter_QRCode] / [PosPrinter_Barras] / [PosPrinter_Logo] / [PosPrinter_Gaveta]
+### [PosPrinter_Device] (produção RAW)
 
-Ver documentação oficial para QR, código de barras, KC1/KC2 do logo e tempos da gaveta.
+| Chave | Valor | Motivo |
+|-------|-------|--------|
+| BytesCount | `512` | Evita saturar spooler (~120s) |
+| BytesInterval | `10` | ms entre blocos |
+| TimeOut | `5` | s — alinhado ao soft timeout |
 
----
+### [Principal]
 
-## Fluxo básico de impressão
+| Chave | Produção |
+|-------|----------|
+| LogNivel | `0` |
+| ArqLog | vazio |
 
-```
-POS_Inicializar("posprinter.ini", "")
-POS_Ativar()
-POS_InicializarPos()
-POS_Imprimir("...", 1, 1, 1, 1)
-POS_PularLinhas(3)
-POS_CortarPapel(0)
-POS_Desativar()
-POS_Finalizar()
-```
+Defaults: `print/posPrinterIniDefaults.js`.
 
 ---
 
-## Observações importantes
+## Observações de campo
 
-- Pré-alocar strings de retorno e passar tamanho; se truncar, usar `POS_UltimoRetorno`
-- `POS_LerInfoImpressora` **não funciona** em comunicação RAW
-- Status (`POS_LerStatusImpressora*`) apenas em serial, USB-serial e TCP/IP
-- Logo para gravação na memória: arquivo **BMP**
-- Porta TCP direta: `TCP:IP:PORTA` (sem spool Windows)
-- Porta RAW: `RAW:Nome da impressora instalada`
+- Pré-alocar buffers de saída; se truncar → `POS_UltimoRetorno`
+- Status / `LerInfo` / `PodeLerDaPorta` — limitados ou inválidos em **RAW:**
+- Logo: arquivo **BMP**
+- TCP: `TCP:IP:PORTA` com pontos no IP (`192.168.1.50`, não `192168150`)
+- Deps: `npm run check:posprinter-deps`
+- Spooler Windows: “Imprimir diretamente na impressora”
 
 ---
 
@@ -121,13 +175,10 @@ POS_Finalizar()
 | Variável | Descrição |
 |----------|-----------|
 | `PRINTER_PROVIDER` | `acbr-posprinter` (padrão) |
-| `ACBR_POSPRINTER_LIB_PATH` | Caminho da `ACBrPosPrinter64.dll` |
-| `ACBR_POSPRINTER_INI` | INI (padrão: `data/posprinter.ini`) |
-| `PRINTER_ALLOW_PARITY` | `true` = fallback ESC/POS legado (só dev/CI) |
+| `ACBR_POSPRINTER_LIB_PATH` | `ACBrPosPrinter64.dll` |
+| `ACBR_POSPRINTER_INI` | padrão `data/posprinter.ini` |
+| `ACBR_POS_WORKER` | `true` = FFI no worker (padrão) |
+| `ACBR_POS_CALL_TIMEOUT_MS` | soft timeout (padrão 5000) |
 
-Runtime FFI: `print/acbrPosPrinterRuntime.js` (koffi). O `fn.async` do koffi
-exige callback `(err, res)` — não retorna Promise. O wrapper interno preserva
-esse contrato; quebrá-lo gera `Expected N arguments, got N-1` e fallback native.
-
-Homologação Windows: `CHECKLIST-WINDOWS-PRINT.md`  
-Tags de cupom: `print/acbrTags.js`, `print/cupomAcbrTags.js`
+Homologação: `.ai/CHECKLIST-IMPRESSORA-CAMPO.md`, `CHECKLIST-WINDOWS-PRINT.md`  
+Tags: `print/acbrTags.js`, `print/cupomAcbrTags.js`

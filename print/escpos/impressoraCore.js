@@ -33,16 +33,33 @@ try {
 } catch (_) {}
 
 const IS_WIN = process.platform === "win32";
-const PRINTER_TYPE = (process.env.PRINTER_TYPE || "auto")
-  .toLowerCase()
-  // "winusb" é alias de "windows" — usa o spooler do Windows (RAW) via winspool.drv
-  .replace(/^winusb$/, "windows");
-const PRINTER_HOST = (process.env.PRINTER_HOST || "").trim();
-const PRINTER_PORT = parseInt(process.env.PRINTER_PORT || "9100", 10);
-const PRINTER_NAME = (process.env.PRINTER_NAME || "").trim();
-// Porta física da impressora no Windows (USB001, USB002, COM3...).
-// Quando definida, é usada para localizar a impressora correta mesmo sem PRINTER_NAME.
-const PRINTER_PATH = (process.env.PRINTER_PATH || "").trim();
+
+/** Lê env dinamicamente — após Salvar no painel o processo NÃO reinicia. */
+function printerType() {
+  return (process.env.PRINTER_TYPE || "auto")
+    .toLowerCase()
+    .replace(/^winusb$/, "windows");
+}
+function printerHost() {
+  const h = (process.env.PRINTER_HOST || "").trim();
+  if (!h) return "";
+  try {
+    const { isValidTcpHost } = require("../printerModelMap");
+    if (!isValidTcpHost(h)) return "";
+  } catch (_) {
+    if (/^\d+$/.test(h) && !h.includes(".")) return "";
+  }
+  return h;
+}
+function printerPortNum() {
+  return parseInt(process.env.PRINTER_PORT || "9100", 10) || 9100;
+}
+function printerName() {
+  return (process.env.PRINTER_NAME || "").trim();
+}
+function printerPath() {
+  return (process.env.PRINTER_PATH || "").trim();
+}
 
 const TERMICA_RX =
   /elgin|bematech|daruma|tanca|jetway|thermal|tm-|mp-|i9|i7|pos\s*80|pos80|posprinter|cupom|nfce|receipt|termica|tm-t|tm-m/i;
@@ -274,23 +291,23 @@ function gerarBuffer(renderFn) {
 }
 
 // ── Listar impressoras Windows ────────────────────────────────────────────────
-const LISTAR_PRINTERS_TIMEOUT_MS = parseInt(
-  process.env.PRINTER_LIST_TIMEOUT_MS || "5000",
-  10,
-);
-const RAW_PRINT_TIMEOUT_MS = parseInt(
-  process.env.PRINTER_RAW_TIMEOUT_MS || "4000",
-  10,
-);
+function listarPrintersTimeoutMs() {
+  return parseInt(process.env.PRINTER_LIST_TIMEOUT_MS || "5000", 10) || 5000;
+}
+function rawPrintTimeoutMs() {
+  return parseInt(process.env.PRINTER_RAW_TIMEOUT_MS || "4000", 10) || 4000;
+}
 /** Após soft kill: segura o Promise (e physicalLock) até filho morrer ou este teto. */
-const RAW_KILL_HOLD_MS = Math.max(
-  1000,
-  parseInt(process.env.PRINTER_RAW_KILL_HOLD_MS || "12000", 10) || 12000,
-);
+function rawKillHoldMs() {
+  return Math.max(
+    1000,
+    parseInt(process.env.PRINTER_RAW_KILL_HOLD_MS || "12000", 10) || 12000,
+  );
+}
 
 function makeRawTimeoutError(nomeImpressora) {
   const err = new Error(
-    `RAW Windows timeout (${RAW_PRINT_TIMEOUT_MS}ms): ${nomeImpressora}`,
+    `RAW Windows timeout (${rawPrintTimeoutMs()}ms): ${nomeImpressora}`,
   );
   err.code = "RAW_PRINT_TIMEOUT";
   err.printTimedOut = true;
@@ -302,9 +319,38 @@ let printersWinInflight = null;
 /**
  * Lista impressoras Windows sem congelar o event loop.
  * Single-flight + cache 30s — Get-Printer via execFile (nunca execFileSync).
+ * Sob impressão / physicalLock: só cache (evita taskkill competindo com RAW/USB).
  */
+function listagemWindowsBloqueada() {
+  try {
+    const pjs = require("../printJobService");
+    if (typeof pjs.impressaoEmAndamento === "function" && pjs.impressaoEmAndamento()) {
+      return true;
+    }
+  } catch (_) {}
+  try {
+    const physical = require("../../runtime/physicalResourceLock");
+    const map = require("../../runtime/physicalResourceMap");
+    if (physical.isHeld(map.resolvePosprinterKey())) return true;
+  } catch (_) {}
+  try {
+    const { physicalSendAbandonedInFlight } = require("../printExecutor");
+    if (
+      typeof physicalSendAbandonedInFlight === "function" &&
+      physicalSendAbandonedInFlight()
+    ) {
+      return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
 function listarImpressorasWindowsAsync(force = false) {
   if (!IS_WIN) return Promise.resolve([]);
+  // Sempre respeitar lock — force=true durante RAW compete com spooler (hang).
+  if (listagemWindowsBloqueada()) {
+    return Promise.resolve(printersWinCache.list);
+  }
   const agora = Date.now();
   if (
     !force &&
@@ -362,13 +408,13 @@ function listarImpressorasWindowsAsync(force = false) {
         child.kill();
       } catch (_) {}
       finish(printersWinCache.list);
-    }, LISTAR_PRINTERS_TIMEOUT_MS);
+    }, listarPrintersTimeoutMs());
     const hardKill = setTimeout(() => {
       void killProcessTree(child.pid, {
         reason: "list_printers_hard",
         metric: "print.list_printers_taskkill",
       });
-    }, LISTAR_PRINTERS_TIMEOUT_MS + 1500);
+    }, listarPrintersTimeoutMs() + 1500);
   });
   return printersWinInflight;
 }
@@ -383,20 +429,38 @@ function listarImpressorasWindows() {
   return listarImpressorasWindowsCached();
 }
 
-/** Nome Windows da porta RAW configurada (PRINTER_PORTA / local config). */
-function resolverNomeRawConfigurado() {
+/** Porta ACBr persistida válida (INI = SSOT). */
+function resolverPortaAcbrConfigurada() {
   try {
-    const porta =
+    const { portaAcbrValida } = require("../printerModelMap");
+    const porta = String(
       require("../printerLocalConfig").ler()?.porta ||
-      process.env.PRINTER_PORTA ||
-      "";
-    const m = /^RAW:(.+)$/i.exec(String(porta).trim());
-    if (m && m[1].trim()) return m[1].trim();
+        process.env.PRINTER_PORTA ||
+        "",
+    ).trim();
+    if (portaAcbrValida(porta)) return porta;
   } catch (_) {
     /* ignore */
   }
-  if (PRINTER_NAME) return PRINTER_NAME;
   return null;
+}
+
+/** Nome Windows da porta RAW configurada (PRINTER_PORTA / local config). */
+function resolverNomeRawConfigurado() {
+  const porta = resolverPortaAcbrConfigurada();
+  if (porta) {
+    const m = /^RAW:(.+)$/i.exec(porta);
+    if (m && m[1].trim()) return m[1].trim();
+    return null; // TCP/COM configurado — não misturar com RAW genérico
+  }
+  if (printerName()) return printerName();
+  return null;
+}
+
+function invalidateDiscoveryCache() {
+  cacheDescoberta = null;
+  cacheDescobertaEm = 0;
+  cacheImpressoraEscolhida = null;
 }
 
 function escolherImpressoraWindows(lista) {
@@ -407,24 +471,24 @@ function escolherImpressoraWindows(lista) {
   );
 
   // 1. Busca por nome exato ou parcial (PRINTER_NAME) — só se não for jato/virtual
-  if (PRINTER_NAME) {
+  if (printerName()) {
     const pool = usaveis.length ? usaveis : lista;
     const exata = pool.find(
-      (p) => p.Name && p.Name.toLowerCase() === PRINTER_NAME.toLowerCase(),
+      (p) => p.Name && p.Name.toLowerCase() === printerName().toLowerCase(),
     );
     if (exata && !pareceNaoTermica(exata.Name)) return exata;
     const parcial = pool.find(
       (p) =>
-        p.Name && p.Name.toLowerCase().includes(PRINTER_NAME.toLowerCase()),
+        p.Name && p.Name.toLowerCase().includes(printerName().toLowerCase()),
     );
     if (parcial && !pareceNaoTermica(parcial.Name)) return parcial;
   }
 
   // 2. Busca pela porta física (PRINTER_PATH: USB001, USB002, COM3...)
-  if (PRINTER_PATH) {
+  if (printerPath()) {
     const porta = usaveis.find(
       (p) =>
-        p.PortName && p.PortName.toLowerCase() === PRINTER_PATH.toLowerCase(),
+        p.PortName && p.PortName.toLowerCase() === printerPath().toLowerCase(),
     );
     if (porta) return porta;
   }
@@ -576,7 +640,7 @@ function enviarRawWindowsUnlocked(nomeImpressora, buffer) {
               pid,
               durationMs: Date.now() - t0,
               printer: nomeImpressora,
-              holdMs: RAW_KILL_HOLD_MS,
+              holdMs: rawKillHoldMs(),
               note: "wrapper morto — libera physicalLock; papel tardio ainda possível via spooler",
             },
             "[ImpressoraCore] RAW kill confirmado — liberando Promise/lock",
@@ -634,7 +698,7 @@ function enviarRawWindowsUnlocked(nomeImpressora, buffer) {
       clearTimeout(leakGuard);
       const durationMs = Date.now() - t0;
       const late =
-        killRequested && durationMs > RAW_PRINT_TIMEOUT_MS + 500;
+        killRequested && durationMs > rawPrintTimeoutMs() + 500;
       const level = late ? "warn" : "info";
       log[level](
         {
@@ -676,7 +740,7 @@ function enviarRawWindowsUnlocked(nomeImpressora, buffer) {
           {
             metric: "print.raw_kill_hold_expired",
             printer: nomeImpressora,
-            holdMs: RAW_KILL_HOLD_MS,
+            holdMs: rawKillHoldMs(),
             durationMs: Date.now() - t0,
             childExited,
             killConfirmedDead: lastKill ? lastKill.confirmedDead : null,
@@ -685,18 +749,18 @@ function enviarRawWindowsUnlocked(nomeImpressora, buffer) {
           "[ImpressoraCore] RAW kill-hold esgotado — liberando Promise/lock",
         );
         finishTimeout();
-      }, RAW_KILL_HOLD_MS);
-    }, RAW_PRINT_TIMEOUT_MS);
+      }, rawKillHoldMs());
+    }, rawPrintTimeoutMs());
 
     // Segundo taskkill se soft não matou ainda (finish do soft NÃO cancela isto).
     hardKill = setTimeout(() => {
       if (childExited || settled) return;
       requestKill("raw_hard_timeout");
-    }, RAW_PRINT_TIMEOUT_MS + 1500);
+    }, rawPrintTimeoutMs() + 1500);
 
     leakGuard = setTimeout(() => {
       cleanupFiles();
-    }, Math.max(90_000, RAW_PRINT_TIMEOUT_MS + RAW_KILL_HOLD_MS + 30_000));
+    }, Math.max(90_000, rawPrintTimeoutMs() + rawKillHoldMs() + 30_000));
   });
 }
 
@@ -758,7 +822,7 @@ function extrairIpPorta(portName) {
 
 async function obterHostsRede() {
   const hosts = [];
-  if (PRINTER_HOST) hosts.push(PRINTER_HOST);
+  if (printerHost()) hosts.push(printerHost());
 
   const lista = await listarImpressorasWindowsAsync();
   for (const p of lista) {
@@ -776,7 +840,7 @@ async function detectarRede() {
 
   const portas = [
     ...new Set(
-      [PRINTER_PORT, ...REDE_PORTAS].filter(
+      [printerPortNum(), ...REDE_PORTAS].filter(
         (p) => p && !Number.isNaN(p) && p !== AGENT_PORT,
       ),
     ),
@@ -805,7 +869,7 @@ function detectarUsb() {
     return {
       metodo: "usb",
       dispositivos: devices.length,
-      nome: PRINTER_NAME || `USB (${devices.length} dispositivo(s))`,
+      nome: printerName() || `USB (${devices.length} dispositivo(s))`,
     };
   } catch (_) {
     return null;
@@ -839,35 +903,80 @@ async function detectarImpressora(force = false) {
     return cacheDescoberta;
   }
 
+  // SSOT: se já há porta válida salva, não redescobrir (evita host de teste / scan lento)
+  if (!force) {
+    const portaCfg = resolverPortaAcbrConfigurada();
+    if (portaCfg) {
+      const { parsePortaTcp } = require("../printerModelMap");
+      const tcp = parsePortaTcp(portaCfg);
+      let escolhida = null;
+      if (tcp) {
+        escolhida = {
+          metodo: "network",
+          host: tcp.host,
+          porta: tcp.port,
+          nome: `${tcp.host}:${tcp.port}`,
+        };
+      } else {
+        const raw = /^RAW:(.+)$/i.exec(portaCfg);
+        if (raw) {
+          escolhida = {
+            metodo: "windows",
+            nome: raw[1].trim(),
+            porta: portaCfg,
+          };
+        } else if (/^COM\d/i.test(portaCfg)) {
+          escolhida = { metodo: "serial", nome: portaCfg, porta: portaCfg };
+        }
+      }
+      if (escolhida) {
+        const resultado = {
+          ok: true,
+          tipoConfigurado: printerType(),
+          impressora: escolhida,
+          candidatos: [escolhida],
+          ultimaUsada: ultimaImpressoraUsada,
+          plataforma: process.platform,
+          fromSavedConfig: true,
+        };
+        cacheDescoberta = resultado;
+        cacheDescobertaEm = agora;
+        cacheImpressoraEscolhida = { em: agora, resultado };
+        return resultado;
+      }
+    }
+  }
+
   const candidatos = [];
   const win = await detectarWindows(force);
   if (win) candidatos.push(win);
   const usb = detectarUsb();
   if (usb) candidatos.push(usb);
-  // Com RAW configurado, não gasta tempo em scan de rede na descoberta
-  const rede = resolverNomeRawConfigurado()
-    ? null
-    : await detectarRede();
+  // Com RAW/TCP configurado, não gasta tempo em scan de rede na descoberta
+  const rede =
+    resolverPortaAcbrConfigurada() || resolverNomeRawConfigurado()
+      ? null
+      : await detectarRede();
   if (rede) candidatos.push(rede);
 
   let escolhida = null;
-  if (PRINTER_TYPE === "windows" && win) escolhida = win;
-  else if (PRINTER_TYPE === "usb" && usb) escolhida = usb;
-  else if (PRINTER_TYPE === "network" && rede) escolhida = rede;
-  else if (PRINTER_TYPE === "network" && PRINTER_HOST) {
-    const port = Number(PRINTER_PORT) || 9100;
-    if (await testarRede(PRINTER_HOST, port, 1500)) {
+  if (printerType() === "windows" && win) escolhida = win;
+  else if (printerType() === "usb" && usb) escolhida = usb;
+  else if (printerType() === "network" && rede) escolhida = rede;
+  else if (printerType() === "network" && printerHost()) {
+    const port = Number(printerPortNum()) || 9100;
+    if (await testarRede(printerHost(), port, 1500)) {
       escolhida = {
         metodo: "network",
-        host: PRINTER_HOST,
+        host: printerHost(),
         porta: port,
-        nome: `${PRINTER_HOST}:${port}`,
+        nome: `${printerHost()}:${port}`,
       };
     }
-  } else if (PRINTER_TYPE === "auto") {
+  } else if (printerType() === "auto") {
     const portaAcbr = String(process.env.PRINTER_PORTA || "").trim();
     const prefereWindows =
-      !!PRINTER_NAME ||
+      !!printerName() ||
       /^RAW:/i.test(portaAcbr) ||
       (process.env.PRINTER_PROVIDER || "").toLowerCase().includes("acbr");
     if (prefereWindows && win) escolhida = win;
@@ -881,7 +990,7 @@ async function detectarImpressora(force = false) {
 
   const resultado = {
     ok: !!escolhida,
-    tipoConfigurado: PRINTER_TYPE,
+    tipoConfigurado: printerType(),
     impressora: escolhida,
     candidatos,
     ultimaUsada: ultimaImpressoraUsada,
@@ -909,10 +1018,15 @@ async function enviarBuffer(buffer) {
     /* ignore */
   }
 
-  const rawConfigurado = resolverNomeRawConfigurado();
+  const { parsePortaTcp, portaAcbrValida } = require("../printerModelMap");
+  const portaCfg =
+    stationOverride && portaAcbrValida(stationOverride)
+      ? null
+      : resolverPortaAcbrConfigurada();
+  const tcpCfg = portaCfg ? parsePortaTcp(portaCfg) : null;
+  const rawConfigurado = tcpCfg ? null : resolverNomeRawConfigurado();
 
   if (stationOverride && /^TCP:/i.test(stationOverride)) {
-    const { parsePortaTcp } = require("../printerModelMap");
     const tcp = parsePortaTcp(stationOverride);
     if (tcp) {
       add("network-station", async () => {
@@ -928,15 +1042,31 @@ async function enviarBuffer(buffer) {
         ultimaImpressoraUsada = { metodo: "windows", nome };
       });
     }
+  } else if (tcpCfg) {
+    // SSOT: porta TCP salva no painel — só esta, sem scan / host de teste antigo
+    add("network-config", async () => {
+      await enviarRede(tcpCfg.host, tcpCfg.port, buffer);
+      ultimaImpressoraUsada = {
+        metodo: "network",
+        host: tcpCfg.host,
+        porta: tcpCfg.port,
+      };
+    });
   } else if (rawConfigurado && IS_WIN) {
-    // Caminho rápido: porta RAW já configurada — sem Get-Printer / scan de rede
+    // SSOT: porta RAW salva — sem Get-Printer / scan de rede
     add("windows-raw-config", async () => {
       await enviarRawWindows(rawConfigurado, buffer);
       ultimaImpressoraUsada = { metodo: "windows", nome: rawConfigurado };
     });
   }
 
-  if (PRINTER_TYPE === "windows" || PRINTER_TYPE === "auto") {
+  const tipo = printerType();
+  const configOnlyPath = !!(
+    (tcpCfg || (rawConfigurado && IS_WIN)) &&
+    !stationOverride
+  );
+
+  if (!configOnlyPath && (tipo === "windows" || tipo === "auto")) {
     add("windows", async () => {
       const win =
         cacheImpressoraEscolhida?.resultado?.impressora?.metodo === "windows"
@@ -948,20 +1078,20 @@ async function enviarBuffer(buffer) {
     });
   }
 
-  if (PRINTER_TYPE === "network" || PRINTER_TYPE === "auto") {
+  if (!configOnlyPath && (tipo === "network" || tipo === "auto")) {
     add("network", async () => {
       let rede =
         cacheImpressoraEscolhida?.resultado?.impressora?.metodo === "network"
           ? cacheImpressoraEscolhida.resultado.impressora
           : null;
-      if (!rede && PRINTER_HOST) {
-        const port = Number(PRINTER_PORT) || 9100;
-        if (await testarRede(PRINTER_HOST, port, 1500)) {
-          rede = { host: PRINTER_HOST, porta: port };
+      const host = printerHost();
+      if (!rede && host) {
+        const port = printerPortNum();
+        if (await testarRede(host, port, 1500)) {
+          rede = { host, porta: port };
         }
       }
-      if (!rede && (PRINTER_TYPE === "network" || PRINTER_TYPE === "auto")) {
-        // Com RAW configurado, não gastar tempo em scan de rede
+      if (!rede && (tipo === "network" || tipo === "auto")) {
         if (!rawConfigurado) {
           rede = await detectarRede();
         }
@@ -976,7 +1106,7 @@ async function enviarBuffer(buffer) {
     });
   }
 
-  if (PRINTER_TYPE === "usb" || PRINTER_TYPE === "auto") {
+  if (!configOnlyPath && (tipo === "usb" || tipo === "auto")) {
     add(
       "usb",
       () =>
@@ -1000,21 +1130,22 @@ async function enviarBuffer(buffer) {
     );
   }
 
-  // RAW configurado: NÃO varrer rede/USB (segundos a mais + agente “pesado”).
-  // Só RAW → rediscovery Windows (cache/Get-Printer). Strict = falha na hora.
+  // Porta salva no painel: não varrer rede/USB (host de teste antigo = minutos).
+  // Default strict=true — falha rápido se a porta escolhida não responder.
   const rawStrict =
-    String(process.env.PRINT_RAW_STRICT || "false").toLowerCase() === "true";
-  const rawOnlyPath = !!(rawConfigurado && IS_WIN && !stationOverride);
+    String(process.env.PRINT_RAW_STRICT || "true").toLowerCase() !== "false";
 
-  const ordemBase = rawOnlyPath
-    ? rawStrict
+  const ordemBase = configOnlyPath
+    ? tcpCfg
       ? []
-      : ["windows"]
-    : PRINTER_TYPE === "windows"
+      : rawStrict
+        ? []
+        : ["windows"]
+    : tipo === "windows"
       ? ["windows"]
-      : PRINTER_TYPE === "network"
+      : tipo === "network"
         ? ["network", "windows", "usb"]
-        : PRINTER_TYPE === "usb"
+        : tipo === "usb"
           ? ["usb", "windows", "network"]
           : IS_WIN
             ? ["windows", "network", "usb"]
@@ -1023,6 +1154,7 @@ async function enviarBuffer(buffer) {
   const ordem = [
     "network-station",
     "windows-station",
+    "network-config",
     "windows-raw-config",
     ...ordemBase,
   ];
@@ -1039,6 +1171,11 @@ async function enviarBuffer(buffer) {
         throw new Error(
           `Impressora da estação indisponível (${metodo}).\n` +
             erros.map((e) => `  - ${e}`).join("\n"),
+        );
+      }
+      if (metodo === "network-config") {
+        throw new Error(
+          `Porta TCP salva falhou: ${err.message}. Verifique IP/porta em Configuração → Impressão.`,
         );
       }
       if (metodo === "windows-raw-config") {
@@ -1059,7 +1196,7 @@ async function enviarBuffer(buffer) {
   throw new Error(
     "Nenhuma impressora disponivel.\n" +
       erros.map((e) => `  - ${e}`).join("\n") +
-      "\nDica: instale o driver da impressora no Windows ou configure PRINTER_NAME / PRINTER_HOST no .env",
+      "\nDica: salve a impressora correta em Configuração → Impressão (RAW ou TCP com IP com pontos).",
   );
 }
 
@@ -1937,8 +2074,10 @@ async function getInfo(force = false) {
 }
 
 function listar() {
-  // Cache only — nunca Get-Printer síncrono. Refresh em background.
-  void listarImpressorasWindowsAsync();
+  // Cache only — nunca Get-Printer síncrono. Refresh em background só se ocioso.
+  if (!listagemWindowsBloqueada()) {
+    void listarImpressorasWindowsAsync();
+  }
   const windows = listarImpressorasWindowsCached().map((p) => ({
     nome: p.Name,
     porta: p.PortName,
@@ -1973,10 +2112,10 @@ function listar() {
   }
 
   return {
-    tipoConfigurado: PRINTER_TYPE,
-    nomeConfigurado: PRINTER_NAME || rawNome || null,
-    hostConfigurado: PRINTER_HOST || null,
-    portaConfigurada: PRINTER_PORT,
+    tipoConfigurado: printerType(),
+    nomeConfigurado: printerName() || rawNome || null,
+    hostConfigurado: printerHost() || null,
+    portaConfigurada: printerPortNum(),
     windows,
     usb,
     ultimaUsada: ultimaImpressoraUsada,
@@ -2041,6 +2180,9 @@ module.exports = {
   listar,
   detectar: () => detectarImpressora(true),
   detectarImpressora,
+  invalidateDiscoveryCache,
+  resolverPortaAcbrConfigurada,
+  resolverNomeRawConfigurado,
   bytesQrGsK,
   imprimirCupom,
   imprimirTeste,
@@ -2055,8 +2197,8 @@ module.exports = {
   __test: {
     renderCupomConteudo,
     renderFechamentoConteudo,
-    RAW_PRINT_TIMEOUT_MS,
-    RAW_KILL_HOLD_MS,
+    rawPrintTimeoutMs,
+    rawKillHoldMs,
     makeRawTimeoutError,
     parseRawTimingFromStdout,
     logRawWin32Timing,

@@ -58,11 +58,21 @@ function isAlreadyGoneMessage(text) {
  *   durationMs: number,
  * }>}
  */
+/** Teto absoluto — execFile timeout no Windows às vezes não dispara sob carga. */
+const KILL_HARD_DEADLINE_MS = Math.max(
+  1000,
+  parseInt(process.env.PRINTER_TASKKILL_HARD_MS || "6000", 10) || 6000,
+);
+
 function killProcessTree(pid, opts = {}) {
   const t0 = Date.now();
   const reason = String(opts.reason || "unspecified");
   const metric = opts.metric || "print.taskkill_attempt";
   const logResult = opts.logResult !== false;
+  const hardMs = Math.max(
+    1000,
+    Number(opts.hardDeadlineMs) || KILL_HARD_DEADLINE_MS,
+  );
   const n = Number(pid);
 
   if (!Number.isFinite(n) || n <= 0) {
@@ -83,102 +93,139 @@ function killProcessTree(pid, opts = {}) {
     return Promise.resolve(empty);
   }
 
-  if (!IS_WIN) {
-    let errMessage = null;
-    try {
-      process.kill(n, "SIGKILL");
-    } catch (err) {
-      errMessage = err?.message || String(err);
-    }
-    return new Promise((resolve) => {
-      // Zombie/reap: PID pode responder a kill(0) por alguns ms
-      const deadline = Date.now() + 500;
-      const tick = () => {
-        const stillAlive = isPidAlive(n);
-        if (stillAlive && Date.now() < deadline) {
-          setTimeout(tick, 20);
-          return;
-        }
-        const result = {
-          attempted: true,
-          pid: n,
-          platform: process.platform,
-          reason,
-          taskkillExitOk: !stillAlive,
-          taskkillAlreadyGone: false,
-          confirmedDead: !stillAlive,
-          stillAlive,
-          stdout: "",
-          stderr: "",
-          errMessage,
-          durationMs: Date.now() - t0,
-        };
-        if (logResult) {
-          log.warn({ metric, ...result }, "[WinKill] SIGKILL (non-Windows)");
-        }
-        resolve(result);
-      };
-      setTimeout(tick, 20);
-    });
-  }
+  const withHardDeadline = (inner) =>
+    Promise.race([
+      inner,
+      new Promise((resolve) => {
+        setTimeout(() => {
+          const stillAlive = isPidAlive(n);
+          const result = {
+            attempted: true,
+            pid: n,
+            platform: process.platform,
+            reason,
+            taskkillExitOk: null,
+            taskkillAlreadyGone: false,
+            confirmedDead: !stillAlive,
+            stillAlive,
+            stdout: "",
+            stderr: "",
+            errMessage: `taskkill hard deadline ${hardMs}ms`,
+            durationMs: Date.now() - t0,
+            hardDeadline: true,
+          };
+          if (logResult) {
+            log.warn(
+              { metric, ...result },
+              "[WinKill] taskkill hard deadline — liberando sem esperar callback",
+            );
+          }
+          resolve(result);
+        }, hardMs);
+      }),
+    ]);
 
-  return new Promise((resolve) => {
-    execFile(
-      "taskkill",
-      ["/F", "/T", "/PID", String(n)],
-      { windowsHide: true, timeout: 5000, encoding: "utf8" },
-      (err, stdout, stderr) => {
-        const out = String(stdout || "");
-        const errOut = String(stderr || "");
-        const combined = `${out}\n${errOut}\n${err?.message || ""}`;
-        const alreadyGone = isAlreadyGoneMessage(combined);
-        const taskkillExitOk = !err || alreadyGone;
-        const deadline = Date.now() + 400;
+  if (!IS_WIN) {
+    return withHardDeadline(
+      new Promise((resolve) => {
+        let errMessage = null;
+        try {
+          process.kill(n, "SIGKILL");
+        } catch (err) {
+          errMessage = err?.message || String(err);
+        }
+        // Zombie/reap: PID pode responder a kill(0) por alguns ms
+        const deadline = Date.now() + 500;
         const tick = () => {
           const stillAlive = isPidAlive(n);
           if (stillAlive && Date.now() < deadline) {
-            setTimeout(tick, 40);
+            setTimeout(tick, 20);
             return;
           }
           const result = {
             attempted: true,
             pid: n,
-            platform: "win32",
+            platform: process.platform,
             reason,
-            taskkillExitOk,
-            taskkillAlreadyGone: alreadyGone,
+            taskkillExitOk: !stillAlive,
+            taskkillAlreadyGone: false,
             confirmedDead: !stillAlive,
             stillAlive,
-            stdout: out.slice(0, 400),
-            stderr: errOut.slice(0, 400),
-            errMessage: err && !alreadyGone ? err.message || String(err) : null,
+            stdout: "",
+            stderr: "",
+            errMessage,
             durationMs: Date.now() - t0,
           };
           if (logResult) {
-            const level = result.stillAlive ? "error" : "warn";
-            log[level](
-              {
-                metric,
-                ...result,
-                note: result.stillAlive
-                  ? "PID ainda vivo após taskkill — handle/driver pode continuar"
-                  : "wrapper morto; spooler Windows ainda pode drenar buffer (late paper)",
-              },
-              result.stillAlive
-                ? "[WinKill] taskkill NÃO confirmou morte do PID"
-                : "[WinKill] taskkill confirmado (wrapper morto)",
-            );
+            log.warn({ metric, ...result }, "[WinKill] SIGKILL (non-Windows)");
           }
           resolve(result);
         };
-        setTimeout(tick, 40);
-      },
+        setTimeout(tick, 20);
+      }),
     );
-  });
+  }
+
+  return withHardDeadline(
+    new Promise((resolve) => {
+      execFile(
+        "taskkill",
+        ["/F", "/T", "/PID", String(n)],
+        { windowsHide: true, timeout: 4000, encoding: "utf8", killSignal: "SIGKILL" },
+        (err, stdout, stderr) => {
+          const out = String(stdout || "");
+          const errOut = String(stderr || "");
+          const combined = `${out}\n${errOut}\n${err?.message || ""}`;
+          const alreadyGone = isAlreadyGoneMessage(combined);
+          const taskkillExitOk = !err || alreadyGone;
+          const deadline = Date.now() + 400;
+          const tick = () => {
+            const stillAlive = isPidAlive(n);
+            if (stillAlive && Date.now() < deadline) {
+              setTimeout(tick, 40);
+              return;
+            }
+            const result = {
+              attempted: true,
+              pid: n,
+              platform: "win32",
+              reason,
+              taskkillExitOk,
+              taskkillAlreadyGone: alreadyGone,
+              confirmedDead: !stillAlive,
+              stillAlive,
+              stdout: out.slice(0, 400),
+              stderr: errOut.slice(0, 400),
+              errMessage: err && !alreadyGone ? err.message || String(err) : null,
+              durationMs: Date.now() - t0,
+            };
+            if (logResult) {
+              const level = result.stillAlive ? "error" : "warn";
+              log[level](
+                {
+                  metric,
+                  ...result,
+                  note: result.stillAlive
+                    ? "PID ainda vivo após taskkill — handle/driver pode continuar"
+                    : "wrapper morto; spooler Windows ainda pode drenar buffer (late paper)",
+                },
+                result.stillAlive
+                  ? "[WinKill] taskkill NÃO confirmou morte do PID"
+                  : "[WinKill] taskkill confirmado (wrapper morto)",
+              );
+            }
+            resolve(result);
+          };
+          setTimeout(tick, 40);
+        },
+      );
+    }),
+  );
 }
 
 module.exports = {
   killProcessTree,
   isPidAlive,
   isAlreadyGoneMessage,
+  KILL_HARD_DEADLINE_MS,
 };

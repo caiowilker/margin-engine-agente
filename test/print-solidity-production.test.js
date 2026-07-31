@@ -40,13 +40,33 @@ async function run() {
     assert.ok(src.includes('PRINTER_RAW_TIMEOUT_MS || "4000"'));
     assert.ok(src.includes("killProcessTree"));
     assert.ok(src.includes("print.taskkill_attempt"));
-    assert.ok(src.includes("RAW_KILL_HOLD_MS"));
+    assert.ok(src.includes("PRINTER_RAW_KILL_HOLD_MS") || src.includes("rawKillHoldMs"));
     assert.ok(src.includes("print.raw_kill_confirmed_release"));
     assert.ok(src.includes("print.raw_kill_hold_expired"));
     assert.ok(src.includes("makeRawTimeoutError"));
     assert.ok(src.includes('code = "RAW_PRINT_TIMEOUT"') || src.includes("RAW_PRINT_TIMEOUT"));
     assert.ok(src.includes("printTimedOut = true") || src.includes("printTimedOut: true"));
     assert.ok(!/\bexecFileSync\s*\(/.test(src), "P2b: execFileSync proibido no RAW");
+    assert.ok(src.includes("listagemWindowsBloqueada"));
+  });
+
+  await test("worker timeout rejeita antes de await terminate", () => {
+    const src = fs.readFileSync(
+      path.join(__dirname, "../print/acbrPosWorkerPool.js"),
+      "utf8",
+    );
+    // Rejeita na hora; kill armado com latch (não spawn 2ª DLL durante terminate)
+    assert.ok(src.includes("const killP = killAndRespawn") || src.includes("killAndRespawn(h, e)"));
+    assert.ok(src.includes("void killP") || src.includes("h.killing"));
+    assert.ok(src.includes("while (h.killing)"));
+    assert.ok(!src.includes("await killAndRespawn(h, e)"));
+    assert.ok(src.includes("TERMINATE_HARD_MS"));
+  });
+
+  await test("TCP malformada rejeitada", () => {
+    const map = require("../print/printerModelMap");
+    assert.strictEqual(map.portaAcbrValida("TCP:192168150:9100"), false);
+    assert.strictEqual(map.portaAcbrValida("TCP:192.168.1.50:9100"), true);
   });
 
   await test("contrato soft-timeout: Promise rejeita rápido com child zombie", async () => {
@@ -132,6 +152,8 @@ async function run() {
   await test("factory honra circuito → effective native", () => {
     const runtime = require("../print/acbrPosPrinterRuntime");
     const factory = require("../print/factory");
+    const prevProv = process.env.PRINTER_PROVIDER;
+    process.env.PRINTER_PROVIDER = "acbr-posprinter";
     runtime.resetAcbrPosCircuit();
     factory.resetPrintProvider();
     runtime.openAcbrPosCircuit("test-factory");
@@ -140,6 +162,7 @@ async function run() {
       assert.strictEqual(factory.resolveEffectiveProviderName(), "native");
     } finally {
       runtime.resetAcbrPosCircuit();
+      process.env.PRINTER_PROVIDER = prevProv || "mock";
       factory.resetPrintProvider();
     }
   });

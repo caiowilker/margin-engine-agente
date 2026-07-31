@@ -6,6 +6,19 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-07-31
+
+### Corrigido
+
+- Timeout do worker ACBr rejeita **antes** de `terminate()` (não segura `physicalLock` por minutos).
+- `terminate()` com teto 2s; `taskkill` com hard deadline 6s.
+- TCP inválido (`TCP:192168150:9100`) rejeitado na normalização/save; POS80 com modelo `0` → `1`.
+- Get-Printer não dispara sob impressão/physicalLock (evita corrida USB + HTTP 502).
+
+### Alterado
+
+- Versão instalador/manifest **1.0.5**.
+
 ## [1.0.4] - 2026-07-30
 
 ### Adicionado

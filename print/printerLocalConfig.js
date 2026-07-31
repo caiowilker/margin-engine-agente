@@ -1,5 +1,6 @@
 /**
- * Configuração local da impressora — INI completo + .env.
+ * Configuração local da impressora — INI completo + .env (SSOT local).
+ * Persistência: escrita atômica, idempotente, reset de provider só quando muda.
  */
 const fs = require("fs");
 const path = require("path");
@@ -7,7 +8,18 @@ const log = require("../logger").child({ modulo: "printer_local_config" });
 function runtime() {
   return require("./acbrPosPrinterRuntime");
 }
-const { inferirModeloAcbr, inferirPortaAcbr, normalizarPortaAcbr, parsePortaTcp, resolveControlePorta } = require("./printerModelMap");
+const {
+  inferirModeloAcbr,
+  inferirPortaAcbr,
+  normalizarPortaAcbr,
+  parsePortaTcp,
+  resolveControlePorta,
+  portaAcbrValida,
+} = require("./printerModelMap");
+const {
+  resolveLogNivel,
+  buildDeviceSection,
+} = require("./posPrinterIniDefaults");
 
 const AGENT_ROOT = path.resolve(__dirname, "..");
 
@@ -26,6 +38,32 @@ function resolveEnvPath() {
   return path.join(AGENT_ROOT, ".env");
 }
 
+/** Escrita atômica (tmp + rename) — evita INI/.env pela metade em crash. */
+function writeFileAtomic(filePath, content) {
+  const dir = path.dirname(filePath);
+  fs.mkdirSync(dir, { recursive: true });
+  const tmp = path.join(
+    dir,
+    `.${path.basename(filePath)}.${process.pid}.${Date.now()}.tmp`,
+  );
+  fs.writeFileSync(tmp, content, "utf8");
+  try {
+    fs.renameSync(tmp, filePath);
+  } catch (_) {
+    // Windows: destino existente — overwrite via copy+unlink
+    fs.copyFileSync(tmp, filePath);
+    try {
+      fs.unlinkSync(tmp);
+    } catch (_) {}
+  }
+}
+
+function paperMmFromColunas(colunas) {
+  const n = Number(colunas);
+  if (Number.isFinite(n) && n > 0 && n <= 32) return 58;
+  return 80;
+}
+
 function lerIniValores(iniPath) {
   const defaults = {
     modelo: "0",
@@ -37,7 +75,7 @@ function lerIniValores(iniPath) {
     parity: "0",
     stopBits: "0",
     handshake: "0",
-    timeout: "3",
+    timeout: "5",
   };
   if (!iniPath || !fs.existsSync(iniPath)) return { ...defaults };
   const raw = fs.readFileSync(iniPath, "utf8");
@@ -61,19 +99,19 @@ function lerIniValores(iniPath) {
 
 function gerarIniContent(vals) {
   const logPath = path.join(AGENT_ROOT, "data", "logs", "posprinter");
-  const isSerial = /^COM\d/i.test(String(vals.porta || ""));
-  const deviceBlock = isSerial
-    ? `
-[PosPrinter_Device]
-Baud=${vals.baud || process.env.PRINTER_SERIAL_BAUD || "9600"}
-Parity=${vals.parity || process.env.PRINTER_SERIAL_PARITY || "0"}
-Stop=${vals.stopBits || process.env.PRINTER_SERIAL_STOP || "0"}
-HandShake=${vals.handshake || process.env.PRINTER_SERIAL_HANDSHAKE || "0"}
-TimeOut=${vals.timeout || process.env.PRINTER_SERIAL_TIMEOUT || "3"}
-SoftFlow=${process.env.PRINTER_SERIAL_SOFTFLOW || "0"}
-HardFlow=${process.env.PRINTER_SERIAL_HARDFLOW || "0"}
+  const logNivel = resolveLogNivel();
+  // LogPath só quando debug — em produção ArqLog/nível 0 evita I/O no HD do PDV
+  const principalLog =
+    logNivel === "0"
+      ? `LogNivel=0
+ArqLog=
 `
-    : "";
+      : `LogNivel=${logNivel}
+LogPath=${logPath}
+ArqLog=
+`;
+
+  const deviceBlock = buildDeviceSection(vals, { porta: vals.porta });
 
   const logo = (() => {
     try {
@@ -94,9 +132,8 @@ FatorY=${size.fatorY}
   })();
 
   return `[Principal]
-LogNivel=4
-LogPath=${logPath}
-
+TipoResposta=2
+${principalLog}
 [PosPrinter]
 Modelo=${vals.modelo || "0"}
 Porta=${vals.porta || ""}
@@ -129,7 +166,7 @@ function patchEnv(map) {
     const line = `${key}=${val ?? ""}`;
     content = re.test(content) ? content.replace(re, line) : `${content.replace(/\s*$/, "")}\n${line}\n`;
   }
-  fs.writeFileSync(envPath, content, "utf8");
+  writeFileAtomic(envPath, content);
   for (const [key, val] of Object.entries(map)) {
     process.env[key] = String(val ?? "");
   }
@@ -147,7 +184,8 @@ function invalidateLerCache() {
   _lerCache = { at: 0, value: null };
 }
 
-function ler() {
+function ler(opts = {}) {
+  if (opts.fresh) invalidateLerCache();
   const agora = Date.now();
   if (_lerCache.value && agora - _lerCache.at < LER_CACHE_MS) {
     return _lerCache.value;
@@ -158,6 +196,7 @@ function ler() {
   try {
     logo = require("./printerLogo").ler();
   } catch (_) {}
+  const paperMm = paperMmFromColunas(ini.colunas);
   const value = {
     provider: process.env.PRINTER_PROVIDER || "acbr-posprinter",
     fallback: process.env.PRINTER_FALLBACK || "native",
@@ -168,6 +207,7 @@ function ler() {
     modelo: ini.modelo,
     porta: ini.porta,
     colunas: ini.colunas,
+    paperMm,
     serial: {
       baud: ini.baud,
       parity: ini.parity,
@@ -179,8 +219,6 @@ function ler() {
     libPath: runtime().resolveLibPath(),
     iniPath,
     iniExiste: !!(iniPath && fs.existsSync(iniPath)),
-    // Não carregar koffi dentro de ler() — no boot do serviço (cwd System32)
-    // require("koffi") estoura stack e envenena canLoad=false para sempre.
     nativeReady: !!runtime().resolveLibPath(),
     mode: runtime().resolveLibPath()
       ? "native"
@@ -211,18 +249,30 @@ function projetarSalvar(updates, valsBase) {
       port: updates.portaNum,
       nomeWindows: updates.nomeImpressora,
     });
+    if (!portaAcbrValida(vals.porta)) {
+      const err = new Error(
+        `Porta inválida: "${updates.porta}". Use TCP:IP:porta (ex.: TCP:192.168.1.50:9100), RAW:NomeWindows ou COMn.`,
+      );
+      err.code = "PRINTER_PORTA_INVALIDA";
+      throw err;
+    }
     envPatch.PRINTER_PORTA = vals.porta;
     const tcp = parsePortaTcp(vals.porta);
     if (tcp) {
       envPatch.PRINTER_HOST = tcp.host;
       envPatch.PRINTER_PORT = String(tcp.port);
+      envPatch.PRINTER_TYPE = updates.tipo || "network";
     } else if (/^RAW:/i.test(vals.porta)) {
+      const nomeRaw = vals.porta.replace(/^RAW:/i, "").trim();
+      if (nomeRaw) envPatch.PRINTER_NAME = nomeRaw;
       envPatch.PRINTER_HOST = "";
       envPatch.PRINTER_TYPE = updates.tipo || "windows";
+    } else if (/^COM\d/i.test(vals.porta)) {
+      envPatch.PRINTER_TYPE = updates.tipo || "serial";
     }
   }
-  if (updates.modelo != null) {
-    vals.modelo = String(updates.modelo);
+  if (updates.modelo != null && String(updates.modelo).trim() !== "") {
+    vals.modelo = String(updates.modelo).trim();
     envPatch.PRINTER_MODEL = vals.modelo;
   }
   if (updates.colunas != null) {
@@ -256,10 +306,29 @@ function projetarSalvar(updates, valsBase) {
   }
   if (updates.nomeImpressora) {
     envPatch.PRINTER_NAME = String(updates.nomeImpressora);
-    if (!updates.modelo && updates.modeloAuto !== false) {
-      // ignoreEnv: modeloAuto deve seguir o nome, não o PRINTER_MODEL antigo do .env
+    if (updates.modelo == null && updates.modeloAuto !== false) {
       vals.modelo = inferirModeloAcbr(updates.nomeImpressora, "", { ignoreEnv: true });
       envPatch.PRINTER_MODEL = vals.modelo;
+    }
+  }
+
+  // Modelo genérico "0" + RAW/POS80 → Epson-compatível (1)
+  if (
+    updates.modeloAuto !== false &&
+    (String(vals.modelo) === "0" || String(vals.modelo).toLowerCase() === "auto")
+  ) {
+    const fromRaw = /^RAW:(.+)$/i.exec(String(vals.porta || ""));
+    const nomeHint =
+      fromRaw?.[1]?.trim() ||
+      updates.nomeImpressora ||
+      process.env.PRINTER_NAME ||
+      "";
+    if (nomeHint) {
+      const inferred = inferirModeloAcbr(nomeHint, "", { ignoreEnv: true });
+      if (inferred && inferred !== "0") {
+        vals.modelo = inferred;
+        envPatch.PRINTER_MODEL = inferred;
+      }
     }
   }
 
@@ -268,7 +337,7 @@ function projetarSalvar(updates, valsBase) {
       nomeWindows: updates.nomeImpressora,
       portaWindows: updates.portaWindows,
     });
-    if (inferida && inferida !== "USB") {
+    if (inferida && inferida !== "USB" && portaAcbrValida(inferida)) {
       vals.porta = inferida;
       envPatch.PRINTER_PORTA = vals.porta;
       const tcp = parsePortaTcp(vals.porta);
@@ -304,6 +373,140 @@ function iniSemMudanca(valsBefore, vals) {
   );
 }
 
+function afterConfigChanged() {
+  try {
+    require("./factory").resetPrintProvider();
+  } catch (_) {}
+  try {
+    require("../printerService").invalidateProbeCache?.();
+  } catch (_) {}
+  try {
+    require("./escpos/impressoraCore").invalidateDiscoveryCache?.();
+  } catch (_) {}
+  // Porta/modelo salvos → reabrir circuito e limpar fallback (próximo cupom tenta ACBr limpo)
+  try {
+    require("./acbrPosPrinterRuntime").resetAcbrPosCircuit();
+  } catch (_) {}
+  try {
+    require("./acbrPosWorkerPool").clearFallbackInProcess();
+  } catch (_) {}
+  try {
+    void require("./acbrPosPrinterRuntime").invalidatePosPrinterSession();
+  } catch (_) {}
+}
+
+/**
+ * Boot / pós-save: remove porta de teste inválida e alinha .env com o INI (SSOT).
+ * Ex.: TCP:192168150:9100 → limpa; RAW válido → zera PRINTER_HOST fantasma.
+ */
+function sanitizarConfigPersistida() {
+  const { portaAcbrValida, parsePortaTcp, normalizarPortaAcbr, isValidTcpHost } = require("./printerModelMap");
+  const iniPath = resolveIniPath();
+  const ini = lerIniValores(iniPath);
+  const portaOriginal = String(ini.porta || "").trim();
+  let porta = portaOriginal;
+  const envPatch = {};
+  let mudouIni = false;
+
+  if (porta && !portaAcbrValida(porta)) {
+    // TCP inválido (ex.: 192168150) NÃO vira RAW via PRINTER_NAME — era teste/erro.
+    const wasTcp = /^TCP:/i.test(porta);
+    const tentativa = wasTcp
+      ? ""
+      : normalizarPortaAcbr(porta, {
+          nomeWindows: process.env.PRINTER_NAME,
+        });
+    if (tentativa && portaAcbrValida(tentativa)) {
+      log.warn(
+        { de: porta, para: tentativa, metric: "print.config_sanitize_normalized" },
+        "[PrinterLocalConfig] Porta inválida normalizada",
+      );
+      porta = tentativa;
+      ini.porta = porta;
+      mudouIni = true;
+    } else {
+      log.warn(
+        { porta, metric: "print.config_sanitize_cleared" },
+        "[PrinterLocalConfig] Porta de teste/inválida removida — configure de novo no painel",
+      );
+      porta = "";
+      ini.porta = "";
+      mudouIni = true;
+      envPatch.PRINTER_PORTA = "";
+      envPatch.PRINTER_HOST = "";
+    }
+  }
+
+  if (portaAcbrValida(porta)) {
+    envPatch.PRINTER_PORTA = porta;
+    const tcp = parsePortaTcp(porta);
+    if (tcp) {
+      envPatch.PRINTER_HOST = tcp.host;
+      envPatch.PRINTER_PORT = String(tcp.port);
+      envPatch.PRINTER_TYPE = "network";
+    } else if (/^RAW:/i.test(porta)) {
+      const nome = porta.replace(/^RAW:/i, "").trim();
+      if (nome) envPatch.PRINTER_NAME = nome;
+      envPatch.PRINTER_HOST = "";
+      envPatch.PRINTER_TYPE = "windows";
+    } else if (/^COM\d/i.test(porta)) {
+      envPatch.PRINTER_HOST = "";
+      envPatch.PRINTER_TYPE = "serial";
+    }
+  } else {
+    const host = String(process.env.PRINTER_HOST || "").trim();
+    if (host && !isValidTcpHost(host)) {
+      envPatch.PRINTER_HOST = "";
+      log.warn(
+        { host, metric: "print.config_sanitize_bad_host" },
+        "[PrinterLocalConfig] PRINTER_HOST inválido limpo",
+      );
+    }
+  }
+
+  // Regrava INI com defaults de produção (LogNivel=0, BytesCount, ControlePorta RAW)
+  // sempre que o conteúdo canônico divergir — corrige installs antigos com LogNivel=4.
+  const valsForIni = { ...ini, porta: porta || ini.porta || "" };
+  const nextIni = gerarIniContent(valsForIni);
+  let prevIni = "";
+  try {
+    if (fs.existsSync(iniPath)) prevIni = fs.readFileSync(iniPath, "utf8");
+  } catch (_) {}
+  if (nextIni !== prevIni) {
+    invalidateLerCache();
+    writeFileAtomic(iniPath, nextIni);
+    mudouIni = true;
+    log.info(
+      { metric: "print.config_ini_production_defaults" },
+      "[PrinterLocalConfig] INI PosPrinter alinhado (log off + BytesCount + ControlePorta)",
+    );
+  } else if (mudouIni) {
+    invalidateLerCache();
+    writeFileAtomic(iniPath, nextIni);
+  }
+  if (Object.keys(envPatch).length && !envPatchSemMudanca(envPatch)) {
+    patchEnv(envPatch);
+  }
+
+  try {
+    const stations = require("./printerStationRoutes");
+    const routes = stations.ler();
+    let dirty = false;
+    const next = { byPrintType: { ...routes.byPrintType } };
+    for (const [k, v] of Object.entries(next.byPrintType)) {
+      if (!v) continue;
+      if (!portaAcbrValida(v)) {
+        next.byPrintType[k] = "";
+        dirty = true;
+      }
+    }
+    if (dirty) stations.salvar(next);
+  } catch (_) {}
+
+  invalidateLerCache();
+  return ler({ fresh: true });
+}
+
 function salvar(updates) {
   if (!updates || typeof updates !== "object") throw new Error("Payload inválido");
 
@@ -317,25 +520,24 @@ function salvar(updates) {
       { porta: vals.porta, modelo: vals.modelo },
       "[PrinterLocalConfig] Sem mudança — skip save/reset",
     );
-    return Object.assign(ler(), { unchanged: true });
+    return Object.assign(ler({ fresh: true }), { unchanged: true });
   }
 
   invalidateLerCache();
-  fs.mkdirSync(path.dirname(iniPath), { recursive: true });
-  fs.writeFileSync(iniPath, gerarIniContent(vals), "utf8");
+  writeFileAtomic(iniPath, gerarIniContent(vals));
   if (Object.keys(envPatch).length) patchEnv(envPatch);
 
-  try {
-    require("./factory").resetPrintProvider();
-  } catch (_) {}
+  afterConfigChanged();
 
-  log.info({ porta: vals.porta, modelo: vals.modelo }, "[PrinterLocalConfig] Configuração salva");
-  return Object.assign(ler(), { unchanged: false });
+  log.info(
+    { porta: vals.porta, modelo: vals.modelo, paperMm: paperMmFromColunas(vals.colunas) },
+    "[PrinterLocalConfig] Configuração salva",
+  );
+  return Object.assign(ler({ fresh: true }), { unchanged: false });
 }
 
 function salvarSemPorta(updates) {
   if (!updates || typeof updates !== "object") throw new Error("Payload inválido");
-  invalidateLerCache();
 
   const envPatch = {
     PRINTER_PROVIDER: String(updates.provider || "acbr-posprinter"),
@@ -346,23 +548,27 @@ function salvarSemPorta(updates) {
   if (updates.modelo != null) envPatch.PRINTER_MODEL = String(updates.modelo);
 
   const iniPath = resolveIniPath();
-  fs.mkdirSync(path.dirname(iniPath), { recursive: true });
+  const before = lerIniValores(iniPath);
   const vals = {
-    ...lerIniValores(iniPath),
-    modelo: updates.modelo != null ? String(updates.modelo) : "0",
+    ...before,
+    modelo: updates.modelo != null ? String(updates.modelo) : before.modelo || "0",
     porta: "",
-    cut: updates.cut || "partial",
-    pageCode: updates.encoding === "UTF8" ? "65001" : "2",
+    cut: updates.cut || before.cut || "partial",
+    pageCode: updates.encoding === "UTF8" ? "65001" : before.pageCode || "2",
   };
-  fs.writeFileSync(iniPath, gerarIniContent(vals), "utf8");
-  patchEnv(envPatch);
 
-  try {
-    require("./factory").resetPrintProvider();
-  } catch (_) {}
+  if (iniSemMudanca(before, vals) && envPatchSemMudanca(envPatch)) {
+    log.debug("[PrinterLocalConfig] Instalador — sem mudança (porta vazia)");
+    return Object.assign(ler({ fresh: true }), { unchanged: true });
+  }
+
+  invalidateLerCache();
+  writeFileAtomic(iniPath, gerarIniContent(vals));
+  patchEnv(envPatch);
+  afterConfigChanged();
 
   log.info("[PrinterLocalConfig] Instalador — aguardando auto-detecção de porta");
-  return ler();
+  return Object.assign(ler({ fresh: true }), { unchanged: false });
 }
 
 function sincronizarDeDeteccao(info) {
@@ -408,4 +614,8 @@ module.exports = {
   resolveIniPath,
   resolveEnvPath,
   invalidateLerCache,
+  writeFileAtomic,
+  paperMmFromColunas,
+  projetarSalvar,
+  sanitizarConfigPersistida,
 };

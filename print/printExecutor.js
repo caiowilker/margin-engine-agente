@@ -294,9 +294,13 @@ async function executarOp(op, args, timeoutMs) {
     }
     return exec;
   } catch (err) {
+    // Timeout / envio abandonado: NÃO re-detectar nem segundo físico
+    if (err?.printTimedOut || physicalSendAbandonedInFlight()) throw err;
     const msg = String(err?.message || "");
     const portaOuAcbr = err?.acbrRet === -10 || /porta|PRINTER_PORTA_INDEFINIDA/i.test(msg);
     if (!portaOuAcbr) throw err;
+    // Só re-tenta se Ativar/porta falhou ANTES de enviar (não após Imprimir)
+    if (/pos_imprimir|imprimirTags/i.test(msg)) throw err;
     log.warn({ op, err: msg }, "[PrintExecutor] Falha de porta — re-detectando impressora");
     try {
       await liberarSessaoPosAposFalha();
@@ -304,7 +308,7 @@ async function executarOp(op, args, timeoutMs) {
       await require("./printerBootstrap").garantirPortaImpressao({ force: true });
       return await withProvider(
         (provider) => executarProviderOp(provider, op, args, timeoutMs),
-        { noFallback: false },
+        { noFallback: true },
       );
     } catch (retryErr) {
       throw retryErr;

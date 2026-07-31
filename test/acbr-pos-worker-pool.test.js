@@ -99,9 +99,50 @@ async function run() {
     }
     assert.ok(err, "deveria rejeitar");
     assert.strictEqual(err.code, "ACBR_POS_WORKER_KILLED");
+    assert.ok(err.printTimedOut === true);
+    // Rejeição imediata: terminate pode completar depois; não pode travar o await
     assert.ok(terminated, "terminate deveria ter sido chamado");
     // cooldown
     await new Promise((r) => setTimeout(r, 40));
+  });
+
+  await test("timeout rejeita sem esperar terminate lento", async () => {
+    process.env.ACBR_POS_WORKER_TERMINATE_MS = "50";
+    let termStarted = 0;
+    mockWorkerImpl = (w) => {
+      w._onPost = (msg) => {
+        if (msg.cmd === "init") {
+          w.emit("message", { id: msg.id, generation: w.generation, ok: true, data: {} });
+        }
+      };
+      w.terminate = () =>
+        new Promise((resolve) => {
+          termStarted = Date.now();
+          setTimeout(resolve, 5000); // simula FFI travado
+        });
+    };
+
+    const t0 = Date.now();
+    let err;
+    try {
+      await pool.imprimirTags({
+        printerKey: "RAW:SLOWTERM",
+        dllPath: "/tmp/fake.dll",
+        iniPath: "/tmp/fake.ini",
+        agentRoot: path.join(__dirname, ".."),
+        values: { PosPrinter: { Porta: "RAW:SLOWTERM", Modelo: "1" } },
+        tags: "</zera>",
+        timeoutMs: 60,
+      });
+    } catch (e) {
+      err = e;
+    }
+    const elapsed = Date.now() - t0;
+    assert.ok(err, "deveria rejeitar");
+    assert.strictEqual(err.code, "ACBR_POS_WORKER_KILLED");
+    assert.ok(elapsed < 400, `rejeição deve ser rápida, levou ${elapsed}ms`);
+    assert.ok(termStarted > 0, "terminate deve ter iniciado em background");
+    await new Promise((r) => setTimeout(r, 80));
   });
 
   await test("late message de geração antiga é ignorada", async () => {
@@ -232,6 +273,75 @@ async function run() {
     assert.strictEqual(pool.isPosWorkerEnabled(), false);
     assert.strictEqual(pool.clearFallbackInProcess(), true);
     assert.strictEqual(pool.isPosWorkerEnabled(), true);
+  });
+
+  await test("kill latch impede spawn durante terminate", async () => {
+    pool.resetForTests();
+    process.env.ACBR_POS_WORKER = "true";
+    process.env.ACBR_POS_WORKER_KILL_COOLDOWN_MS = "50";
+    process.env.ACBR_POS_CALL_TIMEOUT_MS = "40";
+    let spawnCount = 0;
+    let terminateStarted = 0;
+    let spawnDuringTerminate = false;
+    mockWorkerImpl = (w) => {
+      spawnCount += 1;
+      const h = [...pool._handles.values()][0];
+      if (h?.killing && spawnCount > 1) spawnDuringTerminate = true;
+      w._onPost = (msg) => {
+        if (msg.cmd === "init") {
+          w.emit("message", { id: msg.id, generation: w.generation, ok: true, data: {} });
+          return;
+        }
+        // hang
+      };
+      const origTerm = w.terminate.bind(w);
+      w.terminate = async () => {
+        terminateStarted += 1;
+        await new Promise((r) => setTimeout(r, 80));
+        return origTerm();
+      };
+    };
+
+    let err;
+    try {
+      await pool.imprimirTags({
+        printerKey: "RAW:LATCH",
+        dllPath: "/tmp/fake.dll",
+        iniPath: "/tmp/x.ini",
+        agentRoot: path.join(__dirname, ".."),
+        values: { PosPrinter: { Porta: "RAW:LATCH" } },
+        tags: "x",
+        timeoutMs: 40,
+      });
+    } catch (e) {
+      err = e;
+    }
+    assert.strictEqual(err?.code, "ACBR_POS_WORKER_KILLED");
+
+    // Segunda impressão na fila — deve esperar latch (não spawn mid-terminate)
+    mockWorkerImpl = (w) => {
+      spawnCount += 1;
+      const h = [...pool._handles.values()][0];
+      if (h?.killing) spawnDuringTerminate = true;
+      w._onPost = (msg) => {
+        w.emit("message", { id: msg.id, generation: w.generation, ok: true, data: {} });
+      };
+    };
+    // Circuito pode estar aberto; força worker ainda enabled
+    try {
+      require("../print/acbrPosPrinterRuntime").resetAcbrPosCircuit();
+    } catch (_) {}
+    await pool.imprimirTags({
+      printerKey: "RAW:LATCH",
+      dllPath: "/tmp/fake.dll",
+      iniPath: "/tmp/x.ini",
+      agentRoot: path.join(__dirname, ".."),
+      values: { PosPrinter: { Porta: "RAW:LATCH" } },
+      tags: "y",
+      timeoutMs: 500,
+    }).catch(() => {});
+    assert.ok(terminateStarted >= 1);
+    assert.strictEqual(spawnDuringTerminate, false, "não deve spawnar com killing ativo");
   });
 
   // Restore module loader + limpa cache do mock (evita contaminar suite print)

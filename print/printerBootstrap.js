@@ -5,11 +5,8 @@ const log = require("../logger").child({ modulo: "printer_bootstrap" });
 const { parsePortaTcp, normalizarPortaAcbr } = require("./printerModelMap");
 
 function portaEfetivaPrecisaDeteccao(porta) {
-  const p = String(porta || "").trim();
-  if (!p || /^USB$/i.test(p)) return true;
-  if (/^TCP:/i.test(p) || /^RAW:/i.test(p) || /^COM\d/i.test(p)) return false;
-  if (/^\d{1,3}(\.\d{1,3}){3}/.test(p)) return false;
-  return true;
+  const { portaAcbrValida } = require("./printerModelMap");
+  return !portaAcbrValida(porta);
 }
 
 function hostConfiguradoAcessivelSync() {

@@ -287,12 +287,9 @@ module.exports = {
   imprimirPedido: (p) => {
     const routes = require("../printerStationRoutes");
     const porta = routes.resolvePortaForPrintType(p?.printType ?? p?.print_type);
-    // Native ESC/POS lê override em enviarBuffer — sem Desativar×2 por comanda
-    const invalidateAcbr = !preferNativeEscPos(p || {});
-    return routes.withPortaOverride(
-      porta,
-      () => imprimirViaTags(pedidoTags.renderPedidoTags, p, native.imprimirPedido),
-      { invalidateAcbr },
+    // Override de porta sem invalidate — sessão quente; worker re-Ativa se Porta mudar
+    return routes.withPortaOverride(porta, () =>
+      imprimirViaTags(pedidoTags.renderPedidoTags, p, native.imprimirPedido),
     );
   },
   abrirGaveta,

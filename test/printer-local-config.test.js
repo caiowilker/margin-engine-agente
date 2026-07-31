@@ -102,5 +102,76 @@ test("sincronizarDeDeteccao — idempotente quando já sincronizado", () => {
   assert.strictEqual(fs.statSync(iniPath).mtimeMs, mtime1);
 });
 
+test("salvar — rejeita TCP sem pontos", () => {
+  assert.throws(
+    () => cfg.salvar({ porta: "TCP:192168150:9100" }),
+    /Porta inválida|PRINTER_PORTA_INVALIDA/,
+  );
+});
+
+test("salvar — paperMm 80 persiste colunas e paperMm na leitura", () => {
+  const saved = cfg.salvar({
+    porta: "RAW:POSPrinter POS80",
+    modelo: "1",
+    paperMm: 80,
+    tipo: "windows",
+    nomeImpressora: "POSPrinter POS80",
+  });
+  assert.strictEqual(Number(saved.paperMm), 80);
+  assert.ok(Number(saved.colunas) >= 40);
+});
+
+test("salvar — modelo 0 + POS80 vira 1", () => {
+  const saved = cfg.salvar({
+    porta: "RAW:POSPrinter POS80",
+    modelo: "0",
+    tipo: "windows",
+  });
+  assert.strictEqual(saved.modelo, "1");
+});
+
+test("sanitizar — remove TCP sem pontos e limpa PRINTER_HOST", () => {
+  fs.writeFileSync(
+    iniPath,
+    `[PosPrinter]\nModelo=1\nPorta=TCP:192168150:9100\nColunasFonteNormal=48\nPaginaDeCodigo=2\nCortaPapel=1\n`,
+    "utf8",
+  );
+  process.env.PRINTER_HOST = "192168150";
+  process.env.PRINTER_PORTA = "TCP:192168150:9100";
+  cfg.invalidateLerCache();
+  const out = cfg.sanitizarConfigPersistida();
+  assert.ok(!out.porta || out.porta === "", `porta deveria estar vazia, veio ${out.porta}`);
+  assert.strictEqual(String(process.env.PRINTER_HOST || ""), "");
+});
+
+test("sanitizar — RAW válido zera host fantasma", () => {
+  cfg.salvar({
+    porta: "RAW:POSPrinter POS80",
+    modelo: "1",
+    tipo: "windows",
+    nomeImpressora: "POSPrinter POS80",
+  });
+  process.env.PRINTER_HOST = "192168150";
+  cfg.sanitizarConfigPersistida();
+  assert.strictEqual(String(process.env.PRINTER_HOST || ""), "");
+  assert.ok(/^RAW:/i.test(cfg.ler({ fresh: true }).porta));
+});
+
+test("gerarIni — produção: LogNivel=0 + BytesCount + ControlePorta RAW=0", () => {
+  const raw = cfg.gerarIniContent({
+    modelo: "1",
+    porta: "RAW:POSPrinter POS80",
+    colunas: "48",
+    pageCode: "2",
+    cut: "partial",
+  });
+  assert.ok(/LogNivel=0/.test(raw), "log produção off");
+  assert.ok(/ArqLog=/.test(raw));
+  assert.ok(/BytesCount=512/.test(raw));
+  assert.ok(/BytesInterval=10/.test(raw));
+  assert.ok(/ControlePorta=0/.test(raw));
+  assert.ok(/\[PosPrinter_Device\]/.test(raw));
+});
+
 console.log(`\nprinter-local-config: ${passed} passed, ${failed} failed\n`);
 process.exit(failed > 0 ? 1 : 0);

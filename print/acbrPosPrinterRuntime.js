@@ -8,6 +8,11 @@ const path = require("path");
 const { resolveStagingDir } = require("../runtime/windowsEnv");
 const { formatAcbrPosError } = require("./acbrPosPrinterErrors");
 const { resolveControlePorta } = require("./printerModelMap");
+const {
+  resolveLogNivel,
+  resolveDeviceTimeout,
+  buildDeviceRuntimeValues,
+} = require("./posPrinterIniDefaults");
 const log = require("../logger").child({ modulo: "acbr_posprinter_runtime" });
 
 const AGENT_ROOT = path.resolve(__dirname, "..");
@@ -212,69 +217,18 @@ function wrapKoffiFunc(nativeFn, exportName = "POS") {
   return sync;
 }
 
-/** Símbolos essenciais — falha ao carregar qualquer um inviabiliza o provider. */
-const POS_REQUIRED_EXPORTS = new Set([
-  "POS_Inicializar",
-  "POS_Finalizar",
-  "POS_UltimoRetorno",
-  "POS_ConfigLer",
-  "POS_ConfigGravar",
-  "POS_ConfigGravarValor",
-  "POS_Ativar",
-  "POS_Desativar",
-  "POS_InicializarPos",
-  "POS_Imprimir",
-  "POS_ImprimirLinha",
-  "POS_ImprimirCmd",
-  "POS_CortarPapel",
-  "POS_PularLinhas",
-  "POS_AbrirGaveta",
-  "POS_Zerar",
-  "POS_Reset",
-  "POS_Nome",
-  "POS_Versao",
-]);
+const {
+  POS_FFI_SIGNATURES,
+  POS_REQUIRED_EXPORTS,
+} = require("./acbrPosExports");
 
 function createBindings(libPath) {
   const koffi = require("koffi");
   const dll = koffi.load(libPath);
 
-  // ACBrLib PosPrinter — cdecl (default da lib); buffers via Buffer + int[1] (_Inout_)
-  // POS_Imprimir: (eString, PulaLinha, DecodificarTags, CodificarPagina, Copias)
-  const defs = {
-    POS_Inicializar: "int POS_Inicializar(str eArqConfig, str eChaveCrypt)",
-    POS_Finalizar: "int POS_Finalizar()",
-    POS_Nome: "int POS_Nome(_Out_ uint8 *sNome, _Inout_ int *esTamanho)",
-    POS_Versao: "int POS_Versao(_Out_ uint8 *sVersao, _Inout_ int *esTamanho)",
-    POS_UltimoRetorno: "int POS_UltimoRetorno(_Out_ uint8 *sMensagem, _Inout_ int *esTamanho)",
-    POS_ConfigLer: "int POS_ConfigLer(str eArqConfig)",
-    POS_ConfigGravar: "int POS_ConfigGravar(str eArqConfig)",
-    POS_ConfigGravarValor: "int POS_ConfigGravarValor(str eSessao, str eChave, str sValor)",
-    POS_Ativar: "int POS_Ativar()",
-    POS_Desativar: "int POS_Desativar()",
-    POS_Zerar: "int POS_Zerar()",
-    POS_InicializarPos: "int POS_InicializarPos()",
-    POS_Reset: "int POS_Reset()",
-    POS_PularLinhas: "int POS_PularLinhas(int NumLinhas)",
-    POS_CortarPapel: "int POS_CortarPapel(bool Parcial)",
-    POS_AbrirGaveta: "int POS_AbrirGaveta()",
-    POS_LerInfoImpressora: "int POS_LerInfoImpressora(_Out_ uint8 *sInfo, _Inout_ int *esTamanho)",
-    POS_LerStatusImpressoraFormatado:
-      "int POS_LerStatusImpressoraFormatado(int Tentativas, _Out_ uint8 *sStatus, _Inout_ int *esTamanho)",
-    POS_AcharPortas: "int POS_AcharPortas(_Out_ uint8 *sPortas, _Inout_ int *esTamanho)",
-    POS_PodeLerDaPorta: "int POS_PodeLerDaPorta()",
-    POS_LerCaracteristicas:
-      "int POS_LerCaracteristicas(_Out_ uint8 *sCaracteristicas, _Inout_ int *esTamanho)",
-    POS_GravarLogoArquivo: "int POS_GravarLogoArquivo(str eArquivo, int nKC1, int nKC2)",
-    POS_ImprimirLogo: "int POS_ImprimirLogo(int nKC1, int nKC2, int nFatorX, int nFatorY)",
-    POS_Imprimir:
-      "int POS_Imprimir(str eString, bool PulaLinha, bool DecodificarTags, bool CodificarPagina, int Copias)",
-    POS_ImprimirLinha: "int POS_ImprimirLinha(str aString)",
-    POS_ImprimirCmd: "int POS_ImprimirCmd(str aString)",
-  };
-
+  // Catálogo completo (docs/ACBRLIB-POSPRINTER.md) — cdecl; buffers Buffer + int[1]
   const lib = {};
-  for (const [name, sig] of Object.entries(defs)) {
+  for (const [name, sig] of Object.entries(POS_FFI_SIGNATURES)) {
     try {
       lib[name] = wrapKoffiFunc(dll.func(sig), name);
     } catch (err) {
@@ -335,8 +289,13 @@ function allocOutBuffer(size = 8192) {
 }
 
 async function ultimoRetorno(libBundle) {
+  if (!libBundle?.lib?.POS_UltimoRetorno?.async) return "";
   const { buf, tam } = allocOutBuffer(8192);
-  await promisify(libBundle.lib.POS_UltimoRetorno.async.bind(libBundle.lib.POS_UltimoRetorno), buf, tam);
+  try {
+    await callPosBestEffort(libBundle, libBundle.lib.POS_UltimoRetorno.async, buf, tam);
+  } catch (_) {
+    return "";
+  }
   return trimBuf(buf);
 }
 
@@ -504,18 +463,25 @@ async function ativarComConfig(bundle, iniForLib, iniPathDisk) {
 }
 
 function defaultIniContent() {
+  const logNivel = resolveLogNivel();
   return `[Principal]
 TipoResposta=2
-LogNivel=4
+LogNivel=${logNivel}
+ArqLog=
 
 [PosPrinter]
-Modelo=0
-Porta=USB
+Modelo=1
+Porta=
 PaginaDeCodigo=2
 ColunasFonteNormal=48
 CortaPapel=1
 TraduzirTags=1
 ControlePorta=0
+
+[PosPrinter_Device]
+BytesCount=512
+BytesInterval=10
+TimeOut=${resolveDeviceTimeout()}
 `;
 }
 
@@ -524,26 +490,56 @@ function buildRuntimeValues() {
   try {
     local = require("./printerLocalConfig").ler();
   } catch (_) {}
-  const model = local?.modelo || process.env.PRINTER_MODEL || "0";
-  let porta =
-    local?.porta ||
-    process.env.PRINTER_PORTA ||
-    process.env.PRINTER_PATH ||
-    "";
+  let model = local?.modelo || process.env.PRINTER_MODEL || "0";
+  const {
+    portaAcbrValida,
+    normalizarPortaAcbr,
+    inferirModeloAcbr,
+  } = require("./printerModelMap");
+
+  // SSOT: INI válido manda. Env só se INI vazio/inválido — nunca misturar host de teste.
+  let porta = String(local?.porta || "").trim();
+  if (!portaAcbrValida(porta)) {
+    porta = String(
+      process.env.PRINTER_PORTA || process.env.PRINTER_PATH || "",
+    ).trim();
+  }
   try {
     const override = require("./printerStationRoutes").getPortaOverride();
-    if (override) porta = override;
+    if (override && portaAcbrValida(override)) porta = override;
   } catch (_) {
     /* módulo opcional */
   }
-  const { portaAcbrValida, normalizarPortaAcbr } = require("./printerModelMap");
+
+  if (portaAcbrValida(porta)) {
+    porta = normalizarPortaAcbr(porta, {
+      nomeWindows:
+        process.env.PRINTER_NAME ||
+        (/^RAW:(.+)$/i.exec(porta)?.[1] || "").trim(),
+    });
+  } else {
+    porta = normalizarPortaAcbr(porta, {
+      host: process.env.PRINTER_HOST,
+      port: process.env.PRINTER_PORT || "9100",
+      nomeWindows: process.env.PRINTER_NAME || local?.nomeImpressora,
+    });
+  }
+
   if (!portaAcbrValida(porta) && process.env.PRINTER_NAME) {
     porta = normalizarPortaAcbr(`RAW:${process.env.PRINTER_NAME}`, {
       nomeWindows: process.env.PRINTER_NAME,
     });
   }
   if (!portaAcbrValida(porta) && process.env.PRINTER_HOST) {
-    porta = `TCP:${process.env.PRINTER_HOST}:${process.env.PRINTER_PORT || "9100"}`;
+    const tcpCandidate = normalizarPortaAcbr(
+      `TCP:${process.env.PRINTER_HOST}:${process.env.PRINTER_PORT || "9100"}`,
+      {
+        host: process.env.PRINTER_HOST,
+        port: process.env.PRINTER_PORT || "9100",
+        nomeWindows: process.env.PRINTER_NAME,
+      },
+    );
+    if (portaAcbrValida(tcpCandidate)) porta = tcpCandidate;
   }
   if (!portaAcbrValida(porta)) {
     const inferred = require("./printerModelMap").inferirPortaAcbr({
@@ -555,6 +551,18 @@ function buildRuntimeValues() {
     porta = "USB";
   }
 
+  // modelo "0" (texto genérico) com POS80/Elgin/etc. → Epson-compatível
+  if (String(model) === "0" || model === "auto") {
+    const fromPorta = /^RAW:(.+)$/i.exec(String(porta || ""));
+    const nomeHint =
+      fromPorta?.[1] ||
+      process.env.PRINTER_NAME ||
+      local?.nomeImpressora ||
+      "";
+    const inferred = inferirModeloAcbr(nomeHint, "", { ignoreEnv: true });
+    if (inferred && inferred !== "0") model = inferred;
+  }
+
   const enc = local?.encoding || process.env.PRINTER_ENCODING || "850";
   const pageCode = enc === "UTF8" || enc === "utf8" ? "5" : enc === "1252" ? "6" : "2";
   const cut = local?.cut || process.env.PRINTER_CUT || "partial";
@@ -564,6 +572,7 @@ function buildRuntimeValues() {
       ? "1"
       : "0";
 
+  const serial = local?.serial || {};
   const values = {
     PosPrinter: {
       Modelo: model,
@@ -577,19 +586,17 @@ function buildRuntimeValues() {
       VerificarImpressora: verificarImpressora,
       TipoCorte: cut === "partial" ? "1" : "0",
     },
+    PosPrinter_Device: buildDeviceRuntimeValues(
+      {
+        baud: serial.baud || local?.baud,
+        parity: serial.parity || local?.parity,
+        stopBits: serial.stopBits || local?.stopBits,
+        handshake: serial.handshake || local?.handshake,
+        timeout: serial.timeout || local?.timeout,
+      },
+      porta,
+    ),
   };
-
-  const serial = local?.serial || {};
-  const baud = serial.baud || local?.baud;
-  if (baud) {
-    values.PosPrinter_Device = {
-      Baud: baud,
-      Parity: serial.parity || local?.parity || "0",
-      Stop: serial.stopBits || local?.stopBits || "0",
-      HandShake: serial.handshake || local?.handshake || "0",
-      TimeOut: serial.timeout || local?.timeout || "3",
-    };
-  }
 
   return values;
 }
@@ -740,9 +747,11 @@ async function withPosPrinterSession(fn, opts = {}) {
 
 async function assertPortaLegivel(bundle) {
   const porta = buildRuntimeValues().PosPrinter?.Porta || "";
-  // RAW:Windows e exports opcionais ausentes — não bloqueia impressão
+  // RAW:Windows — não consultar (hang conhecido). TCP/COM: opt-in (padrão off).
   if (/^RAW:/i.test(porta) || !bundle?.lib?.POS_PodeLerDaPorta?.async) return;
-  const ret = await promisify(
+  if (String(process.env.ACBR_POS_PODE_LER || "").toLowerCase() !== "true") return;
+  const ret = await callPos(
+    bundle,
     bundle.lib.POS_PodeLerDaPorta.async.bind(bundle.lib.POS_PodeLerDaPorta),
   );
   if (ret === 0) return;
@@ -785,6 +794,16 @@ async function imprimirTagsViaWorker(tags) {
   }
   const values = buildRuntimeValues();
   const porta = values.PosPrinter?.Porta || "default";
+  // Guard térmico ANTES do worker (Ativar em jato/laser prende o RAW)
+  if (/^RAW:/i.test(porta)) {
+    const nome = porta.replace(/^RAW:/i, "").trim();
+    require("./escpos/impressoraCore").assertPortaTermicaOuFalhar(nome);
+  }
+  if (!porta || porta === "default" || !require("./printerModelMap").portaAcbrValida(porta)) {
+    const e = new Error("Porta da impressora não configurada");
+    e.code = "PRINTER_PORTA_INDEFINIDA";
+    throw e;
+  }
   return require("./acbrPosWorkerPool").imprimirTags({
     printerKey: porta,
     dllPath: paths.libPath,
@@ -830,8 +849,34 @@ async function imprimirTagsNativeInProcess(tags) {
 }
 
 /**
- * Impressão ACBr — sob physicalLock; prefer worker (terminate real) com fallback in-process.
- * Com worker ON o main NÃO mantém sessão quente PosPrinter (evita duas instâncias da DLL).
+ * FFI PosPrinter no processo principal (threadpool libuv).
+ * Padrão: NÃO — hang de minutos no HTTP se Ativar/Imprimir travar.
+ * Permitido só com: ACBR_POS_ALLOW_INPROCESS=true OU ACBR_POS_WORKER=false (rollback).
+ */
+function allowInProcessAcbrFfi() {
+  const allow = String(process.env.ACBR_POS_ALLOW_INPROCESS || "").toLowerCase();
+  if (allow === "true" || allow === "1") return true;
+  const worker = String(process.env.ACBR_POS_WORKER || "true").toLowerCase();
+  if (worker === "false" || worker === "0") return true;
+  return false;
+}
+
+function refuseInProcessOrThrow(reason) {
+  const msg = String(reason || "ACBr PosPrinter in-process bloqueado");
+  try {
+    openAcbrPosCircuit(msg);
+  } catch (_) {}
+  const e = new Error(
+    `[ACBrPosPrinter] ${msg} — comerciais via ESC/POS nativo (sem FFI no main)`,
+  );
+  e.code = "ACBR_POS_INPROCESS_BLOCKED";
+  e.fallbackNative = true;
+  throw e;
+}
+
+/**
+ * Impressão ACBr — sob physicalLock; prefer worker (terminate real).
+ * Windows: sem fallback in-process automático (native no executor).
  */
 async function imprimirTagsNative(tags) {
   const physical = require("../runtime/physicalResourceLock");
@@ -845,24 +890,33 @@ async function imprimirTagsNativeInner(tags) {
     try {
       return await imprimirTagsViaWorker(tags);
     } catch (err) {
-      // Timeout/kill: não fallback no mesmo job (risco de dupla impressão)
+      // Timeout/kill/térmica/erro ACBr: NÃO segundo envio no mesmo job
       if (
         err?.code === "ACBR_POS_WORKER_KILLED" ||
         err?.code === "ACBR_POS_TIMEOUT" ||
-        err?.printTimedOut
+        err?.code === "PRINTER_NOT_THERMAL" ||
+        err?.code === "ACBR_POS_ERROR" ||
+        err?.printTimedOut ||
+        err?.acbrRet != null
       ) {
         throw err;
       }
-      // Spawn/init falhou → pool já marcou fallback; tenta in-process
+      // Spawn/init falhou → pool marcou fallback; Win = native (não FFI main)
       if (!pool.isPosWorkerEnabled()) {
+        if (!allowInProcessAcbrFfi()) {
+          refuseInProcessOrThrow(err.message || "worker_spawn_fail");
+        }
         log.warn(
           { err: err.message, metric: "print.worker_fallback_inprocess" },
-          "[ACBrPosPrinter] Worker falhou — imprimindo in-process",
+          "[ACBrPosPrinter] Worker falhou — imprimindo in-process (ALLOW_INPROCESS)",
         );
         return imprimirTagsNativeInProcess(tags);
       }
       throw err;
     }
+  }
+  if (!allowInProcessAcbrFfi()) {
+    refuseInProcessOrThrow("worker indisponível");
   }
   return imprimirTagsNativeInProcess(tags);
 }
@@ -889,12 +943,18 @@ async function abrirGavetaNativeInner() {
       });
     } catch (err) {
       if (err?.code === "ACBR_POS_WORKER_KILLED" || err?.printTimedOut) throw err;
-      if (!pool.isPosWorkerEnabled()) {
-        /* fallback below */
+      if (!pool.isPosWorkerEnabled() && allowInProcessAcbrFfi()) {
+        /* fallback in-process abaixo */
+      } else if (!pool.isPosWorkerEnabled() && !allowInProcessAcbrFfi()) {
+        // Gaveta via ESC/POS nativo — sem FFI no main Windows
+        return require("./escpos/impressoraCore").abrirGaveta();
       } else {
         throw err;
       }
     }
+  }
+  if (!allowInProcessAcbrFfi()) {
+    return require("./escpos/impressoraCore").abrirGaveta();
   }
   return withPosPrinterSession(
     async (bundle) => {
@@ -1110,8 +1170,8 @@ function isAcbrPosCircuitOpen() {
   }
   loadCircuitFromDisk();
   if (!_acbrPosCircuit.open) return false;
-  // Half-open: após TTL tenta ACBr de novo (Epson/QR tags). 0 = nunca expira.
-  const ttl = parseInt(process.env.ACBR_POS_CIRCUIT_TTL_MS || "900000", 10);
+  // Half-open: após TTL tenta ACBr de novo. Default 0 = só Salvar/Detectar reabre (solidez).
+  const ttl = parseInt(process.env.ACBR_POS_CIRCUIT_TTL_MS || "0", 10);
   const ttlMs = Number.isFinite(ttl) && ttl > 0 ? ttl : 0;
   if (
     ttlMs > 0 &&
@@ -1190,6 +1250,7 @@ function shouldOpenCircuitFromError(err) {
     err?.code === "ACBR_POS_WORKER_EXIT" ||
     err?.code === "ACBR_POS_WORKER_ERROR" ||
     err?.code === "PRINT_HARD_DRAIN" ||
+    err?.code === "ACBR_POS_INPROCESS_BLOCKED" ||
     err?.printTimedOut === true
   ) {
     return true;
@@ -1220,6 +1281,7 @@ module.exports = {
   invalidatePosPrinterSession,
   imprimirTagsNative,
   abrirGavetaNative,
+  allowInProcessAcbrFfi,
   lerStatusFormatadoNative,
   acharPortasNative,
   lerInfoImpressoraNative,

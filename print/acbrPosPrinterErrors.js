@@ -7,13 +7,16 @@ const CODIGOS = {
   [-3]: "Configuração INI inválida",
   [-5]: "Arquivo INI não encontrado",
   [-6]: "Diretório do INI não encontrado",
-  [-10]: "Erro de comunicação com a impressora",
+  [-10]: "Erro ao ativar/comunicar com a impressora",
 };
 
 const DICAS = {
   [-10]:
-    "No Windows com porta RAW, clique Detectar no painel e depois Imprimir teste. Confira o nome exato da impressora e se ela está ligada.",
-  [-3]: "Revise Modelo e Porta em Configurações → Impressão.",
+    "Erro -10 (Ativar): 1) Confirme a porta salva (RAW:nome exato ou TCP:IP:9100 com pontos). " +
+    "2) No Windows: propriedades da impressora → Avançado → «Imprimir diretamente na impressora». " +
+    "3) Feche utilitário do fabricante/ACBr Monitor. 4) ControlePorta=0 no RAW (já padrão do agente). " +
+    "5) Preferência: modelo Epson=1 para POS80. Se persistir, use TCP ou COM virtual do fabricante.",
+  [-3]: "Revise Modelo e Porta em Configurações → Impressão (POS80 → modelo 1).",
   [-5]: "Arquivo posprinter.ini ausente — reinicie o agente ou reinstale.",
 };
 

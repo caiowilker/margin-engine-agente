@@ -85,15 +85,35 @@ function salvar(updates) {
     if (!porta) continue;
     const normalizada = normalizarPortaAcbr(porta, {});
     if (!portaAcbrValida(normalizada)) {
-      throw new Error(`Porta inválida para ${type}: ${porta}`);
+      const err = new Error(`Porta inválida para ${type}: ${porta}`);
+      err.code = "PRINTER_PORTA_INVALIDA";
+      throw err;
     }
     next.byPrintType[type] = normalizada;
   }
+
+  const unchanged = PRINT_TYPES.every(
+    (t) => String(current.byPrintType[t] || "") === String(next.byPrintType[t] || ""),
+  );
+  if (unchanged) {
+    log.debug({ routes: next.byPrintType }, "[PrinterStations] Sem mudança — skip save");
+    return Object.assign(next, { unchanged: true });
+  }
+
   const file = resolveFilePath();
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  try {
+    fs.renameSync(tmp, file);
+  } catch (_) {
+    fs.copyFileSync(tmp, file);
+    try {
+      fs.unlinkSync(tmp);
+    } catch (_) {}
+  }
   log.info({ file, routes: next.byPrintType }, "[PrinterStations] Rotas salvas");
-  return next;
+  return Object.assign(next, { unchanged: false });
 }
 
 function resolvePortaForPrintType(printType) {
@@ -115,8 +135,13 @@ function getPortaOverride() {
 
 /**
  * Executa fn com porta temporária (ex.: job de bar neste PC).
- * Por padrão NÃO invalida PosPrinter — ESC/POS nativo usa a override via enviarBuffer.
- * Só passe invalidateAcbr:true quando o job for imprimir via tags ACBr nessa porta.
+ *
+ * NÃO invalida PosPrinter a cada pedido (Desativar×2 em RAW travava o spooler).
+ * A porta entra em buildRuntimeValues() via getPortaOverride(); o worker
+ * re-Ativa só quando o JSON de values muda (troca de porta).
+ *
+ * opts.invalidateAcbr permanece aceito por compatibilidade, mas é ignorado
+ * (salvo ACBR_POS_STATION_INVALIDATE=true — legado/diagnóstico).
  */
 async function withPortaOverride(porta, fn, opts = {}) {
   if (!porta || !portaAcbrValida(porta)) {
@@ -124,9 +149,11 @@ async function withPortaOverride(porta, fn, opts = {}) {
   }
   const prev = portaOverride;
   portaOverride = porta;
-  const invalidateAcbr = opts.invalidateAcbr === true;
+  const forceInvalidate =
+    opts.invalidateAcbr === true &&
+    String(process.env.ACBR_POS_STATION_INVALIDATE || "").toLowerCase() === "true";
   try {
-    if (invalidateAcbr) {
+    if (forceInvalidate) {
       try {
         await require("./acbrPosPrinterRuntime").invalidatePosPrinterSession();
       } catch (_) {
@@ -136,13 +163,7 @@ async function withPortaOverride(porta, fn, opts = {}) {
     return await fn();
   } finally {
     portaOverride = prev;
-    if (invalidateAcbr) {
-      try {
-        await require("./acbrPosPrinterRuntime").invalidatePosPrinterSession();
-      } catch (_) {
-        /* ignore */
-      }
-    }
+    // Sem invalidate no finally — preserva sessão quente para o próximo cupom.
   }
 }
 

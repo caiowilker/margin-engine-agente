@@ -51,6 +51,22 @@ try {
 // Normaliza timeouts/flags de impressão (clamp) — typo não reinicia o serviço
 try {
   require("./config/printEnvSchema").applyPrintEnvSchema();
+  try {
+    require("./print/printerLocalConfig").sanitizarConfigPersistida();
+  } catch (e) {
+    console.warn("[boot] sanitizar config impressora:", e?.message || e);
+  }
+  try {
+    const deps = require("./scripts/check-posprinter-deps").checkPosprinterDeps();
+    if (!deps.ok) {
+      console.warn(
+        "[boot] PosPrinter deps incompletas:",
+        deps.missing.join(", "),
+      );
+    }
+  } catch (e) {
+    console.warn("[boot] check PosPrinter deps:", e?.message || e);
+  }
 } catch (_) {}
 
 const { initLogging } = require("./runtime/loggingService");
@@ -1851,7 +1867,8 @@ function iniciarServidor() {
   app.get("/config/impressora", privateNetworkHeaders, (req, res) => {
     try {
       const printerLocalConfig = require("./print/printerLocalConfig");
-      res.json(printerLocalConfig.ler());
+      const fresh = String(req.query?.fresh || "") === "1" || String(req.query?.fresh || "") === "true";
+      res.json(printerLocalConfig.ler({ fresh }));
     } catch (e) {
       res.status(500).json({ erro: e.message || "Erro ao ler config impressora" });
     }
@@ -1862,10 +1879,18 @@ function iniciarServidor() {
     try {
       const printerLocalConfig = require("./print/printerLocalConfig");
       const saved = printerLocalConfig.salvar(req.body || {});
-      impressora.resetPrintProvider?.();
-      res.json({ ok: true, config: saved });
+      // reset já feito em salvar() quando mudou; evita thrash no idempotente
+      if (!saved.unchanged) {
+        impressora.resetPrintProvider?.();
+        impressora.invalidateProbeCache?.();
+      }
+      res.json({ ok: true, unchanged: !!saved.unchanged, config: saved });
     } catch (e) {
-      res.status(400).json({ erro: e.message || "Erro ao salvar config impressora" });
+      const status = e?.code === "PRINTER_PORTA_INVALIDA" ? 422 : 400;
+      res.status(status).json({
+        erro: e.message || "Erro ao salvar config impressora",
+        code: e?.code || null,
+      });
     }
   });
 
@@ -1883,10 +1908,17 @@ function iniciarServidor() {
     try {
       const routes = require("./print/printerStationRoutes");
       const saved = routes.salvar(req.body || {});
-      impressora.resetPrintProvider?.();
-      res.json({ ok: true, routes: saved });
+      if (!saved.unchanged) {
+        impressora.resetPrintProvider?.();
+        impressora.invalidateProbeCache?.();
+      }
+      res.json({ ok: true, unchanged: !!saved.unchanged, routes: saved });
     } catch (e) {
-      res.status(400).json({ erro: e.message || "Erro ao salvar rotas de estação" });
+      const status = e?.code === "PRINTER_PORTA_INVALIDA" ? 422 : 400;
+      res.status(status).json({
+        erro: e.message || "Erro ao salvar rotas de estação",
+        code: e?.code || null,
+      });
     }
   });
 

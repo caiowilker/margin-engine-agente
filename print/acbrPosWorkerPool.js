@@ -22,6 +22,7 @@ let reqSeq = 0;
  *   queue: Promise<unknown>,
  *   pending: Map<number, { resolve: Function, reject: Function, timer: NodeJS.Timeout }>,
  *   printerKey: string,
+ *   killing: Promise<void>|null,
  * }} WorkerHandle
  */
 
@@ -97,6 +98,7 @@ function getHandle(printerKey) {
       queue: Promise.resolve(),
       pending: new Map(),
       printerKey: key,
+      killing: null,
     };
     handles.set(key, h);
   }
@@ -161,6 +163,10 @@ function attachWorker(h, workerData) {
 }
 
 async function ensureWorker(h, workerData) {
+  // Latch pós-timeout: NÃO spawnar 2ª DLL enquanto terminate() ainda drena o RAW.
+  while (h.killing) {
+    await h.killing.catch(() => {});
+  }
   if (h.worker) return h.worker;
   try {
     const w = attachWorker(h, workerData);
@@ -188,7 +194,11 @@ function callRaw(h, cmd, payload, timeoutMs) {
       );
       e.code = "ACBR_POS_WORKER_KILLED";
       e.printTimedOut = true;
-      killAndRespawn(h, e).finally(() => reject(e));
+      // Rejeita na hora (não prende o job), mas ARMA o latch de kill
+      // sincronicamente para o próximo enqueue NÃO spawnar 2ª DLL no RAW.
+      const killP = killAndRespawn(h, e);
+      reject(e);
+      void killP;
     }, timeoutMs);
 
     h.pending.set(id, { resolve, reject, timer });
@@ -207,6 +217,11 @@ function callRaw(h, cmd, payload, timeoutMs) {
   });
 }
 
+const TERMINATE_HARD_MS = Math.max(
+  500,
+  parseInt(process.env.ACBR_POS_WORKER_TERMINATE_MS || "2000", 10) || 2000,
+);
+
 async function terminateQuiet(h) {
   const w = h.worker;
   h.worker = null;
@@ -219,31 +234,57 @@ async function terminateQuiet(h) {
     }),
   );
   if (!w) return;
+  const t0 = Date.now();
   try {
-    await w.terminate();
+    await Promise.race([
+      w.terminate().catch(() => {}),
+      new Promise((r) => setTimeout(r, TERMINATE_HARD_MS)),
+    ]);
   } catch (_) {}
+  const durationMs = Date.now() - t0;
   log.warn(
-    { key: h.printerKey, generation: h.generation, metric: "print.worker_kill" },
+    {
+      key: h.printerKey,
+      generation: h.generation,
+      durationMs,
+      terminateHardMs: TERMINATE_HARD_MS,
+      metric: "print.worker_kill",
+      note:
+        durationMs >= TERMINATE_HARD_MS
+          ? "terminate() atingiu teto — worker pode ainda existir até o OS liberar"
+          : undefined,
+    },
     "[AcbrPosWorker] terminate()",
   );
 }
 
 async function killAndRespawn(h, cause) {
-  await terminateQuiet(h);
+  if (h.killing) return h.killing;
+  // Armar latch ANTES de qualquer await — próximo ensureWorker espera.
+  let releaseLatch = () => {};
+  h.killing = new Promise((resolve) => {
+    releaseLatch = resolve;
+  });
   try {
-    require("./acbrPosPrinterRuntime").openAcbrPosCircuit(
-      cause?.message || "ACBR_POS_WORKER_KILLED",
+    await terminateQuiet(h);
+    try {
+      require("./acbrPosPrinterRuntime").openAcbrPosCircuit(
+        cause?.message || "ACBR_POS_WORKER_KILLED",
+      );
+    } catch (_) {}
+    try {
+      require("./factory").resetPrintProvider();
+    } catch (_) {}
+    const cool = killCooldownMs();
+    if (cool > 0) await new Promise((r) => setTimeout(r, cool));
+    log.info(
+      { key: h.printerKey, cooldownMs: cool, metric: "print.worker_respawn" },
+      "[AcbrPosWorker] cooldown pós-kill concluído",
     );
-  } catch (_) {}
-  try {
-    require("./factory").resetPrintProvider();
-  } catch (_) {}
-  const cool = killCooldownMs();
-  if (cool > 0) await new Promise((r) => setTimeout(r, cool));
-  log.info(
-    { key: h.printerKey, cooldownMs: cool, metric: "print.worker_respawn" },
-    "[AcbrPosWorker] cooldown pós-kill concluído",
-  );
+  } finally {
+    h.killing = null;
+    releaseLatch();
+  }
 }
 
 /** Serializa operações por printerKey (substitui busy throw). */

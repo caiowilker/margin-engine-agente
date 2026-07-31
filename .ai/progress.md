@@ -1,7 +1,48 @@
 # PROGRESS — Agente Local
 
 **Última atualização:** 2026-07-31  
-**Versão:** `1.0.4` — worker PosPrinter + lock USB + schema env + P2a/P2c kill confirmado
+**Versão:** `1.0.5` — fail-fast worker + TCP válido + config UI sólida
+
+## Changelog (2026-07-31) — Solidez impressão (audit hang)
+
+- **Kill latch:** após timeout do worker, próximo job espera `terminate`+cooldown — sem 2ª DLL no mesmo RAW.
+- **Guard térmico** antes de `POS_Ativar` no caminho worker (jato/laser).
+- **Estação:** sem `invalidate`×2 por pedido (sessão quente; re-Ativa só se Porta mudar).
+- **Salvar config** reseta circuito ACBr + limpa fallback in-process.
+- Sem fallback no mesmo job após timeout/Imprimir; Detectar não força Get-Printer sob lock.
+- Timeouts RAW/list dinâmicos; Device `TimeOut` alinhado ao soft call; `PodeLerDaPorta` opt-in.
+- **Sem FFI no main:** worker morto → native (não koffi no processo HTTP). Opt-in: `ACBR_POS_ALLOW_INPROCESS` ou `ACBR_POS_WORKER=false`.
+- **Circuito TTL default 0:** só Salvar/Detectar reabre ACBr (sem half-open surpresa).
+
+## Changelog (2026-07-31) — PosPrinter -10 / INI RAW produção
+
+- INI: `LogNivel=0`, `ArqLog=`, `BytesCount=512`, `BytesInterval=10`, `TimeOut=5`, `ControlePorta=0` (RAW).
+- Boot regrava INI canônico + `npm run check:posprinter-deps` (DLL + side + koffi).
+- Dica operador -10 atualizada (spooler “imprimir direto”).
+- ADR: [ADR-posprinter-raw-ini-20260731.md](./decisions/ADR-posprinter-raw-ini-20260731.md).
+
+## Changelog (2026-07-31) — Porta escolhida = única usada (anti host de teste)
+
+- Env de impressão lido **dinamicamente** (não mais congelado no boot do módulo).
+- Boot **sanitiza** `TCP:192168150` e host fantasma; INI válido é SSOT.
+- Native imprime **só** a porta salva (RAW/TCP) — sem scan de rede/host antigo.
+- `PRINT_RAW_STRICT` default **true**.
+
+## Changelog (2026-07-31) — Config impressão UI + persistência sólida
+
+- Persistência atômica (INI/.env/stations); reset só se mudou; `unchanged` na API.
+- TCP inválido rejeitado no save (422); modelo POS80 `0`→`1`; `paperMm` no `ler()`.
+- UI: dirty state, select de modelo, TCP só com IP válido + “Aplicar IP”, confirmar Detectar.
+- Front: `obterConfigImpressora(fresh)`, resposta com `config`/`unchanged`.
+
+## Changelog (2026-07-31) — 1.0.5 Fail-fast (logs Caixa 1)
+
+- **Causa:** timeout do worker só rejeitava após `terminate()` → `physicalLock` 70–90s; TCP `192168150` sem pontos; Get-Printer + taskkill até 143s.
+- Worker: `reject` imediato + `terminate` com teto 2s.
+- TCP: validação IPv4; save rejeita porta inválida; POS80 → modelo `1` se `0`.
+- Get-Printer: só cache sob impressão / lock / late abandon.
+- `killProcessTree`: hard deadline 6s.
+- ADR: [ADR-print-failfast-tcp-list-20260731.md](./decisions/ADR-print-failfast-tcp-list-20260731.md).
 
 ## Changelog (2026-07-31) — Diagnóstico Win32 + half-open circuito
 

@@ -368,14 +368,15 @@ test("printExecutor — hardDrainMs curto (PDV comercial)", () => {
   }
 });
 
-test("printErrors — hard drain sugere fallback sem martelar fila", () => {
+test("printErrors — hard drain NÃO sugere fallback no mesmo job", () => {
   const { classifyPrintError } = require("../print/printErrors");
   const err = new Error("Timeout hard");
   err.code = "PRINT_HARD_DRAIN";
   err.printTimedOut = true;
   const cls = classifyPrintError(err);
   assert.strictEqual(cls.retryable, false);
-  assert.strictEqual(cls.fallbackSuggested, true);
+  // Anti-dupla: invoke abandonado pode ainda imprimir; próximo cupom via circuito→native
+  assert.strictEqual(cls.fallbackSuggested, false);
 });
 
 test("printerBootstrap — porta RAW configurada não exige detecção", () => {
