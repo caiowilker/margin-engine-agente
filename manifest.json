@@ -1,6 +1,6 @@
 {
   "versao": "1.0.4",
-  "geradoEm": "2026-07-31T00:34:18.342Z",
+  "geradoEm": "2026-07-31T15:23:59.139Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -244,7 +244,7 @@
     },
     {
       "arquivo": "frontend-dist/api-backend.json",
-      "sha256": "8d1cdc2e82400f9905745f9bc62e65af45a8564fa84fed35fd0f7f5c18d3e36d"
+      "sha256": "03d37e0fb4dd0a92e3e30131d4acf61170a2c1b8f16379c789dd653f2fde220f"
     },
     {
       "arquivo": "frontend-dist/apple-touch-icon.png",
@@ -5040,7 +5040,7 @@
     },
     {
       "arquivo": "frontend-dist/version.json",
-      "sha256": "0abac52ca4fc03c87694acbc6857ef11b26c75fc8920cc1f54a299c9f22d81f8"
+      "sha256": "c3f23bbeba4e516db7bc986c733e5cb3809feae369e3435bfc076504771f7d6a"
     },
     {
       "arquivo": "frontend-dist/workbox-3147e214.js",
@@ -5108,7 +5108,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "cb196b39bbd5fa59ad257ca74f9f9fa93dae88ea19f76c2e8db58edf9876f740"
+      "sha256": "daa25ab5243c97435ecd843ffa9eca0ed6425c545e656ab283b1f949b10fec99"
     },
     {
       "arquivo": "print/acbrPosPrinterErrors.js",
@@ -5116,11 +5116,11 @@
     },
     {
       "arquivo": "print/acbrPosPrinterRuntime.js",
-      "sha256": "8e78e10f67e615ffd2eb7f5cdf2b2289886fc0a756bbd65d1c3d486e327a05b4"
+      "sha256": "d7a3fa77e5c0a6616e71a2c5cff141a6fff3daa8c7d0c50de34e42935d73f4b8"
     },
     {
       "arquivo": "print/acbrPosWorkerPool.js",
-      "sha256": "ddbcc961f0728a9ab23472fac0b2e56625863f3d4c128b38676111f3ce1ff033"
+      "sha256": "bb98cb7195c280300f4e9a3e99dec63781d725c80516aa137ef21b0e8753ef1e"
     },
     {
       "arquivo": "print/acbrTags.js",
@@ -5168,7 +5168,7 @@
     },
     {
       "arquivo": "print/escpos/impressoraCore.js",
-      "sha256": "f455241f4fa0894f1798e97311a957119b177626a2eb3e6076818643f9be4313"
+      "sha256": "015c0a35ed09028a815353da4074967d733da49244556e9d68103d1366f9d8f9"
     },
     {
       "arquivo": "print/factory.js",
@@ -5204,7 +5204,7 @@
     },
     {
       "arquivo": "print/printErrors.js",
-      "sha256": "adea455ac36ec44d7bcb511cc83abc1a6914675cd36ebda85a7237e26ddbb34f"
+      "sha256": "7ed4757510af767ffd8c09d5dcf61f8dd4da47837c7c07bcbf053fc2ac12a9a4"
     },
     {
       "arquivo": "print/printerStationRoutes.js",
@@ -5212,7 +5212,7 @@
     },
     {
       "arquivo": "print/printExecutor.js",
-      "sha256": "7e7e962d515b8c5d74c148a4c56ea3735be506df3433449aed26c166e23f730c"
+      "sha256": "68a8fde8946f112e6d1dcc553f9423771a137cad089c2eb5b8198fc81f7d210a"
     },
     {
       "arquivo": "print/printFiscalCoordination.js",
@@ -5261,6 +5261,10 @@
     {
       "arquivo": "print/thermalCols.js",
       "sha256": "a109bb01df16bad185b9d9a32dc216ba3a2cc3242ac60a8aac76c2e733b903ec"
+    },
+    {
+      "arquivo": "print/winProcessKill.js",
+      "sha256": "59382394d011ce93f6a403e764504129208b505046039d103e317c77f524eb07"
     },
     {
       "arquivo": "print/workers/acbrPosWorker.js",

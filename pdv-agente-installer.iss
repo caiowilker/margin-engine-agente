@@ -53,6 +53,10 @@ SolidCompression=yes
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=admin
+; Fecha processos que travam arquivos ao atualizar sobre instalação existente
+CloseApplications=yes
+CloseApplicationsFilter=*.exe,node.exe
+RestartApplications=no
 WizardStyle=modern
 LicenseFile=LICENSE.txt
 UninstallDisplayName={#MyAppName}
