@@ -2233,6 +2233,18 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = nu
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  function consumoIndevidoResponse(distErr) {
+    return {
+      ok: false,
+      chave: chaveNorm,
+      situacao: "CONSUMO_INDEVIDO",
+      cStat: "656",
+      mensagem: distErr.message,
+      fonteConsulta: "DISTRIBUICAO_DFE",
+      fallbackManual: true,
+    };
+  }
+
   async function tentarDistribuicao() {
     const dist = await api.distribuicaoDFePorChave(chaveNorm, cnpj, uf);
     const cStatDist = String(dist?.cStat || "");
@@ -2252,39 +2264,54 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = nu
     return Boolean(xml && /<NFe[\s>]/i.test(xml));
   }
 
-  // 1) DistDFe primeiro — caminho feliz (1 ida à SEFAZ) para importação.
-  let xml = null;
-  let fonte = "DISTRIBUICAO_DFE";
-  try {
-    xml = await tentarDistribuicao();
-  } catch (distErr) {
-    if (distErr?.consumoIndevido || String(distErr?.cStat) === "656") {
-      return {
-        ok: false,
-        chave: chaveNorm,
-        situacao: "CONSUMO_INDEVIDO",
-        cStat: "656",
-        mensagem: distErr.message,
-        fonteConsulta: "DISTRIBUICAO_DFE",
-        fallbackManual: true,
-      };
-    }
-    // Segue para ConsultarNFe / ciência
-  }
-
-  if (xmlOk(xml)) {
+  function sucessoXml(xml, fonte, situacao, cStat, mensagem) {
     return {
       ok: true,
       chave: chaveNorm,
-      situacao: "AUTORIZADA",
-      cStat: null,
-      mensagem: "XML obtido via DistDFe.",
+      situacao: situacao || "AUTORIZADA",
+      cStat: cStat || null,
+      mensagem: mensagem || "XML obtido com sucesso.",
       xml,
       fonteConsulta: fonte,
     };
   }
 
-  // 2) Situação na SEFAZ (cancelada/denegada) — só se DistDFe não trouxe XML.
+  // Arquitetura rápida:
+  // 1) DistDFe (caminho feliz — 1 RTT)
+  // 2) Ciência + DistDFe imediato (libera schema 12 sem ConsultarNFe no meio)
+  // 3) ConsultarNFe só para status / XML residual
+  // 4) Um DistDFe final curto se autorizada e ainda sem XML
+  let xml = null;
+  let fonte = "DISTRIBUICAO_DFE";
+
+  try {
+    xml = await tentarDistribuicao();
+  } catch (distErr) {
+    if (distErr?.consumoIndevido || String(distErr?.cStat) === "656") {
+      return consumoIndevidoResponse(distErr);
+    }
+  }
+  if (xmlOk(xml)) {
+    return sucessoXml(xml, fonte, "AUTORIZADA", null, "XML obtido via DistDFe.");
+  }
+
+  try {
+    await api.manifestarCienciaOperacao(chaveNorm, cnpj);
+  } catch {
+    /* ciência já registrada ou indisponível — DistDFe ainda pode liberar */
+  }
+
+  try {
+    xml = await tentarDistribuicao();
+    if (xmlOk(xml)) {
+      return sucessoXml(xml, "DISTRIBUICAO_DFE", "AUTORIZADA", null, "XML obtido via DistDFe após ciência.");
+    }
+  } catch (distErr) {
+    if (distErr?.consumoIndevido || String(distErr?.cStat) === "656") {
+      return consumoIndevidoResponse(distErr);
+    }
+  }
+
   let consulta = { cStat: null, xMotivo: null, situacao: "DESCONHECIDA", raw: null };
   try {
     consulta = await api.consultarChave(chaveNorm);
@@ -2315,74 +2342,59 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = nu
   }
 
   const docs = require("./documentosFiscais");
-  if (!xmlOk(xml) && consulta.raw) {
+  if (consulta.raw) {
     xml = docs.extrairXmlDaResposta(consulta.raw);
-    if (xmlOk(xml)) fonte = "PORTAL_NACIONAL";
+    if (xmlOk(xml)) {
+      return sucessoXml(
+        xml,
+        "PORTAL_NACIONAL",
+        situacao === "DESCONHECIDA" ? "AUTORIZADA" : situacao,
+        consulta.cStat,
+        consulta.xMotivo || "XML obtido via consulta.",
+      );
+    }
   }
 
-  // 3) Ciência + DistDFe com retries (AN costuma liberar schema 12 após 210210).
-  if (!xmlOk(xml)) {
+  const autorizada =
+    situacao === "AUTORIZADA" || String(consulta.cStat || "") === "100";
+  if (autorizada && !xmlOk(xml)) {
+    // Última chance curta — AN às vezes demora milissegundos após 210210.
+    await sleep(400);
     try {
-      await api.manifestarCienciaOperacao(chaveNorm, cnpj);
-    } catch {
-      /* ciência já registrada ou indisponível — ainda tenta DistDFe */
-    }
-    const maxTentativas = 3;
-    for (let i = 0; i < maxTentativas && !xmlOk(xml); i++) {
-      if (i > 0) await sleep(1500);
-      try {
-        xml = await tentarDistribuicao();
-        if (xmlOk(xml)) {
-          fonte = "DISTRIBUICAO_DFE";
-          break;
-        }
-      } catch (distErr) {
-        if (distErr?.consumoIndevido || String(distErr?.cStat) === "656") {
-          return {
-            ok: false,
-            chave: chaveNorm,
-            situacao: "CONSUMO_INDEVIDO",
-            cStat: "656",
-            mensagem: distErr.message,
-            fonteConsulta: "DISTRIBUICAO_DFE",
-            fallbackManual: true,
-          };
-        }
+      xml = await tentarDistribuicao();
+      if (xmlOk(xml)) {
+        return sucessoXml(
+          xml,
+          "DISTRIBUICAO_DFE",
+          "AUTORIZADA",
+          consulta.cStat,
+          "XML obtido via DistDFe.",
+        );
+      }
+    } catch (distErr) {
+      if (distErr?.consumoIndevido || String(distErr?.cStat) === "656") {
+        return consumoIndevidoResponse(distErr);
       }
     }
   }
 
-  if (!xmlOk(xml)) {
-    const autorizada =
-      situacao === "AUTORIZADA" || String(consulta.cStat || "") === "100";
-    return {
-      ok: false,
-      chave: chaveNorm,
-      situacao: autorizada
-        ? "AUTORIZADA_SEM_XML"
-        : situacao === "DESCONHECIDA"
-          ? "NAO_LOCALIZADA"
-          : situacao,
-      cStat: consulta.cStat,
-      mensagem: autorizada
-        ? "Nota autorizada na SEFAZ, mas o XML completo ainda não está disponível no DistDFe. " +
-          "Aguarde 1–2 minutos e consulte de novo, ou use Manifesto Destinatário / upload do XML."
-        : consulta.xMotivo ||
-          "XML não disponível — utilize upload de XML ou aguarde o manifesto DistDFe.",
-      fonteConsulta: fonte,
-      fallbackManual: true,
-      precisaRetry: autorizada,
-    };
-  }
-
   return {
-    ok: true,
+    ok: false,
     chave: chaveNorm,
-    situacao: situacao === "DESCONHECIDA" ? "AUTORIZADA" : situacao,
+    situacao: autorizada
+      ? "AUTORIZADA_SEM_XML"
+      : situacao === "DESCONHECIDA"
+        ? "NAO_LOCALIZADA"
+        : situacao,
     cStat: consulta.cStat,
-    mensagem: consulta.xMotivo || "XML obtido com sucesso.",
-    xml,
+    mensagem: autorizada
+      ? "Nota autorizada na SEFAZ, mas o XML completo ainda não está disponível no DistDFe. " +
+        "Aguarde cerca de 1 minuto e consulte de novo, ou use Manifesto Destinatário / upload do XML."
+      : consulta.xMotivo ||
+        "XML não disponível — utilize upload de XML ou aguarde o manifesto DistDFe.",
     fonteConsulta: fonte,
+    fallbackManual: true,
+    precisaRetry: autorizada,
   };
 }
 

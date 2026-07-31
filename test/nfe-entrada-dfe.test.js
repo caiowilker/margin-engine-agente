@@ -200,12 +200,9 @@ async function run() {
     const xml = `<nfeProc><NFe Id="NFe${ok}"><infNFe/></NFe></nfeProc>`;
     let distCalls = 0;
     const r = await acbr.consultarChaveEntrada(ok, CNPJ, "SP", {
-      consultarChave: async () => ({
-        cStat: "100",
-        situacao: "AUTORIZADA",
-        xMotivo: "Autorizado o uso da NF-e",
-        raw: "",
-      }),
+      consultarChave: async () => {
+        throw new Error("não deveria ConsultarNFe se DistDFe pós-ciência trouxe XML");
+      },
       distribuicaoDFePorChave: async () => {
         distCalls += 1;
         if (distCalls === 1) return { cStat: "137", xml: null, xMotivo: "Nenhum documento" };
@@ -217,7 +214,7 @@ async function run() {
     });
     assert.strictEqual(r.ok, true);
     assert.ok(r.xml && r.xml.includes("<NFe"));
-    assert.ok(distCalls >= 2, "deve tentar DistDFe após ciência");
+    assert.strictEqual(distCalls, 2, "DistDFe → ciência → DistDFe");
   });
 
   await test("consultarChaveEntrada AUTORIZADA sem XML não usa xMotivo cru", async () => {

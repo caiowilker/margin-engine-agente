@@ -167,9 +167,13 @@ async function resolverEmpresaFiscal(cfg) {
   if (cfg?.backendUrl && cfg?.backendToken) {
     try {
       const url = `${String(cfg.backendUrl).replace(/\/$/, "")}/pdv/empresa`;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 2500);
       const resp = await fetch(url, {
         headers: { Authorization: `Bearer ${cfg.backendToken}`, Accept: "application/json" },
+        signal: ctrl.signal,
       });
+      clearTimeout(timer);
       if (resp.ok) {
         fromBackend = await resp.json();
       } else {

@@ -6,10 +6,12 @@
 ## Changelog (2026-07-31) — Consulta NF-e entrada por chave (velocidade + handoff)
 
 - `consultarChaveEntrada`: DistDFe **primeiro** (caminho feliz em 1 RTT).
-- ConsultarNFe só se DistDFe não trouxe XML (CANCELADA/DENEGADA).
-- Ciência + DistDFe com até 3 tentativas (1,5s); DistDFe mesmo se ciência falhar.
-- Resposta `AUTORIZADA_SEM_XML` + `precisaRetry` (não devolve xMotivo “Autorizado…” como sucesso vazio).
-- Front: com XML → `confirmarConsultaChave` direto (sem preview duplicado) e navega ao detalhe.
+- Sem XML: ciência → DistDFe imediato; ConsultarNFe só depois (status/cancelada).
+- Um DistDFe final curto (400ms) se autorizada sem XML; `AUTORIZADA_SEM_XML` + `precisaRetry`.
+- Rota consulta-chave: pula `resolverEmpresaFiscal` quando CNPJ/UF vêm no body.
+- `resolverEmpresaFiscal`: timeout 2,5s no GET `/pdv/empresa`.
+- Front: confirmação → navega já; lista em background; garante CNPJ antes da SEFAZ.
+- Back: `confirmarConsultaChave` com um parse (sem preview/reparse).
 
 ## Changelog (2026-07-31) — Solidez impressão (audit hang)
 

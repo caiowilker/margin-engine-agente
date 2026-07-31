@@ -2719,19 +2719,18 @@ function iniciarServidor() {
   app.post("/acbr/nfe/entrada/consultar-chave", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       const body = req.body || {};
-      const cfg = await lerConfig();
-      const manifestoDestinatario = require("./manifestoDestinatario");
-      // Mesma resolução do DistDFe/manifesto: /pdv/empresa → local → env.
-      // (lerSnapshot/empresa no fiscalLocalConfig não existia — CNPJ vinha sempre vazio.)
-      const empresaResolved = await manifestoDestinatario.resolverEmpresaFiscal(cfg);
       const empresaBody = body.empresa && typeof body.empresa === "object" ? body.empresa : {};
       const chave = String(body.chaveAcesso || body.chave || "").replace(/\D/g, "");
-      const cnpj = String(
-        body.cnpj || empresaBody.cnpj || empresaResolved.cnpj || "",
-      ).replace(/\D/g, "");
-      const uf = String(
-        body.uf || empresaBody.uf || empresaResolved.uf || "",
-      ).trim();
+      let cnpj = String(body.cnpj || empresaBody.cnpj || "").replace(/\D/g, "");
+      let uf = String(body.uf || empresaBody.uf || "").trim();
+      // Caminho rápido: front já manda CNPJ/UF — não bloqueia em GET /pdv/empresa.
+      if (cnpj.length !== 14 || !uf) {
+        const cfg = await lerConfig();
+        const manifestoDestinatario = require("./manifestoDestinatario");
+        const empresaResolved = await manifestoDestinatario.resolverEmpresaFiscal(cfg);
+        if (cnpj.length !== 14) cnpj = String(empresaResolved.cnpj || "").replace(/\D/g, "");
+        if (!uf) uf = String(empresaResolved.uf || "").trim();
+      }
       res.json(await fiscalDriver.consultarChaveEntrada(chave, cnpj, uf));
     } catch (err) {
       res.status(400).json({ ok: false, erro: err.message });
