@@ -1,26 +1,21 @@
 # ADR — RAW:Windows comercial via ESC/POS nativo rápido
 
 **Data:** 2026-07-31  
-**Status:** Aceito
+**Status:** Aceito (revisado)
 
 ## Problema
 
-Em POS80 via `RAW:NomeWindows`, o caminho ACBr (`POS_ConfigGravarValor` / `POS_Ativar`) frequentemente falha com **-10** ou estoura soft timeout (4s). O job ou falhava sem fallback (anti-dupla) ou só imprimia no drain (~6–11s), embora o WritePrinter Win32 real fosse ~0,4–0,8s. AddType C# a cada PowerShell novo somava 250–600ms; logo frio (sharp + Image.load) somava segundos no primeiro cupom.
+Em POS80 via `RAW:NomeWindows`, o caminho ACBr (`POS_ConfigGravarValor` / `POS_Ativar`) frequentemente falha com **-10** ou estoura soft timeout (4s). O job ou falhava sem fallback (anti-dupla) ou só imprimia no drain (~6–11s), embora o WritePrinter Win32 real fosse ~0,4–0,8s.
 
 ## Decisão
 
-1. Porta **`RAW:`** + payload comercial → **preferNativeEscPos** (sem pagar tentativa ACBr).
-2. **isFastNativePath** respeita circuito aberto e preferNative (não exige `PRINT_FAST_NATIVE=true`).
-3. Timeout **pré-impressão** (`ConfigGravar` / `Ativar` -10) permite **fallback native no mesmo job** (nenhum byte enviado).
-4. **RawPrinterHelper.dll** pré-compilada (cache em `%TEMP%/pdv-margin-raw`) + warm no boot.
-5. Logo: cache de PNG + **escpos.Image em memória**; warm no boot.
+1. Porta **`RAW:`** + payload comercial → native direto no executor (`withProvider`).
+2. Circuito aberto → native só para **não fiscal** (DANFE/chave permanece no ACBr).
+3. Timeout **pré-impressão** (`acbrPhase` config/ativar/init ou ConfigGravar -10) → fallback native no mesmo job.
+4. `RAW_PRINT_TIMEOUT` **nunca** faz fallback (WritePrinter já iniciado).
+5. **RawPrinterHelper.dll** + logo PNG/`escpos.Image` aquecidos no boot.
 
 ## Não-objetivos
 
-- Não remove isolamento PowerShell (WritePrinter no processo principal ainda é risco de hang).
-- Fiscal/DANFE com chave permanece no ACBr quando aplicável.
-
-## Consequências
-
-- Cupom não fiscal em RAW deve imprimir perto do tempo do spooler (~1s após warm).
-- Primeiro job após -10 ACBr não fica sem cupom quando a falha é pré-envio.
+- Não remove isolamento PowerShell.
+- Não muda provider cache global para RAW (resolução é por job no executor).

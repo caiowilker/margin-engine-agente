@@ -211,7 +211,6 @@ module.exports = {
   preferNativeEscPos,
   portaEhRawWindows,
   isFiscalPayload,
-  isFiscalPayload,
   // Poll/status: somente leitura — NÃO sincronizarDeDeteccao / resetPrintProvider
   // (isso reinfectava o spooler a cada /status e marcava Agente off).
   testar: async (force) => {

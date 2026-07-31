@@ -96,15 +96,25 @@ function isFastNativePath(opts = {}) {
   if (opts.fastNative === true) return true;
   if (opts.fastNative === false) return false;
 
-  // Circuito aberto / RAW:Windows comercial → zero ACBr (sem garantirPorta/invalidate).
+  const payload = opts.payload;
+  let acbrProv = null;
   try {
-    if (require("./acbrPosPrinterRuntime").isAcbrPosCircuitOpen()) return true;
+    acbrProv = require("./drivers/acbrPosPrinterProvider");
   } catch (_) {}
 
-  const payload = opts.payload;
+  // Circuito aberto: só comerciais (fiscal/DANFE permanece no ACBr).
   try {
-    const acbrProv = require("./drivers/acbrPosPrinterProvider");
-    if (typeof acbrProv.preferNativeEscPos === "function") {
+    if (require("./acbrPosPrinterRuntime").isAcbrPosCircuitOpen()) {
+      if (payload && typeof payload === "object" && acbrProv?.isFiscalPayload?.(payload)) {
+        /* fiscal sob circuito → ACBr */
+      } else {
+        return true;
+      }
+    }
+  } catch (_) {}
+
+  try {
+    if (typeof acbrProv?.preferNativeEscPos === "function") {
       if (payload && typeof payload === "object") {
         if (acbrProv.preferNativeEscPos(payload)) return true;
       } else if (opts.op && OPS_FAST_NATIVE.has(opts.op)) {

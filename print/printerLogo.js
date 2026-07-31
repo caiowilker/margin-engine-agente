@@ -90,6 +90,7 @@ function salvar(opts = {}) {
 
   if (opts.kc1 != null) meta.kc1 = String(opts.kc1);
   if (opts.kc2 != null) meta.kc2 = String(opts.kc2);
+  const fatorAntes = `${meta.fatorX}|${meta.fatorY}`;
   if (opts.fatorX != null) meta.fatorX = String(opts.fatorX);
   if (opts.fatorY != null) meta.fatorY = String(opts.fatorY);
   if (opts.modo) meta.modo = opts.modo;
@@ -112,6 +113,8 @@ function salvar(opts = {}) {
     }
     invalidatePrintCache();
     log.info({ bytes: buf.length }, "[PrinterLogo] Logo BMP salvo");
+  } else if (`${meta.fatorX}|${meta.fatorY}` !== fatorAntes) {
+    invalidatePrintCache();
   }
 
   salvarMeta(meta);
@@ -237,7 +240,7 @@ function deveExibirLogoCupom(payload) {
 }
 
 /**
- * Pré-aquece PNG + valida BMP — primeiro cupom com logo não paga sharp frio.
+ * Pré-aquece PNG + Image ESC/POS — primeiro cupom com logo não paga sharp/get-pixels.
  * @returns {Promise<boolean>}
  */
 async function warmLogoEscpos() {
@@ -245,7 +248,16 @@ async function warmLogoEscpos() {
     const info = ler();
     if (!(info.ativo && info.caminhoAbsoluto)) return false;
     const pathOut = await prepararArquivoEscpos(info);
-    return !!pathOut;
+    if (!pathOut) return false;
+    try {
+      const core = require("./escpos/impressoraCore");
+      if (typeof core.warmLogoEscposImage === "function") {
+        await core.warmLogoEscposImage(pathOut, info);
+      }
+    } catch (_) {
+      /* Image warm opcional */
+    }
+    return true;
   } catch (err) {
     log.debug({ err: err?.message }, "[PrinterLogo] warm falhou");
     return false;

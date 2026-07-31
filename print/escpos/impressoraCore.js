@@ -2277,6 +2277,20 @@ module.exports = {
   invalidateLogoEscposImageCache() {
     logoEscposImageCache = { key: null, image: null };
   },
+  async warmLogoEscposImage(caminho, info) {
+    if (!caminho) return false;
+    const size = info?.printSize || require("../printerLogoSize").resolveLogoPrintSize(info || {});
+    const cacheKey = `${info?.sha256 || caminho}|${size.escposWidthDots}|${size.density || "d24"}`;
+    if (logoEscposImageCache.key === cacheKey && logoEscposImageCache.image) return true;
+    const image = await new Promise((resolve, reject) => {
+      escpos.Image.load(caminho, (err, img) => {
+        if (err) reject(err);
+        else resolve(img);
+      });
+    });
+    logoEscposImageCache = { key: cacheKey, image };
+    return true;
+  },
   warmRawWin32Helper,
   warmPrintHotPath,
   resolverPortaAcbrConfigurada,

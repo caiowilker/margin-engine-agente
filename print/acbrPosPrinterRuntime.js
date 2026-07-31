@@ -17,6 +17,24 @@ const log = require("../logger").child({ modulo: "acbr_posprinter_runtime" });
 
 const AGENT_ROOT = path.resolve(__dirname, "..");
 
+/** Fase atual da sessão PosPrinter — usada pelo executor p/ fallback pré-impressão. */
+let _acbrPrintPhase = "idle";
+
+function setAcbrPrintPhase(phase) {
+  _acbrPrintPhase = String(phase || "idle");
+}
+
+function getAcbrPrintPhase() {
+  return _acbrPrintPhase;
+}
+
+function annotateAcbrError(err) {
+  if (err && typeof err === "object" && err.acbrPhase == null) {
+    err.acbrPhase = _acbrPrintPhase;
+  }
+  return err;
+}
+
 function isUncPath(p) {
   return /wsl\.localhost|wsl\$|^\\\\/i.test(String(p || ""));
 }
@@ -327,32 +345,41 @@ async function callPos(libBundle, fn, ...args) {
   if (typeof fn !== "function") {
     const e = new Error("[ACBrPosPrinter] Função FFI indisponível nesta DLL");
     e.code = "ACBR_POS_FN_MISSING";
-    throw e;
+    throw annotateAcbrError(e);
   }
   const timeoutMs = parseInt(process.env.ACBR_POS_CALL_TIMEOUT_MS || "5000", 10);
   const invoke = promisify(fn.bind(libBundle.lib), ...args);
   let timer;
-  const ret = await Promise.race([
-    invoke,
-    new Promise((_, reject) => {
-      timer = setTimeout(() => {
-        const e = new Error(
-          `Timeout ACBr PosPrinter (${timeoutMs}ms) em ${fn.name || "POS_*"}`,
-        );
-        e.code = "ACBR_POS_TIMEOUT";
-        e.printTimedOut = true;
-        reject(e);
-      }, Math.max(1000, timeoutMs));
-    }),
-  ]).finally(() => clearTimeout(timer));
+  let ret;
+  try {
+    ret = await Promise.race([
+      invoke,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          const e = new Error(
+            `Timeout ACBr PosPrinter (${timeoutMs}ms) em ${fn.name || "POS_*"}`,
+          );
+          e.code = "ACBR_POS_TIMEOUT";
+          e.printTimedOut = true;
+          reject(annotateAcbrError(e));
+        }, Math.max(1000, timeoutMs));
+      }),
+    ]);
+  } catch (err) {
+    throw annotateAcbrError(err);
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (ret !== 0) {
     const msg = await ultimoRetorno(libBundle);
     const values = buildRuntimeValues();
-    throw formatAcbrPosError(fn.name || "POS", ret, msg, {
-      porta: values.PosPrinter?.Porta,
-      modelo: values.PosPrinter?.Modelo,
-    });
+    throw annotateAcbrError(
+      formatAcbrPosError(fn.name || "POS", ret, msg, {
+        porta: values.PosPrinter?.Porta,
+        modelo: values.PosPrinter?.Modelo,
+      }),
+    );
   }
   return ret;
 }
@@ -380,6 +407,7 @@ async function callPosBestEffort(libBundle, fn, ...args) {
 }
 
 async function gravarConfigIni(libBundle, iniPath, values) {
+  setAcbrPrintPhase("config");
   const criticalKeys = new Set(["Porta", "Modelo"]);
   for (const [sec, keys] of Object.entries(values)) {
     for (const [key, val] of Object.entries(keys)) {
@@ -393,7 +421,7 @@ async function gravarConfigIni(libBundle, iniPath, values) {
       } catch (err) {
         // Porta/Modelo errados = Ativar/Imprimir no destino errado — não engolir
         if (sec === "PosPrinter" && criticalKeys.has(key)) {
-          throw err;
+          throw annotateAcbrError(err);
         }
         /* demais chaves: opcional por versão da DLL */
       }
@@ -459,6 +487,7 @@ async function ativarComConfig(bundle, iniForLib, iniPathDisk) {
   } catch (_) {
     /* primeira ativação */
   }
+  setAcbrPrintPhase("ativar");
   await callPos(bundle, bundle.lib.POS_Ativar.async);
 }
 
@@ -772,11 +801,17 @@ async function imprimirTagsNativeOnce(bundle, tags) {
     await ativarComConfig(bundle, sess.iniForLib, sess.iniPath);
   }
   await assertPortaLegivel(bundle);
+  setAcbrPrintPhase("init");
   await callPos(bundle, bundle.lib.POS_InicializarPos.async);
   // POS_Imprimir(eString, PulaLinha, DecodificarTags, CodificarPagina, Copias)
   // CodificarPagina=true alinha com PaginaDeCodigo do INI (CP850/1252/UTF8).
-  await callPos(bundle, bundle.lib.POS_Imprimir.async, String(tags || ""), true, true, true, 1);
-  return { ok: true, native: true };
+  setAcbrPrintPhase("imprimir");
+  try {
+    await callPos(bundle, bundle.lib.POS_Imprimir.async, String(tags || ""), true, true, true, 1);
+    return { ok: true, native: true };
+  } finally {
+    setAcbrPrintPhase("idle");
+  }
 }
 
 function erroPortaRecuperavel(err) {
@@ -1293,6 +1328,8 @@ module.exports = {
   openAcbrPosCircuit,
   resetAcbrPosCircuit,
   shouldOpenCircuitFromError,
+  getAcbrPrintPhase,
+  setAcbrPrintPhase,
   /** @internal testes — simula contrato async do koffi */
   __wrapKoffiFunc: wrapKoffiFunc,
   __reloadCircuitFromDiskForTests,

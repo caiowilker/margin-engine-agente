@@ -60,18 +60,32 @@ function isProviderOperational(name) {
   }
 }
 
-function resolveEffectiveProviderName() {
+function resolveEffectiveProviderName(opts = {}) {
   const requested = resolveProviderName();
   // mock/testes: nunca sobrescrever por circuito ACBr
   if (requested === "mock") return "mock";
 
-  // Circuito RAW aberto: PDV forte usa ESC/POS nativo direto — sem pagar timeout ACBr.
+  const forceAcbr = opts.forceAcbr === true;
+  const fiscalPayload =
+    opts.payload &&
+    typeof opts.payload === "object" &&
+    (() => {
+      try {
+        return require("./drivers/acbrPosPrinterProvider").isFiscalPayload(opts.payload);
+      } catch (_) {
+        return false;
+      }
+    })();
+
+  // Circuito RAW aberto: comerciais (e status sem payload) → native.
+  // Fiscal/DANFE com chave permanece no ACBr.
   try {
-    const runtime = require("./acbrPosPrinterRuntime");
     if (
-      typeof runtime.isAcbrPosCircuitOpen === "function" &&
-      runtime.isAcbrPosCircuitOpen() &&
-      (requested === "acbr-posprinter")
+      requested === "acbr-posprinter" &&
+      !forceAcbr &&
+      !fiscalPayload &&
+      typeof require("./acbrPosPrinterRuntime").isAcbrPosCircuitOpen === "function" &&
+      require("./acbrPosPrinterRuntime").isAcbrPosCircuitOpen()
     ) {
       const fb = resolveFallbackName();
       if (fb && fb !== "mock" && isProviderOperational(fb)) return fb;

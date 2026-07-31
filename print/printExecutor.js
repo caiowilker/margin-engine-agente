@@ -58,28 +58,44 @@ async function liberarSessaoPosAposFalha() {
 }
 
 async function withProvider(fn, opts = {}) {
-  // Circuito aberto → native first (sem tentar ACBr neste job).
+  const payload = opts.payload;
   let primary = factory.getPrintProvider();
   let primaryName = primary.getProviderName();
-  try {
-    const runtime = require("./acbrPosPrinterRuntime");
-    if (
-      runtime.isAcbrPosCircuitOpen?.() &&
-      primaryName === "acbr-posprinter" &&
-      !opts.forceAcbr
-    ) {
-      const fbName = factory.resolveFallbackName() || "native";
-      if (fbName !== primaryName) {
-        primary = factory.createProvider(fbName);
-        primaryName = primary.getProviderName();
-        log.info(
-          { effective: primaryName, metric: "print.provider_effective" },
-          "[PrintExecutor] Circuito aberto — native direto",
-        );
+
+  // Por job: circuito / RAW comercial / preferNative → native direto (sem ACBr).
+  // Fiscal/DANFE com chave permanece no ACBr mesmo com circuito aberto.
+  if (!opts.forceAcbr && primaryName === "acbr-posprinter") {
+    try {
+      const runtime = require("./acbrPosPrinterRuntime");
+      const acbrProv = require("./drivers/acbrPosPrinterProvider");
+      const fiscal = payload && acbrProv.isFiscalPayload?.(payload);
+      const wantNative =
+        !fiscal &&
+        (runtime.isAcbrPosCircuitOpen?.() ||
+          acbrProv.portaEhRawWindows?.() ||
+          (payload && acbrProv.preferNativeEscPos?.(payload)));
+      if (wantNative) {
+        const fbName = factory.resolveFallbackName() || "native";
+        if (fbName !== primaryName) {
+          primary = factory.createProvider(fbName);
+          primaryName = primary.getProviderName();
+          log.info(
+            {
+              effective: primaryName,
+              metric: "print.provider_effective",
+              reason: runtime.isAcbrPosCircuitOpen?.()
+                ? "circuit"
+                : acbrProv.portaEhRawWindows?.()
+                  ? "raw_windows"
+                  : "prefer_native",
+            },
+            "[PrintExecutor] Native direto (comercial)",
+          );
+        }
       }
+    } catch (_) {
+      /* ignore */
     }
-  } catch (_) {
-    /* ignore */
   }
 
   try {
@@ -102,19 +118,31 @@ async function withProvider(fn, opts = {}) {
     }
 
     // Hard drain / timeout após envio físico: NÃO fallback (anti-dupla).
-    // Exceção: falha PRÉ-impressão (ConfigGravar/Ativar -10) — nenhum byte enviado.
+    // Exceção: falha PRÉ-impressão ACBr (ConfigGravar/Ativar / phase≠imprimir).
+    // RAW_PRINT_TIMEOUT = WritePrinter já iniciado — nunca segundo envio.
     if (err?.code === "PRINT_HARD_DRAIN" || err?.code === "RAW_PRINT_TIMEOUT" || err?.printTimedOut === true) {
       const msgLow = String(err?.message || "").toLowerCase();
+      let phase = err?.acbrPhase;
+      try {
+        phase = phase || require("./acbrPosPrinterRuntime").getAcbrPrintPhase?.();
+      } catch (_) {}
+      const phasePre =
+        phase === "config" || phase === "ativar" || phase === "init" || phase === "idle";
       const prePrintOnly =
-        (/pos_configgravar|configgravarvalor|pos_ativar|pos_inicializar/i.test(msgLow) ||
-          err?.acbrRet === -10) &&
-        !/pos_imprimir|imprimir\b/i.test(msgLow);
+        err?.code !== "RAW_PRINT_TIMEOUT" &&
+        (err?.fallbackNative === true ||
+          ((phasePre ||
+            /pos_configgravar|configgravarvalor|pos_ativar|pos_inicializar/i.test(msgLow) ||
+            err?.acbrRet === -10) &&
+            phase !== "imprimir" &&
+            !/pos_imprimir|imprimir\b/i.test(msgLow)));
       if (!prePrintOnly) {
         log.warn(
           {
             err: err.message,
             primary: primaryName,
             metric: "print.no_fallback_after_drain",
+            acbrPhase: phase || null,
           },
           "[PrintExecutor] Hard drain — sem segundo envio físico neste job (anti-dupla)",
         );
@@ -125,6 +153,7 @@ async function withProvider(fn, opts = {}) {
           err: err.message,
           primary: primaryName,
           metric: "print.fallback_after_preprint_timeout",
+          acbrPhase: phase || null,
         },
         "[PrintExecutor] Timeout pré-impressão ACBr — fallback native (sem risco de dupla)",
       );
@@ -135,7 +164,7 @@ async function withProvider(fn, opts = {}) {
 
     if (
       !opts.noFallback &&
-      cls.fallbackSuggested &&
+      (cls.fallbackSuggested || err?.fallbackNative) &&
       fallbackName &&
       fallbackName !== primaryName
     ) {
@@ -300,8 +329,9 @@ async function executarProviderOp(provider, op, args, timeoutMs) {
 async function executarOp(op, args, timeoutMs) {
   const wait = await prepararImpressaoAposFiscal({ op, payload: args?.[0] });
   try {
-    const exec = await withProvider((provider) =>
-      executarProviderOp(provider, op, args, timeoutMs),
+    const exec = await withProvider(
+      (provider) => executarProviderOp(provider, op, args, timeoutMs),
+      { payload: args?.[0] },
     );
     if (wait?.aguardouMs > 0) {
       exec.waitFiscalMs = wait.aguardouMs;

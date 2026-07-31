@@ -29,11 +29,17 @@ function classifyPrintError(err) {
   ) {
     out.retryable = false;
     const msgLow = msg.toLowerCase();
+    const phase = err?.acbrPhase;
+    const phasePre =
+      phase === "config" || phase === "ativar" || phase === "init" || phase === "idle";
     const prePrintOnly =
-      err?.fallbackNative === true ||
-      ((/pos_configgravar|configgravarvalor|pos_ativar|pos_inicializar/i.test(msgLow) ||
-        err?.acbrRet === -10) &&
-        !/pos_imprimir|imprimir\b/i.test(msgLow));
+      err?.code !== "RAW_PRINT_TIMEOUT" &&
+      (err?.fallbackNative === true ||
+        ((phasePre ||
+          /pos_configgravar|configgravarvalor|pos_ativar|pos_inicializar/i.test(msgLow) ||
+          err?.acbrRet === -10) &&
+          phase !== "imprimir" &&
+          !/pos_imprimir|imprimir\b/i.test(msgLow)));
     out.fallbackSuggested = !!prePrintOnly;
     return out;
   }
@@ -54,7 +60,7 @@ function classifyPrintError(err) {
     const beforePrint =
       err?.acbrRet === -10 ||
       /pos_ativar|ativar|porta|n[aã]o definida|inicializar/i.test(msgLow);
-    out.fallbackSuggested = beforePrint && !/pos_imprimir|imprimir/i.test(msgLow);
+    out.fallbackSuggested = beforePrint && !/pos_imprimir|imprimir\b/i.test(msgLow);
     return out;
   }
   // Bug de binding koffi (arity) — fallback native uma vez; não reprocessar em loop

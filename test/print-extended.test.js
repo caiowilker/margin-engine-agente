@@ -410,15 +410,33 @@ test("printExecutor — hardDrainMs curto (PDV comercial)", () => {
   }
 });
 
-test("printErrors — hard drain NÃO sugere fallback no mesmo job", () => {
+test("printErrors — hard drain genérico sem fase NÃO sugere fallback", () => {
   const { classifyPrintError } = require("../print/printErrors");
   const err = new Error("Timeout hard");
   err.code = "PRINT_HARD_DRAIN";
   err.printTimedOut = true;
   const cls = classifyPrintError(err);
   assert.strictEqual(cls.retryable, false);
-  // Anti-dupla: invoke abandonado pode ainda imprimir; próximo cupom via circuito→native
   assert.strictEqual(cls.fallbackSuggested, false);
+});
+
+test("printErrors — hard drain fase config sugere fallback", () => {
+  const { classifyPrintError } = require("../print/printErrors");
+  const err = new Error("Timeout de impressão (4000+2000ms) — envio não concluiu");
+  err.code = "PRINT_HARD_DRAIN";
+  err.printTimedOut = true;
+  err.acbrPhase = "config";
+  const cls = classifyPrintError(err);
+  assert.strictEqual(cls.fallbackSuggested, true);
+});
+
+test("printErrors — RAW_PRINT_TIMEOUT nunca sugere fallback", () => {
+  const { classifyPrintError } = require("../print/printErrors");
+  const err = new Error("RAW Windows timeout");
+  err.code = "RAW_PRINT_TIMEOUT";
+  err.printTimedOut = true;
+  err.acbrPhase = "idle";
+  assert.strictEqual(classifyPrintError(err).fallbackSuggested, false);
 });
 
 test("printErrors — timeout pré-impressão ConfigGravar sugere fallback", () => {
@@ -432,6 +450,32 @@ test("printErrors — timeout pré-impressão ConfigGravar sugere fallback", () 
   const cls = classifyPrintError(err);
   assert.strictEqual(cls.retryable, false);
   assert.strictEqual(cls.fallbackSuggested, true);
+});
+
+test("isFastNativePath — circuito aberto NÃO força fiscal", () => {
+  const { isFastNativePath } = require("../print/printFiscalCoordination");
+  const runtime = require("../print/acbrPosPrinterRuntime");
+  const prev = process.env.PRINT_FAST_NATIVE;
+  const prevPorta = process.env.PRINTER_PORTA;
+  delete process.env.PRINT_FAST_NATIVE;
+  delete process.env.PRINTER_PORTA;
+  runtime.resetAcbrPosCircuit();
+  try {
+    runtime.openAcbrPosCircuit("test-fiscal");
+    assert.strictEqual(isFastNativePath({ payload: { naoFiscal: true } }), true);
+    assert.strictEqual(
+      isFastNativePath({
+        payload: { chaveNfe: "35" + "0".repeat(42), naoFiscal: false },
+      }),
+      false,
+    );
+  } finally {
+    if (prev === undefined) delete process.env.PRINT_FAST_NATIVE;
+    else process.env.PRINT_FAST_NATIVE = prev;
+    if (prevPorta === undefined) delete process.env.PRINTER_PORTA;
+    else process.env.PRINTER_PORTA = prevPorta;
+    runtime.resetAcbrPosCircuit();
+  }
 });
 
 test("printerBootstrap — porta RAW configurada não exige detecção", () => {
