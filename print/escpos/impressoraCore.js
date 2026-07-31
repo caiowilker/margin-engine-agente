@@ -1586,9 +1586,6 @@ async function renderCupomConteudo(printer, payload) {
     printer.text(tx(razao));
   }
   if (empresa.cnpj) printer.text("CNPJ: " + toThermalDoc(empresa.cnpj));
-  if (empresa.inscricaoEstadual) {
-    printer.text("IE: " + toThermalDoc(empresa.inscricaoEstadual));
-  }
   const linhaEndereco = formatarLinhaEnderecoEmpresa(empresa);
   if (linhaEndereco) printer.text(linhaEndereco.slice(0, COLS));
   if (empresa.cidade)

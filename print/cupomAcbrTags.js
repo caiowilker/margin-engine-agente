@@ -112,9 +112,6 @@ function renderCupomTags(rawPayload) {
     lines.push(corpo(tx(razao)));
   }
   if (empresa.cnpj) lines.push(corpo(`CNPJ: ${toThermalDoc(empresa.cnpj)}`));
-  if (empresa.inscricaoEstadual) {
-    lines.push(corpo(`IE: ${toThermalDoc(empresa.inscricaoEstadual)}`));
-  }
   const end = formatarLinhaEndereco(empresa);
   if (end) lines.push(corpo(end.slice(0, COLS)));
   if (empresa.cidade) {
