@@ -2176,9 +2176,96 @@ async function manifestarEventoDestinatario(chave, cnpjDestinatario, tpEvento, x
 }
 
 /**
- * Consulta NF-e de entrada (modelo 55) e obtém o XML completo.
- * Ordem otimizada: DistDFe primeiro (caminho feliz 1 RTT); ConsultarNFe só
- * para CANCELADA/DENEGADA; ciência + retries se o XML ainda não veio.
+ * Valida XML de entrada obtido via DistDFe/consulta antes de importar.
+ * - Exige NFe + chave coerente
+ * - Se houver protNFe/infProt, só aceita cStat 100/150
+ * - Sem protocolo: aceita NFe com infNFe (schema DistDFe) desde que a chave bata
+ */
+function validarXmlConsultaEntrada(xml, chaveEsperada) {
+  const chaveNorm = String(chaveEsperada || "").replace(/\D/g, "");
+  if (!xml || typeof xml !== "string" || !/<NFe[\s>]/i.test(xml)) {
+    return { ok: false, code: "SEM_NFE", mensagem: "XML sem elemento NFe." };
+  }
+  if (chaveNorm.length !== 44) {
+    return { ok: false, code: "CHAVE_INVALIDA", mensagem: "Chave esperada inválida." };
+  }
+  const chaveXml =
+    xml.match(/Id=["']NFe(\d{44})["']/i)?.[1] ||
+    xml.match(/<chNFe>(\d{44})<\/chNFe>/i)?.[1] ||
+    null;
+  if (chaveXml && chaveXml !== chaveNorm) {
+    return {
+      ok: false,
+      code: "CHAVE_DIVERGENTE",
+      situacao: "XML_DIVERGENTE",
+      mensagem: "O XML retornado não corresponde à chave consultada.",
+      cStat: null,
+    };
+  }
+  const docs = require("./documentosFiscais");
+  const prot = docs.extrairProtNFe(xml);
+  if (prot?.cStat) {
+    if (prot.chNFe && String(prot.chNFe).replace(/\D/g, "") !== chaveNorm) {
+      return {
+        ok: false,
+        code: "CHAVE_DIVERGENTE",
+        situacao: "XML_DIVERGENTE",
+        mensagem: "Protocolo SEFAZ com chave diferente da consultada.",
+        cStat: prot.cStat,
+      };
+    }
+    if (prot.cStat === "100" || prot.cStat === "150") {
+      return { ok: true, cStat: prot.cStat, comProtocolo: true };
+    }
+    if (["101", "151", "155"].includes(prot.cStat)) {
+      return {
+        ok: false,
+        code: "CANCELADA",
+        situacao: "CANCELADA",
+        mensagem: prot.xMotivo || "Nota cancelada na SEFAZ.",
+        cStat: prot.cStat,
+      };
+    }
+    if (["110", "301", "302"].includes(prot.cStat)) {
+      return {
+        ok: false,
+        code: "DENEGADA",
+        situacao: "DENEGADA",
+        mensagem: prot.xMotivo || "Nota denegada na SEFAZ.",
+        cStat: prot.cStat,
+      };
+    }
+    return {
+      ok: false,
+      code: "NAO_AUTORIZADA",
+      situacao: "NAO_AUTORIZADA",
+      mensagem: prot.xMotivo || `XML com protocolo não autorizado (cStat ${prot.cStat}).`,
+      cStat: prot.cStat,
+    };
+  }
+  if (!/<infNFe[\s/>]/i.test(xml)) {
+    return {
+      ok: false,
+      code: "XML_INCOMPLETO",
+      mensagem: "XML incompleto (sem infNFe/protocolo).",
+    };
+  }
+  if (!chaveXml) {
+    return {
+      ok: false,
+      code: "CHAVE_AUSENTE",
+      mensagem: "Não foi possível confirmar a chave no XML.",
+    };
+  }
+  return { ok: true, cStat: null, comProtocolo: false };
+}
+
+const consultarChaveEntradaInFlight = new Map();
+
+/**
+ * Consulta NF-e de entrada (modelo 55) por chave — produção.
+ * Ordem: cooldown 656 → DistDFe → ciência → DistDFe → ConsultarNFe → DistDFe final.
+ * Single-flight por CNPJ+chave. XML só retorna ok após validarXmlConsultaEntrada.
  * @param {object} [deps] — permite ACBrLib sobrescrever consultar/DistDFe/ciência
  */
 async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = null) {
@@ -2186,6 +2273,23 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = nu
     throw new Error("Chave NF-e deve ter 44 dígitos.");
   }
   const chaveNorm = String(chave).replace(/\D/g, "");
+  const cnpj = String(cnpjDestinatario || "").replace(/\D/g, "");
+  const flightKey = `${cnpj || "nocnpj"}:${chaveNorm}`;
+  if (consultarChaveEntradaInFlight.has(flightKey)) {
+    return consultarChaveEntradaInFlight.get(flightKey);
+  }
+  const promise = consultarChaveEntradaCore(chaveNorm, cnpjDestinatario, ufAutor, deps).finally(
+    () => {
+      if (consultarChaveEntradaInFlight.get(flightKey) === promise) {
+        consultarChaveEntradaInFlight.delete(flightKey);
+      }
+    },
+  );
+  consultarChaveEntradaInFlight.set(flightKey, promise);
+  return promise;
+}
+
+async function consultarChaveEntradaCore(chaveNorm, cnpjDestinatario, ufAutor, deps = null) {
   const ufIbge = chaveNorm.substring(0, 2);
   const UFS = new Set([
     "11", "12", "13", "14", "15", "16", "17", "21", "22", "23", "24", "25", "26", "27", "28", "29",
@@ -2198,7 +2302,6 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = nu
   if (modelo !== "55") {
     throw new Error("Consulta de entrada suporta apenas NF-e modelo 55.");
   }
-  // DV módulo 11 — falha rápida (estilo portal) antes de bater na SEFAZ
   let peso = 2;
   let soma = 0;
   const base43 = chaveNorm.substring(0, 43);
@@ -2222,8 +2325,33 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = nu
         "CNPJ da empresa não configurado no agente — configure o certificado digital (A1/A3).",
       fonteConsulta: null,
       fallbackManual: true,
+      retryable: false,
     };
   }
+
+  try {
+    const manifesto = require("./manifestoDestinatario");
+    const rest = manifesto.restanteCooldown656Ms();
+    if (rest > 0) {
+      const min = Math.max(1, Math.ceil(rest / 60_000));
+      return {
+        ok: false,
+        chave: chaveNorm,
+        situacao: "CONSUMO_INDEVIDO",
+        cStat: "656",
+        mensagem:
+          `SEFAZ bloqueou DistDFe (consumo indevido). Aguarde ~${min} min antes de consultar de novo.`,
+        fonteConsulta: "DISTRIBUICAO_DFE",
+        fallbackManual: true,
+        precisaRetry: true,
+        retryable: true,
+        retryAfterMs: rest,
+      };
+    }
+  } catch {
+    /* cooldown opcional se módulo indisponível em teste isolado */
+  }
+
   const uf = resolverUfIbgeDestinatario(ufAutor, chaveNorm);
   const api = {
     consultarChave: deps?.consultarChave || consultarChave,
@@ -2233,7 +2361,22 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = nu
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  function marcarCooldown656() {
+    try {
+      require("./manifestoDestinatario").registrarCooldown656();
+    } catch {
+      /* ignore */
+    }
+  }
+
   function consumoIndevidoResponse(distErr) {
+    marcarCooldown656();
+    let retryAfterMs = null;
+    try {
+      retryAfterMs = require("./manifestoDestinatario").restanteCooldown656Ms() || null;
+    } catch {
+      retryAfterMs = null;
+    }
     return {
       ok: false,
       chave: chaveNorm,
@@ -2242,6 +2385,9 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = nu
       mensagem: distErr.message,
       fonteConsulta: "DISTRIBUICAO_DFE",
       fallbackManual: true,
+      precisaRetry: true,
+      retryable: true,
+      retryAfterMs,
     };
   }
 
@@ -2251,7 +2397,7 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = nu
     if (cStatDist === "656") {
       const err = new Error(
         dist.xMotivo ||
-          "SEFAZ: consumo indevido (cStat 656). Aguarde alguns minutos antes de consultar de novo.",
+          "SEFAZ: consumo indevido (cStat 656). Aguarde o cooldown antes de consultar de novo.",
       );
       err.cStat = "656";
       err.consumoIndevido = true;
@@ -2260,27 +2406,36 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = nu
     return dist.xml && /<NFe[\s>]/i.test(dist.xml) ? dist.xml : null;
   }
 
-  function xmlOk(xml) {
-    return Boolean(xml && /<NFe[\s>]/i.test(xml));
-  }
-
-  function sucessoXml(xml, fonte, situacao, cStat, mensagem) {
+  function rejeicaoXml(validacao) {
     return {
-      ok: true,
+      ok: false,
       chave: chaveNorm,
-      situacao: situacao || "AUTORIZADA",
-      cStat: cStat || null,
-      mensagem: mensagem || "XML obtido com sucesso.",
-      xml,
-      fonteConsulta: fonte,
+      situacao: validacao.situacao || validacao.code || "XML_INVALIDO",
+      cStat: validacao.cStat || null,
+      mensagem: validacao.mensagem || "XML rejeitado na validação de entrada.",
+      fonteConsulta: "DISTRIBUICAO_DFE",
+      fallbackManual: true,
+      retryable: false,
     };
   }
 
-  // Arquitetura rápida:
-  // 1) DistDFe (caminho feliz — 1 RTT)
-  // 2) Ciência + DistDFe imediato (libera schema 12 sem ConsultarNFe no meio)
-  // 3) ConsultarNFe só para status / XML residual
-  // 4) Um DistDFe final curto se autorizada e ainda sem XML
+  function tentarAceitarXml(xml, fonte, mensagem) {
+    const validacao = validarXmlConsultaEntrada(xml, chaveNorm);
+    if (!validacao.ok) {
+      return rejeicaoXml(validacao);
+    }
+    return {
+      ok: true,
+      chave: chaveNorm,
+      situacao: "AUTORIZADA",
+      cStat: validacao.cStat || null,
+      mensagem: mensagem || "XML obtido com sucesso.",
+      xml,
+      fonteConsulta: fonte,
+      comProtocolo: Boolean(validacao.comProtocolo),
+    };
+  }
+
   let xml = null;
   let fonte = "DISTRIBUICAO_DFE";
 
@@ -2291,20 +2446,32 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = nu
       return consumoIndevidoResponse(distErr);
     }
   }
-  if (xmlOk(xml)) {
-    return sucessoXml(xml, fonte, "AUTORIZADA", null, "XML obtido via DistDFe.");
+  if (xml) {
+    const aceito = tentarAceitarXml(xml, fonte, "XML obtido via DistDFe.");
+    if (
+      aceito.ok ||
+      ["CANCELADA", "DENEGADA", "XML_DIVERGENTE", "NAO_AUTORIZADA"].includes(aceito.situacao)
+    ) {
+      return aceito;
+    }
   }
 
   try {
     await api.manifestarCienciaOperacao(chaveNorm, cnpj);
   } catch {
-    /* ciência já registrada ou indisponível — DistDFe ainda pode liberar */
+    /* já registrada / indisponível */
   }
 
   try {
     xml = await tentarDistribuicao();
-    if (xmlOk(xml)) {
-      return sucessoXml(xml, "DISTRIBUICAO_DFE", "AUTORIZADA", null, "XML obtido via DistDFe após ciência.");
+    if (xml) {
+      const aceito = tentarAceitarXml(xml, "DISTRIBUICAO_DFE", "XML obtido via DistDFe após ciência.");
+      if (
+        aceito.ok ||
+        ["CANCELADA", "DENEGADA", "XML_DIVERGENTE", "NAO_AUTORIZADA"].includes(aceito.situacao)
+      ) {
+        return aceito;
+      }
     }
   } catch (distErr) {
     if (distErr?.consumoIndevido || String(distErr?.cStat) === "656") {
@@ -2328,6 +2495,7 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = nu
       cStat: consulta.cStat,
       mensagem: "Nota cancelada na SEFAZ.",
       fonteConsulta: "PORTAL_NACIONAL",
+      retryable: false,
     };
   }
   if (situacao === "DENEGADA") {
@@ -2338,38 +2506,36 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = nu
       cStat: consulta.cStat,
       mensagem: "Nota denegada na SEFAZ.",
       fonteConsulta: "PORTAL_NACIONAL",
+      retryable: false,
     };
   }
 
   const docs = require("./documentosFiscais");
   if (consulta.raw) {
     xml = docs.extrairXmlDaResposta(consulta.raw);
-    if (xmlOk(xml)) {
-      return sucessoXml(
+    if (xml) {
+      const aceito = tentarAceitarXml(
         xml,
         "PORTAL_NACIONAL",
-        situacao === "DESCONHECIDA" ? "AUTORIZADA" : situacao,
-        consulta.cStat,
         consulta.xMotivo || "XML obtido via consulta.",
       );
+      if (aceito.ok || ["CANCELADA", "DENEGADA"].includes(aceito.situacao)) {
+        return aceito;
+      }
     }
   }
 
   const autorizada =
     situacao === "AUTORIZADA" || String(consulta.cStat || "") === "100";
-  if (autorizada && !xmlOk(xml)) {
-    // Última chance curta — AN às vezes demora milissegundos após 210210.
+  if (autorizada) {
     await sleep(400);
     try {
       xml = await tentarDistribuicao();
-      if (xmlOk(xml)) {
-        return sucessoXml(
-          xml,
-          "DISTRIBUICAO_DFE",
-          "AUTORIZADA",
-          consulta.cStat,
-          "XML obtido via DistDFe.",
-        );
+      if (xml) {
+        const aceito = tentarAceitarXml(xml, "DISTRIBUICAO_DFE", "XML obtido via DistDFe.");
+        if (aceito.ok || ["CANCELADA", "DENEGADA"].includes(aceito.situacao)) {
+          return aceito;
+        }
       }
     } catch (distErr) {
       if (distErr?.consumoIndevido || String(distErr?.cStat) === "656") {
@@ -2395,14 +2561,17 @@ async function consultarChaveEntrada(chave, cnpjDestinatario, ufAutor, deps = nu
     fonteConsulta: fonte,
     fallbackManual: true,
     precisaRetry: autorizada,
+    retryable: autorizada,
   };
 }
+
 
 module.exports = {
   testar,
   statusServico,
   consultarChave,
   consultarChaveEntrada,
+  validarXmlConsultaEntrada,
   inferirSituacao,
   distribuicaoDFePorChave,
   distribuicaoDFePorUltNsu,

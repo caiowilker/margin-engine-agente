@@ -155,6 +155,8 @@ async function run() {
   });
 
   await test("consultarChaveEntrada obtém XML via DistDFe (deps mock)", async () => {
+    const manifesto = require("../manifestoDestinatario");
+    manifesto.limparCooldown656();
     const ok = "35260612345678000190550010000000011000000011";
     const xml = `<nfeProc><NFe Id="NFe${ok}"><infNFe/></NFe></nfeProc>`;
     const r = await acbr.consultarChaveEntrada(ok, CNPJ, "SP", {
@@ -176,6 +178,8 @@ async function run() {
   });
 
   await test("consultarChaveEntrada trata cStat 656 sem loop", async () => {
+    const manifesto = require("../manifestoDestinatario");
+    manifesto.limparCooldown656();
     const ok = "35260612345678000190550010000000011000000011";
     const r = await acbr.consultarChaveEntrada(ok, CNPJ, "SP", {
       consultarChave: async () => ({
@@ -193,9 +197,13 @@ async function run() {
     assert.strictEqual(r.ok, false);
     assert.strictEqual(r.cStat, "656");
     assert.ok(/consumo indevido|656/i.test(r.mensagem || ""));
+    assert.ok(manifesto.restanteCooldown656Ms() > 0, "656 deve registrar cooldown");
+    manifesto.limparCooldown656();
   });
 
   await test("consultarChaveEntrada ciência falha ainda tenta DistDFe", async () => {
+    const manifesto = require("../manifestoDestinatario");
+    manifesto.limparCooldown656();
     const ok = "35260612345678000190550010000000011000000011";
     const xml = `<nfeProc><NFe Id="NFe${ok}"><infNFe/></NFe></nfeProc>`;
     let distCalls = 0;
@@ -218,6 +226,8 @@ async function run() {
   });
 
   await test("consultarChaveEntrada AUTORIZADA sem XML não usa xMotivo cru", async () => {
+    const manifesto = require("../manifestoDestinatario");
+    manifesto.limparCooldown656();
     const ok = "35260612345678000190550010000000011000000011";
     const r = await acbr.consultarChaveEntrada(ok, CNPJ, "SP", {
       consultarChave: async () => ({
@@ -238,6 +248,85 @@ async function run() {
     assert.ok(!/^Autorizado/i.test(r.mensagem || ""));
     assert.ok(/XML completo|DistDFe|Manifesto/i.test(r.mensagem || ""));
     assert.strictEqual(r.precisaRetry, true);
+  });
+
+  await test("validarXmlConsultaEntrada rejeita protocolo cancelado", () => {
+    const ok = "35260612345678000190550010000000011000000011";
+    const xml =
+      `<nfeProc><NFe Id="NFe${ok}"><infNFe Id="NFe${ok}"/></NFe>` +
+      `<protNFe><infProt><cStat>101</cStat><xMotivo>Cancelamento</xMotivo>` +
+      `<chNFe>${ok}</chNFe></infProt></protNFe></nfeProc>`;
+    const v = acbr.validarXmlConsultaEntrada(xml, ok);
+    assert.strictEqual(v.ok, false);
+    assert.strictEqual(v.situacao, "CANCELADA");
+  });
+
+  await test("validarXmlConsultaEntrada aceita cStat 100", () => {
+    const ok = "35260612345678000190550010000000011000000011";
+    const xml =
+      `<nfeProc><NFe Id="NFe${ok}"><infNFe Id="NFe${ok}"/></NFe>` +
+      `<protNFe><infProt><cStat>100</cStat><xMotivo>Autorizado</xMotivo>` +
+      `<chNFe>${ok}</chNFe></infProt></protNFe></nfeProc>`;
+    const v = acbr.validarXmlConsultaEntrada(xml, ok);
+    assert.strictEqual(v.ok, true);
+    assert.strictEqual(v.comProtocolo, true);
+  });
+
+  await test("validarXmlConsultaEntrada rejeita chave divergente", () => {
+    const ok = "35260612345678000190550010000000011000000011";
+    const outra = "35260612345678000190550010000000021000000018";
+    const xml = `<nfeProc><NFe Id="NFe${outra}"><infNFe Id="NFe${outra}"/></NFe></nfeProc>`;
+    const v = acbr.validarXmlConsultaEntrada(xml, ok);
+    assert.strictEqual(v.ok, false);
+    assert.strictEqual(v.situacao, "XML_DIVERGENTE");
+  });
+
+  await test("consultarChaveEntrada single-flight coalesces", async () => {
+    const manifesto = require("../manifestoDestinatario");
+    manifesto.limparCooldown656();
+    const ok = "35260612345678000190550010000000011000000011";
+    const xml = `<nfeProc><NFe Id="NFe${ok}"><infNFe/></NFe></nfeProc>`;
+    let distCalls = 0;
+    const deps = {
+      consultarChave: async () => {
+        throw new Error("não deveria");
+      },
+      distribuicaoDFePorChave: async () => {
+        distCalls += 1;
+        await new Promise((r) => setTimeout(r, 50));
+        return { cStat: "138", xml, xMotivo: "ok" };
+      },
+      manifestarCienciaOperacao: async () => ({ ok: true }),
+    };
+    const [a, b] = await Promise.all([
+      acbr.consultarChaveEntrada(ok, CNPJ, "SP", deps),
+      acbr.consultarChaveEntrada(ok, CNPJ, "SP", deps),
+    ]);
+    assert.strictEqual(a.ok, true);
+    assert.strictEqual(b.ok, true);
+    assert.strictEqual(distCalls, 1, "duas consultas paralelas = uma DistDFe");
+  });
+
+  await test("consultarChaveEntrada respeita cooldown 656 persistido", async () => {
+    const manifesto = require("../manifestoDestinatario");
+    manifesto.limparCooldown656();
+    process.env.MANIFESTO_656_COOLDOWN_MS = "3600000";
+    manifesto.registrarCooldown656();
+    const ok = "35260612345678000190550010000000011000000011";
+    let distCalls = 0;
+    const r = await acbr.consultarChaveEntrada(ok, CNPJ, "SP", {
+      consultarChave: async () => ({ cStat: "100", situacao: "AUTORIZADA", raw: "" }),
+      distribuicaoDFePorChave: async () => {
+        distCalls += 1;
+        return { cStat: "138", xml: null };
+      },
+      manifestarCienciaOperacao: async () => ({ ok: true }),
+    });
+    assert.strictEqual(r.ok, false);
+    assert.strictEqual(r.situacao, "CONSUMO_INDEVIDO");
+    assert.strictEqual(distCalls, 0);
+    manifesto.limparCooldown656();
+    delete process.env.MANIFESTO_656_COOLDOWN_MS;
   });
 
   await test("acbrLibDriver exporta DistDFe e manifesto nativos", () => {

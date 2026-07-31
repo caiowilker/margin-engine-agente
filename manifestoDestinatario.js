@@ -382,7 +382,20 @@ function avaliarPaginaDist(dist) {
   return { parar: true, erro: null };
 }
 
+/** Evita sync DistDFe concorrente (manual + job) no mesmo processo. */
+let syncInFlight = null;
+
 async function executarSincronizacao(_forcar = false) {
+  if (syncInFlight) {
+    return syncInFlight;
+  }
+  syncInFlight = executarSincronizacaoCore(_forcar).finally(() => {
+    syncInFlight = null;
+  });
+  return syncInFlight;
+}
+
+async function executarSincronizacaoCore(_forcar = false) {
   const cfg = await getCfgFn();
   const ambiente = ambienteSefazAtual();
 
@@ -418,7 +431,7 @@ async function executarSincronizacao(_forcar = false) {
 
   const fiscalDriver = require("./fiscalDriver");
 
-  let ultNsuInicial = "0";
+  let ultNsuInicial = null;
   try {
     ultNsuInicial = await obterUltNsuBackend(cfg);
   } catch (err) {
@@ -432,7 +445,15 @@ async function executarSincronizacao(_forcar = false) {
         ambiente,
       };
     }
-    log.warn({ err: err.message }, "Falha ao obter ultNSU — usando 0");
+    log.warn({ err: err.message }, "Falha ao obter ultNSU — abortando sync (não reinicia NSU em 0)");
+    return respostaIgnorada("ult_nsu_indisponivel", {
+      erro:
+        `Não foi possível obter o último NSU do backend (${err.message}). ` +
+        "Sync DistDFe abortado para evitar reconsulta completa e cStat 656.",
+    });
+  }
+  if (ultNsuInicial == null || ultNsuInicial === "") {
+    ultNsuInicial = "0";
   }
 
   let ultNsuAtual = ultNsuInicial;

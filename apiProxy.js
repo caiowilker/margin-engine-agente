@@ -180,7 +180,6 @@ function criarApiProxy({ lerConfigSync }) {
       console.warn("[Agente] api-proxy:", err.message);
       res.status(502).json({
         erro: `Proxy para backend falhou: ${err.message}`,
-        backendUrl: resolverBackendUrl(),
       });
     }
   };

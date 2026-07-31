@@ -2731,9 +2731,20 @@ function iniciarServidor() {
         if (cnpj.length !== 14) cnpj = String(empresaResolved.cnpj || "").replace(/\D/g, "");
         if (!uf) uf = String(empresaResolved.uf || "").trim();
       }
-      res.json(await fiscalDriver.consultarChaveEntrada(chave, cnpj, uf));
+      const result = await fiscalDriver.consultarChaveEntrada(chave, cnpj, uf);
+      // 429 só para 656 (rate limit SEFAZ). Demais resultados de negócio vêm 200 + ok.
+      if (result?.situacao === "CONSUMO_INDEVIDO") {
+        return res.status(429).json(result);
+      }
+      return res.json(result);
     } catch (err) {
-      res.status(400).json({ ok: false, erro: err.message });
+      const msg = String(err.message || err);
+      const status = /timeout|ETIMEDOUT|timed out/i.test(msg)
+        ? 504
+        : /certific|offline|indispon/i.test(msg)
+          ? 503
+          : 400;
+      res.status(status).json({ ok: false, erro: msg, retryable: status >= 500 });
     }
   });
 

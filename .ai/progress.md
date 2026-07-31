@@ -3,6 +3,15 @@
 **Última atualização:** 2026-07-31  
 **Versão:** `1.0.5` — fail-fast worker + TCP válido + config UI sólida
 
+## Changelog (2026-07-31) — Consulta NF-e entrada por chave (produção)
+
+- Validação XML: protNFe 100/150, chave coerente, rejeita cancelada/denegada/divergente.
+- Cooldown 656 compartilhado consulta↔manifesto; HTTP 429; single-flight por CNPJ+chave.
+- Sync DistDFe: single-flight + aborta se ultNSU indisponível (não reinicia em 0).
+- Proxy 502 sem vazar `backendUrl`.
+- Front: mutex síncrono, trata 656/XML inválido, mantém XML se confirmação falhar.
+- Back: modelo 55, protocolo, DataIntegrity→409, `exigirUsuario` nas rotas chave.
+
 ## Changelog (2026-07-31) — Consulta NF-e entrada por chave (velocidade + handoff)
 
 - `consultarChaveEntrada`: DistDFe **primeiro** (caminho feliz em 1 RTT).
