@@ -1607,7 +1607,9 @@ async function enviarEventoFiscal(payload) {
 }
 
 async function emitirNfce(payload) {
-  if (!getEmissaoFiscalAtivo()) return { fiscal: false };
+  if (!getEmissaoFiscalAtivo() && payload?.forcarEmissao !== true) {
+    return { fiscal: false };
+  }
 
   const { withEmissionLock } = require("./fiscal/fiscalEmissionLock");
   const physical = require("./runtime/physicalResourceLock");
