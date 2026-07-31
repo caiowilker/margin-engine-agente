@@ -34,11 +34,22 @@ function fiscalEmUso() {
 /**
  * Aguarda fiscal liberar a sessão.
  * Default curto: impressão térmica não pode travar 120s — PDV precisa ser instantâneo.
+ * Com PHYSICAL_USB_TOPOLOGY=shared: NÃO prosseguir no timeout — o physicalLock
+ * serializa de verdade; aqui esperamos até liberar (ou max alto).
  */
 async function aguardarFiscalLivre(maxMs) {
+  const shared = (() => {
+    try {
+      return require("../runtime/physicalResourceMap").isSharedUsbTopology();
+    } catch (_) {
+      return false;
+    }
+  })();
   const limite = Number.isFinite(maxMs)
     ? maxMs
-    : parseInt(process.env.PRINT_FISCAL_WAIT_MS || "2000", 10);
+    : shared
+      ? parseInt(process.env.PRINT_FISCAL_WAIT_SHARED_MS || "30000", 10)
+      : parseInt(process.env.PRINT_FISCAL_WAIT_MS || "2000", 10);
   const started = Date.now();
   const deadline = started + Math.max(0, limite);
   while (Date.now() < deadline) {
@@ -47,6 +58,14 @@ async function aguardarFiscalLivre(maxMs) {
     }
     _ultimaVezFiscalOcupadoEm = Date.now();
     await new Promise((r) => setTimeout(r, 40));
+  }
+  if (shared) {
+    // Ainda ocupado: não "pula" — quem imprime adquire physicalLock (usb-shared) e espera.
+    log.warn(
+      { aguardouMs: Date.now() - started, maxMs: limite, topology: "shared" },
+      "[PrintFiscalCoord] Fiscal ainda ativo (shared USB) — impressão aguardará physicalLock",
+    );
+    return { aguardouMs: Date.now() - started, timeout: true, sharedBlocked: true };
   }
   log.warn(
     { aguardouMs: Date.now() - started, maxMs: limite },

@@ -255,10 +255,22 @@ function checkFrontAgenteUrls() {
   }
 }
 
+function checkPrintEnvExample() {
+  console.log("\n[print env schema]");
+  const { spawnSync } = require("child_process");
+  const r = spawnSync(process.execPath, [path.join(ROOT, "scripts", "generate-print-env-example.js"), "--check"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+  if (r.status === 0) ok(".env.example ≡ printEnvSchema");
+  else fail(String(r.stderr || r.stdout || "print-env check failed").trim());
+}
+
 async function main() {
   console.log("pre-deploy-check.js\n");
   checkNode();
   checkManifest();
+  checkPrintEnvExample();
   checkEnvVars();
   checkWebhookUrl();
   checkFrontAgenteUrls();

@@ -382,8 +382,19 @@ function assertPortaTermicaOuFalhar(nomeImpressora) {
  * Envia bytes RAW via spooler Windows.
  * IMPORTANTE: async (execFile) — execFileSync bloqueava o event loop do agente
  * quando WritePrinter/spooler demorava (sintoma: cupom ~140s + AbortError no front).
+ * Sob physicalLock (mesma key da PosPrinter) — mesmo cabo USB/spooler.
  */
 function enviarRawWindows(nomeImpressora, buffer) {
+  const physical = require("../../runtime/physicalResourceLock");
+  const map = require("../../runtime/physicalResourceMap");
+  return physical.run(
+    map.resolvePosprinterKey(),
+    () => enviarRawWindowsUnlocked(nomeImpressora, buffer),
+    "native-raw",
+  );
+}
+
+function enviarRawWindowsUnlocked(nomeImpressora, buffer) {
   assertPortaTermicaOuFalhar(nomeImpressora);
   const tmpBin = path.join(
     os.tmpdir(),

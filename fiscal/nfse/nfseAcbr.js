@@ -89,8 +89,15 @@ async function emitirNfseCore(payload) {
 
 async function emitirNfse(payload) {
   if (!acbr.isNfseHabilitado()) return { fiscal: false };
-  return fiscalEmissionLock.withEmissionLock(
-    () => emitirNfseCore(payload),
+  const physical = require("../../runtime/physicalResourceLock");
+  const map = require("../../runtime/physicalResourceMap");
+  return physical.run(
+    map.resolveNfeKey(),
+    () =>
+      fiscalEmissionLock.withEmissionLock(
+        () => emitirNfseCore(payload),
+        "monitor-nfse",
+      ),
     "monitor-nfse",
   );
 }

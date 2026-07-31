@@ -599,9 +599,9 @@ const CATALOGO = {
   printJobTimeoutTotalMs: {
     env: "PRINT_JOB_TIMEOUT_TOTAL_MS",
     tipo: "number",
-    default: 20000,
-    min: 5000,
-    max: 120000,
+    default: 10000,
+    min: 2000,
+    max: 60000,
     grupo: "impressora",
     label: "Timeout total por tentativa (ms)",
   },

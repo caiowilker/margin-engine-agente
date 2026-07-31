@@ -595,6 +595,24 @@ function buildRuntimeValues() {
 }
 
 async function withPosPrinterSession(fn, opts = {}) {
+  // Worker mode: main NÃO carrega a mesma DLL (duas instâncias = hang RAW).
+  // Fallback in-process só quando pool.markFallbackInProcess (isPosWorkerEnabled=false).
+  if (!opts.fromWorkerFallback && !opts.allowAlongsideWorker) {
+    try {
+      const pool = require("./acbrPosWorkerPool");
+      if (pool.isPosWorkerEnabled()) {
+        const e = new Error(
+          "[ACBrPosPrinter] Sessão in-process bloqueada — ACBR_POS_WORKER ativo (use worker ou =false)",
+        );
+        e.code = "ACBR_POS_WORKER_OWNS_SESSION";
+        throw e;
+      }
+    } catch (err) {
+      if (err?.code === "ACBR_POS_WORKER_OWNS_SESSION") throw err;
+      /* pool opcional em testes isolados */
+    }
+  }
+
   const SESSION_IDLE_MS = parseInt(process.env.ACBR_POS_SESSION_IDLE_MS || "45000", 10);
   let _activeSession = withPosPrinterSession._session;
   let _refCount = withPosPrinterSession._refCount || 0;
@@ -757,7 +775,28 @@ function erroPortaRecuperavel(err) {
   return err?.acbrRet === -10 || /porta.*n[aã]o definida|PRINTER_PORTA_INDEFINIDA/i.test(msg);
 }
 
-async function imprimirTagsNative(tags) {
+async function imprimirTagsViaWorker(tags) {
+  await require("./printerBootstrap").garantirPortaImpressao({ skipDetect: true });
+  const paths = prepareRuntimePaths();
+  if (!paths?.libPath) {
+    const e = new Error("[ACBrPosPrinter] DLL não encontrada para worker");
+    e.code = "ACBR_POS_DLL_MISSING";
+    throw e;
+  }
+  const values = buildRuntimeValues();
+  const porta = values.PosPrinter?.Porta || "default";
+  return require("./acbrPosWorkerPool").imprimirTags({
+    printerKey: porta,
+    dllPath: paths.libPath,
+    iniPath: paths.iniPath,
+    agentRoot: AGENT_ROOT,
+    cryptKey: process.env.ACBR_POSPRINTER_CRYPT_KEY || process.env.ACBR_LIB_CRYPT_KEY || "",
+    values,
+    tags,
+  });
+}
+
+async function imprimirTagsNativeInProcess(tags) {
   const maxTentativas = parseInt(process.env.ACBR_POS_PRINT_RETRIES || "2", 10);
   let lastErr;
 
@@ -767,9 +806,13 @@ async function imprimirTagsNative(tags) {
         skipDetect: attempt === 1,
         force: attempt > 1,
       });
-      return await withPosPrinterSession(async (bundle) => imprimirTagsNativeOnce(bundle, tags), {
-        invalidateOnError: attempt < maxTentativas,
-      });
+      return await withPosPrinterSession(
+        async (bundle) => imprimirTagsNativeOnce(bundle, tags),
+        {
+          invalidateOnError: attempt < maxTentativas,
+          fromWorkerFallback: true,
+        },
+      );
     } catch (err) {
       lastErr = err;
       if (!erroPortaRecuperavel(err) || attempt >= maxTentativas) throw err;
@@ -786,14 +829,90 @@ async function imprimirTagsNative(tags) {
   throw lastErr;
 }
 
+/**
+ * Impressão ACBr — sob physicalLock; prefer worker (terminate real) com fallback in-process.
+ * Com worker ON o main NÃO mantém sessão quente PosPrinter (evita duas instâncias da DLL).
+ */
+async function imprimirTagsNative(tags) {
+  const physical = require("../runtime/physicalResourceLock");
+  const map = require("../runtime/physicalResourceMap");
+  return physical.run(map.resolvePosprinterKey(), () => imprimirTagsNativeInner(tags), "pos-print");
+}
+
+async function imprimirTagsNativeInner(tags) {
+  const pool = require("./acbrPosWorkerPool");
+  if (pool.isPosWorkerEnabled() && canLoadNativeLib()) {
+    try {
+      return await imprimirTagsViaWorker(tags);
+    } catch (err) {
+      // Timeout/kill: não fallback no mesmo job (risco de dupla impressão)
+      if (
+        err?.code === "ACBR_POS_WORKER_KILLED" ||
+        err?.code === "ACBR_POS_TIMEOUT" ||
+        err?.printTimedOut
+      ) {
+        throw err;
+      }
+      // Spawn/init falhou → pool já marcou fallback; tenta in-process
+      if (!pool.isPosWorkerEnabled()) {
+        log.warn(
+          { err: err.message, metric: "print.worker_fallback_inprocess" },
+          "[ACBrPosPrinter] Worker falhou — imprimindo in-process",
+        );
+        return imprimirTagsNativeInProcess(tags);
+      }
+      throw err;
+    }
+  }
+  return imprimirTagsNativeInProcess(tags);
+}
+
 async function abrirGavetaNative() {
-  return withPosPrinterSession(async (bundle) => {
-    await callPos(bundle, bundle.lib.POS_AbrirGaveta.async);
-    return { ok: true, native: true };
-  });
+  const physical = require("../runtime/physicalResourceLock");
+  const map = require("../runtime/physicalResourceMap");
+  return physical.run(map.resolvePosprinterKey(), () => abrirGavetaNativeInner(), "pos-gaveta");
+}
+
+async function abrirGavetaNativeInner() {
+  const pool = require("./acbrPosWorkerPool");
+  if (pool.isPosWorkerEnabled() && canLoadNativeLib()) {
+    try {
+      const paths = prepareRuntimePaths();
+      const values = buildRuntimeValues();
+      return await pool.abrirGaveta({
+        printerKey: values.PosPrinter?.Porta || "default",
+        dllPath: paths.libPath,
+        iniPath: paths.iniPath,
+        agentRoot: AGENT_ROOT,
+        cryptKey: process.env.ACBR_POSPRINTER_CRYPT_KEY || process.env.ACBR_LIB_CRYPT_KEY || "",
+        values,
+      });
+    } catch (err) {
+      if (err?.code === "ACBR_POS_WORKER_KILLED" || err?.printTimedOut) throw err;
+      if (!pool.isPosWorkerEnabled()) {
+        /* fallback below */
+      } else {
+        throw err;
+      }
+    }
+  }
+  return withPosPrinterSession(
+    async (bundle) => {
+      await callPos(bundle, bundle.lib.POS_AbrirGaveta.async);
+      return { ok: true, native: true };
+    },
+    { fromWorkerFallback: true },
+  );
 }
 
 async function lerStatusFormatadoNative(tentativas = 3) {
+  try {
+    const pool = require("./acbrPosWorkerPool");
+    if (pool.isPosWorkerEnabled()) {
+      // Evita segunda instância da DLL no main enquanto worker possui a porta
+      return { raw: "", status: {}, ok: true, unsupported: true, workerOwned: true };
+    }
+  } catch (_) {}
   return withPosPrinterSession(async (bundle) => {
     if (!bundle?.lib?.POS_LerStatusImpressoraFormatado?.async) {
       return { raw: "", status: {}, ok: true, unsupported: true };
@@ -835,7 +954,18 @@ async function lerStatusFormatadoNative(tentativas = 3) {
   });
 }
 
+function workerOwnsPosSession() {
+  try {
+    return require("./acbrPosWorkerPool").isPosWorkerEnabled();
+  } catch (_) {
+    return false;
+  }
+}
+
 async function acharPortasNative() {
+  if (workerOwnsPosSession()) {
+    return { portas: [], raw: "", unsupported: true, workerOwned: true };
+  }
   return withPosPrinterSession(async (bundle) => {
     if (!bundle?.lib?.POS_AcharPortas?.async) {
       return { portas: [], raw: "", unsupported: true };
@@ -846,6 +976,9 @@ async function acharPortasNative() {
 }
 
 async function lerInfoImpressoraNative() {
+  if (workerOwnsPosSession()) {
+    return { raw: "", unsupported: true, workerOwned: true };
+  }
   return withPosPrinterSession(async (bundle) => {
     if (!bundle?.lib?.POS_LerInfoImpressora?.async) {
       return { raw: "", unsupported: true };
@@ -856,16 +989,26 @@ async function lerInfoImpressoraNative() {
 }
 
 async function gravarLogoArquivoNative(bmpPath, kc1, kc2) {
-  return withPosPrinterSession(async (bundle) => {
-    if (!bundle?.lib?.POS_GravarLogoArquivo?.async) {
-      throw new Error("[ACBrPosPrinter] POS_GravarLogoArquivo não disponível nesta DLL");
-    }
-    await callPos(bundle, bundle.lib.POS_GravarLogoArquivo.async, bmpPath, kc1, kc2);
-    return { ok: true, native: true };
-  });
+  if (workerOwnsPosSession()) {
+    // Libera porta no worker antes de gravar logo in-process (operação rara/operador)
+    await invalidatePosPrinterSession();
+  }
+  return withPosPrinterSession(
+    async (bundle) => {
+      if (!bundle?.lib?.POS_GravarLogoArquivo?.async) {
+        throw new Error("[ACBrPosPrinter] POS_GravarLogoArquivo não disponível nesta DLL");
+      }
+      await callPos(bundle, bundle.lib.POS_GravarLogoArquivo.async, bmpPath, kc1, kc2);
+      return { ok: true, native: true };
+    },
+    { fromWorkerFallback: true },
+  );
 }
 
 async function lerVersaoNative() {
+  if (workerOwnsPosSession()) {
+    return { nome: "", versao: "", unsupported: true, workerOwned: true };
+  }
   return withPosPrinterSession(async (bundle) => {
     const nome = await readStringOut(bundle, bundle.lib.POS_Nome.async);
     const versao = await readStringOut(bundle, bundle.lib.POS_Versao.async);
@@ -874,6 +1017,9 @@ async function lerVersaoNative() {
 }
 
 async function invalidatePosPrinterSession() {
+  try {
+    await require("./acbrPosWorkerPool").invalidateAll();
+  } catch (_) {}
   const sess = withPosPrinterSession._session;
   if (!sess?.bundle) return;
   withPosPrinterSession._refCount = 0;
@@ -999,6 +1145,9 @@ function resetAcbrPosCircuit() {
   const wasOpen = _acbrPosCircuit.open;
   _acbrPosCircuit = { open: false, reason: null, openedAt: null };
   persistCircuitToDisk();
+  try {
+    require("./acbrPosWorkerPool").clearFallbackInProcess();
+  } catch (_) {}
   if (wasOpen) {
     log.info(
       { metric: "print.circuit_reset" },
@@ -1010,11 +1159,15 @@ function resetAcbrPosCircuit() {
 function shouldOpenCircuitFromError(err) {
   const msg = String(err?.message || err || "");
   if (err?.code === "PRINTER_NOT_THERMAL" || err?.permanente) return false;
+  if (err?.code === "ACBR_POS_WORKER_OWNS_SESSION") return false;
   if (err?.acbrRet === -10 || /\(-10\)/.test(msg)) return true;
   if (/expected \d+ arguments, got \d+/i.test(msg)) return true;
   if (
     err?.code === "ACBR_POS_TIMEOUT" ||
     err?.code === "ACBR_POS_FN_MISSING" ||
+    err?.code === "ACBR_POS_WORKER_KILLED" ||
+    err?.code === "ACBR_POS_WORKER_EXIT" ||
+    err?.code === "ACBR_POS_WORKER_ERROR" ||
     err?.code === "PRINT_HARD_DRAIN" ||
     err?.printTimedOut === true
   ) {

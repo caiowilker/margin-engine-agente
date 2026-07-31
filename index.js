@@ -48,6 +48,11 @@ try {
   }
 } catch (_) {}
 
+// Normaliza timeouts/flags de impressão (clamp) — typo não reinicia o serviço
+try {
+  require("./config/printEnvSchema").applyPrintEnvSchema();
+} catch (_) {}
+
 const { initLogging } = require("./runtime/loggingService");
 const { version: VERSAO_BOOT } = require("./package.json");
 initLogging({

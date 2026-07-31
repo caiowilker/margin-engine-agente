@@ -167,9 +167,17 @@ function resolveEmissaoTimeoutMs() {
 }
 
 async function emitirNfceLib(payload) {
-  return fiscalEmissionLock.withEmissionLock(
-    () => emitirNfceLibCore(payload),
-    "acbr-lib-nfce",
+  const physical = require("../../runtime/physicalResourceLock");
+  const map = require("../../runtime/physicalResourceMap");
+  // Ordem: physicalLock → emissionLock (nunca o inverso)
+  return physical.run(
+    map.resolveNfeKey(),
+    () =>
+      fiscalEmissionLock.withEmissionLock(
+        () => emitirNfceLibCore(payload),
+        "acbr-lib-nfce",
+      ),
+    "nfe-emit",
   );
 }
 
@@ -183,17 +191,31 @@ async function emitirNfceLibCore(payload) {
 async function emitirNfseLib(payload) {
   if (!acbr.isNfseHabilitado()) return { fiscal: false };
   const nfseLib = require("../nfse/nfseLib");
-  return fiscalEmissionLock.withEmissionLock(
-    () => nfseLib.emitirNfseLibCore(payload),
-    "lib-nfse",
+  const physical = require("../../runtime/physicalResourceLock");
+  const map = require("../../runtime/physicalResourceMap");
+  return physical.run(
+    map.resolveNfeKey(),
+    () =>
+      fiscalEmissionLock.withEmissionLock(
+        () => nfseLib.emitirNfseLibCore(payload),
+        "lib-nfse",
+      ),
+    "nfse-emit",
   );
 }
 
 async function emitirNfeLib(payload) {
   if (!acbr.isNfeModelo55Habilitado()) return { fiscal: false };
-  return fiscalEmissionLock.withEmissionLock(
-    () => emitirDocumentoLib(payload, "55"),
-    "acbr-lib-nfe",
+  const physical = require("../../runtime/physicalResourceLock");
+  const map = require("../../runtime/physicalResourceMap");
+  return physical.run(
+    map.resolveNfeKey(),
+    () =>
+      fiscalEmissionLock.withEmissionLock(
+        () => emitirDocumentoLib(payload, "55"),
+        "acbr-lib-nfe",
+      ),
+    "nfe55-emit",
   );
 }
 

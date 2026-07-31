@@ -14,16 +14,21 @@ Use em cada PC de caixa antes de liberar o turno.
 6. Gerenciador de dispositivos → Hubs USB raiz → **desmarcar** “Permitir que o computador desligue este dispositivo para economizar energia”.
 7. Plano de energia → Desativar **suspensão seletiva de USB**.
 8. Nenhum outro app (ACBr Monitor, utilitário do fabricante, outro PDV) deve segurar a fila da POS80.
+9. **Topology USB:** se térmica **e** token/cert/pinpad estão no **mesmo hub USB**, no `.env` do agente:
+   - `PHYSICAL_USB_TOPOLOGY=shared`
+   - (default `separate` — portas traseiras distintas, sem serializar NFC-e×print)
 
 ## Agente Margin Engine
 
-1. Serviço **Margin Engine** em execução; build **1.0.3+**.
+1. Serviço **Margin Engine** em execução; build **1.0.4+**.
 2. Configuração → Impressão: porta `RAW:…` correta; modelo Epson/POS = `1`.
 3. Imprimir página de teste pelo PDV — deve sair em poucos segundos.
 4. Se o **primeiro** cupom via ACBr der timeout: log de circuito RAW aberto; o **segundo** cupom vai **native direto** (sem tentar ACBr; tipicamente &lt; 2 s).
 5. Poll de status por alguns minutos: **não** spammar `Configuração salva`.
 6. Abort/timeout na UI: mensagem de **ocupado / 2ª via**, não “Agente off”, se `/health` responde.
 7. Hard drain: **sem** segunda via automática no mesmo job (anti-dupla). Use 2ª via se o papel não saiu.
+8. Worker PosPrinter (`ACBR_POS_WORKER=true`): se hang, log `print.worker_kill` + circuito; rollback emergencial: `ACBR_POS_WORKER=false` + reiniciar serviço.
+9. Timeouts no `.env` devem bater com o bloco `PRINT_ENV_SCHEMA` do `.env.example` (não usar 8000 legado).
 
 ## Critérios de aceite rápidos
 
@@ -34,4 +39,6 @@ Use em cada PC de caixa antes de liberar o turno.
 | POST print Abort | `timeout_impressao`, caixa online |
 | Hard drain | Job `ERRO`; **sem** fallback físico no mesmo job |
 | Reinício do serviço | Circuito permanece aberto até Detectar force |
-| Build | Agente/instalador/front **1.0.3** |
+| Worker kill | `/health` responde; próximo cupom native |
+| `PHYSICAL_USB_TOPOLOGY=shared` | NFC-e e print não se sobrepõem no hub |
+| Build | Agente/instalador **1.0.4** |

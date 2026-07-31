@@ -1,10 +1,10 @@
 {
-  "versao": "1.0.3",
-  "geradoEm": "2026-07-31T00:11:46.712Z",
+  "versao": "1.0.4",
+  "geradoEm": "2026-07-31T00:32:00.227Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
-      "sha256": "b252d4616a983300f09830fcfacf431f3ced1e5e69f954397dadd5ecd1b48657"
+      "sha256": "f08a948b25763a1bbca93ebcc6843284844ad442a51d8a316ffb64d2c18964ee"
     },
     {
       "arquivo": "acbrLibResposta.js",
@@ -20,7 +20,7 @@
     },
     {
       "arquivo": "agentConfigCatalog.js",
-      "sha256": "56fdf1dc83a4f9a2418da4fa40e7e45367dd6a0d65ccd383e55a0d4a05eea059"
+      "sha256": "3a2245b019990b4310a6fe2f2d833cd5be93ebd17c139f0da30f69f5c635383d"
     },
     {
       "arquivo": "apiContract.js",
@@ -92,7 +92,7 @@
     },
     {
       "arquivo": "fiscal/drivers/acbrLibDriver.js",
-      "sha256": "ec1ff3d2e281cc90d3f854d8d0b9799b2b8520aca9a73ec47dab0a01d4762fc6"
+      "sha256": "5b2e9da287b1324f2b213bdcb425c04685eb4c12c70fec00b4a21f397fa14bc3"
     },
     {
       "arquivo": "fiscal/drivers/acbrLibRuntime.js",
@@ -132,7 +132,7 @@
     },
     {
       "arquivo": "fiscal/nfse/nfseAcbr.js",
-      "sha256": "c6cbe20cf8edd851e67b7718ce3be3c89f764f77674b221f1d8f54af0f33d6f0"
+      "sha256": "5a5ea0b676769ce0b73335f6bded19065cf7b4155de5e9f32e0a39f7b490b5cc"
     },
     {
       "arquivo": "fiscal/nfse/nfseCallback.js",
@@ -5068,7 +5068,7 @@
     },
     {
       "arquivo": "index.js",
-      "sha256": "de7a0e28b7948b1c803e3b2cc89a5656441663e19f0247f3ab106749d705b065"
+      "sha256": "489878f584b1c270217a04a722d9798e5da1670cdd16b47746d6e80693e4a3c9"
     },
     {
       "arquivo": "install-service.js",
@@ -5104,7 +5104,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "dbbb09c607b10f63fb7fe4395ba9ad60d2ec50f0e1cec7cd80a27e776f8dcb2e"
+      "sha256": "cb196b39bbd5fa59ad257ca74f9f9fa93dae88ea19f76c2e8db58edf9876f740"
     },
     {
       "arquivo": "print/acbrPosPrinterErrors.js",
@@ -5112,7 +5112,11 @@
     },
     {
       "arquivo": "print/acbrPosPrinterRuntime.js",
-      "sha256": "4858a929fb53d0e5ad51848e3f7f9be8126e7d7728f733395dee03584d0aba1e"
+      "sha256": "8e78e10f67e615ffd2eb7f5cdf2b2289886fc0a756bbd65d1c3d486e327a05b4"
+    },
+    {
+      "arquivo": "print/acbrPosWorkerPool.js",
+      "sha256": "ddbcc961f0728a9ab23472fac0b2e56625863f3d4c128b38676111f3ce1ff033"
     },
     {
       "arquivo": "print/acbrTags.js",
@@ -5148,7 +5152,7 @@
     },
     {
       "arquivo": "print/drivers/acbrPosPrinterProvider.js",
-      "sha256": "b5cf8f5d97b9dd856e8660d319e534b9d21b5f9c03c4afee55997e4cd46be0e6"
+      "sha256": "8c3a4b59b82fedcdd0e9c605c39e3f1eaa8229ad91efdeb93c8fbc63092a01f5"
     },
     {
       "arquivo": "print/drivers/mockPrinterProvider.js",
@@ -5160,7 +5164,7 @@
     },
     {
       "arquivo": "print/escpos/impressoraCore.js",
-      "sha256": "04048db3f6fa0c56ec3671fac128f974fea6a265e90620d5daa3ba48d55f5ef8"
+      "sha256": "f455241f4fa0894f1798e97311a957119b177626a2eb3e6076818643f9be4313"
     },
     {
       "arquivo": "print/factory.js",
@@ -5196,7 +5200,7 @@
     },
     {
       "arquivo": "print/printErrors.js",
-      "sha256": "9a3e9722033513bf79ea11ffa53b40a106ac9882a13ab7c34199447f69e1c688"
+      "sha256": "adea455ac36ec44d7bcb511cc83abc1a6914675cd36ebda85a7237e26ddbb34f"
     },
     {
       "arquivo": "print/printerStationRoutes.js",
@@ -5208,7 +5212,7 @@
     },
     {
       "arquivo": "print/printFiscalCoordination.js",
-      "sha256": "e90b60f3c6d0a466f0c9c3f76b3953294dadf41f68bfaf4e6aba0b365d2f5983"
+      "sha256": "7d341d70a1115046e64cbbcfac6ca1a0c88e5462124f70d7ee41078558a9f0ac"
     },
     {
       "arquivo": "print/printIdempotency.js",
@@ -5253,6 +5257,10 @@
     {
       "arquivo": "print/thermalCols.js",
       "sha256": "a109bb01df16bad185b9d9a32dc216ba3a2cc3242ac60a8aac76c2e733b903ec"
+    },
+    {
+      "arquivo": "print/workers/acbrPosWorker.js",
+      "sha256": "a01f0d7e9e7992bfe1329bec7f316e9d9255db5fe2c46f3e7c7b91286e32ca39"
     },
     {
       "arquivo": "printerService.js",
@@ -5301,6 +5309,14 @@
     {
       "arquivo": "runtime/mensagensOperador.js",
       "sha256": "486890286845bf65a5a192abda94bfe0682219a112efd580ca86f1fc1854a20e"
+    },
+    {
+      "arquivo": "runtime/physicalResourceLock.js",
+      "sha256": "ae5a75ad178f15c77f485809f4036cae00c848c186893ef4c0c9431bc47a1f2b"
+    },
+    {
+      "arquivo": "runtime/physicalResourceMap.js",
+      "sha256": "cc9153869674a8466a2dd317ad9d1081a301b6c67c337ab70a39cfc9127139c8"
     },
     {
       "arquivo": "runtime/runtimeErrors.js",

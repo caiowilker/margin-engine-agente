@@ -6,6 +6,22 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-07-30
+
+### Adicionado
+
+- **Worker PosPrinter** (`acbrPosWorker` + pool): `terminate()` real no hang, sessão quente, cooldown, fallback in-process.
+- **`physicalResourceLock`** + `PHYSICAL_USB_TOPOLOGY=shared|separate` — serializa térmica/NFC-e no mesmo hub USB.
+- **`config/printEnvSchema.js`** — SSOT de timeouts; `.env.example` gerado (`npm run generate:print-env` / `check:print-env`).
+- ADR: worker + lock físico + schema env.
+
+### Alterado
+
+- Timeouts canônicos alinhados (4s/2s/4s/5s); typo de env → clamp (sem restart do serviço Windows).
+- Native RAW e emissão NFC-e sob o mesmo modelo de locks físicos.
+- Main bloqueado de carregar PosPrinter com worker ativo; Detectar/force limpa fallback in-process.
+- Versão instalador/manifest **1.0.4**.
+
 ## [1.0.1] - 2026-07-12
 
 ### Adicionado

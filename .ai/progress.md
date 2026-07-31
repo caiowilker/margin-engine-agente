@@ -1,7 +1,16 @@
 # PROGRESS — Agente Local
 
 **Última atualização:** 2026-07-30  
-**Versão:** `1.0.3` — PDV comercial rápido + anti-dupla + circuito na factory
+**Versão:** `1.0.4` — worker PosPrinter + lock USB + schema env
+
+## Changelog (2026-07-30) — 1.0.4 Worker FFI + physical lock + env SSOT
+
+- **Worker PosPrinter** com `terminate()` real, sessão quente, cooldown pós-kill, fallback in-process.
+- **Main não toca PosPrinter** com worker ON (`ACBR_POS_WORKER_OWNS_SESSION`); status soft-fail; fila interna no pool (sem BUSY).
+- **`physicalResourceLock`** + `PHYSICAL_USB_TOPOLOGY` (default `separate`); native RAW e NFC-e/NFS-e sob o mesmo modelo de keys.
+- **`printEnvSchema`**: defaults canônicos; `.env.example` gerado; typo → clamp (sem restart loop).
+- Flag: `ACBR_POS_WORKER=true` (default); rollback `=false`.
+- ADR: [ADR-worker-pos-physical-lock-env-20260730.md](./decisions/ADR-worker-pos-physical-lock-env-20260730.md).
 
 ## Changelog (2026-07-30) — Solidity produção (poll + circuito + front)
 
@@ -53,7 +62,7 @@
   3. `PRINT_FAST_NATIVE=true` permanece como escape hatch (não é mais o padrão).
 - **Hardening (mesma data):**
   - Porta `RAW:` não varre rede/USB em fallback.
-  - Timeout dedicado `PRINT_JOB_TIMEOUT_FAST_MS=8000` para tipos comerciais.
+  - Timeout dedicado `PRINT_JOB_TIMEOUT_FAST_MS=4000` para tipos comerciais.
   - Probe de status pula enquanto `impressaoEmAndamento`.
   - RAW timeout padrão 8s; retries ACBr PosPrinter 2.
   - Follow-up auditoria: Desativar/Finalizar com timeout 2s; hard-drain sem retry de fila; station route sem invalidate no native; `resetPrintProvider` não dispara Desativar; aviso de flags perigosas no boot; gate de reclaim com envio abandonado vivo.

@@ -75,6 +75,13 @@ function getIntegrationMode() {
 
 function getDriverInfo() {
   const mode = getIntegrationMode();
+  let posWorker = false;
+  let posWorkerActive = false;
+  try {
+    const pool = require("../acbrPosWorkerPool");
+    posWorker = pool.isPosWorkerEnabled();
+    posWorkerActive = pool.hasActiveWorker();
+  } catch (_) {}
   return {
     ...DRIVER_INFO,
     mode,
@@ -84,6 +91,9 @@ function getDriverInfo() {
     iniPath: runtime.resolveIniPath(),
     ready: mode === "native" || mode === "parity",
     fastNative: String(process.env.PRINT_FAST_NATIVE || "false"),
+    posWorker,
+    posWorkerActive,
+    usbTopology: String(process.env.PHYSICAL_USB_TOPOLOGY || "separate"),
     acbrCircuitOpen: (() => {
       try {
         return runtime.isAcbrPosCircuitOpen();

@@ -75,6 +75,10 @@ test("shouldOpenCircuitFromError — timeout e hard drain", () => {
     true,
   );
   assert.strictEqual(
+    runtime.shouldOpenCircuitFromError({ code: "ACBR_POS_WORKER_KILLED" }),
+    true,
+  );
+  assert.strictEqual(
     runtime.shouldOpenCircuitFromError({ code: "PRINTER_NOT_THERMAL" }),
     false,
   );

@@ -1595,7 +1595,13 @@ async function emitirNfce(payload) {
   if (!getEmissaoFiscalAtivo()) return { fiscal: false };
 
   const { withEmissionLock } = require("./fiscal/fiscalEmissionLock");
-  return withEmissionLock(async () => emitirNfceCore(payload), "monitor-nfce");
+  const physical = require("./runtime/physicalResourceLock");
+  const map = require("./runtime/physicalResourceMap");
+  return physical.run(
+    map.resolveNfeKey(),
+    () => withEmissionLock(async () => emitirNfceCore(payload), "monitor-nfce"),
+    "monitor-nfce",
+  );
 }
 
 async function emitirNfceCore(payload) {
@@ -1659,7 +1665,13 @@ async function emitirNfe(payload) {
   if (!isNfeModelo55Habilitado()) return { fiscal: false };
 
   const { withEmissionLock } = require("./fiscal/fiscalEmissionLock");
-  return withEmissionLock(async () => emitirNfeCore(payload), "monitor-nfe");
+  const physical = require("./runtime/physicalResourceLock");
+  const map = require("./runtime/physicalResourceMap");
+  return physical.run(
+    map.resolveNfeKey(),
+    () => withEmissionLock(async () => emitirNfeCore(payload), "monitor-nfe"),
+    "monitor-nfe",
+  );
 }
 
 async function emitirNfeCore(payload) {
