@@ -370,7 +370,7 @@ async function callPos(libBundle, fn, ...args) {
     e.code = "ACBR_POS_FN_MISSING";
     throw e;
   }
-  const timeoutMs = parseInt(process.env.ACBR_POS_CALL_TIMEOUT_MS || "8000", 10);
+  const timeoutMs = parseInt(process.env.ACBR_POS_CALL_TIMEOUT_MS || "5000", 10);
   const invoke = promisify(fn.bind(libBundle.lib), ...args);
   let timer;
   const ret = await Promise.race([
@@ -895,39 +895,116 @@ async function invalidatePosPrinterSession() {
 }
 
 /**
- * Circuito aberto: ACBr PosPrinter falhou nesta máquina (ex.: POS_Ativar -10 em RAW).
+ * Circuito aberto: ACBr PosPrinter falhou nesta máquina (ex.: POS_Ativar -10 / timeout RAW).
  * Cupons comerciais passam a ir direto no ESC/POS nativo (sem WARN a cada job).
- * Fiscal/DANFE ainda tenta ACBr. Desligar: PRINT_ACBR_CIRCUIT=false. Reset: reinício.
+ * Fiscal/DANFE ainda tenta ACBr. Desligar: PRINT_ACBR_CIRCUIT=false.
+ * Persistido em disco — sobrevive a reinício do serviço Windows.
+ * Reset: Detectar/Salvar force do operador ou apagar o arquivo.
  */
 let _acbrPosCircuit = { open: false, reason: null, openedAt: null };
+let _circuitLoaded = false;
+
+function resolveCircuitPath() {
+  if (process.env.ACBR_POS_CIRCUIT_FILE) return process.env.ACBR_POS_CIRCUIT_FILE;
+  return path.join(path.dirname(resolveIniPath()), "acbr-pos-circuit.json");
+}
+
+function loadCircuitFromDisk() {
+  if (_circuitLoaded) return;
+  _circuitLoaded = true;
+  try {
+    const file = resolveCircuitPath();
+    if (!fs.existsSync(file)) return;
+    const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (raw && raw.open === true) {
+      _acbrPosCircuit = {
+        open: true,
+        reason: String(raw.reason || "persisted").slice(0, 240),
+        openedAt: Number(raw.openedAt) || Date.now(),
+      };
+      log.info(
+        { reason: _acbrPosCircuit.reason, openedAt: _acbrPosCircuit.openedAt },
+        "[ACBrPosPrinter] Circuito RAW restaurado do disco — comerciais via native",
+      );
+    }
+  } catch (err) {
+    log.debug({ err: err.message }, "[ACBrPosPrinter] Falha ao ler circuito do disco");
+  }
+}
+
+function persistCircuitToDisk() {
+  try {
+    const file = resolveCircuitPath();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    if (!_acbrPosCircuit.open) {
+      if (fs.existsSync(file)) fs.unlinkSync(file);
+      return;
+    }
+    fs.writeFileSync(
+      file,
+      JSON.stringify(
+        {
+          open: true,
+          reason: _acbrPosCircuit.reason,
+          openedAt: _acbrPosCircuit.openedAt,
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+  } catch (err) {
+    log.warn({ err: err.message }, "[ACBrPosPrinter] Falha ao persistir circuito");
+  }
+}
 
 function isAcbrPosCircuitOpen() {
   if (String(process.env.PRINT_ACBR_CIRCUIT || "true").toLowerCase() === "false") {
     return false;
   }
+  loadCircuitFromDisk();
   return !!_acbrPosCircuit.open;
 }
 
 function getAcbrPosCircuit() {
+  loadCircuitFromDisk();
   return { ..._acbrPosCircuit };
 }
 
 function openAcbrPosCircuit(reason) {
+  loadCircuitFromDisk();
   if (_acbrPosCircuit.open) return false;
   _acbrPosCircuit = {
     open: true,
     reason: String(reason || "acbr_unreliable").slice(0, 240),
     openedAt: Date.now(),
   };
+  persistCircuitToDisk();
+  try {
+    require("./factory").resetPrintProvider();
+  } catch (_) {}
   log.warn(
-    { reason: _acbrPosCircuit.reason },
+    {
+      reason: _acbrPosCircuit.reason,
+      circuitFile: resolveCircuitPath(),
+      metric: "print.circuit_open",
+    },
     "[ACBrPosPrinter] Circuito RAW aberto — comerciais via ESC/POS nativo (sem tentar Ativar a cada cupom)",
   );
   return true;
 }
 
 function resetAcbrPosCircuit() {
+  _circuitLoaded = true;
+  const wasOpen = _acbrPosCircuit.open;
   _acbrPosCircuit = { open: false, reason: null, openedAt: null };
+  persistCircuitToDisk();
+  if (wasOpen) {
+    log.info(
+      { metric: "print.circuit_reset" },
+      "[ACBrPosPrinter] Circuito RAW fechado — ACBr será tentado novamente",
+    );
+  }
 }
 
 function shouldOpenCircuitFromError(err) {
@@ -935,9 +1012,25 @@ function shouldOpenCircuitFromError(err) {
   if (err?.code === "PRINTER_NOT_THERMAL" || err?.permanente) return false;
   if (err?.acbrRet === -10 || /\(-10\)/.test(msg)) return true;
   if (/expected \d+ arguments, got \d+/i.test(msg)) return true;
-  if (err?.code === "ACBR_POS_TIMEOUT" || err?.code === "ACBR_POS_FN_MISSING") return true;
-  if (/POS_Ativar|erro de comunica[cç][aã]o com a impressora/i.test(msg)) return true;
+  if (
+    err?.code === "ACBR_POS_TIMEOUT" ||
+    err?.code === "ACBR_POS_FN_MISSING" ||
+    err?.code === "PRINT_HARD_DRAIN" ||
+    err?.printTimedOut === true
+  ) {
+    return true;
+  }
+  if (/POS_Ativar|erro de comunica[cç][aã]o com a impressora|Timeout de impressão/i.test(msg)) {
+    return true;
+  }
   return false;
+}
+
+/** @internal testes — força reload do arquivo */
+function __reloadCircuitFromDiskForTests() {
+  _circuitLoaded = false;
+  _acbrPosCircuit = { open: false, reason: null, openedAt: null };
+  loadCircuitFromDisk();
 }
 
 module.exports = {
@@ -946,6 +1039,7 @@ module.exports = {
   getFfiBindingsError,
   resolveLibPath,
   resolveIniPath,
+  resolveCircuitPath,
   prepareRuntimePaths,
   loadLib,
   withPosPrinterSession,
@@ -965,4 +1059,5 @@ module.exports = {
   shouldOpenCircuitFromError,
   /** @internal testes — simula contrato async do koffi */
   __wrapKoffiFunc: wrapKoffiFunc,
+  __reloadCircuitFromDiskForTests,
 };

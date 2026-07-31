@@ -1,9 +1,37 @@
 # PROGRESS — Agente Local
 
 **Última atualização:** 2026-07-30  
-**Versão:** `1.0.0` — certificada com a plataforma
+**Versão:** `1.0.3` — PDV comercial rápido + anti-dupla + circuito na factory
 
-## Changelog (2026-07-30)
+## Changelog (2026-07-30) — Solidity produção (poll + circuito + front)
+
+### 1.0.3 (produção — passada PDV real)
+
+- Factory honra circuito → **native** efetivo (sem timeout ACBr no 2º cupom).
+- Hard drain: **sem fallback** no mesmo job (anti-dupla física).
+- Timeouts comerciais: soft **4s**, drain **≤2s**, RAW **4s**, ACBr call **5s**, wait fiscal **2s**.
+- Front: imprime mesmo com status “off” stale; POST timeout **6s**.
+- Checklist campo: USB suspend, bidirecional, driver fabricante.
+
+- Versão instalador/agente/front alinhada para deploy em campo (substitui 1.0.1).
+- `postImpressaoTermica` preserva `motivoImpressao` no Error (timeout ≠ offline).
+- Reclaim não roda com `impressaoEmAndamento()`; job `ERRO` não promove a `IMPRESSO` se status mudou no meio do envio.
+- Bootstrap não chama `resetPrintProvider` quando sync foi idempotente (`unchanged: true`).
+- Testes: busy probe, solidity production, circuit, idempotência.
+
+- Hang ~150 s em `RAW:POSPrinter POS80`, `AbortError` (“signal is aborted without reason”), falso **Agente off**.
+- Loop `[PrinterLocalConfig] Configuração salva` + `resetPrintProvider` a cada poll de status.
+- PWA 1.0.0 **não** era a causa.
+
+### Fix (Fases 1–5)
+
+1. **`salvar` / `sincronizarDeDeteccao` idempotentes** — skip se porta/modelo/env iguais.
+2. **`testar` read-only** (ACBr provider + impressoraCore) — sem sync/reset no poll.
+3. **`GET /impressora/status` + `printerService.testar`** respeitam `impressaoEmAndamento` (igual probe leve).
+4. **Circuito ACBr persistente** (`acbr-pos-circuit.json`); `-10`/timeout/hard-drain abrem circuito; comerciais → native; reset só Detectar force.
+5. **Hard drain:** `late_abandoned_ok` só log; job já `ERRO` não vira `IMPRESSO`.
+6. **Front:** `timeout_impressao` ≠ `agente_offline` ([`impressaoGarantida.ts`](../margin-engine-front/src/lib/impressaoGarantida.ts)).
+7. Docs: [ADR-print-poll-readonly-circuit-20260730.md](./decisions/ADR-print-poll-readonly-circuit-20260730.md), [CHECKLIST-IMPRESSORA-CAMPO.md](./CHECKLIST-IMPRESSORA-CAMPO.md).
 
 ### ACBr PosPrinter como caminho oficial (fim do cupom ~120s)
 

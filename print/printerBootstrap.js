@@ -66,9 +66,12 @@ async function autoDetectarESincronizar(opts = {}) {
   }
 
   const saved = require("./printerLocalConfig").sincronizarDeDeteccao(info);
-  try {
-    require("./factory").resetPrintProvider();
-  } catch (_) {}
+  // Idempotente: não resetar provider se porta/modelo já iguais (evita thrash).
+  if (!saved?.unchanged) {
+    try {
+      require("./factory").resetPrintProvider();
+    } catch (_) {}
+  }
 
   const imp = info.impressora;
   log.info(
@@ -78,6 +81,7 @@ async function autoDetectarESincronizar(opts = {}) {
       host: imp.host,
       porta: imp.porta || imp.port,
       acbrPorta: saved.porta,
+      unchanged: !!saved?.unchanged,
     },
     "[PrinterBootstrap] Impressora sincronizada",
   );

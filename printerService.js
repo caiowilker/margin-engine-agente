@@ -25,6 +25,16 @@ const PROBE_CACHE_TTL_MS = parseInt(process.env.PRINTER_PROBE_TTL_MS || "5000", 
  * simultâneas quando múltiplos clientes fazem poll ao mesmo tempo.
  */
 async function testar(force = false) {
+  // Durante envio físico: não dispara detectar/Get-Printer (disputa spooler).
+  if (
+    !force &&
+    typeof printJobService.impressaoEmAndamento === "function" &&
+    printJobService.impressaoEmAndamento()
+  ) {
+    _probeCache.result = true;
+    _probeCache.at = Date.now();
+    return true;
+  }
   if (!force && printJobService.impressaoRecenteOk()) {
     _probeCache.result = true;
     _probeCache.at = Date.now();

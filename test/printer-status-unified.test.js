@@ -109,6 +109,46 @@ test("printerService.resetPrintProvider() invalida o cache de probe e não lanç
   assert.doesNotThrow(() => impressora.resetPrintProvider());
 });
 
+test("printerService.testar durante impressaoEmAndamento não dispara probe live", async () => {
+  const impressora = require("../printerService");
+  const executor = require("../print/printExecutor");
+  const factory = require("../print/factory");
+  impressora.invalidateProbeCache();
+
+  const prevAbandoned = executor.physicalSendAbandonedInFlight;
+  executor.physicalSendAbandonedInFlight = () => true;
+
+  let liveCalls = 0;
+  const provider = factory.getPrintProvider();
+  const prevTestar = provider.testar;
+  provider.testar = async () => {
+    liveCalls += 1;
+    return false;
+  };
+
+  try {
+    assert.strictEqual(pjs.impressaoEmAndamento(), true);
+    const ok = await impressora.testar(false);
+    assert.strictEqual(ok, true, "busy → assume conectada sem probe");
+    assert.strictEqual(liveCalls, 0, "não deve chamar provider.testar live");
+  } finally {
+    executor.physicalSendAbandonedInFlight = prevAbandoned;
+    provider.testar = prevTestar;
+    impressora.invalidateProbeCache();
+  }
+});
+
+test("impressaoEmAndamento bloqueia reclaim conceitual (gate do worker)", () => {
+  const executor = require("../print/printExecutor");
+  const prev = executor.physicalSendAbandonedInFlight;
+  executor.physicalSendAbandonedInFlight = () => true;
+  try {
+    assert.strictEqual(pjs.impressaoEmAndamento(), true);
+  } finally {
+    executor.physicalSendAbandonedInFlight = prev;
+  }
+});
+
 // ── 3. LoggingService — dedup de warn/error idênticos em < 1 s ──────────────
 // Os testes abaixo criam instâncias LOCAIS de LoggingService (sem tocar no
 // singleton global) para evitar conflitos de estado entre testes concorrentes.

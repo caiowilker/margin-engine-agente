@@ -5,12 +5,17 @@
 const log = require("../logger").child({ modulo: "print_job_service" });
 const store = require("./printJobStore");
 const printLog = require("./printJobLog");
-const { executarOp, classifyPrintError } = require("./printExecutor");
+const { classifyPrintError } = require("./printExecutor");
 const { resolverTipo, extrairMeta, STATUS } = require("./printJobTypes");
 const {
   resolveIdempotencyKey,
   deveDeduplicar,
 } = require("./printIdempotency");
+
+function getExecutarOp() {
+  // Lazy: permite testes monkeypatcharem printExecutor.executarOp
+  return require("./printExecutor").executarOp;
+}
 
 let workerTimer = null;
 let processando = false;
@@ -28,9 +33,9 @@ const stats = {
 function cfg() {
   return {
     maxTentativas: parseInt(process.env.PRINT_JOB_MAX_TENTATIVAS || "5", 10),
-    // Soft deadline curto: native RAW ~10s; ACBr call 8s. Nunca minutos.
-    timeoutTotalMs: parseInt(process.env.PRINT_JOB_TIMEOUT_TOTAL_MS || "12000", 10),
-    timeoutFastMs: parseInt(process.env.PRINT_JOB_TIMEOUT_FAST_MS || "8000", 10),
+    // Soft curto: PDV comercial — falha limpa < ~6s (soft+drain), nunca minutos.
+    timeoutTotalMs: parseInt(process.env.PRINT_JOB_TIMEOUT_TOTAL_MS || "10000", 10),
+    timeoutFastMs: parseInt(process.env.PRINT_JOB_TIMEOUT_FAST_MS || "4000", 10),
     backoffBaseMs: parseInt(process.env.PRINT_JOB_BACKOFF_MS || "1500", 10),
     pollMs: parseInt(process.env.PRINT_JOB_POLL_MS || "400", 10),
     retentionDias: parseInt(process.env.PRINT_JOB_RETENTION_DIAS || "90", 10),
@@ -191,7 +196,21 @@ async function processarJobRow(row) {
 
   jobsEmVoo += 1;
   try {
-    const exec = await executarOp(row.op, args, timeoutParaJob(row));
+    const exec = await getExecutarOp()(row.op, args, timeoutParaJob(row));
+    // Anti sucesso fantasma: se o job já saiu de ENVIANDO (reclaim/erro paralelo), não promover.
+    const atual = store.buscarJob(row.id);
+    if (atual && atual.status !== STATUS.ENVIANDO) {
+      log.warn(
+        {
+          jobId: row.id,
+          status: atual.status,
+          durationMs: exec.durationMs,
+          metric: "print.late_abandoned",
+        },
+        "[PrintJob] Envio concluiu tarde — status já finalizado; sem promover IMPRESSO",
+      );
+      return { ok: false, abandoned: true, job: rowToJob(atual), result: exec.result };
+    }
     store.atualizarJob(row.id, {
       status: STATUS.IMPRESSO,
       provider: exec.provider,
@@ -220,7 +239,10 @@ async function processarJobRow(row) {
     stats.jobsProcessados += 1;
     stats.ultimaImpressaoEm = new Date().toISOString();
     stats.ultimoErro = null;
-    log.info({ jobId: row.id, op: row.op, ms: exec.durationMs }, "[PrintJob] Impresso");
+    log.info(
+      { jobId: row.id, op: row.op, ms: exec.durationMs, metric: "print.duration_ms", provider: exec.provider },
+      "[PrintJob] Impresso",
+    );
     return { ok: true, job: rowToJob(store.buscarJob(row.id)), result: exec.result };
   } catch (err) {
     const cls = classifyPrintError(err);
@@ -342,15 +364,14 @@ function iniciarWorker() {
   if (process.env.PRINT_JOB_WORKER === "false") return;
   setInterval(() => {
     try {
-      // Não reclaim enquanto envio físico abandonado ainda pode estar vivo
-      const busy =
-        typeof require("./printExecutor").physicalSendAbandonedInFlight === "function" &&
-        require("./printExecutor").physicalSendAbandonedInFlight();
-      if (!busy) {
-        store.recuperarJobsEnviandoPresos(
-          parseInt(process.env.PRINT_ENVIANDO_STALE_MS || "90000", 10),
-        );
+      // Não reclaim enquanto job físico em voo ou envio abandonado ainda vivo
+      if (impressaoEmAndamento()) {
+        processarFila().catch(() => {});
+        return;
       }
+      store.recuperarJobsEnviandoPresos(
+        parseInt(process.env.PRINT_ENVIANDO_STALE_MS || "90000", 10),
+      );
     } catch (_) {}
     processarFila().catch(() => {});
   }, cfg().pollMs);

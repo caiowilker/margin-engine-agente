@@ -38,7 +38,7 @@ function fiscalEmUso() {
 async function aguardarFiscalLivre(maxMs) {
   const limite = Number.isFinite(maxMs)
     ? maxMs
-    : parseInt(process.env.PRINT_FISCAL_WAIT_MS || "5000", 10);
+    : parseInt(process.env.PRINT_FISCAL_WAIT_MS || "2000", 10);
   const started = Date.now();
   const deadline = started + Math.max(0, limite);
   while (Date.now() < deadline) {
@@ -113,8 +113,8 @@ async function prepararImpressaoAposFiscal(opts = {}) {
 
   const acbrNativo = precisaPortaAcbrNativa();
   const waitMs = acbrNativo
-    ? parseInt(process.env.PRINT_FISCAL_WAIT_MS || "5000", 10)
-    : parseInt(process.env.PRINT_FISCAL_WAIT_NATIVE_MS || "1500", 10);
+    ? parseInt(process.env.PRINT_FISCAL_WAIT_MS || "2000", 10)
+    : parseInt(process.env.PRINT_FISCAL_WAIT_NATIVE_MS || "1000", 10);
 
   const wait = fiscalEmUso()
     ? await aguardarFiscalLivre(waitMs)

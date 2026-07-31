@@ -181,15 +181,11 @@ module.exports = {
   getDriverInfo,
   preferNativeEscPos,
   isFiscalPayload,
+  // Poll/status: somente leitura — NÃO sincronizarDeDeteccao / resetPrintProvider
+  // (isso reinfectava o spooler a cada /status e marcava Agente off).
   testar: async (force) => {
     try {
       const det = await native.detectar(force);
-      if (det?.impressora) {
-        require("../printerLocalConfig").sincronizarDeDeteccao(det);
-        try {
-          require("../factory").resetPrintProvider();
-        } catch (_) {}
-      }
       // NUNCA abrir sessão ACBr no poll de status — POS_*/threadpool prende o agente
       // ("Offline", lista vazia). Live status só com flag explícita.
       if (
@@ -207,6 +203,7 @@ module.exports = {
         }
       }
       if (det?.impressora) return true;
+      // native.testar também é read-only (sem sync) — ver impressoraCore.testar
       return native.testar(force);
     } catch (_) {
       return false;
@@ -254,13 +251,17 @@ module.exports = {
     };
   },
   listar: () => ({ ...native.listar(), provider: "acbr-posprinter", ...getDriverInfo() }),
-  detectar: async () => {
+  // Operador "Detectar" (force): sync + reset circuito para reavaliar ACBr neste PC.
+  detectar: async (force = true) => {
     const bootstrap = require("../printerBootstrap");
-    const result = await bootstrap.autoDetectarESincronizar({ force: true });
-    try {
-      runtime.resetAcbrPosCircuit();
-    } catch (_) {
-      /* ignore */
+    const forceSync = force !== false;
+    const result = await bootstrap.autoDetectarESincronizar({ force: forceSync });
+    if (forceSync) {
+      try {
+        runtime.resetAcbrPosCircuit();
+      } catch (_) {
+        /* ignore */
+      }
     }
     return result.info || { ok: false };
   },

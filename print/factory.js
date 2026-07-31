@@ -61,6 +61,17 @@ function isProviderOperational(name) {
 }
 
 function resolveEffectiveProviderName() {
+  // Circuito RAW aberto: PDV forte usa ESC/POS nativo direto — sem pagar timeout ACBr.
+  try {
+    const runtime = require("./acbrPosPrinterRuntime");
+    if (typeof runtime.isAcbrPosCircuitOpen === "function" && runtime.isAcbrPosCircuitOpen()) {
+      const fb = resolveFallbackName();
+      if (fb && isProviderOperational(fb)) return fb;
+      if (isProviderOperational("native")) return "native";
+    }
+  } catch (_) {
+    /* runtime opcional em testes */
+  }
   const requested = resolveProviderName();
   if (isProviderOperational(requested)) return requested;
   const fallback = resolveFallbackName();

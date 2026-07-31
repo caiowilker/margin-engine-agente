@@ -3372,19 +3372,24 @@ function iniciarServidor() {
         await impressora.detectar(true);
       } catch (_) {}
     }
+    // Mesma regra de probeImpressoraLeve — não disputar spooler durante job.
+    const printBusy =
+      typeof impressora.printJobService?.impressaoEmAndamento === "function" &&
+      impressora.printJobService.impressaoEmAndamento();
     const recente =
       typeof impressora.printJobService?.impressaoRecenteOk === "function"
         ? impressora.printJobService.impressaoRecenteOk() === true
         : false;
-    // Poll rápido: se imprimiu há pouco, não dispara Get-Printer/POS
-    let ok = recente;
+    let ok = recente || printBusy;
     let info = null;
-    if (!recente || forceDetect) {
+    const skipLive = (printBusy || recente) && !forceDetect;
+    if (!skipLive) {
       ok = await impressora.testar(forceDetect).catch(() => false);
       info = await impressora.getInfo(forceDetect).catch(() => null);
     }
     const conectada =
       recente ||
+      printBusy ||
       ok === true ||
       info?.conectada === true ||
       info?.ok === true;
@@ -3399,6 +3404,7 @@ function iniciarServidor() {
       driver:
         typeof impressora.getDriverInfo === "function" ? impressora.getDriverInfo() : null,
       recente,
+      printBusy: !!printBusy,
       detectada:
         info?.impressora?.nome ||
         (info?.impressora?.host

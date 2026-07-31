@@ -53,7 +53,8 @@ function classifyPrintError(err) {
     return out;
   }
   if (err?.acbrRet === -10 || /\(-10\)/.test(msg)) {
-    out.retryable = true;
+    // Ativar -10 neste hardware: fallback native uma vez; não martelar fila.
+    out.retryable = false;
     out.fallbackSuggested = true;
     return out;
   }

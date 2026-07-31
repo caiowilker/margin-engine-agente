@@ -128,6 +128,7 @@ Paths ACBr: `C:\ProgramData\MarginEngine\acbr\` (XML, PDF, logs)
 * ADR-010 (backend): orquestração emissão no agente com callback
 * TCP ACBr preservado (não migrar para ent/sai como protocolo principal)
 * Impressão cupom fiscal só com QR válido para NFC-e 65
+* ADR 2026-07-30: poll/status de impressora **read-only** (sem salvar/reset); circuito ACBr RAW **persistente** → comerciais via native; Abort de print ≠ agente offline
 
 ---
 

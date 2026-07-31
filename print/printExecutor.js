@@ -21,9 +21,22 @@ function physicalSendAbandonedInFlight() {
 
 function trackAbandonedInvoke(invokePromise) {
   abandonedPhysicalSends += 1;
-  Promise.resolve(invokePromise).finally(() => {
-    abandonedPhysicalSends = Math.max(0, abandonedPhysicalSends - 1);
-  });
+  Promise.resolve(invokePromise)
+    .then(() => {
+      log.warn(
+        { metric: "print.late_abandoned", late: true },
+        "[PrintExecutor] late_abandoned_ok — envio concluiu após hard drain; job já finalizado (sem reimpressão)",
+      );
+    })
+    .catch((err) => {
+      log.debug(
+        { err: err?.message, metric: "print.late_abandoned" },
+        "[PrintExecutor] late_abandoned_fail",
+      );
+    })
+    .finally(() => {
+      abandonedPhysicalSends = Math.max(0, abandonedPhysicalSends - 1);
+    });
 }
 
 async function liberarSessaoPosAposFalha() {
@@ -33,8 +46,30 @@ async function liberarSessaoPosAposFalha() {
 }
 
 async function withProvider(fn, opts = {}) {
-  const primary = factory.getPrintProvider();
-  const primaryName = primary.getProviderName();
+  // Circuito aberto → native first (sem tentar ACBr neste job).
+  let primary = factory.getPrintProvider();
+  let primaryName = primary.getProviderName();
+  try {
+    const runtime = require("./acbrPosPrinterRuntime");
+    if (
+      runtime.isAcbrPosCircuitOpen?.() &&
+      primaryName === "acbr-posprinter" &&
+      !opts.forceAcbr
+    ) {
+      const fbName = factory.resolveFallbackName() || "native";
+      if (fbName !== primaryName) {
+        primary = factory.createProvider(fbName);
+        primaryName = primary.getProviderName();
+        log.info(
+          { effective: primaryName, metric: "print.provider_effective" },
+          "[PrintExecutor] Circuito aberto — native direto",
+        );
+      }
+    }
+  } catch (_) {
+    /* ignore */
+  }
+
   try {
     return await fn(primary);
   } catch (err) {
@@ -44,11 +79,30 @@ async function withProvider(fn, opts = {}) {
     try {
       const runtime = require("./acbrPosPrinterRuntime");
       if (runtime.shouldOpenCircuitFromError?.(err)) {
-        runtime.openAcbrPosCircuit?.(err.message);
+        if (runtime.openAcbrPosCircuit?.(err.message)) {
+          try {
+            factory.resetPrintProvider();
+          } catch (_) {}
+        }
       }
     } catch (_) {
       /* ignore */
     }
+
+    // Hard drain / timeout: NÃO fallback no mesmo job — invoke abandonado pode
+    // ainda imprimir (dupla via). Circuito aberto → próximo cupom vai native.
+    if (err?.code === "PRINT_HARD_DRAIN" || err?.printTimedOut === true) {
+      log.warn(
+        {
+          err: err.message,
+          primary: primaryName,
+          metric: "print.no_fallback_after_drain",
+        },
+        "[PrintExecutor] Hard drain — sem segundo envio físico neste job (anti-dupla)",
+      );
+      throw err;
+    }
+
     if (
       !opts.noFallback &&
       cls.fallbackSuggested &&
@@ -77,9 +131,12 @@ function driverSnapshot(provider) {
   };
 }
 
+/** Drain curto: PDV comercial não espera 8s após soft timeout. */
 function hardDrainMs(timeoutMs) {
+  const soft = timeoutMs || 4000;
   return parseInt(
-    process.env.PRINT_HARD_DRAIN_MS || String(Math.min(8000, Math.max(2000, timeoutMs || 8000))),
+    process.env.PRINT_HARD_DRAIN_MS ||
+      String(Math.min(2000, Math.max(1000, Math.floor(soft / 2)))),
     10,
   );
 }

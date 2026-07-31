@@ -354,13 +354,14 @@ test("printerModelMap — Epson/POS80 → modelo 1 (enum ACBr oficial)", () => {
   assert.strictEqual(inferirModeloAcbr("Bematech MP-4200", ""), "2");
 });
 
-test("printExecutor — hardDrainMs limitado", () => {
+test("printExecutor — hardDrainMs curto (PDV comercial)", () => {
   const { hardDrainMs } = require("../print/printExecutor");
   const prev = process.env.PRINT_HARD_DRAIN_MS;
   delete process.env.PRINT_HARD_DRAIN_MS;
   try {
-    assert.ok(hardDrainMs(12000) <= 8000);
-    assert.ok(hardDrainMs(1000) >= 2000);
+    assert.ok(hardDrainMs(4000) <= 2000);
+    assert.ok(hardDrainMs(4000) >= 1000);
+    assert.ok(hardDrainMs(12000) <= 2000);
   } finally {
     if (prev === undefined) delete process.env.PRINT_HARD_DRAIN_MS;
     else process.env.PRINT_HARD_DRAIN_MS = prev;

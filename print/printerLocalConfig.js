@@ -192,15 +192,17 @@ function ler() {
   return value;
 }
 
-function salvar(updates) {
-  if (!updates || typeof updates !== "object") throw new Error("Payload inválido");
-  invalidateLerCache();
+function eqStr(a, b) {
+  return String(a ?? "").trim() === String(b ?? "").trim();
+}
 
+/**
+ * Calcula vals+envPatch a partir do estado atual sem gravar.
+ * Usado por salvar (idempotente) e testes.
+ */
+function projetarSalvar(updates, valsBase) {
   const envPatch = {};
-  const iniPath = resolveIniPath();
-  fs.mkdirSync(path.dirname(iniPath), { recursive: true });
-
-  let vals = lerIniValores(iniPath);
+  const vals = { ...valsBase };
 
   if (updates.provider) envPatch.PRINTER_PROVIDER = String(updates.provider);
   if (updates.porta != null && String(updates.porta).trim() !== "") {
@@ -277,6 +279,49 @@ function salvar(updates) {
     }
   }
 
+  return { vals, envPatch };
+}
+
+function envPatchSemMudanca(envPatch) {
+  for (const [key, val] of Object.entries(envPatch)) {
+    if (!eqStr(process.env[key], val)) return false;
+  }
+  return true;
+}
+
+function iniSemMudanca(valsBefore, vals) {
+  return (
+    eqStr(valsBefore.porta, vals.porta) &&
+    eqStr(valsBefore.modelo, vals.modelo) &&
+    eqStr(valsBefore.colunas, vals.colunas) &&
+    eqStr(valsBefore.cut, vals.cut) &&
+    eqStr(valsBefore.pageCode, vals.pageCode) &&
+    eqStr(valsBefore.baud, vals.baud) &&
+    eqStr(valsBefore.parity, vals.parity) &&
+    eqStr(valsBefore.stopBits, vals.stopBits) &&
+    eqStr(valsBefore.handshake, vals.handshake) &&
+    eqStr(valsBefore.timeout, vals.timeout)
+  );
+}
+
+function salvar(updates) {
+  if (!updates || typeof updates !== "object") throw new Error("Payload inválido");
+
+  const iniPath = resolveIniPath();
+  const valsBefore = lerIniValores(iniPath);
+  const { vals, envPatch } = projetarSalvar(updates, valsBefore);
+
+  // Poll/detect repetido: não regravar INI/.env nem resetPrintProvider.
+  if (iniSemMudanca(valsBefore, vals) && envPatchSemMudanca(envPatch)) {
+    log.debug(
+      { porta: vals.porta, modelo: vals.modelo },
+      "[PrinterLocalConfig] Sem mudança — skip save/reset",
+    );
+    return Object.assign(ler(), { unchanged: true });
+  }
+
+  invalidateLerCache();
+  fs.mkdirSync(path.dirname(iniPath), { recursive: true });
   fs.writeFileSync(iniPath, gerarIniContent(vals), "utf8");
   if (Object.keys(envPatch).length) patchEnv(envPatch);
 
@@ -285,7 +330,7 @@ function salvar(updates) {
   } catch (_) {}
 
   log.info({ porta: vals.porta, modelo: vals.modelo }, "[PrinterLocalConfig] Configuração salva");
-  return ler();
+  return Object.assign(ler(), { unchanged: false });
 }
 
 function salvarSemPorta(updates) {
@@ -321,7 +366,7 @@ function salvarSemPorta(updates) {
 }
 
 function sincronizarDeDeteccao(info) {
-  if (!info?.impressora) return ler();
+  if (!info?.impressora) return Object.assign(ler(), { unchanged: true });
   const imp = info.impressora;
   const nome = imp.nome || imp.name || "";
   // Não gravar jato/laser como porta térmica — reinfecta config e derruba o agente.
@@ -332,7 +377,7 @@ function sincronizarDeDeteccao(info) {
         { nome },
         "[PrinterLocalConfig] Ignorando auto-detecção de impressora não térmica",
       );
-      return ler();
+      return Object.assign(ler(), { unchanged: true });
     }
   } catch (_) {}
   const payload = {

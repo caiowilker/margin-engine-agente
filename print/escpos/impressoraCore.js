@@ -202,7 +202,7 @@ const LISTAR_PRINTERS_TIMEOUT_MS = parseInt(
   10,
 );
 const RAW_PRINT_TIMEOUT_MS = parseInt(
-  process.env.PRINTER_RAW_TIMEOUT_MS || "8000",
+  process.env.PRINTER_RAW_TIMEOUT_MS || "4000",
   10,
 );
 
@@ -1715,15 +1715,11 @@ async function renderMovimentoCaixa(printer, payload) {
 }
 
 // ── API publica ───────────────────────────────────────────────────────────────
+/** Poll/status: somente leitura — sync fica em detectar/bootstrap/PUT config. */
 async function testar(force = false) {
   try {
     const info = await detectarImpressora(force);
-    if (info?.impressora) {
-      try {
-        require("../printerLocalConfig").sincronizarDeDeteccao(info);
-      } catch (_) {}
-    }
-    return info.ok;
+    return !!info?.ok || !!info?.impressora;
   } catch (_) {
     return false;
   }

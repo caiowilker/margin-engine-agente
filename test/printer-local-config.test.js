@@ -67,5 +67,40 @@ test("sincronizarDeDeteccao — ignora sem impressora", () => {
   assert.strictEqual(cfg.ler().modelo, before);
 });
 
+test("salvar — idempotente: mesma porta/modelo não reseta", () => {
+  cfg.salvar({
+    porta: "RAW:POSPrinter POS80",
+    modelo: "1",
+    tipo: "windows",
+    nomeImpressora: "POSPrinter POS80",
+  });
+  const mtime1 = fs.statSync(iniPath).mtimeMs;
+  const raw1 = fs.readFileSync(iniPath, "utf8");
+  cfg.salvar({
+    porta: "RAW:POSPrinter POS80",
+    modelo: "1",
+    tipo: "windows",
+    nomeImpressora: "POSPrinter POS80",
+  });
+  const mtime2 = fs.statSync(iniPath).mtimeMs;
+  const raw2 = fs.readFileSync(iniPath, "utf8");
+  assert.strictEqual(raw1, raw2);
+  assert.strictEqual(mtime1, mtime2);
+});
+
+test("sincronizarDeDeteccao — idempotente quando já sincronizado", () => {
+  cfg.salvar({
+    porta: "RAW:POSPrinter POS80",
+    modelo: "1",
+    tipo: "windows",
+    nomeImpressora: "POSPrinter POS80",
+  });
+  const mtime1 = fs.statSync(iniPath).mtimeMs;
+  cfg.sincronizarDeDeteccao({
+    impressora: { nome: "POSPrinter POS80", metodo: "windows", porta: "USB001" },
+  });
+  assert.strictEqual(fs.statSync(iniPath).mtimeMs, mtime1);
+});
+
 console.log(`\nprinter-local-config: ${passed} passed, ${failed} failed\n`);
 process.exit(failed > 0 ? 1 : 0);
