@@ -1635,7 +1635,8 @@ function registrarHandlersFila(lerConfigFn) {
 
   filaFiscal.registrarHandler("EMISSAO", async (payload, job) => {
     const cfg = await lerConfigFn();
-    if (!fiscalDriver.EMISSAO_FISCAL) {
+    // Painel / emissão manual: forcarEmissao ignora o toggle da frente (EMISSAO_FISCAL).
+    if (!fiscalDriver.EMISSAO_FISCAL && payload?.forcarEmissao !== true) {
       throw Object.assign(new Error("EMISSAO_FISCAL desabilitada no agente"), { permanente: true });
     }
     const correlationId = payload.correlationId || job.correlation_id;
