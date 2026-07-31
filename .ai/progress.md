@@ -3,6 +3,14 @@
 **Última atualização:** 2026-07-31  
 **Versão:** `1.0.5` — fail-fast worker + TCP válido + config UI sólida
 
+## Changelog (2026-07-31) — Consulta NF-e entrada por chave (velocidade + handoff)
+
+- `consultarChaveEntrada`: DistDFe **primeiro** (caminho feliz em 1 RTT).
+- ConsultarNFe só se DistDFe não trouxe XML (CANCELADA/DENEGADA).
+- Ciência + DistDFe com até 3 tentativas (1,5s); DistDFe mesmo se ciência falhar.
+- Resposta `AUTORIZADA_SEM_XML` + `precisaRetry` (não devolve xMotivo “Autorizado…” como sucesso vazio).
+- Front: com XML → `confirmarConsultaChave` direto (sem preview duplicado) e navega ao detalhe.
+
 ## Changelog (2026-07-31) — Solidez impressão (audit hang)
 
 - **Kill latch:** após timeout do worker, próximo job espera `terminate`+cooldown — sem 2ª DLL no mesmo RAW.
