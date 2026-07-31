@@ -76,6 +76,24 @@ function criarResolverBackendUrl(lerConfigSync) {
   };
 }
 
+/**
+ * Lê o body bruto quando o Express ainda não consumiu o stream
+ * (multipart / binary). Essencial para upload de XML via FormData.
+ * @param {import('express').Request} req
+ * @returns {Promise<Buffer|null>}
+ */
+async function lerBodyBruto(req) {
+  if (req.readableEnded || req.complete) {
+    return null;
+  }
+  const chunks = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  if (chunks.length === 0) return null;
+  return Buffer.concat(chunks);
+}
+
 function criarApiProxy({ lerConfigSync }) {
   const resolverBackendUrl = criarResolverBackendUrl(lerConfigSync);
 
@@ -85,7 +103,10 @@ function criarApiProxy({ lerConfigSync }) {
     "accept",
     "accept-language",
     "x-request-id",
+    "x-correlation-id",
     "x-tenant-id",
+    "x-store-floor-session",
+    "x-agent-token",
   ];
 
   return async function proxyApiParaBackend(req, res) {
@@ -107,17 +128,32 @@ function criarApiProxy({ lerConfigSync }) {
 
       const method = req.method.toUpperCase();
       const init = { method, headers };
+      const ct = String(req.headers["content-type"] || "").toLowerCase();
 
       if (!["GET", "HEAD"].includes(method)) {
-        const ct = String(req.headers["content-type"] || "");
-        if (req.body != null) {
-          init.body = ct.includes("application/json")
-            ? JSON.stringify(req.body)
-            : req.body;
+        if (ct.includes("application/json") && req.body != null) {
+          // express.json já parseou — re-serializa.
+          init.body =
+            typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+        } else if (Buffer.isBuffer(req.body) || typeof req.body === "string") {
+          init.body = req.body;
+        } else {
+          // Multipart / octet-stream: stream ainda legível (json middleware pulou).
+          const raw = await lerBodyBruto(req);
+          if (raw && raw.length) {
+            init.body = raw;
+            if (!headers["content-length"]) {
+              headers["content-length"] = String(raw.length);
+            }
+          } else if (req.body != null && typeof req.body === "object") {
+            // Fallback: objeto já parseado (urlencoded etc.)
+            init.body = JSON.stringify(req.body);
+            headers["content-type"] = headers["content-type"] || "application/json";
+          }
         }
       }
 
-      const timeoutMs = Number(process.env.API_PROXY_TIMEOUT_MS || 15_000);
+      const timeoutMs = Number(process.env.API_PROXY_TIMEOUT_MS || 60_000);
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       let upstream;
@@ -167,7 +203,7 @@ function anexarProxyWebSocket(httpServer, { lerConfigSync, isAllowed }) {
       return;
     }
 
-    if (typeof isAllowed === "function" && !isAllowed(req)) {
+    if (typeof isAllowed === "function" && isAllowed(req) === false) {
       socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
       socket.destroy();
       return;
@@ -272,5 +308,6 @@ module.exports = {
   resolverBackendUrlPadrao,
   lerBackendPadraoDoFrontend,
   normalizeBackendUrl,
+  lerBodyBruto,
   PRODUCTION_API_URL,
 };

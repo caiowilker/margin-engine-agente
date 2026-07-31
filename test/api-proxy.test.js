@@ -85,6 +85,63 @@ test("criarApiProxy encaminha POST /auth/login para API (não SPA app.*)", async
   }
 });
 
+test("criarApiProxy encaminha body bruto multipart (importar-xml)", async () => {
+  const calls = [];
+  const originalFetch = global.fetch;
+  global.fetch = async (url, init) => {
+    calls.push({ url, init });
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+
+  const proxy = criarApiProxy({
+    lerConfigSync: () => ({ backendUrl: "https://api.marginengine.com.br" }),
+  });
+
+  const boundary = "----BoundForm";
+  const raw = Buffer.from(
+    `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="n.xml"\r\n\r\n<xml/>\r\n--${boundary}--\r\n`,
+  );
+
+  async function* gen() {
+    yield raw;
+  }
+
+  const req = {
+    method: "POST",
+    url: "/pdv/notas-entrada/importar-xml",
+    headers: {
+      "content-type": `multipart/form-data; boundary=${boundary}`,
+      authorization: "Bearer tok",
+    },
+    readableEnded: false,
+    complete: false,
+    [Symbol.asyncIterator]: gen,
+  };
+
+  const res = {
+    status() {
+      return this;
+    },
+    setHeader() {},
+    send() {},
+    json() {},
+    end() {},
+  };
+
+  try {
+    await proxy(req, res);
+    assert.equal(calls.length, 1);
+    assert.ok(Buffer.isBuffer(calls[0].init.body));
+    assert.ok(calls[0].init.body.includes(Buffer.from("<xml/>")));
+    assert.equal(calls[0].init.headers.authorization, "Bearer tok");
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test("criarApiProxy responde 204 em OPTIONS", async () => {
   const proxy = criarApiProxy({ lerConfigSync: () => ({}) });
   let statusCode = 0;

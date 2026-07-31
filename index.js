@@ -1116,7 +1116,8 @@ function iniciarServidor() {
 
   app.use(securityHeaders);
   app.use(corsMiddleware);
-  app.use(express.json({ limit: "2mb" }));
+  // NF-e XML via api-proxy (JSON) pode passar de 2MB — margem para notas grandes.
+  app.use(express.json({ limit: "12mb" }));
 
   const { getLoggingService } = require("./runtime/loggingService");
   app.use((req, res, next) => {
