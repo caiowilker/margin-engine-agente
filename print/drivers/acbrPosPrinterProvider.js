@@ -64,7 +64,7 @@ function preferNativeEscPos(payload) {
   return true;
 }
 
-async function imprimirViaTags(renderFn, payload, fallbackNative) {
+async function imprimirViaTags(renderFn, payload, fallbackNative, opts = {}) {
   const mode = getIntegrationMode();
   if (mode === "parity" || preferNativeEscPos(payload)) {
     return fallbackNative(payload);
@@ -72,12 +72,27 @@ async function imprimirViaTags(renderFn, payload, fallbackNative) {
   const tags = renderFn(payload || {});
   const t0 = Date.now();
   await imprimirTags(tags);
+  await talvezAbrirGavetaAposAcbr(payload, opts);
   return {
     ok: true,
     provider: "acbr-posprinter",
     durationMs: Date.now() - t0,
     lines: tags.split("\n").length,
   };
+}
+
+/** Após tags ACBr: pulso ESC/POS nativo (sem segunda sessão PosPrinter). */
+async function talvezAbrirGavetaAposAcbr(payload, opts = {}) {
+  try {
+    const core = require("../escpos/impressoraCore");
+    const deve =
+      typeof core.deveAbrirGavetaNoPayload === "function" &&
+      core.deveAbrirGavetaNoPayload(payload, { sempre: opts.sempre === true });
+    if (!deve) return;
+    await abrirGaveta();
+  } catch (err) {
+    log.warn({ err: err?.message }, "[ACBrPosPrinter] Gaveta pós-tags falhou (ignorado)");
+  }
 }
 
 const DRIVER_INFO = {
@@ -162,6 +177,7 @@ async function imprimirPayloadTags(payload) {
   tags = await resolverQrBmpPlaceholders(tags, normalizado);
   const t0 = Date.now();
   const res = await imprimirTags(tags);
+  await talvezAbrirGavetaAposAcbr(normalizado);
   return {
     ...res,
     ok: true,
@@ -296,11 +312,14 @@ module.exports = {
   imprimirSegundaVia,
   imprimirTags,
   imprimirTeste,
-  imprimirAbertura: (p) => imprimirViaTags(caixaTags.renderAberturaTags, p, native.imprimirAbertura),
+  imprimirAbertura: (p) =>
+    imprimirViaTags(caixaTags.renderAberturaTags, p, native.imprimirAbertura, { sempre: true }),
   imprimirFechamento: (p) =>
     imprimirViaTags(caixaTags.renderFechamentoTags, p, native.imprimirFechamento),
   imprimirMovimentoCaixa: (p) =>
-    imprimirViaTags(caixaTags.renderMovimentoCaixaTags, p, native.imprimirMovimentoCaixa),
+    imprimirViaTags(caixaTags.renderMovimentoCaixaTags, p, native.imprimirMovimentoCaixa, {
+      sempre: true,
+    }),
   imprimirPedido: (p) => {
     const routes = require("../printerStationRoutes");
     const porta = routes.resolvePortaForPrintType(p?.printType ?? p?.print_type);

@@ -13,7 +13,9 @@ A API `/impressora/gaveta` existia, mas o PDV quase não a usava; o teste nativo
 2. Pulso configurável (`PRINTER_DRAWER_ON_MS` / `OFF_MS` / `PIN` / `INVERTED`).
 3. Mesmo job do cupom: anexa pulso quando dinheiro (ou `abrirGaveta: true`).
 4. Abertura/sangria/suprimento e teste: pulso quando `PRINTER_DRAWER` ativo.
-5. Front: flag no cupom + `abrirGaveta()` se impressão recusada / DANFC-e + botão manual no painel.
+5. Front: flag no cupom + `abrirGaveta()` se impressão recusada / DANFE com chave + botão manual.
+6. Caminho ACBr tags: após tags, `talvezAbrirGavetaAposAcbr` (dinheiro / sempre em abertura-movimento).
+7. Faturar pedido: recusa de impressão e DANFE com chave também abrem gaveta em dinheiro.
 
 ## Consequências
 

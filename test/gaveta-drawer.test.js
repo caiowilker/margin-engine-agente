@@ -94,7 +94,17 @@ test("acbrPosPrinterProvider.abrirGaveta sempre chama native", () => {
     "utf8",
   );
   assert.ok(/async function abrirGaveta\(\)[\s\S]*return native\.abrirGaveta\(\)/.test(src));
-  assert.ok(!/abrirGavetaNative\(\)/.test(src.match(/async function abrirGaveta[\s\S]*?\n\}/)[0]));
+  const fn = src.match(/async function abrirGaveta\(\)[\s\S]*?\n\}/)?.[0] || "";
+  assert.ok(fn && !/abrirGavetaNative\(\)/.test(fn));
+});
+
+test("acbrPosPrinterProvider — pós-tags abre gaveta (cupom/abertura)", () => {
+  const src = require("fs").readFileSync(
+    path.join(__dirname, "../print/drivers/acbrPosPrinterProvider.js"),
+    "utf8",
+  );
+  assert.ok(src.includes("talvezAbrirGavetaAposAcbr"));
+  assert.ok(src.includes("sempre: true"));
 });
 
 console.log(`\ngaveta: ${passed} passed, ${failed} failed`);
