@@ -58,6 +58,11 @@ function isTipoRapido(tipo) {
 
 function timeoutParaJob(row) {
   const c = cfg();
+  // Gaveta = 5 bytes ESC/POS — soft curto para PDV sentir instantâneo.
+  if (row.tipo === "gaveta" || row.op === "abrirGaveta") {
+    const gavetaMs = parseInt(process.env.PRINT_JOB_TIMEOUT_GAVETA_MS || "2500", 10);
+    return Math.min(c.timeoutFastMs, Number.isFinite(gavetaMs) ? Math.max(800, gavetaMs) : 2500);
+  }
   if (isTipoRapido(row.tipo)) return c.timeoutFastMs;
   return c.timeoutTotalMs;
 }

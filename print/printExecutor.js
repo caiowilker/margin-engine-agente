@@ -59,10 +59,11 @@ async function liberarSessaoPosAposFalha() {
 
 async function withProvider(fn, opts = {}) {
   const payload = opts.payload;
+  const op = opts.op;
   let primary = factory.getPrintProvider();
   let primaryName = primary.getProviderName();
 
-  // Por job: circuito / RAW comercial / preferNative → native direto (sem ACBr).
+  // Por job: gaveta / circuito / RAW comercial / preferNative → native direto (sem ACBr).
   // Fiscal/DANFE com chave permanece no ACBr mesmo com circuito aberto.
   if (!opts.forceAcbr && primaryName === "acbr-posprinter") {
     try {
@@ -70,10 +71,11 @@ async function withProvider(fn, opts = {}) {
       const acbrProv = require("./drivers/acbrPosPrinterProvider");
       const fiscal = payload && acbrProv.isFiscalPayload?.(payload);
       const wantNative =
-        !fiscal &&
-        (runtime.isAcbrPosCircuitOpen?.() ||
-          acbrProv.portaEhRawWindows?.() ||
-          (payload && acbrProv.preferNativeEscPos?.(payload)));
+        op === "abrirGaveta" ||
+        (!fiscal &&
+          (runtime.isAcbrPosCircuitOpen?.() ||
+            acbrProv.portaEhRawWindows?.() ||
+            (payload && acbrProv.preferNativeEscPos?.(payload))));
       if (wantNative) {
         const fbName = factory.resolveFallbackName() || "native";
         if (fbName !== primaryName) {
@@ -83,11 +85,14 @@ async function withProvider(fn, opts = {}) {
             {
               effective: primaryName,
               metric: "print.provider_effective",
-              reason: runtime.isAcbrPosCircuitOpen?.()
-                ? "circuit"
-                : acbrProv.portaEhRawWindows?.()
-                  ? "raw_windows"
-                  : "prefer_native",
+              reason:
+                op === "abrirGaveta"
+                  ? "gaveta"
+                  : runtime.isAcbrPosCircuitOpen?.()
+                    ? "circuit"
+                    : acbrProv.portaEhRawWindows?.()
+                      ? "raw_windows"
+                      : "prefer_native",
             },
             "[PrintExecutor] Native direto (comercial)",
           );
@@ -331,7 +336,7 @@ async function executarOp(op, args, timeoutMs) {
   try {
     const exec = await withProvider(
       (provider) => executarProviderOp(provider, op, args, timeoutMs),
-      { payload: args?.[0] },
+      { payload: args?.[0], op },
     );
     if (wait?.aguardouMs > 0) {
       exec.waitFiscalMs = wait.aguardouMs;

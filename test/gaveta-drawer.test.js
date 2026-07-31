@@ -27,7 +27,25 @@ function test(name, fn) {
   }
 }
 
-const { drawerPulseBuffer, deveAbrirGavetaNoPayload, drawerEnabled } = core.__test;
+async function testAsync(name, fn) {
+  try {
+    await fn();
+    passed++;
+    console.log(`  ✓ ${name}`);
+  } catch (e) {
+    failed++;
+    console.error(`  ✗ ${name}:`, e.message);
+  }
+}
+
+const {
+  drawerPulseBuffer,
+  deveAbrirGavetaNoPayload,
+  drawerEnabled,
+  markGavetaPulseSent,
+  gavetaPulseRecente,
+  resetGavetaPulse,
+} = core.__test;
 
 test("drawerPulseBuffer — defaults POS80 0x19/0xFA", () => {
   delete process.env.PRINTER_DRAWER_ON_MS;
@@ -98,14 +116,47 @@ test("acbrPosPrinterProvider.abrirGaveta sempre chama native", () => {
   assert.ok(fn && !/abrirGavetaNative\(\)/.test(fn));
 });
 
-test("acbrPosPrinterProvider — pós-tags abre gaveta (cupom/abertura)", () => {
+test("printExecutor — abrirGaveta força native no withProvider", () => {
   const src = require("fs").readFileSync(
-    path.join(__dirname, "../print/drivers/acbrPosPrinterProvider.js"),
+    path.join(__dirname, "../print/printExecutor.js"),
     "utf8",
   );
-  assert.ok(src.includes("talvezAbrirGavetaAposAcbr"));
-  assert.ok(src.includes("sempre: true"));
+  assert.ok(src.includes('op === "abrirGaveta"'));
+  assert.ok(src.includes('reason:\n                op === "abrirGaveta"') || src.includes('? "gaveta"'));
 });
 
-console.log(`\ngaveta: ${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);
+test("printJobService — timeout curto para gaveta", () => {
+  const src = require("fs").readFileSync(
+    path.join(__dirname, "../print/printJobService.js"),
+    "utf8",
+  );
+  assert.ok(src.includes("PRINT_JOB_TIMEOUT_GAVETA_MS"));
+  assert.ok(src.includes('row.tipo === "gaveta"') || src.includes('op === "abrirGaveta"'));
+});
+
+test("gaveta coalesce — janela recente após mark", () => {
+  process.env.PRINTER_DRAWER = "true";
+  process.env.PRINTER_DRAWER_COALESCE_MS = "800";
+  resetGavetaPulse();
+  assert.strictEqual(gavetaPulseRecente(), false);
+  markGavetaPulseSent();
+  assert.strictEqual(gavetaPulseRecente(), true);
+  resetGavetaPulse();
+  assert.strictEqual(gavetaPulseRecente(), false);
+});
+
+(async () => {
+  await testAsync("gaveta coalesce — segundo abrirGaveta retorna coalesced", async () => {
+    process.env.PRINTER_DRAWER = "true";
+    process.env.PRINTER_DRAWER_COALESCE_MS = "800";
+    resetGavetaPulse();
+    markGavetaPulseSent();
+    const r = await core.abrirGaveta();
+    assert.strictEqual(r.ok, true);
+    assert.strictEqual(r.coalesced, true);
+    resetGavetaPulse();
+  });
+
+  console.log(`\ngaveta: ${passed} passed, ${failed} failed`);
+  process.exit(failed ? 1 : 0);
+})();

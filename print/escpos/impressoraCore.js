@@ -2277,6 +2277,21 @@ function imprimirPedido(payload) {
   });
 }
 
+/** Coalesce pulsos próximos — evita gaveta dupla (cupom+job / recusa+DANFE). */
+let _lastGavetaPulseAt = 0;
+
+function gavetaCoalesceMs() {
+  return Math.max(0, parseInt(process.env.PRINTER_DRAWER_COALESCE_MS || "800", 10) || 800);
+}
+
+function markGavetaPulseSent() {
+  _lastGavetaPulseAt = Date.now();
+}
+
+function gavetaPulseRecente() {
+  return Date.now() - _lastGavetaPulseAt < gavetaCoalesceMs();
+}
+
 function drawerEnabled() {
   return (process.env.PRINTER_DRAWER || "true").toLowerCase() !== "false";
 }
@@ -2329,8 +2344,9 @@ function deveAbrirGavetaNoPayload(payload, opts = {}) {
 async function imprimirComGavetaOpcional(renderFn, payload, opts = {}) {
   return comLockImpressao(async () => {
     let buffer = await gerarBuffer(renderFn);
-    if (deveAbrirGavetaNoPayload(payload, opts)) {
+    if (deveAbrirGavetaNoPayload(payload, opts) && !gavetaPulseRecente()) {
       buffer = Buffer.concat([buffer, drawerPulseBuffer()]);
+      markGavetaPulseSent();
     }
     return enviarBuffer(buffer);
   });
@@ -2340,7 +2356,16 @@ function abrirGaveta() {
   if (!drawerEnabled()) {
     return Promise.resolve({ ok: true, skipped: true, motivo: "PRINTER_DRAWER=false" });
   }
+  if (gavetaPulseRecente()) {
+    return Promise.resolve({
+      ok: true,
+      gaveta: true,
+      coalesced: true,
+      metric: "print.gaveta_coalesced",
+    });
+  }
   const buffer = drawerPulseBuffer();
+  markGavetaPulseSent();
   return comLockImpressao(() =>
     enviarBuffer(buffer).then(() => ({
       ok: true,
@@ -2404,5 +2429,10 @@ module.exports = {
     drawerPulseBuffer,
     deveAbrirGavetaNoPayload,
     drawerEnabled,
+    markGavetaPulseSent,
+    gavetaPulseRecente,
+    resetGavetaPulse() {
+      _lastGavetaPulseAt = 0;
+    },
   },
 };
