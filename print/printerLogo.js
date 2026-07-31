@@ -76,6 +76,9 @@ function invalidatePrintCache() {
   try {
     if (fs.existsSync(LOGO_PRINT_KEY)) fs.unlinkSync(LOGO_PRINT_KEY);
   } catch (_) {}
+  try {
+    require("./escpos/impressoraCore").invalidateLogoEscposImageCache?.();
+  } catch (_) {}
 }
 
 /**
@@ -222,8 +225,8 @@ function deveExibirLogoCupom(payload) {
   const info = ler();
   if (!(info.ativo && info.caminhoAbsoluto)) return false;
   try {
-    const buf = fs.readFileSync(info.caminhoAbsoluto);
-    if (!isBmpPrintable(buf)) {
+    const buf = lerBuffer();
+    if (!buf || !isBmpPrintable(buf)) {
       log.warn("[PrinterLogo] BMP inválido/corrompido — logo omitida no cupom");
       return false;
     }
@@ -231,6 +234,22 @@ function deveExibirLogoCupom(payload) {
     return false;
   }
   return true;
+}
+
+/**
+ * Pré-aquece PNG + valida BMP — primeiro cupom com logo não paga sharp frio.
+ * @returns {Promise<boolean>}
+ */
+async function warmLogoEscpos() {
+  try {
+    const info = ler();
+    if (!(info.ativo && info.caminhoAbsoluto)) return false;
+    const pathOut = await prepararArquivoEscpos(info);
+    return !!pathOut;
+  } catch (err) {
+    log.debug({ err: err?.message }, "[PrinterLogo] warm falhou");
+    return false;
+  }
 }
 
 module.exports = {
@@ -245,5 +264,6 @@ module.exports = {
   exibirLogoCupomHabilitado,
   deveExibirLogoCupom,
   prepararArquivoEscpos,
+  warmLogoEscpos,
   resolveLogoPrintSize,
 };

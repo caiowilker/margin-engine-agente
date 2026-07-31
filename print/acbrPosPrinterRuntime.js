@@ -1241,7 +1241,7 @@ function shouldOpenCircuitFromError(err) {
   const msg = String(err?.message || err || "");
   if (err?.code === "PRINTER_NOT_THERMAL" || err?.permanente) return false;
   if (err?.code === "ACBR_POS_WORKER_OWNS_SESSION") return false;
-  if (err?.acbrRet === -10 || /\(-10\)/.test(msg)) return true;
+  if (err?.acbrRet === -10 || /\(-10\)/.test(msg) || /ret\s*=\s*-10\b/i.test(msg)) return true;
   if (/expected \d+ arguments, got \d+/i.test(msg)) return true;
   if (
     err?.code === "ACBR_POS_TIMEOUT" ||

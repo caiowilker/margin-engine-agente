@@ -272,14 +272,25 @@ test("printFiscalCoord — fiscalEmUso sem lock ativo", () => {
     fiscalAcabouDeUsar,
     isFastNativePath,
   } = require("../print/printFiscalCoordination");
+  const runtime = require("../print/acbrPosPrinterRuntime");
   assert.strictEqual(fiscalEmUso(), false);
   assert.strictEqual(fiscalAcabouDeUsar(1), false);
-  // Padrão: tudo via ACBr (não fast-native)
-  assert.strictEqual(isFastNativePath({ payload: { naoFiscal: true } }), false);
-  assert.strictEqual(isFastNativePath({ op: "imprimirPedido" }), false);
   const prev = process.env.PRINT_FAST_NATIVE;
-  process.env.PRINT_FAST_NATIVE = "true";
+  const prevPorta = process.env.PRINTER_PORTA;
+  delete process.env.PRINT_FAST_NATIVE;
+  delete process.env.PRINTER_PORTA;
+  runtime.resetAcbrPosCircuit();
   try {
+    // Sem RAW / circuito: tudo via ACBr (não fast-native)
+    assert.strictEqual(isFastNativePath({ payload: { naoFiscal: true } }), false);
+    assert.strictEqual(isFastNativePath({ op: "imprimirPedido" }), false);
+
+    process.env.PRINTER_PORTA = "RAW:POSPrinter POS80";
+    assert.strictEqual(isFastNativePath({ payload: { naoFiscal: true } }), true);
+    assert.strictEqual(isFastNativePath({ op: "imprimirPedido" }), true);
+
+    delete process.env.PRINTER_PORTA;
+    process.env.PRINT_FAST_NATIVE = "true";
     assert.strictEqual(isFastNativePath({ payload: { naoFiscal: true } }), true);
     assert.strictEqual(isFastNativePath({ op: "imprimirPedido" }), true);
     assert.strictEqual(
@@ -291,6 +302,9 @@ test("printFiscalCoord — fiscalEmUso sem lock ativo", () => {
   } finally {
     if (prev === undefined) delete process.env.PRINT_FAST_NATIVE;
     else process.env.PRINT_FAST_NATIVE = prev;
+    if (prevPorta === undefined) delete process.env.PRINTER_PORTA;
+    else process.env.PRINTER_PORTA = prevPorta;
+    runtime.resetAcbrPosCircuit();
   }
 });
 
@@ -317,7 +331,9 @@ test("preferNativeEscPos — padrão ACBr (PRINT_FAST_NATIVE=false)", () => {
   const { preferNativeEscPos } = require("../print/drivers/acbrPosPrinterProvider");
   const runtime = require("../print/acbrPosPrinterRuntime");
   const prev = process.env.PRINT_FAST_NATIVE;
+  const prevPorta = process.env.PRINTER_PORTA;
   delete process.env.PRINT_FAST_NATIVE;
+  delete process.env.PRINTER_PORTA;
   runtime.resetAcbrPosCircuit();
   try {
     assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), false);
@@ -325,6 +341,32 @@ test("preferNativeEscPos — padrão ACBr (PRINT_FAST_NATIVE=false)", () => {
   } finally {
     if (prev === undefined) delete process.env.PRINT_FAST_NATIVE;
     else process.env.PRINT_FAST_NATIVE = prev;
+    if (prevPorta === undefined) delete process.env.PRINTER_PORTA;
+    else process.env.PRINTER_PORTA = prevPorta;
+    runtime.resetAcbrPosCircuit();
+  }
+});
+
+test("preferNativeEscPos — RAW:Windows comercial usa native sem PRINT_FAST_NATIVE", () => {
+  const { preferNativeEscPos } = require("../print/drivers/acbrPosPrinterProvider");
+  const runtime = require("../print/acbrPosPrinterRuntime");
+  const prev = process.env.PRINT_FAST_NATIVE;
+  const prevPorta = process.env.PRINTER_PORTA;
+  delete process.env.PRINT_FAST_NATIVE;
+  process.env.PRINTER_PORTA = "RAW:POSPrinter POS80";
+  runtime.resetAcbrPosCircuit();
+  try {
+    assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), true);
+    assert.strictEqual(preferNativeEscPos({}), true);
+    assert.strictEqual(
+      preferNativeEscPos({ chaveNfe: "35" + "0".repeat(42), naoFiscal: false }),
+      false,
+    );
+  } finally {
+    if (prev === undefined) delete process.env.PRINT_FAST_NATIVE;
+    else process.env.PRINT_FAST_NATIVE = prev;
+    if (prevPorta === undefined) delete process.env.PRINTER_PORTA;
+    else process.env.PRINTER_PORTA = prevPorta;
     runtime.resetAcbrPosCircuit();
   }
 });
@@ -377,6 +419,19 @@ test("printErrors — hard drain NÃO sugere fallback no mesmo job", () => {
   assert.strictEqual(cls.retryable, false);
   // Anti-dupla: invoke abandonado pode ainda imprimir; próximo cupom via circuito→native
   assert.strictEqual(cls.fallbackSuggested, false);
+});
+
+test("printErrors — timeout pré-impressão ConfigGravar sugere fallback", () => {
+  const { classifyPrintError } = require("../print/printErrors");
+  const err = new Error(
+    "Timeout de impressão (4000ms): [ACBrPosPrinter] POS_ConfigGravarValor ret=-10",
+  );
+  err.code = "PRINT_TIMEOUT";
+  err.printTimedOut = true;
+  err.acbrRet = -10;
+  const cls = classifyPrintError(err);
+  assert.strictEqual(cls.retryable, false);
+  assert.strictEqual(cls.fallbackSuggested, true);
 });
 
 test("printerBootstrap — porta RAW configurada não exige detecção", () => {

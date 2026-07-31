@@ -18,8 +18,8 @@ function classifyPrintError(err) {
     out.fallbackSuggested = false;
     return out;
   }
-  // Hard drain / hang: NÃO sugerir fallback no mesmo job (FFI pode ainda imprimir).
-  // Circuito abre → próximo cupom vai native.
+  // Hard drain / hang após envio: NÃO sugerir fallback (FFI pode ainda imprimir).
+  // Pré-impressão (ConfigGravar/Ativar) pode vir embrulhada em timeout — fallback OK.
   if (
     err?.code === "PRINT_HARD_DRAIN" ||
     err?.code === "ACBR_POS_TIMEOUT" ||
@@ -28,7 +28,13 @@ function classifyPrintError(err) {
     err?.printTimedOut
   ) {
     out.retryable = false;
-    out.fallbackSuggested = false;
+    const msgLow = msg.toLowerCase();
+    const prePrintOnly =
+      err?.fallbackNative === true ||
+      ((/pos_configgravar|configgravarvalor|pos_ativar|pos_inicializar/i.test(msgLow) ||
+        err?.acbrRet === -10) &&
+        !/pos_imprimir|imprimir\b/i.test(msgLow));
+    out.fallbackSuggested = !!prePrintOnly;
     return out;
   }
   // Worker morto / in-process bloqueado no Windows → native UMA vez neste job

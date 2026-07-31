@@ -90,10 +90,14 @@ let cacheDescobertaEm = 0;
 let cacheImpressoraEscolhida = null;
 let ultimaImpressoraUsada = null;
 let printLock = Promise.resolve();
+/** Cache em memória do escpos.Image — evita get-pixels a cada cupom. */
+let logoEscposImageCache = { key: null, image: null };
 
 const RAW_PRINT_SCRIPT = path.join(os.tmpdir(), "pdv-margin-raw-print.ps1");
+const RAW_HELPER_DLL = path.join(os.tmpdir(), "pdv-margin-raw", "RawPrinterHelper.dll");
 if (IS_WIN) {
   try {
+    fs.mkdirSync(path.dirname(RAW_HELPER_DLL), { recursive: true });
     fs.writeFileSync(
       RAW_PRINT_SCRIPT,
       `$ErrorActionPreference = 'Stop'
@@ -109,8 +113,12 @@ function Mark([string]$name) {
   $timings[$name] = [int64]$sw.ElapsedMilliseconds
   $sw.Restart()
 }
+$asm = ${JSON.stringify(RAW_HELPER_DLL)}
 if (-not ("RawPrinterHelper" -as [type])) {
-Add-Type -TypeDefinition @'
+  if (Test-Path -LiteralPath $asm) {
+    Add-Type -Path $asm
+  } else {
+    $src = @'
 using System;
 using System.Runtime.InteropServices;
 public class RawPrinterHelper {
@@ -132,6 +140,11 @@ public class RawPrinterHelper {
   public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);
 }
 '@
+    $dir = Split-Path -Parent $asm
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+    Add-Type -TypeDefinition $src -OutputAssembly $asm
+    Add-Type -Path $asm
+  }
 }
 Mark 'AddType'
 $h = [IntPtr]::Zero
@@ -174,6 +187,66 @@ Remove-Item $cfg.file -Force -ErrorAction SilentlyContinue
       "utf8",
     );
   } catch (_) {}
+}
+
+/** Pré-compila RawPrinterHelper.dll (fire-and-forget) — cupons seguintes sem AddType lento. */
+function warmRawWin32Helper() {
+  if (!IS_WIN) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    try {
+      if (fs.existsSync(RAW_HELPER_DLL)) {
+        resolve(true);
+        return;
+      }
+      fs.mkdirSync(path.dirname(RAW_HELPER_DLL), { recursive: true });
+      const child = execFile(
+        "powershell",
+        [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          `$asm=${JSON.stringify(RAW_HELPER_DLL)}; if (Test-Path -LiteralPath $asm) { exit 0 }; $dir=Split-Path -Parent $asm; New-Item -ItemType Directory -Force -Path $dir | Out-Null; Add-Type -TypeDefinition @'
+using System; using System.Runtime.InteropServices;
+public class RawPrinterHelper {
+  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]
+  public class DOCINFOA {
+    [MarshalAs(UnmanagedType.LPStr)] public string pDocName;
+    [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
+    [MarshalAs(UnmanagedType.LPStr)] public string pDatatype;
+  }
+  [DllImport("winspool.drv", EntryPoint="OpenPrinterA", SetLastError=true, CharSet=CharSet.Ansi)]
+  public static extern bool OpenPrinter(string szPrinter, out IntPtr hPrinter, IntPtr pd);
+  [DllImport("winspool.drv", SetLastError=true)] public static extern bool ClosePrinter(IntPtr hPrinter);
+  [DllImport("winspool.drv", EntryPoint="StartDocPrinterA", SetLastError=true, CharSet=CharSet.Ansi)]
+  public static extern bool StartDocPrinter(IntPtr hPrinter, int level, [In] DOCINFOA di);
+  [DllImport("winspool.drv", SetLastError=true)] public static extern bool EndDocPrinter(IntPtr hPrinter);
+  [DllImport("winspool.drv", SetLastError=true)] public static extern bool StartPagePrinter(IntPtr hPrinter);
+  [DllImport("winspool.drv", SetLastError=true)] public static extern bool EndPagePrinter(IntPtr hPrinter);
+  [DllImport("winspool.drv", SetLastError=true)]
+  public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);
+}
+'@ -OutputAssembly $asm`,
+        ],
+        { windowsHide: true, timeout: 30000 },
+        (err) => {
+          if (err) {
+            log.debug({ err: err.message }, "[ImpressoraCore] warm RawPrinterHelper falhou");
+            resolve(false);
+          } else {
+            log.info(
+              { dll: RAW_HELPER_DLL, metric: "print.raw_helper_warm" },
+              "[ImpressoraCore] RawPrinterHelper.dll pré-compilada",
+            );
+            resolve(true);
+          }
+        },
+      );
+      child.on("error", () => resolve(false));
+    } catch (_) {
+      resolve(false);
+    }
+  });
 }
 
 function parseRawTimingFromStdout(stdout) {
@@ -461,6 +534,21 @@ function invalidateDiscoveryCache() {
   cacheDescoberta = null;
   cacheDescobertaEm = 0;
   cacheImpressoraEscolhida = null;
+}
+
+/** Pré-aquece DLL Win32 + logo ESC/POS — cupom seguinte perto de instantâneo. */
+async function warmPrintHotPath() {
+  const out = { rawHelper: false, logo: false };
+  try {
+    out.rawHelper = await warmRawWin32Helper();
+  } catch (_) {}
+  try {
+    out.logo = await require("../printerLogo").warmLogoEscpos();
+  } catch (_) {}
+  if (out.rawHelper || out.logo) {
+    log.info({ ...out, metric: "print.hot_path_warm" }, "[ImpressoraCore] Hot-path aquecido");
+  }
+  return out;
 }
 
 function escolherImpressoraWindows(lista) {
@@ -1424,12 +1512,17 @@ async function imprimirLogoCupomEscpos(printer, payload) {
     } catch (_) {
       /* usa BMP original se sharp falhar */
     }
-    const image = await new Promise((resolve, reject) => {
-      escpos.Image.load(caminho, (err, img) => {
-        if (err) reject(err);
-        else resolve(img);
+    const cacheKey = `${info.sha256 || caminho}|${size.escposWidthDots}|${size.density || "d24"}`;
+    let image = logoEscposImageCache.key === cacheKey ? logoEscposImageCache.image : null;
+    if (!image) {
+      image = await new Promise((resolve, reject) => {
+        escpos.Image.load(caminho, (err, img) => {
+          if (err) reject(err);
+          else resolve(img);
+        });
       });
-    });
+      logoEscposImageCache = { key: cacheKey, image };
+    }
     await new Promise((resolve, reject) => {
       printer.align("ct").image(image, size.density || "d24", (err) => {
         if (err) reject(err);
@@ -2181,6 +2274,11 @@ module.exports = {
   detectar: () => detectarImpressora(true),
   detectarImpressora,
   invalidateDiscoveryCache,
+  invalidateLogoEscposImageCache() {
+    logoEscposImageCache = { key: null, image: null };
+  },
+  warmRawWin32Helper,
+  warmPrintHotPath,
   resolverPortaAcbrConfigurada,
   resolverNomeRawConfigurado,
   bytesQrGsK,

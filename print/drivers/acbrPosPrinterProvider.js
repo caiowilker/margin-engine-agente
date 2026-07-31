@@ -15,8 +15,10 @@ const pedidoTags = require("../pedidoAcbrTags");
 
 /**
  * Prefere ESC/POS nativo vs ACBr tags.
- * Padrão: ACBr (PRINT_FAST_NATIVE=false). Native só com flag explícita,
- * circuito RAW aberto (Ativar -10 / arity) ou como retaguarda.
+ * Padrão: ACBr (PRINT_FAST_NATIVE=false), exceto:
+ * - circuito RAW aberto (Ativar/ConfigGravar -10)
+ * - porta RAW:Windows em comerciais (ACBr em spooler RAW costuma hang/timeout)
+ * - PRINT_FAST_NATIVE=true|always
  */
 function isFiscalPayload(payload) {
   if (!payload || typeof payload !== "object") return false;
@@ -27,6 +29,19 @@ function isFiscalPayload(payload) {
   return false;
 }
 
+/** Porta RAW:NomeWindows — ESC/POS nativo é o caminho sólido/rápido. */
+function portaEhRawWindows() {
+  try {
+    const local = require("../printerLocalConfig").ler()?.porta;
+    if (local != null && String(local).trim() !== "") {
+      return /^RAW:/i.test(String(local).trim());
+    }
+  } catch (_) {
+    /* ignore */
+  }
+  return /^RAW:/i.test(String(process.env.PRINTER_PORTA || "").trim());
+}
+
 function preferNativeEscPos(payload) {
   try {
     if (runtime.isAcbrPosCircuitOpen() && !isFiscalPayload(payload)) {
@@ -34,6 +49,10 @@ function preferNativeEscPos(payload) {
     }
   } catch (_) {
     /* runtime opcional em testes */
+  }
+  // RAW:Windows + cupom comercial: não pagar timeout ACBr (ConfigGravar/Ativar -10).
+  if (portaEhRawWindows() && !isFiscalPayload(payload)) {
+    return true;
   }
   const flag = String(process.env.PRINT_FAST_NATIVE || "false").toLowerCase();
   if (flag === "false" || flag === "0" || flag === "") return false;
@@ -190,6 +209,8 @@ module.exports = {
   getProviderName,
   getDriverInfo,
   preferNativeEscPos,
+  portaEhRawWindows,
+  isFiscalPayload,
   isFiscalPayload,
   // Poll/status: somente leitura — NÃO sincronizarDeDeteccao / resetPrintProvider
   // (isso reinfectava o spooler a cada /status e marcava Agente off).

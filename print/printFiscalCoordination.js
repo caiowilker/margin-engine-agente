@@ -95,17 +95,31 @@ function fiscalAcabouDeUsar(janelaMs) {
 function isFastNativePath(opts = {}) {
   if (opts.fastNative === true) return true;
   if (opts.fastNative === false) return false;
-  // Padrão produção: ACBr — native só com PRINT_FAST_NATIVE=true/always
-  const flag = String(process.env.PRINT_FAST_NATIVE || "false").toLowerCase();
-  if (flag === "false" || flag === "0") return false;
-  if (opts.op && OPS_FAST_NATIVE.has(opts.op)) return true;
+
+  // Circuito aberto / RAW:Windows comercial → zero ACBr (sem garantirPorta/invalidate).
+  try {
+    if (require("./acbrPosPrinterRuntime").isAcbrPosCircuitOpen()) return true;
+  } catch (_) {}
+
   const payload = opts.payload;
-  if (payload && typeof payload === "object") {
-    try {
-      return require("./drivers/acbrPosPrinterProvider").preferNativeEscPos(payload);
-    } catch (_) {
-      if (payload.naoFiscal || payload.cupomSemFiscal) return true;
+  try {
+    const acbrProv = require("./drivers/acbrPosPrinterProvider");
+    if (typeof acbrProv.preferNativeEscPos === "function") {
+      if (payload && typeof payload === "object") {
+        if (acbrProv.preferNativeEscPos(payload)) return true;
+      } else if (opts.op && OPS_FAST_NATIVE.has(opts.op)) {
+        // Gaveta/caixa/pedido sem payload: RAW: → native direto
+        if (acbrProv.portaEhRawWindows?.()) return true;
+      }
     }
+  } catch (_) {}
+
+  const flag = String(process.env.PRINT_FAST_NATIVE || "false").toLowerCase();
+  if (flag === "false" || flag === "0" || flag === "") return false;
+  if (flag === "always") return true;
+  if (opts.op && OPS_FAST_NATIVE.has(opts.op)) return true;
+  if (payload && typeof payload === "object") {
+    if (payload.naoFiscal || payload.cupomSemFiscal) return true;
   }
   return false;
 }

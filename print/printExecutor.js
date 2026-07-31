@@ -101,18 +101,36 @@ async function withProvider(fn, opts = {}) {
       /* ignore */
     }
 
-    // Hard drain / timeout: NÃO fallback no mesmo job — invoke abandonado pode
-    // ainda imprimir (dupla via). Circuito aberto → próximo cupom vai native.
+    // Hard drain / timeout após envio físico: NÃO fallback (anti-dupla).
+    // Exceção: falha PRÉ-impressão (ConfigGravar/Ativar -10) — nenhum byte enviado.
     if (err?.code === "PRINT_HARD_DRAIN" || err?.code === "RAW_PRINT_TIMEOUT" || err?.printTimedOut === true) {
+      const msgLow = String(err?.message || "").toLowerCase();
+      const prePrintOnly =
+        (/pos_configgravar|configgravarvalor|pos_ativar|pos_inicializar/i.test(msgLow) ||
+          err?.acbrRet === -10) &&
+        !/pos_imprimir|imprimir\b/i.test(msgLow);
+      if (!prePrintOnly) {
+        log.warn(
+          {
+            err: err.message,
+            primary: primaryName,
+            metric: "print.no_fallback_after_drain",
+          },
+          "[PrintExecutor] Hard drain — sem segundo envio físico neste job (anti-dupla)",
+        );
+        throw err;
+      }
       log.warn(
         {
           err: err.message,
           primary: primaryName,
-          metric: "print.no_fallback_after_drain",
+          metric: "print.fallback_after_preprint_timeout",
         },
-        "[PrintExecutor] Hard drain — sem segundo envio físico neste job (anti-dupla)",
+        "[PrintExecutor] Timeout pré-impressão ACBr — fallback native (sem risco de dupla)",
       );
-      throw err;
+      err.printTimedOut = false;
+      err.fallbackNative = true;
+      err.code = err.acbrRet != null ? "ACBR_POS_ERROR" : err.code;
     }
 
     if (

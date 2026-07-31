@@ -218,11 +218,21 @@ async function garantirPortaImpressao(opts = {}) {
 }
 
 function noBoot(delayMs = 2500) {
-  const tipo = String(process.env.PRINTER_PROVIDER || "acbr-posprinter").toLowerCase();
-  if (!tipo.includes("acbr") && tipo !== "posprinter") return Promise.resolve();
-
   return new Promise((resolve) => {
     setTimeout(async () => {
+      try {
+        // Sempre aquecer hot-path (DLL RAW + logo) — independente do provider.
+        require("./escpos/impressoraCore")
+          .warmPrintHotPath()
+          .catch(() => {});
+      } catch (_) {}
+
+      const tipo = String(process.env.PRINTER_PROVIDER || "acbr-posprinter").toLowerCase();
+      if (!tipo.includes("acbr") && tipo !== "posprinter") {
+        resolve();
+        return;
+      }
+
       try {
         const r = await autoDetectarESincronizar();
         if (r.ok && !r.skipped) {
