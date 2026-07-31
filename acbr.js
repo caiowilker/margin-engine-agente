@@ -618,14 +618,17 @@ function resolverTpAmb() {
   return "2";
 }
 
-/** Aplica série/número reservados pelo agente em INI montado no backend (Onda B.4). */
+/** Aplica série/número reservados pelo agente em INI montado no backend (Onda B.4).
+ * Também alinha tpAmb ao AMBIENTE_SEFAZ local (SSOT operacional do caixa). */
 function patchNumeracaoIni(ini, numeracao) {
   if (!ini || !numeracao) return ini;
   const serie = numeracao.serie ?? fiscalNumeracao.SERIE_PADRAO;
   const numero = numeracao.numero;
   const cNf = gerarCodigoNumerico();
+  const tpAmb = resolverTpAmb();
   const lines = String(ini).split(/\r?\n/);
   let inIdent = false;
+  let tpAmbPatched = false;
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
     const line = raw.trim();
@@ -634,12 +637,24 @@ function patchNumeracaoIni(ini, numeracao) {
       continue;
     }
     if (inIdent && line.startsWith("[")) {
+      if (!tpAmbPatched) {
+        lines.splice(i, 0, `tpAmb=${tpAmb}`);
+        tpAmbPatched = true;
+        i += 1;
+      }
       break;
     }
     if (!inIdent) continue;
     if (line.startsWith("serie=")) lines[i] = `serie=${serie}`;
     else if (line.startsWith("nNF=")) lines[i] = `nNF=${numero}`;
     else if (line.startsWith("cNF=")) lines[i] = `cNF=${cNf}`;
+    else if (/^tpAmb=/i.test(line)) {
+      lines[i] = `tpAmb=${tpAmb}`;
+      tpAmbPatched = true;
+    }
+  }
+  if (inIdent && !tpAmbPatched) {
+    lines.push(`tpAmb=${tpAmb}`);
   }
   return fiscalDhEmiIni.prepararIniParaEmissao(lines.join("\n"));
 }

@@ -31,6 +31,8 @@ let heartbeatHandle = null;
 let acbrRef = null;
 let lerConfigFnRef = null;
 let sincronizando = false;
+/** Evita sobrepor heartbeats (abort do anterior gera WARN ruidoso). */
+let heartbeatInFlight = false;
 /** @type {null | ((ctx: { remoto: object, backendUrl: string, backendToken: string }) => Promise<void>)} */
 let onUpdateRequestedFn = null;
 let processandoUpdateCloud = false;
@@ -251,6 +253,8 @@ async function sincronizarCatalogo(backendUrl, backendToken) {
 }
 
 async function enviarHeartbeat(backendUrl, backendToken) {
+  if (heartbeatInFlight) return;
+  heartbeatInFlight = true;
   const fetch = require("node-fetch");
   const fiscalTrace = require("./fiscalTraceLog");
   const filaFiscal = require("./filaFiscal");
@@ -261,7 +265,7 @@ async function enviarHeartbeat(backendUrl, backendToken) {
   } catch {
     /* ignore */
   }
-  const timeoutMs = parseInt(process.env.BACKEND_TIMEOUT_MS || "5000", 10);
+  const timeoutMs = parseInt(process.env.BACKEND_TIMEOUT_MS || "15000", 10);
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timer = controller
     ? setTimeout(() => controller.abort(), timeoutMs)
@@ -278,7 +282,12 @@ async function enviarHeartbeat(backendUrl, backendToken) {
       ...(controller ? { signal: controller.signal } : {}),
       timeout: timeoutMs,
     });
-    if (!resp.ok) {
+    if (resp.status === 409) {
+      // Optimistic lock no commit — próximo ciclo reaplica telemetria.
+      fiscalTrace.trace("Heartbeat", "OK soft — conflito otimista (409)", {
+        providerId: payload.providerId,
+      });
+    } else if (!resp.ok) {
       const txt = await resp.text().catch(() => "");
       fiscalTrace.warn("Heartbeat", "Backend rejeitou heartbeat", {
         status: resp.status,
@@ -291,10 +300,19 @@ async function enviarHeartbeat(backendUrl, backendToken) {
       });
     }
   } catch (err) {
-    fiscalTrace.warn("Heartbeat", "Falha ao enviar heartbeat", { err: err.message });
-    log.debug({ err: err.message }, "[ConfigSync] heartbeat falhou");
+    const msg = err && err.message ? String(err.message) : String(err);
+    const aborted =
+      (err && err.name === "AbortError") ||
+      /aborted|AbortError/i.test(msg);
+    if (aborted) {
+      log.debug({ err: msg }, "[ConfigSync] heartbeat abortado (timeout/restart)");
+    } else {
+      fiscalTrace.warn("Heartbeat", "Falha ao enviar heartbeat", { err: msg });
+      log.debug({ err: msg }, "[ConfigSync] heartbeat falhou");
+    }
   } finally {
     if (timer) clearTimeout(timer);
+    heartbeatInFlight = false;
   }
 }
 

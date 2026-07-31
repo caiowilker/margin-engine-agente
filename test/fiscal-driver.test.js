@@ -98,13 +98,29 @@ test("lib driver sem DLL e sem ALLOW_PARITY fica unconfigured", () => {
 
 test("patchNumeracaoIniLib aplica cNF determinístico", () => {
   process.env.ACBR_DRIVER = "lib";
+  process.env.AMBIENTE_SEFAZ = "homologacao";
   factory.resetFiscalDriver();
   const lib = factory.createDriver("lib");
-  const ini = "[Identificacao]\nserie=0\nnNF=0\ncNF=99999999\n";
+  const ini = "[Identificacao]\nserie=0\nnNF=0\ncNF=99999999\ntpAmb=1\n";
   const patched = lib.patchNumeracaoIniLib(ini, { serie: 1, numero: 1, cNf: "00000001" });
   assert(patched.includes("cNF=00000001"), "cNF deve ser patchado");
   assert(patched.includes("nNF=1"), "nNF deve ser patchado");
+  assert(patched.includes("tpAmb=2"), "tpAmb deve seguir AMBIENTE_SEFAZ=homologacao");
   process.env.ACBR_DRIVER = "monitor";
+  delete process.env.AMBIENTE_SEFAZ;
+  factory.resetFiscalDriver();
+});
+
+test("patchNumeracaoIniLib força tpAmb produção quando AMBIENTE_SEFAZ=producao", () => {
+  process.env.ACBR_DRIVER = "lib";
+  process.env.AMBIENTE_SEFAZ = "producao";
+  factory.resetFiscalDriver();
+  const lib = factory.createDriver("lib");
+  const ini = "[Identificacao]\nserie=1\nnNF=10\ncNF=1\ntpAmb=2\n[Emitente]\nCNPJ=1\n";
+  const patched = lib.patchNumeracaoIniLib(ini, { serie: 1, numero: 10, cNf: "00000002" });
+  assert(patched.includes("tpAmb=1"), "tpAmb deve seguir AMBIENTE_SEFAZ=producao");
+  process.env.ACBR_DRIVER = "monitor";
+  delete process.env.AMBIENTE_SEFAZ;
   factory.resetFiscalDriver();
 });
 
