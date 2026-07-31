@@ -42,10 +42,28 @@ function hasActiveWorker() {
 function markFallbackInProcess(reason) {
   if (forceInProcess) return;
   forceInProcess = true;
-  log.warn(
-    { reason: String(reason || "").slice(0, 240), metric: "print.worker_fallback_inprocess" },
-    "[AcbrPosWorker] Fallback in-process — worker indisponível",
+  const reasonShort = String(reason || "").slice(0, 240);
+  log.error(
+    {
+      reason: reasonShort,
+      metric: "print.worker_fallback_inprocess",
+      severity: "high",
+      note:
+        "FFI koffi no main/threadpool — risco de pressionar HTTP; circuito ACBr aberto para comerciais via native",
+    },
+    "[AcbrPosWorker] Fallback in-process — worker indisponível (P2c)",
   );
+  // P2c: preferir native nos próximos comerciais em vez de koffi no processo principal
+  try {
+    const runtime = require("./acbrPosPrinterRuntime");
+    if (typeof runtime.openAcbrPosCircuit === "function") {
+      runtime.openAcbrPosCircuit(
+        `worker_fallback_inprocess: ${reasonShort || "spawn_fail"}`,
+      );
+    }
+  } catch (_) {
+    /* ignore circular/boot */
+  }
 }
 
 /** Operador Detectar/force: permite tentar worker de novo após falha de spawn. */

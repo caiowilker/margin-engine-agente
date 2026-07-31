@@ -20,7 +20,7 @@ Use em cada PC de caixa antes de liberar o turno.
 
 ## Agente Margin Engine
 
-1. Serviço **Margin Engine** em execução; build **1.0.4+**.
+1. Serviço **Margin Engine** em execução; build **1.0.4+** (P2a kill confirmado).
 2. Configuração → Impressão: porta `RAW:…` correta; modelo Epson/POS = `1`.
 3. Imprimir página de teste pelo PDV — deve sair em poucos segundos.
 4. Se o **primeiro** cupom via ACBr der timeout: log de circuito RAW aberto; o **segundo** cupom vai **native direto** (sem tentar ACBr; tipicamente &lt; 2 s).
@@ -29,6 +29,7 @@ Use em cada PC de caixa antes de liberar o turno.
 7. Hard drain: **sem** segunda via automática no mesmo job (anti-dupla). Use 2ª via se o papel não saiu.
 8. Worker PosPrinter (`ACBR_POS_WORKER=true`): se hang, log `print.worker_kill` + circuito; rollback emergencial: `ACBR_POS_WORKER=false` + reiniciar serviço.
 9. Timeouts no `.env` devem bater com o bloco `PRINT_ENV_SCHEMA` do `.env.example` (não usar 8000 legado).
+10. Em máquina lenta (~2 min): logs esperados `print.taskkill_attempt` + `print.child_exit` / `print.late_abandoned` com `lateMs`; `/health` e caixa devem continuar OK. Se `print.taskkill_still_alive` → processar checklist USB acima. Notepad na mesma fila é o teste decisivo.
 
 ## Critérios de aceite rápidos
 
@@ -40,5 +41,6 @@ Use em cada PC de caixa antes de liberar o turno.
 | Hard drain | Job `ERRO`; **sem** fallback físico no mesmo job |
 | Reinício do serviço | Circuito permanece aberto até Detectar force |
 | Worker kill | `/health` responde; próximo cupom native |
+| RAW soft kill | `printTimedOut` / `RAW_PRINT_TIMEOUT`; physicalLock só libera após kill confirmado ou `PRINTER_RAW_KILL_HOLD_MS` |
 | `PHYSICAL_USB_TOPOLOGY=shared` | NFC-e e print não se sobrepõem no hub |
-| Build | Agente/instalador **1.0.4** |
+| Build | Agente/instalador **1.0.4+** |

@@ -41,6 +41,15 @@ const PRINT_ENV_FIELDS = [
     comment: "Timeout WritePrinter PowerShell + taskkill /T",
   },
   {
+    env: "PRINTER_RAW_KILL_HOLD_MS",
+    kind: "int",
+    min: 1000,
+    max: 30000,
+    default: 12000,
+    comment:
+      "Após soft kill: quanto segurar o physicalLock antes de liberar (evita 2º cupom no USB ocupado)",
+  },
+  {
     env: "ACBR_POS_CALL_TIMEOUT_MS",
     kind: "int",
     min: 1000,

@@ -38,9 +38,15 @@ async function run() {
       "utf8",
     );
     assert.ok(src.includes('PRINTER_RAW_TIMEOUT_MS || "4000"'));
-    assert.ok(src.includes("taskkill"));
-    assert.ok(src.includes("softKill"));
-    assert.ok(src.includes("finish(reject") || src.includes("finish(\n      reject"));
+    assert.ok(src.includes("killProcessTree"));
+    assert.ok(src.includes("print.taskkill_attempt"));
+    assert.ok(src.includes("RAW_KILL_HOLD_MS"));
+    assert.ok(src.includes("print.raw_kill_confirmed_release"));
+    assert.ok(src.includes("print.raw_kill_hold_expired"));
+    assert.ok(src.includes("makeRawTimeoutError"));
+    assert.ok(src.includes('code = "RAW_PRINT_TIMEOUT"') || src.includes("RAW_PRINT_TIMEOUT"));
+    assert.ok(src.includes("printTimedOut = true") || src.includes("printTimedOut: true"));
+    assert.ok(!/\bexecFileSync\s*\(/.test(src), "P2b: execFileSync proibido no RAW");
   });
 
   await test("contrato soft-timeout: Promise rejeita rápido com child zombie", async () => {

@@ -24,6 +24,7 @@ function classifyPrintError(err) {
     err?.code === "PRINT_HARD_DRAIN" ||
     err?.code === "ACBR_POS_TIMEOUT" ||
     err?.code === "ACBR_POS_WORKER_KILLED" ||
+    err?.code === "RAW_PRINT_TIMEOUT" ||
     err?.printTimedOut
   ) {
     out.retryable = false;

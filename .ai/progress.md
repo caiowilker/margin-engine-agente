@@ -1,7 +1,19 @@
 # PROGRESS — Agente Local
 
-**Última atualização:** 2026-07-30  
-**Versão:** `1.0.4` — worker PosPrinter + lock USB + schema env
+**Última atualização:** 2026-07-31  
+**Versão:** `1.0.4` — worker PosPrinter + lock USB + schema env + P2a/P2c kill confirmado
+
+## Changelog (2026-07-31) — P2a/P2c harden kill RAW + fallback in-process
+
+- **P2a:** `print/winProcessKill.js` — `taskkill /F /T` com confirmação de PID morto; métricas `print.taskkill_attempt`, `print.taskkill_still_alive`, `print.child_exit`.
+- Soft timeout **mata** o wrapper, mas **só libera physicalLock** quando kill confirma morte, filho sai, ou teto `PRINTER_RAW_KILL_HOLD_MS` (default 12s) — evita 2º cupom no USB ainda ocupado.
+- Erro RAW marca `code=RAW_PRINT_TIMEOUT` + `printTimedOut` (sem fallback ACBr no mesmo job).
+- Hard kill (+1,5s) permanece ativo após soft (antes era cancelado pelo `finish`).
+- Cleanup de temp no settle; leak-guard de segurança.
+- **Nota de campo:** wrapper PowerShell morto ≠ spooler parou — `late_abandoned` com `lateMs` documenta drenagem do driver USB.
+- **P2b:** guard/teste — `execFileSync(` proibido em `impressoraCore`.
+- **P2c:** fallback in-process do worker sobe para `error` + abre circuito ACBr (comerciais → native).
+- ADR: [ADR-raw-kill-hold-lock-20260731.md](./decisions/ADR-raw-kill-hold-lock-20260731.md).
 
 ## Changelog (2026-07-30) — 1.0.4 Worker FFI + physical lock + env SSOT
 

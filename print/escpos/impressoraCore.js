@@ -16,7 +16,9 @@ const os = require("os");
 const path = require("path");
 const net = require("net");
 const { execFile } = require("child_process");
+const { killProcessTree } = require("../winProcessKill");
 
+const log = require("../../logger").child({ modulo: "impressora_core" });
 const escpos = require("escpos");
 
 let escposUSB;
@@ -205,7 +207,20 @@ const RAW_PRINT_TIMEOUT_MS = parseInt(
   process.env.PRINTER_RAW_TIMEOUT_MS || "4000",
   10,
 );
+/** Após soft kill: segura o Promise (e physicalLock) até filho morrer ou este teto. */
+const RAW_KILL_HOLD_MS = Math.max(
+  1000,
+  parseInt(process.env.PRINTER_RAW_KILL_HOLD_MS || "12000", 10) || 12000,
+);
 
+function makeRawTimeoutError(nomeImpressora) {
+  const err = new Error(
+    `RAW Windows timeout (${RAW_PRINT_TIMEOUT_MS}ms): ${nomeImpressora}`,
+  );
+  err.code = "RAW_PRINT_TIMEOUT";
+  err.printTimedOut = true;
+  return err;
+}
 let printersWinCache = { list: [], at: 0 };
 let printersWinInflight = null;
 
@@ -263,27 +278,21 @@ function listarImpressorasWindowsAsync(force = false) {
       },
     );
 
-    const killTree = (pid) => {
-      if (!pid) return;
-      try {
-        execFile(
-          "taskkill",
-          ["/F", "/T", "/PID", String(pid)],
-          { windowsHide: true, timeout: 5000 },
-          () => {},
-        );
-      } catch (_) {}
-    };
-
     const softKill = setTimeout(() => {
-      killTree(child.pid);
+      void killProcessTree(child.pid, {
+        reason: "list_printers_soft",
+        metric: "print.list_printers_taskkill",
+      });
       try {
         child.kill();
       } catch (_) {}
       finish(printersWinCache.list);
     }, LISTAR_PRINTERS_TIMEOUT_MS);
     const hardKill = setTimeout(() => {
-      killTree(child.pid);
+      void killProcessTree(child.pid, {
+        reason: "list_printers_hard",
+        metric: "print.list_printers_taskkill",
+      });
     }, LISTAR_PRINTERS_TIMEOUT_MS + 1500);
   });
   return printersWinInflight;
@@ -412,8 +421,20 @@ function enviarRawWindowsUnlocked(nomeImpressora, buffer) {
   );
 
   return new Promise((resolve, reject) => {
+    const t0 = Date.now();
     let settled = false;
-    const cleanup = () => {
+    let killRequested = false;
+    let lastKill = null;
+    let childExited = false;
+    let filesCleaned = false;
+    let softKill;
+    let hardKill;
+    let holdKill;
+    let leakGuard;
+
+    const cleanupFiles = () => {
+      if (filesCleaned) return;
+      filesCleaned = true;
       try {
         fs.unlinkSync(tmpCfg);
       } catch (_) {}
@@ -421,32 +442,73 @@ function enviarRawWindowsUnlocked(nomeImpressora, buffer) {
         fs.unlinkSync(tmpBin);
       } catch (_) {}
     };
+
+    const clearKillTimers = () => {
+      clearTimeout(softKill);
+      clearTimeout(hardKill);
+      clearTimeout(holdKill);
+    };
+
+    /**
+     * Libera a Promise (e o physicalLock externo) só quando seguro o bastante:
+     * filho saiu, kill confirmou morte do wrapper, ou teto KILL_HOLD esgotou.
+     */
     const finish = (fn, val) => {
       if (settled) return;
       settled = true;
-      clearTimeout(softKill);
-      clearTimeout(hardKill);
-      cleanup();
+      clearKillTimers();
+      clearTimeout(leakGuard);
+      cleanupFiles();
       fn(val);
     };
 
-    /** SIGTERM/SIGKILL não derrubam árvore PowerShell no Windows — taskkill /T. */
-    const killTree = (pid) => {
-      if (!pid) return;
-      if (process.platform === "win32") {
-        try {
-          execFile(
-            "taskkill",
-            ["/F", "/T", "/PID", String(pid)],
-            { windowsHide: true, timeout: 5000 },
-            () => {},
-          );
-        } catch (_) {}
-        return;
-      }
+    const finishTimeout = () => finish(reject, makeRawTimeoutError(nomeImpressora));
+
+    /**
+     * P2a: mata wrapper com confirmação. Soft timeout NÃO rejeita na hora —
+     * senão o physicalLock libera com WritePrinter/spooler ainda ativos.
+     */
+    const requestKill = (reason) => {
+      killRequested = true;
+      const pid = child.pid;
       try {
-        process.kill(pid, "SIGKILL");
+        child.kill();
       } catch (_) {}
+      void killProcessTree(pid, {
+        reason,
+        metric: "print.taskkill_attempt",
+      }).then((result) => {
+        lastKill = result;
+        if (result.stillAlive) {
+          log.error(
+            {
+              metric: "print.taskkill_still_alive",
+              pid,
+              reason,
+              printer: nomeImpressora,
+              durationMs: Date.now() - t0,
+            },
+            "[ImpressoraCore] RAW — PowerShell ainda vivo após taskkill",
+          );
+          return;
+        }
+        // Wrapper morto: libera lock cedo (spooler pode continuar drenando sozinho).
+        if (!settled && !childExited) {
+          log.warn(
+            {
+              metric: "print.raw_kill_confirmed_release",
+              reason,
+              pid,
+              durationMs: Date.now() - t0,
+              printer: nomeImpressora,
+              holdMs: RAW_KILL_HOLD_MS,
+              note: "wrapper morto — libera physicalLock; papel tardio ainda possível via spooler",
+            },
+            "[ImpressoraCore] RAW kill confirmado — liberando Promise/lock",
+          );
+          finishTimeout();
+        }
+      });
     };
 
     const child = execFile(
@@ -461,46 +523,96 @@ function enviarRawWindowsUnlocked(nomeImpressora, buffer) {
       ],
       { windowsHide: true },
       (err) => {
+        // Callback de conclusão; 'exit' cuida de métricas/finish principal.
         if (settled) return;
-        if (err) {
+        if (!err && !killRequested) {
+          finish(resolve, true);
+          return;
+        }
+        if (err && !killRequested) {
           const timedOut =
             err.killed ||
             /SIGKILL|SIGTERM|ETIMEDOUT|timeout|taskkill/i.test(
               String(err.signal || "") + String(err.message || ""),
             );
+          if (timedOut) return finishTimeout();
           return finish(
             reject,
-            new Error(
-              timedOut
-                ? `RAW Windows timeout (${RAW_PRINT_TIMEOUT_MS}ms): ${nomeImpressora}`
-                : `RAW Windows falhou: ${err.message}`,
-            ),
+            new Error(`RAW Windows falhou: ${err.message}`),
           );
         }
-        finish(resolve, true);
+        // killRequested: finishTimeout via exit / kill confirm / hold
       },
     );
 
-    // Soft: rejeita na hora + mata árvore (antes o kill não rejeitava → ~120s hang)
-    const softKill = setTimeout(() => {
-      killTree(child.pid);
-      try {
-        child.kill();
-      } catch (_) {}
-      finish(
-        reject,
-        new Error(
-          `RAW Windows timeout (${RAW_PRINT_TIMEOUT_MS}ms): ${nomeImpressora}`,
-        ),
+    child.on("exit", (code, signal) => {
+      childExited = true;
+      clearTimeout(leakGuard);
+      const durationMs = Date.now() - t0;
+      const late =
+        killRequested && durationMs > RAW_PRINT_TIMEOUT_MS + 500;
+      const level = late ? "warn" : "info";
+      log[level](
+        {
+          metric: "print.child_exit",
+          code,
+          signal: signal || null,
+          wasKilled: killRequested,
+          killConfirmedDead: lastKill ? lastKill.confirmedDead : null,
+          killStillAliveAtAttempt: lastKill ? lastKill.stillAlive : null,
+          durationMs,
+          settledAlready: settled,
+          late,
+          printer: nomeImpressora,
+          note: late
+            ? "wrapper saiu após kill — spooler/driver pode ter drenado sozinho (papel tardio)"
+            : undefined,
+        },
+        late
+          ? "[ImpressoraCore] RAW child_exit tardio após kill"
+          : "[ImpressoraCore] RAW child_exit",
       );
-    }, RAW_PRINT_TIMEOUT_MS);
-    const hardKill = setTimeout(() => {
-      killTree(child.pid);
-    }, RAW_PRINT_TIMEOUT_MS + 1500);
-    child.on("exit", () => {
-      clearTimeout(softKill);
-      clearTimeout(hardKill);
+      if (settled) {
+        cleanupFiles();
+        return;
+      }
+      if (killRequested) {
+        finishTimeout();
+      }
+      // Sem kill: o callback do execFile resolve/rejeita com a mensagem correta.
     });
+
+    // Soft: inicia kill; NÃO rejeita ainda (segura physicalLock).
+    softKill = setTimeout(() => {
+      requestKill("raw_soft_timeout");
+      // Teto: se filho/kill não confirmarem, libera lock para não travar a fila para sempre.
+      holdKill = setTimeout(() => {
+        if (settled) return;
+        log.error(
+          {
+            metric: "print.raw_kill_hold_expired",
+            printer: nomeImpressora,
+            holdMs: RAW_KILL_HOLD_MS,
+            durationMs: Date.now() - t0,
+            childExited,
+            killConfirmedDead: lastKill ? lastKill.confirmedDead : null,
+            note: "Liberando lock no teto — verifique USB/driver/spooler nesta máquina",
+          },
+          "[ImpressoraCore] RAW kill-hold esgotado — liberando Promise/lock",
+        );
+        finishTimeout();
+      }, RAW_KILL_HOLD_MS);
+    }, RAW_PRINT_TIMEOUT_MS);
+
+    // Segundo taskkill se soft não matou ainda (finish do soft NÃO cancela isto).
+    hardKill = setTimeout(() => {
+      if (childExited || settled) return;
+      requestKill("raw_hard_timeout");
+    }, RAW_PRINT_TIMEOUT_MS + 1500);
+
+    leakGuard = setTimeout(() => {
+      cleanupFiles();
+    }, Math.max(90_000, RAW_PRINT_TIMEOUT_MS + RAW_KILL_HOLD_MS + 30_000));
   });
 }
 
@@ -1855,9 +1967,12 @@ module.exports = {
   imprimirPedido,
   assertPortaTermicaOuFalhar,
   pareceNaoTermica,
-  /** @internal regressão COLS / TDZ no render nativo */
+  /** @internal regressão COLS / TDZ no render nativo + P2a */
   __test: {
     renderCupomConteudo,
     renderFechamentoConteudo,
+    RAW_PRINT_TIMEOUT_MS,
+    RAW_KILL_HOLD_MS,
+    makeRawTimeoutError,
   },
 };

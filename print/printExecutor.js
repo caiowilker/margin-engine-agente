@@ -21,16 +21,28 @@ function physicalSendAbandonedInFlight() {
 
 function trackAbandonedInvoke(invokePromise) {
   abandonedPhysicalSends += 1;
+  const abandonedAt = Date.now();
   Promise.resolve(invokePromise)
     .then(() => {
+      const lateMs = Date.now() - abandonedAt;
       log.warn(
-        { metric: "print.late_abandoned", late: true },
+        {
+          metric: "print.late_abandoned",
+          late: true,
+          lateMs,
+          note:
+            "Envio físico concluiu após hard drain — tipicamente spooler/driver USB drenando; taskkill do wrapper PowerShell não cancela job já no kernel",
+        },
         "[PrintExecutor] late_abandoned_ok — envio concluiu após hard drain; job já finalizado (sem reimpressão)",
       );
     })
     .catch((err) => {
       log.debug(
-        { err: err?.message, metric: "print.late_abandoned" },
+        {
+          err: err?.message,
+          metric: "print.late_abandoned",
+          lateMs: Date.now() - abandonedAt,
+        },
         "[PrintExecutor] late_abandoned_fail",
       );
     })
@@ -91,7 +103,7 @@ async function withProvider(fn, opts = {}) {
 
     // Hard drain / timeout: NÃO fallback no mesmo job — invoke abandonado pode
     // ainda imprimir (dupla via). Circuito aberto → próximo cupom vai native.
-    if (err?.code === "PRINT_HARD_DRAIN" || err?.printTimedOut === true) {
+    if (err?.code === "PRINT_HARD_DRAIN" || err?.code === "RAW_PRINT_TIMEOUT" || err?.printTimedOut === true) {
       log.warn(
         {
           err: err.message,
