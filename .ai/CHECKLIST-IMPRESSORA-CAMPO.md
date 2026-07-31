@@ -30,6 +30,8 @@ Use em cada PC de caixa antes de liberar o turno.
 8. Worker PosPrinter (`ACBR_POS_WORKER=true`): se hang, log `print.worker_kill` + circuito; rollback emergencial: `ACBR_POS_WORKER=false` + reiniciar serviço.
 9. Timeouts no `.env` devem bater com o bloco `PRINT_ENV_SCHEMA` do `.env.example` (não usar 8000 legado).
 10. Em máquina lenta (~2 min): logs esperados `print.taskkill_attempt` + `print.child_exit` / `print.late_abandoned` com `lateMs`; `/health` e caixa devem continuar OK. Se `print.taskkill_still_alive` → processar checklist USB acima. Notepad na mesma fila é o teste decisivo.
+11. **Diagnóstico Win32 (máquina lenta):** rode `scripts/diagnose-raw-print.ps1` **nessa PC e na PC boa** e compare. No agente, o log `print.raw_win32_timing` mostra `slowest=` (`WritePrinter` / `EndDocPrinter` / `OpenPrinter`). Se a etapa lenta for WritePrinter/EndDocPrinter com fila RAW ok → problema abaixo do agente (USB/driver/spooler).
+12. **Após update 1.0.3+ “parou de imprimir”:** o circuito ACBr pode ter ficado aberto (native forever). Use **Detectar force** ou aguarde `ACBR_POS_CIRCUIT_TTL_MS` (default 15 min) para tentar de novo o caminho Epson/ACBr (QR via tags). Confirme modelo Epson (`1`) em Configuração → Impressão.
 
 ## Critérios de aceite rápidos
 

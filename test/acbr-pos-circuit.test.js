@@ -11,6 +11,8 @@ const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "acbr-circuit-"));
 const circuitFile = path.join(tmpRoot, "acbr-pos-circuit.json");
 process.env.ACBR_POS_CIRCUIT_FILE = circuitFile;
 process.env.PRINT_ACBR_CIRCUIT = "true";
+// Testes de persistência: sem TTL (comportamento antigo). TTL coberto em teste dedicado.
+process.env.ACBR_POS_CIRCUIT_TTL_MS = "0";
 
 // Isola módulo (cache) — path de circuito via env
 delete require.cache[require.resolve("../print/acbrPosPrinterRuntime")];
@@ -50,12 +52,29 @@ test("reload do disco restaura circuito aberto", () => {
   runtime.resetAcbrPosCircuit();
   fs.writeFileSync(
     circuitFile,
-    JSON.stringify({ open: true, reason: "persisted-test", openedAt: 1 }),
+    JSON.stringify({ open: true, reason: "persisted-test", openedAt: Date.now() }),
     "utf8",
   );
   runtime.__reloadCircuitFromDiskForTests();
   assert.strictEqual(runtime.isAcbrPosCircuitOpen(), true);
   assert.strictEqual(runtime.getAcbrPosCircuit().reason, "persisted-test");
+});
+
+test("TTL expira circuito (half-open) e remove arquivo", () => {
+  runtime.resetAcbrPosCircuit();
+  process.env.ACBR_POS_CIRCUIT_TTL_MS = "50";
+  runtime.openAcbrPosCircuit("ttl-test");
+  assert.strictEqual(runtime.isAcbrPosCircuitOpen(), true);
+  const openedAt = Date.now() - 200;
+  fs.writeFileSync(
+    circuitFile,
+    JSON.stringify({ open: true, reason: "ttl-test", openedAt }),
+    "utf8",
+  );
+  runtime.__reloadCircuitFromDiskForTests();
+  assert.strictEqual(runtime.isAcbrPosCircuitOpen(), false);
+  assert.strictEqual(fs.existsSync(circuitFile), false);
+  process.env.ACBR_POS_CIRCUIT_TTL_MS = "0";
 });
 
 test("reset remove arquivo do disco", () => {

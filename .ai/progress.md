@@ -3,6 +3,13 @@
 **Última atualização:** 2026-07-31  
 **Versão:** `1.0.4` — worker PosPrinter + lock USB + schema env + P2a/P2c kill confirmado
 
+## Changelog (2026-07-31) — Diagnóstico Win32 + half-open circuito
+
+- **`print.raw_win32_timing`:** OpenPrinter → WritePrinter → EndDocPrinter com `slowest=` no log.
+- Script de campo `scripts/diagnose-raw-print.ps1` (sem agente).
+- **`ACBR_POS_CIRCUIT_TTL_MS` (default 15 min):** circuito não fica forever em native — retenta ACBr/Epson (QR tags). `0` = nunca expira.
+- Contexto: update 1.0.3 (RAW 8s→4s + circuito) fez PCs com USB lento parecerem “parados”; Epson/QR GS(k) segue correto no código.
+
 ## Changelog (2026-07-31) — P2a/P2c harden kill RAW + fallback in-process
 
 - **P2a:** `print/winProcessKill.js` — `taskkill /F /T` com confirmação de PID morto; métricas `print.taskkill_attempt`, `print.taskkill_still_alive`, `print.child_exit`.

@@ -76,6 +76,17 @@ async function run() {
     assert.ok(src.includes("printTimedOut"));
   });
 
+  await test("parseRawTimingFromStdout extrai JSON e aponta WritePrinter lento", () => {
+    const core = require("../print/escpos/impressoraCore");
+    const t = core.__test.parseRawTimingFromStdout(
+      'ok\nRAW_TIMING_JSON:{"OpenPrinter":1,"WritePrinter":125000,"EndDocPrinter":2,"totalMs":125010}\n',
+    );
+    assert.ok(t);
+    assert.equal(t.WritePrinter, 125000);
+    assert.equal(t.totalMs, 125010);
+    assert.equal(core.__test.parseRawTimingFromStdout("sem timing"), null);
+  });
+
   await test("P2a: soft timeout rejeita rápido com child zombie", async () => {
     const { killProcessTree: kill } = require("../print/winProcessKill");
     const t0 = Date.now();

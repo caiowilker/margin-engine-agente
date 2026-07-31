@@ -106,6 +106,15 @@ const PRINT_ENV_FIELDS = [
     default: true,
     comment: "Circuito RAW: após falha ACBr, comerciais vão native",
   },
+  {
+    env: "ACBR_POS_CIRCUIT_TTL_MS",
+    kind: "int",
+    min: 0,
+    max: 86400000,
+    default: 900000,
+    comment:
+      "TTL do circuito (0=nunca). Após expirar, retenta ACBr/Epson/QR tags (half-open)",
+  },
 ];
 
 function isTruthy(v) {

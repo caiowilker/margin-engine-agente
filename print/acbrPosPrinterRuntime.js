@@ -1109,7 +1109,28 @@ function isAcbrPosCircuitOpen() {
     return false;
   }
   loadCircuitFromDisk();
-  return !!_acbrPosCircuit.open;
+  if (!_acbrPosCircuit.open) return false;
+  // Half-open: após TTL tenta ACBr de novo (Epson/QR tags). 0 = nunca expira.
+  const ttl = parseInt(process.env.ACBR_POS_CIRCUIT_TTL_MS || "900000", 10);
+  const ttlMs = Number.isFinite(ttl) && ttl > 0 ? ttl : 0;
+  if (
+    ttlMs > 0 &&
+    _acbrPosCircuit.openedAt &&
+    Date.now() - Number(_acbrPosCircuit.openedAt) >= ttlMs
+  ) {
+    log.info(
+      {
+        metric: "print.circuit_ttl_expire",
+        ttlMs,
+        openedAt: _acbrPosCircuit.openedAt,
+        reason: _acbrPosCircuit.reason,
+      },
+      "[ACBrPosPrinter] Circuito expirou (TTL) — nova tentativa ACBr/Epson no próximo cupom",
+    );
+    resetAcbrPosCircuit();
+    return false;
+  }
+  return true;
 }
 
 function getAcbrPosCircuit() {

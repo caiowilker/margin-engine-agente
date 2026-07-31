@@ -79,8 +79,19 @@ if (IS_WIN) {
   try {
     fs.writeFileSync(
       RAW_PRINT_SCRIPT,
-      `$cfg = Get-Content -Raw $args[0] | ConvertFrom-Json
+      `$ErrorActionPreference = 'Stop'
+$cfg = Get-Content -Raw $args[0] | ConvertFrom-Json
 $bytes = [System.IO.File]::ReadAllBytes($cfg.file)
+$timings = [ordered]@{
+  bytes = $bytes.Length
+  printer = [string]$cfg.printer
+}
+$sw = [System.Diagnostics.Stopwatch]::StartNew()
+$total = [System.Diagnostics.Stopwatch]::StartNew()
+function Mark([string]$name) {
+  $timings[$name] = [int64]$sw.ElapsedMilliseconds
+  $sw.Restart()
+}
 if (-not ("RawPrinterHelper" -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -105,30 +116,94 @@ public class RawPrinterHelper {
 }
 '@
 }
+Mark 'AddType'
 $h = [IntPtr]::Zero
 if (-not [RawPrinterHelper]::OpenPrinter($cfg.printer, [ref]$h, [IntPtr]::Zero)) {
   throw "Nao foi possivel abrir a impressora: $($cfg.printer)"
 }
+Mark 'OpenPrinter'
 try {
   $di = New-Object RawPrinterHelper+DOCINFOA
   $di.pDocName = "PDV Cupom"
   $di.pDatatype = "RAW"
   if (-not [RawPrinterHelper]::StartDocPrinter($h, 1, $di)) { throw "StartDocPrinter falhou" }
+  Mark 'StartDocPrinter'
   try {
     if (-not [RawPrinterHelper]::StartPagePrinter($h)) { throw "StartPagePrinter falhou" }
+    Mark 'StartPagePrinter'
     $p = [Runtime.InteropServices.Marshal]::AllocHGlobal($bytes.Length)
     [Runtime.InteropServices.Marshal]::Copy($bytes, 0, $p, $bytes.Length)
+    Mark 'AllocCopy'
     $written = 0
     if (-not [RawPrinterHelper]::WritePrinter($h, $p, $bytes.Length, [ref]$written)) { throw "WritePrinter falhou" }
+    $timings['written'] = [int64]$written
+    Mark 'WritePrinter'
     [Runtime.InteropServices.Marshal]::FreeHGlobal($p)
     [RawPrinterHelper]::EndPagePrinter($h) | Out-Null
-  } finally { [RawPrinterHelper]::EndDocPrinter($h) | Out-Null }
-} finally { [RawPrinterHelper]::ClosePrinter($h) | Out-Null }
+    Mark 'EndPagePrinter'
+  } finally {
+    [RawPrinterHelper]::EndDocPrinter($h) | Out-Null
+    Mark 'EndDocPrinter'
+  }
+} finally {
+  [RawPrinterHelper]::ClosePrinter($h) | Out-Null
+  Mark 'ClosePrinter'
+}
+$timings['totalMs'] = [int64]$total.ElapsedMilliseconds
+$json = ($timings | ConvertTo-Json -Compress)
+Write-Output ("RAW_TIMING_JSON:" + $json)
 Remove-Item $cfg.file -Force -ErrorAction SilentlyContinue
 `,
       "utf8",
     );
   } catch (_) {}
+}
+
+function parseRawTimingFromStdout(stdout) {
+  const text = String(stdout || "");
+  const m = /RAW_TIMING_JSON:(\{[\s\S]*\})/.exec(text);
+  if (!m) return null;
+  try {
+    return JSON.parse(m[1]);
+  } catch (_) {
+    return null;
+  }
+}
+
+function logRawWin32Timing(timings, meta = {}) {
+  if (!timings || typeof timings !== "object") return;
+  const steps = [
+    "AddType",
+    "OpenPrinter",
+    "StartDocPrinter",
+    "StartPagePrinter",
+    "AllocCopy",
+    "WritePrinter",
+    "EndPagePrinter",
+    "EndDocPrinter",
+    "ClosePrinter",
+  ];
+  let slowest = null;
+  let slowestMs = -1;
+  for (const k of steps) {
+    const ms = Number(timings[k]);
+    if (Number.isFinite(ms) && ms > slowestMs) {
+      slowestMs = ms;
+      slowest = k;
+    }
+  }
+  const payload = {
+    metric: "print.raw_win32_timing",
+    ...timings,
+    slowest,
+    slowestMs,
+    ...meta,
+  };
+  const level = slowestMs >= 2000 ? "warn" : "info";
+  log[level](
+    payload,
+    `[ImpressoraCore] RAW Win32 timing — slowest=${slowest || "?"} ${slowestMs}ms total=${timings.totalMs || "?"}ms`,
+  );
 }
 
 function comLockImpressao(fn) {
@@ -521,8 +596,17 @@ function enviarRawWindowsUnlocked(nomeImpressora, buffer) {
         RAW_PRINT_SCRIPT,
         tmpCfg,
       ],
-      { windowsHide: true },
-      (err) => {
+      { windowsHide: true, encoding: "utf8" },
+      (err, stdout, stderr) => {
+        const timings = parseRawTimingFromStdout(stdout);
+        if (timings) {
+          logRawWin32Timing(timings, {
+            printer: nomeImpressora,
+            killed: killRequested,
+            err: err ? String(err.message || err).slice(0, 200) : null,
+            stderr: stderr ? String(stderr).slice(0, 300) : null,
+          });
+        }
         // Callback de conclusão; 'exit' cuida de métricas/finish principal.
         if (settled) return;
         if (!err && !killRequested) {
@@ -1974,5 +2058,7 @@ module.exports = {
     RAW_PRINT_TIMEOUT_MS,
     RAW_KILL_HOLD_MS,
     makeRawTimeoutError,
+    parseRawTimingFromStdout,
+    logRawWin32Timing,
   },
 };
