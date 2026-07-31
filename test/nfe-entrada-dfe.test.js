@@ -158,12 +158,9 @@ async function run() {
     const ok = "35260612345678000190550010000000011000000011";
     const xml = `<nfeProc><NFe Id="NFe${ok}"><infNFe/></NFe></nfeProc>`;
     const r = await acbr.consultarChaveEntrada(ok, CNPJ, "SP", {
-      consultarChave: async () => ({
-        cStat: "100",
-        situacao: "AUTORIZADA",
-        xMotivo: "Autorizado",
-        raw: "sem xml completo",
-      }),
+      consultarChave: async () => {
+        throw new Error("não deveria ConsultarNFe se DistDFe já trouxe XML");
+      },
       distribuicaoDFePorChave: async () => ({
         cStat: "138",
         xml,
@@ -196,6 +193,54 @@ async function run() {
     assert.strictEqual(r.ok, false);
     assert.strictEqual(r.cStat, "656");
     assert.ok(/consumo indevido|656/i.test(r.mensagem || ""));
+  });
+
+  await test("consultarChaveEntrada ciência falha ainda tenta DistDFe", async () => {
+    const ok = "35260612345678000190550010000000011000000011";
+    const xml = `<nfeProc><NFe Id="NFe${ok}"><infNFe/></NFe></nfeProc>`;
+    let distCalls = 0;
+    const r = await acbr.consultarChaveEntrada(ok, CNPJ, "SP", {
+      consultarChave: async () => ({
+        cStat: "100",
+        situacao: "AUTORIZADA",
+        xMotivo: "Autorizado o uso da NF-e",
+        raw: "",
+      }),
+      distribuicaoDFePorChave: async () => {
+        distCalls += 1;
+        if (distCalls === 1) return { cStat: "137", xml: null, xMotivo: "Nenhum documento" };
+        return { cStat: "138", xml, xMotivo: "Documento localizado" };
+      },
+      manifestarCienciaOperacao: async () => {
+        throw new Error("ciência já registrada");
+      },
+    });
+    assert.strictEqual(r.ok, true);
+    assert.ok(r.xml && r.xml.includes("<NFe"));
+    assert.ok(distCalls >= 2, "deve tentar DistDFe após ciência");
+  });
+
+  await test("consultarChaveEntrada AUTORIZADA sem XML não usa xMotivo cru", async () => {
+    const ok = "35260612345678000190550010000000011000000011";
+    const r = await acbr.consultarChaveEntrada(ok, CNPJ, "SP", {
+      consultarChave: async () => ({
+        cStat: "100",
+        situacao: "AUTORIZADA",
+        xMotivo: "Autorizado o uso da NF-e",
+        raw: "",
+      }),
+      distribuicaoDFePorChave: async () => ({
+        cStat: "137",
+        xml: null,
+        xMotivo: "Nenhum documento",
+      }),
+      manifestarCienciaOperacao: async () => ({ ok: true }),
+    });
+    assert.strictEqual(r.ok, false);
+    assert.strictEqual(r.situacao, "AUTORIZADA_SEM_XML");
+    assert.ok(!/^Autorizado/i.test(r.mensagem || ""));
+    assert.ok(/XML completo|DistDFe|Manifesto/i.test(r.mensagem || ""));
+    assert.strictEqual(r.precisaRetry, true);
   });
 
   await test("acbrLibDriver exporta DistDFe e manifesto nativos", () => {
