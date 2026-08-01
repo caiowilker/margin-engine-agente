@@ -381,9 +381,14 @@ function opensslPairForStaging() {
 
 /** Pastas oficiais do pacote ACBrLib (\dep\ / OpenSSL / LibXml2) — mesma arch da DLL. */
 function officialDepCandidateDirs(libDir) {
-  const dirs = [libDir];
+  // LibXml2/x64 e OpenSSL/* ANTES de libDir: a raiz de acbrlib/lib costuma ter
+  // libxml2.dll antigo/incompatível (CarregarINI → -10 XmlNode nulo). Preferir o
+  // pacote oficial LibXml2/x64 (validado 2026-08-01).
+  const dirs = [];
   const opensslRoot = path.join(libDir, "OpenSSL");
   const libxmlRoot = path.join(libDir, "LibXml2");
+  dirs.push(path.join(libxmlRoot, "x64"));
+  dirs.push(path.join(libxmlRoot, "X64"));
   // Preferir 1.1.x; se ACBR_LIB_OPENSSL=3, priorizar 3.x.
   const prefer3 = /^(3|3\.0)$/.test(String(process.env.ACBR_LIB_OPENSSL || "1.1").trim());
   const opensslVers = prefer3
@@ -393,8 +398,7 @@ function officialDepCandidateDirs(libDir) {
     dirs.push(path.join(opensslRoot, ver, "x64"));
     dirs.push(path.join(opensslRoot, ver, "X64"));
   }
-  dirs.push(path.join(libxmlRoot, "x64"));
-  dirs.push(path.join(libxmlRoot, "X64"));
+  dirs.push(libDir);
   return dirs.filter((d) => d && fs.existsSync(d));
 }
 

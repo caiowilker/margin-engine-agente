@@ -3,6 +3,13 @@
 **Última atualização:** 2026-08-01  
 **Versão:** `1.0.6` — hotfix pós-install (HTTP :9100 estável no boot)
 
+## CarregarINI XmlNode / LibXml2 (2026-08-01)
+
+- Sintoma: emissão `-10: XmlNode não pode ser nulo` no `NFE_CarregarINI` (StatusServico 107 OK).
+- Causa: staging copiava `acbrlib/lib/libxml2.dll` legado (1.1MB) em vez de `LibXml2/x64` (1.4MB).
+- Fix: `officialDepCandidateDirs` prioriza `LibXml2/x64` e OpenSSL oficiais antes da raiz `lib/`.
+- 502 no PDV: backend `:8080` precisa estar no ar (api-proxy).
+
 ## StatusServico: JSON oco vs XML 107 (2026-08-01)
 
 - Após wipe+reinstall: mTLS OK — `%TEMP%\margin-acbrlib\notas\*-sta.xml` traz `cStat=107 Serviço em Operação`.

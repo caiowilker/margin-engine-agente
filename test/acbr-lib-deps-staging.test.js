@@ -29,9 +29,11 @@ test("stageNativeLibBundle copia deps oficiais e remove crypto-3 no modo 1.1", (
   fs.writeFileSync(path.join(openssl, "libcrypto-1_1-x64.dll"), "crypto11");
   fs.writeFileSync(path.join(openssl, "libssl-1_1-x64.dll"), "ssl11");
   fs.writeFileSync(path.join(openssl, "legacy.dll"), "legacy");
-  fs.writeFileSync(path.join(libxml, "libxml2.dll"), "xml2");
+  fs.writeFileSync(path.join(libxml, "libxml2.dll"), "xml2-official");
   fs.writeFileSync(path.join(libxml, "libxslt.dll"), "xslt");
   fs.writeFileSync(path.join(libxml, "libiconv.dll"), "iconv");
+  // Raiz com libxml2 antigo (não deve vencer o pacote LibXml2/x64)
+  fs.writeFileSync(path.join(libDir, "libxml2.dll"), "xml2-legacy-root");
   // Poluição prévia no staging
   fs.writeFileSync(path.join(staging, "libcrypto-3-x64.dll"), "old3");
   fs.writeFileSync(path.join(staging, "ACBrCTe64.dll"), "oldcte");
@@ -45,6 +47,7 @@ test("stageNativeLibBundle copia deps oficiais e remove crypto-3 no modo 1.1", (
   assert.ok(fs.existsSync(path.join(staging, "libcrypto-1_1-x64.dll")));
   assert.ok(fs.existsSync(path.join(staging, "legacy.dll")));
   assert.ok(fs.existsSync(path.join(staging, "libxml2.dll")));
+  assert.equal(fs.readFileSync(path.join(staging, "libxml2.dll"), "utf8"), "xml2-official");
   assert.equal(fs.existsSync(path.join(staging, "libcrypto-3-x64.dll")), false);
   assert.equal(fs.existsSync(path.join(staging, "ACBrCTe64.dll")), false);
 
