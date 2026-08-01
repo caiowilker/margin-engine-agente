@@ -2788,7 +2788,23 @@ function iniciarServidor() {
     try {
       res.json(await fiscalDriver.statusServico());
     } catch (err) {
-      res.status(500).json({ erro: err.message });
+      const msg = String(err?.message || err || "");
+      // koffi/sessão: 503 com payload estruturado — Diagnóstico não interpreta 500 como agente morto.
+      if (/void \*\*|unexpected external|invalid handle/i.test(msg)) {
+        try {
+          if (typeof fiscalDriver.invalidateNativeSession === "function") {
+            await fiscalDriver.invalidateNativeSession("sefaz_status_soft");
+          }
+        } catch (_) {}
+        return res.status(503).json({
+          operacional: false,
+          erro: msg,
+          retryable: true,
+          native: true,
+          sessaoReset: true,
+        });
+      }
+      res.status(500).json({ erro: msg });
     }
   });
 

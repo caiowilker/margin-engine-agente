@@ -193,6 +193,48 @@ function writeFileIfChanged(filePath, content) {
   return true;
 }
 
+/** Sync só quando ausente, size diverge, ou origem é mais nova (update). */
+function fileNeedsSync(src, dest) {
+  if (!src || !fs.existsSync(src)) return false;
+  if (!dest || !fs.existsSync(dest)) return true;
+  try {
+    const s = fs.statSync(src);
+    const d = fs.statSync(dest);
+    if (s.size !== d.size) return true;
+    // Destino mais novo/igual → já sincronizado (copy atualiza mtime do dest).
+    return Math.floor(s.mtimeMs) > Math.floor(d.mtimeMs) + 500;
+  } catch (_) {
+    return true;
+  }
+}
+
+function copyFileIfNeeded(src, dest) {
+  if (!fileNeedsSync(src, dest)) return false;
+  copyFileEnsureDir(src, dest);
+  return true;
+}
+
+function copyDirRecursiveIfNeeded(src, dest) {
+  if (!fs.existsSync(src)) return 0;
+  fs.mkdirSync(dest, { recursive: true });
+  let n = 0;
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const s = path.join(src, entry.name);
+    const d = path.join(dest, entry.name);
+    if (entry.isDirectory()) n += copyDirRecursiveIfNeeded(s, d);
+    else if (copyFileIfNeeded(s, d)) n += 1;
+  }
+  return n;
+}
+
+function isNativeSessionActiveSafe() {
+  try {
+    return require("./acbrLibSession").getSessionStatus().ativa === true;
+  } catch (_) {
+    return false;
+  }
+}
+
 function copyDirRecursive(src, dest) {
   if (!fs.existsSync(src)) return;
   fs.mkdirSync(dest, { recursive: true });
@@ -271,13 +313,27 @@ function prepareNativeRuntime({ libPath, iniConfigPath, assets, stagingRoot, for
     if (d !== staging) fs.mkdirSync(d, { recursive: true });
   }
 
-  copyDirRecursive(libDir, staging);
-  if (schemasDir) copyDirRecursive(schemasDir, dirs.schemas);
+  // Nunca regravar DLL/deps enquanto a sessão nativa está ativa — overwrite no Windows
+  // corrompe o handle koffi → "Unexpected External value, expected void **".
+  const sessionAtiva = isNativeSessionActiveSafe();
+  if (sessionAtiva) {
+    const stagedLib = path.join(staging, path.basename(libPath));
+    if (!fs.existsSync(stagedLib)) {
+      copyFileIfNeeded(libPath, stagedLib);
+    }
+  } else {
+    copyDirRecursiveIfNeeded(libDir, staging);
+  }
+  if (schemasDir) {
+    if (!sessionAtiva || !fs.existsSync(dirs.schemas) || fs.readdirSync(dirs.schemas).length < 5) {
+      copyDirRecursiveIfNeeded(schemasDir, dirs.schemas);
+    }
+  }
   if (servicosFile) {
-    copyFileEnsureDir(servicosFile, path.join(dirs.config, path.basename(servicosFile)));
+    copyFileIfNeeded(servicosFile, path.join(dirs.config, path.basename(servicosFile)));
   }
   if (certFile) {
-    copyFileEnsureDir(certFile, path.join(dirs.cert, path.basename(certFile) || "cert.pfx"));
+    copyFileIfNeeded(certFile, path.join(dirs.cert, path.basename(certFile) || "cert.pfx"));
   }
 
   const stagedCert = path.join(dirs.cert, path.basename(certFile || "cert.pfx"));
@@ -608,6 +664,9 @@ module.exports = {
   tpAmbToAmbienteLib,
   prepareNativeRuntime,
   writeFileIfChanged,
+  fileNeedsSync,
+  copyFileIfNeeded,
+  copyDirRecursiveIfNeeded,
   ensureNativeDocumentPath,
   resolveNativeDocumentIniPath,
   resolveNativeLibRelativePath,

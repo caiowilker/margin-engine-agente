@@ -132,6 +132,35 @@ test("fingerprint de sessão usa hash de conteúdo (não mtime)", () => {
   fs.unlinkSync(tmp);
 });
 
+test("copyFileIfNeeded não regrava arquivo idêntico", () => {
+  const { copyFileIfNeeded } = require("../fiscal/drivers/acbrLibRuntime");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "me-sync-"));
+  const src = path.join(dir, "a.dll");
+  const dest = path.join(dir, "b.dll");
+  fs.writeFileSync(src, "DLLDATA");
+  assert.strictEqual(copyFileIfNeeded(src, dest), true, "primeira cópia");
+  assert.strictEqual(copyFileIfNeeded(src, dest), false, "segunda cópia deve skip");
+  fs.writeFileSync(src, "DLLDATA!");
+  assert.strictEqual(copyFileIfNeeded(src, dest), true, "size diferente → copia");
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("isKoffiDeadHandleError e recentlyHadKoffiDead", async () => {
+  const session = require("../fiscal/drivers/acbrLibSession");
+  assert.strictEqual(
+    session.isKoffiDeadHandleError(
+      new Error("Unexpected External value, expected void **"),
+    ),
+    true,
+  );
+  assert.strictEqual(
+    session.isKoffiDeadHandleError(new Error("SEFAZ timeout")),
+    false,
+  );
+  await session.invalidateNativeSession("koffi_dead");
+  assert.strictEqual(session.recentlyHadKoffiDead(60_000), true);
+});
+
 acbr.setRuntimeEmissaoFiscal(null);
 process.env.ACBR_DRIVER = "monitor";
 factory.resetFiscalDriver();

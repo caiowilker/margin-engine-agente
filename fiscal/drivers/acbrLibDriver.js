@@ -363,11 +363,7 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
 
     const LibClass = loadAcbrLibNFeMT();
     try {
-      return await acbrLibRuntime.withNativeLibSession(runtime, async () => {
-        const session = await acbrLibSession.ensureSession(runtime, LibClass);
-        const inst = session.inst;
-        acbrLibSession.scheduleIdleFinalize();
-
+      return await runNativeOpWithRetry("emitir", runtime, LibClass, async (inst) => {
         try {
           try {
             inst.limparLista();
@@ -468,9 +464,6 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
             ultimoRetorno: String(ultimo || "").slice(0, 500),
           });
           log.error({ err: err.message, ultimoRetorno: ultimo }, "[ACBrLib] Falha na emissão nativa");
-          if (acbrLibSession.shouldInvalidateOnError(err)) {
-            await acbrLibSession.invalidateNativeSession("emissao_error");
-          }
           throw err;
         }
       });
@@ -552,19 +545,46 @@ async function withNativeLib(opName, fn) {
   const LibClass = loadAcbrLibNFeMT();
   return acbr.withAcbrLock(async () => {
     log.info({ opName }, "[ACBrLib] operação nativa (sessão compartilhada)");
-    return acbrLibRuntime.withNativeLibSession(runtime, async () => {
-      try {
-        const session = await acbrLibSession.ensureSession(runtime, LibClass);
-        acbrLibSession.scheduleIdleFinalize();
-        return await fn(session.inst, runtime);
-      } catch (err) {
-        if (acbrLibSession.shouldInvalidateOnError(err)) {
-          await acbrLibSession.invalidateNativeSession("operation_error");
-        }
-        throw err;
-      }
-    });
+    return runNativeOpWithRetry(opName, runtime, LibClass, fn);
   }, `acbr-lib-${opName}`);
+}
+
+/**
+ * Executa op nativa com retry único em handle koffi morto.
+ * Assume caller já segura withAcbrLock (ou usa via withNativeLib).
+ */
+async function runNativeOpWithRetry(opName, runtime, LibClass, fn) {
+  return acbrLibRuntime.withNativeLibSession(runtime, async () => {
+    const runOnce = async () => {
+      const session = await acbrLibSession.ensureSession(runtime, LibClass);
+      acbrLibSession.scheduleIdleFinalize();
+      return await fn(session.inst, runtime);
+    };
+    try {
+      return await runOnce();
+    } catch (err) {
+      if (!acbrLibSession.shouldInvalidateOnError(err)) throw err;
+      await acbrLibSession.invalidateNativeSession(
+        acbrLibSession.isKoffiDeadHandleError(err) ? "koffi_dead" : "operation_error",
+      );
+      log.warn(
+        { opName, err: err.message },
+        "[ACBrLib] Sessão invalidada — retry único",
+      );
+      try {
+        return await runOnce();
+      } catch (err2) {
+        if (acbrLibSession.shouldInvalidateOnError(err2)) {
+          await acbrLibSession.invalidateNativeSession(
+            acbrLibSession.isKoffiDeadHandleError(err2)
+              ? "koffi_dead"
+              : "operation_error",
+          );
+        }
+        throw err2;
+      }
+    }
+  });
 }
 
 async function statusServicoLib() {
@@ -598,6 +618,20 @@ async function testarLib() {
     return ok;
   } catch (err) {
     log.warn({ err: err.message }, "[ACBrLib] testar() falhou");
+    // koffi/void**: não marque offline definitivo — sessão será recriada no próximo uso.
+    if (acbrLibSession.shouldInvalidateOnError(err)) {
+      try {
+        await acbrLibSession.invalidateNativeSession("testar_soft");
+      } catch (_) {}
+      try {
+        const st2 = await statusServicoLib();
+        const ok2 = st2.operacional !== false;
+        acbr.atualizarStatusMemoria(ok2);
+        return ok2;
+      } catch (err2) {
+        log.warn({ err: err2.message }, "[ACBrLib] testar() retry falhou");
+      }
+    }
     acbr.atualizarStatusMemoria(false);
     return false;
   }

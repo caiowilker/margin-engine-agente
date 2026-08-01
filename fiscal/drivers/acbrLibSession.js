@@ -10,9 +10,15 @@ let cachedRuntime = null;
 let cachedRuntimeFp = null;
 let idleTimer = null;
 let idleSuspended = 0;
+/** Timestamp do último abandon soft por koffi — watchdog não abre contingência. */
+let lastKoffiDeadAt = 0;
 
 const IDLE_MS = parseInt(process.env.ACBR_LIB_SESSION_IDLE_MS || "120000", 10);
 const IDLE_BUSY_POLL_MS = parseInt(process.env.ACBR_LIB_IDLE_BUSY_POLL_MS || "5000", 10);
+const KOFFI_WATCHDOG_GRACE_MS = parseInt(
+  process.env.ACBR_LIB_KOFFI_WATCHDOG_GRACE_MS || "90000",
+  10,
+);
 
 const fs = require("fs");
 
@@ -87,6 +93,12 @@ function shouldInvalidateOnError(err) {
   );
 }
 
+/** Handle koffi já morto — Finalizar piora / repete void**. */
+function isKoffiDeadHandleError(err) {
+  const msg = String(err?.message || err || "").toLowerCase();
+  return /unexpected external|void \*\*|access violation|invalid handle/i.test(msg);
+}
+
 async function destroySession(reason) {
   if (idleTimer) {
     clearTimeout(idleTimer);
@@ -100,11 +112,27 @@ async function destroySession(reason) {
   const { inst } = activeSession;
   activeSession = null;
   runtimeFingerprint = null;
+
+  // Sessão morta (koffi): abandonar sem Finalizar — evita cascata void**.
+  if (
+    reason === "koffi_dead" ||
+    reason === "testar_soft" ||
+    reason === "watchdog_soft" ||
+    reason === "sefaz_status_soft"
+  ) {
+    lastKoffiDeadAt = Date.now();
+    log.warn({ reason }, "[ACBrLibSession] Sessão abandonada sem Finalizar (handle inválido)");
+    return;
+  }
+
   try {
     inst.finalizar();
     log.info({ reason }, "[ACBrLibSession] Sessão finalizada");
   } catch (err) {
-    log.debug({ err: err.message, reason }, "[ACBrLibSession] Finalizar ignorado");
+    log.warn(
+      { err: err.message, reason },
+      "[ACBrLibSession] Finalizar falhou — sessão abandonada",
+    );
   }
 }
 
@@ -152,6 +180,11 @@ async function invalidateNativeSession(reason = "manual") {
   await destroySession(reason);
 }
 
+function recentlyHadKoffiDead(graceMs = KOFFI_WATCHDOG_GRACE_MS) {
+  if (!lastKoffiDeadAt) return false;
+  return Date.now() - lastKoffiDeadAt < Math.max(5000, graceMs);
+}
+
 function getSessionStatus() {
   return {
     ativa: !!activeSession,
@@ -159,6 +192,7 @@ function getSessionStatus() {
     idleMs: IDLE_MS,
     idleSuspended: idleSuspended > 0,
     runtimeFingerprint: runtimeFingerprint || null,
+    lastKoffiDeadAt: lastKoffiDeadAt || null,
   };
 }
 
@@ -169,6 +203,8 @@ module.exports = {
   invalidateNativeSession,
   getSessionStatus,
   shouldInvalidateOnError,
+  isKoffiDeadHandleError,
+  recentlyHadKoffiDead,
   scheduleIdleFinalize,
   suspendIdle,
   resumeIdle,

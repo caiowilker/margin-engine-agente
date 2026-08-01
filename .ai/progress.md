@@ -10,6 +10,11 @@
 - `sanitizarConfigPersistida` grava `ACBR_POSPRINTER_INI` → ProgramData no `.env` (path real em `process.env`).
 - Suíte: `emissao-fiscal-runtime-live` + `printer-win10-solidity` no `npm test`.
 
+## Hotfix void**/contingência (2026-08-01)
+
+- Causa: staging regravava DLL a cada StatusServico com sessão ativa → koffi `void **` → watchdog → CONTINGÊNCIA/OFFLINE.
+- Fix: sync de DLL só se ausente/origem mais nova; abandon soft sem Finalizar; retry único na op nativa; watchdog/preflight sem EPEC em koffi.
+
 ## Changelog (2026-08-01) — Impressora/status sólido no Win10
 
 - **Sintoma:** no Win11 impressora (e percepção de “busca”/caixa) estável; no Win10 oscila, some e config não persiste após update.

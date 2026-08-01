@@ -200,8 +200,23 @@ async function validarEmissaoRapida() {
       if (cacheAceitavelComGrace(cacheRapido)) {
         return cacheRapido.resultado;
       }
-      cacheRapido = null;
-      throw new Error(`Emissor fiscal indisponível: ${err.message}`);
+      const msg = String(err?.message || err || "");
+      if (/void \*\*|unexpected external|invalid handle/i.test(msg)) {
+        try {
+          if (typeof fiscalDriver.invalidateNativeSession === "function") {
+            await fiscalDriver.invalidateNativeSession("koffi_dead");
+          }
+        } catch (_) {}
+        try {
+          ({ resposta, p } = await validarSefazOperacional());
+        } catch (err2) {
+          cacheRapido = null;
+          throw new Error(`Emissor fiscal indisponível: ${err2.message}`);
+        }
+      } else {
+        cacheRapido = null;
+        throw new Error(`Emissor fiscal indisponível: ${err.message}`);
+      }
     }
 
     const ambAcbr = validarAmbiente(ambienteEsperado, resposta, p);

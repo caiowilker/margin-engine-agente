@@ -45,6 +45,25 @@ async function tick(restartAcbrFn, hooks = {}) {
     }
     throw new Error("NFE.StatusServico falhou");
   } catch (err) {
+    const msg = String(err?.message || err || "");
+    // koffi/sessão: reset suave — NÃO abre contingência EPEC (falso positivo Win).
+    let softKoffi = /void \*\*|unexpected external|invalid handle/i.test(msg);
+    if (!softKoffi) {
+      try {
+        softKoffi = require("./fiscal/drivers/acbrLibSession").recentlyHadKoffiDead();
+      } catch (_) {}
+    }
+    if (softKoffi) {
+      console.warn(
+        "[Watchdog ACBr] Sessão nativa inválida — reset suave (sem contingência)",
+      );
+      try {
+        if (typeof fiscalDriver.invalidateNativeSession === "function") {
+          await fiscalDriver.invalidateNativeSession("watchdog_soft");
+        }
+      } catch (_) {}
+      return;
+    }
     falhasConsecutivas++;
     if (falhasConsecutivas >= MAX_FALHAS && !degraded) {
       degraded = true;
