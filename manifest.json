@@ -1,10 +1,10 @@
 {
   "versao": "1.0.6",
-  "geradoEm": "2026-08-01T01:07:35.844Z",
+  "geradoEm": "2026-08-01T01:09:30.976Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
-      "sha256": "a4758a3855ee778f3db92c1c439c41345ef4436661aff2a52f15b0547ff39da5"
+      "sha256": "d19b820dd854fb70a5d94b50cfbc8f9ab9586af8f86dd635ef2a6dccb41fbabb"
     },
     {
       "arquivo": "acbrLibResposta.js",
@@ -60,7 +60,7 @@
     },
     {
       "arquivo": "diagnosticoEnterprise.js",
-      "sha256": "4d171e6f788ba98133dcd258d1a149936651f40679924e1720eed7f5d3607c25"
+      "sha256": "76a2df4125df348064c47a908ecb948ea5d080b75f1906806d1e0193698ce61b"
     },
     {
       "arquivo": "diagnosticoPainel.js",
@@ -100,7 +100,7 @@
     },
     {
       "arquivo": "fiscal/drivers/acbrLibSession.js",
-      "sha256": "6909653d7122fcaba66d1fd0339b7b48ffc2215f125f2fb262987bb08961d885"
+      "sha256": "8aa527d816f62663773c45a2b2c0e3e9c6a58e2fdee9ec6a6445c5026649832d"
     },
     {
       "arquivo": "fiscal/drivers/acbrMonitorDriver.js",
@@ -5128,7 +5128,7 @@
     },
     {
       "arquivo": "print/acbrPosPrinterRuntime.js",
-      "sha256": "dfc8cc6e9f58d448957455da0b7a34043d77bf3d338f68d41ef2c0934b7ad5e4"
+      "sha256": "0638ac8a5987746f8c916fcb14e83b785d3ba46df99d8ffc6f6235467c1b825b"
     },
     {
       "arquivo": "print/acbrPosWorkerPool.js",
@@ -5400,7 +5400,7 @@
     },
     {
       "arquivo": "watchdog.js",
-      "sha256": "d486043147e024d990fc3f45c868a06022b1a35e51190164d9a8462c153a43d1"
+      "sha256": "ecee3c13517ac467b4daf86b16903fa6e7822fb6075c17859805cbc4191c6397"
     }
   ]
 }

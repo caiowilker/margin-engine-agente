@@ -17,6 +17,40 @@ test("logSuggestions retorna ação operacional", () => {
   assert.doesNotMatch(JSON.stringify(s), /stack|ACBrLib|DLL/i);
 });
 
+test("diagnosticoEnterprise — degradado/desligado não são OFFLINE", () => {
+  const { calcularStatusGeralEnterprise } = require("../diagnosticoEnterprise");
+  assert.equal(
+    calcularStatusGeralEnterprise({
+      acbr: "degradado",
+      bancoOk: true,
+      manifestOk: true,
+      impressoraOk: true,
+      atualizando: false,
+      contingenciaAtiva: false,
+      recuperando: 0,
+      incertos: 0,
+      incertosComBackoff: 0,
+      discoCritico: false,
+    }),
+    "DEGRADADO",
+  );
+  assert.equal(
+    calcularStatusGeralEnterprise({
+      acbr: "desligado",
+      bancoOk: true,
+      manifestOk: true,
+      impressoraOk: true,
+      atualizando: false,
+      contingenciaAtiva: false,
+      recuperando: 0,
+      incertos: 0,
+      incertosComBackoff: 0,
+      discoCritico: false,
+    }),
+    "ONLINE",
+  );
+});
+
 test("diagnosticoEnterprise calcula status ONLINE", () => {
   const { calcularStatusGeralEnterprise } = require("../diagnosticoEnterprise");
   assert.equal(

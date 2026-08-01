@@ -97,7 +97,8 @@ function atualizarStatusMemoria(ok, opts = {}) {
 }
 
 function obterStatusMemoria(watchdogDegraded = false) {
-  if (!getEmissaoFiscalAtivo()) return "offline";
+  // Emissão desligada ≠ motor morto — não pintar Diagnóstico OFFLINE.
+  if (!getEmissaoFiscalAtivo()) return "desligado";
   if (watchdogDegraded) return "degradado";
   return ultimoStatusMemoria.estado;
 }

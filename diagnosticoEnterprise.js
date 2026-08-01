@@ -115,7 +115,11 @@ function calcularStatusGeralEnterprise(ctx) {
   if (ctx.atualizando) return "ATUALIZANDO";
   if (ctx.contingenciaAtiva) return "CONTINGÊNCIA";
   if (ctx.recuperando > 0 || ctx.incertos > 0) return "RECUPERANDO";
-  if (ctx.acbr === "offline" || ctx.bancoOk === false || ctx.manifestOk === false) {
+  if (ctx.bancoOk === false || ctx.manifestOk === false) {
+    return "OFFLINE";
+  }
+  // "desligado" = emissão off de propósito — não é falha do agente.
+  if (ctx.acbr === "offline") {
     return "OFFLINE";
   }
   if (
@@ -303,7 +307,10 @@ function coletarContextoEnterprise(deps) {
       driverRaw: fiscalDriverInfo.provider || null,
       mode: fiscalDriverInfo.mode || null,
       emissaoFiscal: deps.acbr.EMISSAO_FISCAL === true,
-      ok: acbrDet.estado === "online",
+      ok:
+        acbrDet.estado === "online" ||
+        acbrDet.estado === "degradado" ||
+        deps.acbr.EMISSAO_FISCAL !== true,
       fallback: fiscalDriverInfo.mode === "parity",
       ultimaEmissao: formatarEventoEmissao(alertas.ultimaEmissao),
       ultimaAutorizacao: formatarEventoEmissao(alertas.ultimaEmissaoSucesso),

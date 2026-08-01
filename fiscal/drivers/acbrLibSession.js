@@ -64,20 +64,12 @@ function normPath(p) {
 
 function fingerprintRuntime(runtime) {
   if (!runtime) return "";
-  let iniFp = "";
-  if (runtime.iniConfig) {
-    try {
-      const raw = fs.readFileSync(runtime.iniConfig, "utf8");
-      iniFp = require("crypto").createHash("sha256").update(raw).digest("hex").slice(0, 20);
-    } catch (_) {
-      iniFp = String(runtime.iniConfig);
-    }
-  }
+  // NÃO hashear o conteúdo do INI: a Lib grava valores em runtime (configGravarValor)
+  // e isso invalidava a sessão → Finalizar/Inicializar → void** no koffi.
   return [
     resolveSlotKey(runtime),
     normPath(runtime.libPath),
     normPath(runtime.iniConfig),
-    iniFp,
     String(runtime.tpAmb || ""),
     String(runtime.ambienteLib || ""),
     String(runtime.ambienteSefaz || ""),

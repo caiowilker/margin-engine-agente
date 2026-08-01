@@ -101,7 +101,7 @@ test("writeFileIfChanged não altera mtime se conteúdo igual", () => {
   fs.unlinkSync(tmp);
 });
 
-test("fingerprint de sessão usa hash de conteúdo (não mtime)", () => {
+test("fingerprint estável mesmo se ACBr regravar conteúdo do INI", () => {
   const { fingerprintRuntime } = require("../fiscal/drivers/acbrLibSession");
   const tmp = path.join(os.tmpdir(), `me-fp-${Date.now()}.ini`);
   fs.writeFileSync(tmp, "Ambiente=1\n", "utf8");
@@ -117,18 +117,46 @@ test("fingerprint de sessão usa hash de conteúdo (não mtime)", () => {
     csc: "t",
   };
   const fp1 = fingerprintRuntime(runtime);
+  fs.writeFileSync(tmp, "Ambiente=1\nLogPath=C:\\\\temp\\\\x\n", "utf8");
+  const fp2 = fingerprintRuntime(runtime);
+  assert.strictEqual(
+    fp1,
+    fp2,
+    "conteúdo do INI não deve invalidar sessão (Lib grava em runtime)",
+  );
+  runtime.tpAmb = "1";
+  assert.notStrictEqual(
+    fp1,
+    fingerprintRuntime(runtime),
+    "mudança de ambiente deve invalidar fingerprint",
+  );
+  fs.unlinkSync(tmp);
+});
+
+test("fingerprint de sessão usa path estável (não mtime)", () => {
+  const { fingerprintRuntime } = require("../fiscal/drivers/acbrLibSession");
+  const tmp = path.join(os.tmpdir(), `me-fp2-${Date.now()}.ini`);
+  fs.writeFileSync(tmp, "Ambiente=1\n", "utf8");
+  const runtime = {
+    libPath: "/x/ACBrNFe64.dll",
+    iniConfig: tmp,
+    tpAmb: "2",
+    ambienteLib: "1",
+    ambienteSefaz: "homologacao",
+    certRel: "c.pfx",
+    idCsc: "1",
+    senha: "s",
+    csc: "t",
+  };
+  const fp1 = fingerprintRuntime(runtime);
   const t0 = Date.now();
   while (Date.now() - t0 < 20) {
     /* mtime distinto */
   }
-  // regrava idêntico — mtime muda, hash não
   fs.writeFileSync(tmp, "Ambiente=1\n", "utf8");
   const fp2 = fingerprintRuntime(runtime);
-  assert.strictEqual(fp1, fp2, "mesmo conteúdo → mesmo fingerprint");
-  fs.writeFileSync(tmp, "Ambiente=0\n", "utf8");
-  const fp3 = fingerprintRuntime(runtime);
-  assert.notStrictEqual(fp1, fp3, "conteúdo diferente → fingerprint diferente");
-  assert.strictEqual(writeFileIfChanged(tmp, "Ambiente=0\n"), false);
+  assert.strictEqual(fp1, fp2, "mesmo SSOT → mesmo fingerprint");
+  assert.strictEqual(writeFileIfChanged(tmp, "Ambiente=1\n"), false);
   fs.unlinkSync(tmp);
 });
 

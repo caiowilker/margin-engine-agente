@@ -164,11 +164,41 @@ function prepareRuntimePaths() {
 
   const staging =
     process.env.ACBR_POS_WIN_STAGING || resolveStagingDir("margin-acbr-posprinter");
-  copyDirRecursive(path.dirname(sourceLib), staging);
   const stagedLib = path.join(staging, path.basename(sourceLib));
+  const sessionActive = !!withPosPrinterSession._session;
+
+  // Nunca sobrescrever DLL PosPrinter com sessão koffi ativa (mesmo padrão da NFe).
+  const needsLib =
+    !fs.existsSync(stagedLib) ||
+    (() => {
+      try {
+        const s = fs.statSync(sourceLib);
+        const d = fs.statSync(stagedLib);
+        return s.size !== d.size || Math.floor(s.mtimeMs) > Math.floor(d.mtimeMs) + 500;
+      } catch (_) {
+        return true;
+      }
+    })();
+
+  if (!sessionActive && needsLib) {
+    copyDirRecursive(path.dirname(sourceLib), staging);
+  } else if (!fs.existsSync(stagedLib)) {
+    copyFileEnsureDir(sourceLib, stagedLib);
+  }
+
   fs.mkdirSync(path.dirname(iniPath), { recursive: true });
   if (fs.existsSync(iniPath) && !String(iniPath).startsWith(staging)) {
-    copyFileEnsureDir(iniPath, path.join(staging, "config", path.basename(iniPath)));
+    const destIni = path.join(staging, "config", path.basename(iniPath));
+    try {
+      if (
+        !fs.existsSync(destIni) ||
+        fs.statSync(iniPath).size !== fs.statSync(destIni).size
+      ) {
+        copyFileEnsureDir(iniPath, destIni);
+      }
+    } catch (_) {
+      copyFileEnsureDir(iniPath, destIni);
+    }
   }
   const stagedIni = path.join(staging, "config", path.basename(iniPath));
   return {

@@ -5,7 +5,7 @@ const filaFiscal = require("./filaFiscal");
 let timer = null;
 let falhasConsecutivas = 0;
 let degraded = false;
-const MAX_FALHAS = 3;
+const MAX_FALHAS = parseInt(process.env.ACBR_WATCHDOG_MAX_FALHAS || "5", 10);
 const INTERVAL_MS = parseInt(process.env.ACBR_WATCHDOG_MS || "30000", 10);
 
 function statusWatchdog() {
@@ -78,6 +78,16 @@ async function tick(restartAcbrFn, hooks = {}) {
     }
     falhasConsecutivas++;
     if (falhasConsecutivas >= MAX_FALHAS && !degraded) {
+      // Última guarda: nunca abrir EPEC por glitch koffi recente.
+      try {
+        if (require("./fiscal/drivers/acbrLibSession").recentlyHadKoffiDead()) {
+          console.warn(
+            "[Watchdog ACBr] Falhas consecutivas ignoradas — koffi recente (sem contingência)",
+          );
+          falhasConsecutivas = 0;
+          return;
+        }
+      } catch (_) {}
       degraded = true;
       filaFiscal.pausarFila();
       console.warn(
