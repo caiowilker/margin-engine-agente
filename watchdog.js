@@ -27,6 +27,16 @@ async function tick(restartAcbrFn, hooks = {}) {
   if (fiscalDriver.isAcbrBusy?.() || filaFiscal.estaProcessando?.()) {
     return;
   }
+  try {
+    const recycle = require("./fiscal/drivers/acbrLibProcessRecycle");
+    if (recycle.isProcessPoisoned()) {
+      console.warn(
+        "[Watchdog ACBr] Processo envenenado (koffi) — aguardando recycle (sem contingência)",
+      );
+      recycle.scheduleRecycle("watchdog_poisoned");
+      return;
+    }
+  } catch (_) {}
   // Memória online recente: não martela StatusServico (DLL/SEFAZ).
   try {
     const det = fiscalDriver.obterStatusDetalhe?.(false);

@@ -437,6 +437,11 @@ async function boot() {
       });
     },
   });
+  try {
+    require("./fiscal/drivers/acbrLibProcessRecycle").setRecycleHook((reason) =>
+      encerrarGracefully(`ACBR_LIB_RECYCLE:${reason}`, 1),
+    );
+  } catch (_) {}
   // Se reiniciou já em contingência, mantém fila pausada até SEFAZ voltar.
   if (estadoContingencia.ativa) {
     try {
@@ -533,6 +538,14 @@ async function reiniciarEmissorFiscal() {
   const driver = String(process.env.ACBR_DRIVER || "lib").toLowerCase();
   if (driver === "lib" || driver === "acbr-lib") {
     try {
+      const processRecycle = require("./fiscal/drivers/acbrLibProcessRecycle");
+      if (processRecycle.isProcessPoisoned()) {
+        processRecycle.scheduleRecycle("watchdog_restart_poisoned");
+        console.warn(
+          "[Margin Engine] Emissor Lib envenenado — reciclagem do processo agendada",
+        );
+        return;
+      }
       const libDriver = require("./fiscal/drivers/acbrLibDriver");
       if (typeof libDriver.invalidateNativeSession === "function") {
         await libDriver.invalidateNativeSession("watchdog_restart");

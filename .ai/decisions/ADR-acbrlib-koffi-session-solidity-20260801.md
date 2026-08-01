@@ -11,12 +11,13 @@
 3. **INI staging** só regrava se conteúdo mudou; **fingerprint de sessão NÃO inclui hash do INI** (Lib grava em runtime).
 4. **Idle finalize** sob `withAcbrLock`; busy check **antes** do lock; dentro do lock (`isHoldingAcbrLock`) idle **pode** `Finalizar`.
 5. **`withAcbrLock` reentrante** (AsyncLocalStorage) — emit → enrich cStat 104 → consultar sem deadlock.
-6. **Handle morto:** abandonar sem `Finalizar`; **soft-dead até recycle** (sem re-Inicializar em loop); `clearSoftDead` só em refresh/shutdown/operator_reset.
-7. **StatusServico:** single-flight + cache longo só para positivo; negativo TTL curto (~5s).
-8. **Memória:** falha koffi → `degradado` sticky enquanto soft-dead/koffi recente; emissão off → `desligado`.
-9. **PosPrinter:** não overwrite DLL com sessão, `_dllPinned` ou worker ativo com staged lib.
-10. **Watchdog:** nunca EPEC por soft-dead / degradado / koffi recente.
-11. **chdir:** Pos in-process recusa se fiscal busy ou sessão NFe ativa (worker default evita o problema).
+6. **Handle morto:** abandonar **sem** `Finalizar` e **sem** `Symbol.dispose` (dispose do `@projetoacbr` chama Finalizar e gera `void**` permanente).
+7. **Processo envenenado:** após retry void** falhar → `ACBR_LIB_AUTO_RECYCLE` (default true) → exit(1) e o serviço Windows sobe limpo.
+8. **Idle Finalizar:** desligado por padrão (`ACBR_LIB_SESSION_IDLE_MS=0`) — sessão quente.
+9. **StatusServico:** single-flight + cache longo só para positivo; negativo TTL curto (~5s).
+10. **Memória:** soft-dead ativo → `degradado`; emissão off → `desligado`.
+11. **PosPrinter:** não overwrite DLL com sessão/worker; in-process bloqueado se NFe ativo (chdir).
+12. **Watchdog:** nunca EPEC por soft-dead / processo envenenado.
 
 ## Consequências
 

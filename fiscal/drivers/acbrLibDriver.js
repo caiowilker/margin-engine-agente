@@ -571,6 +571,17 @@ async function withNativeLib(opName, fn) {
  * Assume caller já segura withAcbrLock (ou usa via withNativeLib).
  */
 async function runNativeOpWithRetry(opName, runtime, LibClass, fn) {
+  const processRecycle = require("./acbrLibProcessRecycle");
+  if (processRecycle.isProcessPoisoned()) {
+    const e = new Error(
+      "ACBrLib koffi envenenado — o serviço do agente está reiniciando automaticamente",
+    );
+    e.reiniciarAcbr = true;
+    e.processPoisoned = true;
+    e.retryable = true;
+    processRecycle.scheduleRecycle("op_poisoned");
+    throw e;
+  }
   return acbrLibRuntime.withNativeLibSession(runtime, async () => {
     const runOnce = async () => {
       const session = await acbrLibSession.ensureSession(runtime, LibClass);
@@ -588,8 +599,8 @@ async function runNativeOpWithRetry(opName, runtime, LibClass, fn) {
         koffiDead ? "koffi_dead" : "operation_error",
         slot,
       );
-      // Soft-dead / void**: libera cooldown e tenta UMA nova Inicializar.
       if (koffiDead) {
+        // Uma tentativa de nova sessão — sem dispose/Finalizar no abandon.
         acbrLibSession.clearSoftDead(slot);
         log.warn(
           { opName, err: err.message, slot },
@@ -598,7 +609,9 @@ async function runNativeOpWithRetry(opName, runtime, LibClass, fn) {
         try {
           return await runOnce();
         } catch (err2) {
-          if (acbrLibSession.shouldInvalidateOnError(err2)) {
+          if (acbrLibSession.isKoffiDeadHandleError(err2) || err2?.processPoisoned) {
+            processRecycle.markProcessPoisoned(`retry_failed:${opName}`);
+          } else if (acbrLibSession.shouldInvalidateOnError(err2)) {
             await acbrLibSession.invalidateNativeSession(
               acbrLibSession.isKoffiDeadHandleError(err2)
                 ? "koffi_dead"
@@ -645,6 +658,19 @@ function invalidateStatusServicoCache() {
 async function statusServicoLib() {
   if (getIntegrationMode() !== "native") {
     return acbr.statusServico();
+  }
+  const processRecycle = require("./acbrLibProcessRecycle");
+  if (processRecycle.isProcessPoisoned()) {
+    acbr.atualizarStatusMemoria(false, { degradado: true });
+    processRecycle.scheduleRecycle("status_poisoned");
+    return {
+      operacional: false,
+      cStat: null,
+      xMotivo: "ACBrLib koffi envenenado — reiniciando serviço",
+      native: true,
+      processPoisoned: true,
+      cached: false,
+    };
   }
   const ttl = Math.max(5000, STATUS_SERVICO_TTL_MS);
   const negTtl = Math.max(2000, parseInt(process.env.ACBR_STATUS_SERVICO_NEG_TTL_MS || "5000", 10));
@@ -694,10 +720,16 @@ async function testarLib() {
   if (getIntegrationMode() !== "native") {
     return acbr.testar();
   }
+  const processRecycle = require("./acbrLibProcessRecycle");
+  if (processRecycle.isProcessPoisoned()) {
+    acbr.atualizarStatusMemoria(false, { degradado: true });
+    processRecycle.scheduleRecycle("testar_poisoned");
+    return false;
+  }
   try {
     const st = await statusServicoLib();
     const ok = st.operacional !== false;
-    acbr.atualizarStatusMemoria(ok);
+    acbr.atualizarStatusMemoria(ok, ok ? {} : { degradado: true });
     return ok;
   } catch (err) {
     log.warn({ err: err.message }, "[ACBrLib] testar() falhou");
@@ -716,6 +748,9 @@ async function testarLib() {
         return ok2;
       } catch (err2) {
         log.warn({ err: err2.message }, "[ACBrLib] testar() retry falhou");
+        if (acbrLibSession.isKoffiDeadHandleError(err2) || err2?.processPoisoned) {
+          processRecycle.markProcessPoisoned("testar_retry_void");
+        }
         acbr.atualizarStatusMemoria(false, { degradado: true });
         return false;
       }

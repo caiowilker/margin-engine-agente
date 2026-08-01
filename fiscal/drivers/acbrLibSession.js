@@ -1,16 +1,17 @@
 /**
  * Sessão persistente ACBrLib — evita Inicializar/Finalizar por operação.
  *
- * Regras de solidez (Windows + koffi):
+ * Regras de solidez (Windows + koffi + @projetoacbr):
  * - NFe e NFS-e têm slots separados (DLLs/classes diferentes).
- * - Idle finalize SEMPRE sob withAcbrLock (sem corrida com emissão).
- * - Handle morto (void**): abandonar sem Finalizar; DLL fica pinned até recycle do processo.
- * - Generation id: nunca reutilizar inst após dispose.
- * - Soft-dead: só com handle abandonado; cooldown curto + retry (não brick permanente).
- * - withAcbrLock é reentrante (ALS) — idle sob lock não confunde busy com "outro dono".
+ * - Handle morto (void**): abandonar SEM Finalizar e SEM Symbol.dispose
+ *   (dispose do wrapper oficial chama Finalizar e envenena o koffi).
+ * - Processo envenenado → recycle automático do serviço (exit 1).
+ * - Idle Finalizar desligado por padrão (ACBR_LIB_SESSION_IDLE_MS=0).
+ * - withAcbrLock é reentrante (ALS).
  */
 const path = require("path");
 const log = require("../../logger").child({ modulo: "acbr_lib_session" });
+const processRecycle = require("./acbrLibProcessRecycle");
 
 /** @type {Record<string, { inst: object, runtime: object, createdAt: number, generation: number, slot: string }|null>} */
 const slots = { nfe: null, nfse: null };
@@ -33,7 +34,7 @@ const softDeadUntilRecycle = { nfe: false, nfse: false };
 /** @type {Record<string, number>} */
 const softDeadAt = { nfe: 0, nfse: 0 };
 
-const IDLE_MS = parseInt(process.env.ACBR_LIB_SESSION_IDLE_MS || "300000", 10);
+const IDLE_MS = parseInt(process.env.ACBR_LIB_SESSION_IDLE_MS || "0", 10);
 const IDLE_BUSY_POLL_MS = parseInt(process.env.ACBR_LIB_IDLE_BUSY_POLL_MS || "5000", 10);
 const KOFFI_WATCHDOG_GRACE_MS = parseInt(
   process.env.ACBR_LIB_KOFFI_WATCHDOG_GRACE_MS || "120000",
@@ -126,6 +127,7 @@ function clearIdleTimer(key) {
 function scheduleIdleFinalizeSlot(slotKey = "nfe") {
   const key = slotKey === "nfse" ? "nfse" : "nfe";
   clearIdleTimer(key);
+  if (IDLE_MS <= 0) return; // idle Finalizar desligado — sessão quente (produção)
   if (idleSuspended > 0 || !slots[key]) return;
   // Busy check ANTES do lock — dentro do lock isAcbrBusy sempre true (depth++).
   if (isAcbrBusySafe()) {
@@ -195,11 +197,8 @@ async function destroySession(reason, slotKey) {
       dllPinned = true;
       softDeadUntilRecycle[key] = true;
       softDeadAt[key] = Date.now();
-      try {
-        if (typeof inst?.[Symbol.dispose] === "function") inst[Symbol.dispose]();
-      } catch (_) {
-        /* ignore */
-      }
+      // NÃO chamar Symbol.dispose / Finalizar — o wrapper oficial (@projetoacbr)
+      // faz Finalizar no dispose e isso gera void** permanente no processo.
       log.warn({ reason, slot: key }, "[ACBrLibSession] Sessão abandonada sem Finalizar");
       continue;
     }
@@ -251,6 +250,17 @@ function allowSoftDeadRecovery(key) {
  */
 async function ensureSession(runtime, LibClass) {
   const key = resolveSlotKey(runtime);
+  if (processRecycle.isProcessPoisoned()) {
+    const e = new Error(
+      "ACBrLib koffi envenenado — o serviço do agente está reiniciando automaticamente",
+    );
+    e.reiniciarAcbr = true;
+    e.softDead = true;
+    e.processPoisoned = true;
+    e.retryable = true;
+    processRecycle.scheduleRecycle("ensure_session_poisoned");
+    throw e;
+  }
   if (softDeadUntilRecycle[key] && !allowSoftDeadRecovery(key)) {
     const e = new Error(
       "ACBrLib sessão nativa em recuperação — aguarde 1–2s e tente novamente",
@@ -398,6 +408,8 @@ function getSessionStatus() {
     softDead: softDeadUntilRecycle.nfe || softDeadUntilRecycle.nfse,
     softDeadNfe: softDeadUntilRecycle.nfe,
     softDeadNfse: softDeadUntilRecycle.nfse,
+    processPoisoned: processRecycle.isProcessPoisoned(),
+    recycle: processRecycle.getRecycleStatus(),
   };
 }
 
