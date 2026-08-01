@@ -1,6 +1,6 @@
 {
   "versao": "1.0.6",
-  "geradoEm": "2026-08-01T01:22:15.018Z",
+  "geradoEm": "2026-08-01T01:23:17.871Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -5128,7 +5128,7 @@
     },
     {
       "arquivo": "print/acbrPosPrinterRuntime.js",
-      "sha256": "e99a8912809ae08e2eddae6de2098364ec324748894334c35455418b74c654cc"
+      "sha256": "a920a996f0fe54e825a76f05ef58ecdd5eb0750cdc8ec7749db811141f612136"
     },
     {
       "arquivo": "print/acbrPosWorkerPool.js",
