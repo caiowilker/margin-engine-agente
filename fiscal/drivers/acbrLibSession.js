@@ -6,6 +6,7 @@
  * - Idle finalize SEMPRE sob withAcbrLock (sem corrida com emissão).
  * - Handle morto (void**): abandonar sem Finalizar; DLL fica pinned até recycle do processo.
  * - Generation id: nunca reutilizar inst após dispose.
+ * - Soft-dead: só com handle abandonado; cooldown curto + retry (não brick permanente).
  * - withAcbrLock é reentrante (ALS) — idle sob lock não confunde busy com "outro dono".
  */
 const path = require("path");
@@ -27,8 +28,10 @@ let lastKoffiDeadAt = 0;
 let generationSeq = 0;
 /** Após Inicializar ou soft-abandon, não sobrescrever DLLs mapeadas no processo. */
 let dllPinned = false;
-/** Soft-dead por slot: não re-Inicializar até recycle do processo (ou reset operador). */
+/** Soft-dead por slot: cooldown curto antes de re-Inicializar (não brick permanente). */
 const softDeadUntilRecycle = { nfe: false, nfse: false };
+/** @type {Record<string, number>} */
+const softDeadAt = { nfe: 0, nfse: 0 };
 
 const IDLE_MS = parseInt(process.env.ACBR_LIB_SESSION_IDLE_MS || "300000", 10);
 const IDLE_BUSY_POLL_MS = parseInt(process.env.ACBR_LIB_IDLE_BUSY_POLL_MS || "5000", 10);
@@ -170,11 +173,8 @@ async function destroySession(reason, slotKey) {
     clearIdleTimer(key);
     const active = slots[key];
     if (!active) {
-      if (softReason) {
-        lastKoffiDeadAt = Date.now();
-        dllPinned = true;
-        softDeadUntilRecycle[key] = true;
-      }
+      // Sem handle vivo: NÃO marcar soft-dead (isso brickava o caixa após testar/preflight).
+      if (softReason) lastKoffiDeadAt = Date.now();
       continue;
     }
     // Só adia idle se outro dono segura o recurso — sob o próprio lock (reentrante) finaliza.
@@ -194,6 +194,7 @@ async function destroySession(reason, slotKey) {
       lastKoffiDeadAt = Date.now();
       dllPinned = true;
       softDeadUntilRecycle[key] = true;
+      softDeadAt[key] = Date.now();
       try {
         if (typeof inst?.[Symbol.dispose] === "function") inst[Symbol.dispose]();
       } catch (_) {
@@ -210,6 +211,7 @@ async function destroySession(reason, slotKey) {
       lastKoffiDeadAt = Date.now();
       dllPinned = true;
       softDeadUntilRecycle[key] = true;
+      softDeadAt[key] = Date.now();
       log.warn(
         { err: err.message, reason, slot: key },
         "[ACBrLibSession] Finalizar falhou — sessão abandonada",
@@ -218,18 +220,44 @@ async function destroySession(reason, slotKey) {
   }
 }
 
+const SOFTDEAD_COOLDOWN_MS = parseInt(
+  process.env.ACBR_LIB_SOFTDEAD_COOLDOWN_MS || "1500",
+  10,
+);
+
+/**
+ * Soft-dead: após abandonar handle vivo, espera cooldown curto e tenta Inicializar de novo.
+ * Nunca bloqueia o caixa para sempre — só evita reentrada imediata no mesmo tick.
+ */
+function allowSoftDeadRecovery(key) {
+  if (!softDeadUntilRecycle[key]) return true;
+  const at = softDeadAt[key] || lastKoffiDeadAt || 0;
+  const age = Date.now() - at;
+  if (age >= Math.max(500, SOFTDEAD_COOLDOWN_MS)) {
+    softDeadUntilRecycle[key] = false;
+    softDeadAt[key] = 0;
+    log.info(
+      { slot: key, cooldownMs: age },
+      "[ACBrLibSession] Soft-dead liberado — nova Inicializar permitida",
+    );
+    return true;
+  }
+  return false;
+}
+
 /**
  * @param {object} runtime
  * @param {new (...args: any[]) => any} LibClass
  */
 async function ensureSession(runtime, LibClass) {
   const key = resolveSlotKey(runtime);
-  if (softDeadUntilRecycle[key]) {
+  if (softDeadUntilRecycle[key] && !allowSoftDeadRecovery(key)) {
     const e = new Error(
-      "ACBrLib sessão nativa inválida — reinicie o serviço do agente no caixa",
+      "ACBrLib sessão nativa em recuperação — aguarde 1–2s e tente novamente",
     );
     e.reiniciarAcbr = true;
     e.softDead = true;
+    e.retryable = true;
     throw e;
   }
   const fp = fingerprintRuntime(runtime);
@@ -240,13 +268,13 @@ async function ensureSession(runtime, LibClass) {
   }
 
   await destroySession("config_changed", key);
-  // destroySession soft-dead path não se aplica a config_changed; se Finalizar falhou, softDead set.
-  if (softDeadUntilRecycle[key]) {
+  if (softDeadUntilRecycle[key] && !allowSoftDeadRecovery(key)) {
     const e = new Error(
-      "ACBrLib sessão nativa inválida — reinicie o serviço do agente no caixa",
+      "ACBrLib sessão nativa em recuperação — aguarde 1–2s e tente novamente",
     );
     e.reiniciarAcbr = true;
     e.softDead = true;
+    e.retryable = true;
     throw e;
   }
 
@@ -260,9 +288,13 @@ async function ensureSession(runtime, LibClass) {
   try {
     inst.inicializar();
     dllPinned = true;
+    softDeadUntilRecycle[key] = false;
+    softDeadAt[key] = 0;
   } catch (err) {
     lastKoffiDeadAt = Date.now();
     dllPinned = true;
+    softDeadUntilRecycle[key] = true;
+    softDeadAt[key] = Date.now();
     throw err;
   }
   require("./acbrLibRuntime").applyNativeRuntimeConfig(inst, runtime);
@@ -341,10 +373,13 @@ function isSoftDead(slotKey) {
 function clearSoftDead(slotKey) {
   if (slotKey === "nfe" || slotKey === "nfse") {
     softDeadUntilRecycle[slotKey] = false;
+    softDeadAt[slotKey] = 0;
     return;
   }
   softDeadUntilRecycle.nfe = false;
   softDeadUntilRecycle.nfse = false;
+  softDeadAt.nfe = 0;
+  softDeadAt.nfse = 0;
 }
 
 function getSessionStatus() {
@@ -381,6 +416,8 @@ function resetDllPinForTests() {
   lastKoffiDeadAt = 0;
   softDeadUntilRecycle.nfe = false;
   softDeadUntilRecycle.nfse = false;
+  softDeadAt.nfe = 0;
+  softDeadAt.nfse = 0;
 }
 
 module.exports = {

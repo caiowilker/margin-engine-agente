@@ -101,11 +101,16 @@ test("acbrLibSession idle sob lock finaliza (não confunde busy do próprio mute
   assert.equal(session.getSessionStatus().ativa, false);
 });
 
-test("acbrLibSession soft-dead bloqueia ensureSession até clearSoftDead", async () => {
+test("acbrLibSession soft-dead sem sessão ativa não bricka o caixa", async () => {
   await session.invalidateNativeSession("test");
   session.resetDllPinForTests();
   await session.invalidateNativeSession("koffi_dead", "nfe");
-  assert.equal(session.isSoftDead("nfe"), true);
+  assert.equal(session.isSoftDead("nfe"), false);
+});
+
+test("acbrLibSession clearSoftDead libera gate", async () => {
+  await session.invalidateNativeSession("test");
+  session.resetDllPinForTests();
   session.clearSoftDead("nfe");
   assert.equal(session.isSoftDead("nfe"), false);
 });

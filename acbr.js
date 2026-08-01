@@ -88,11 +88,11 @@ let ultimoStatusMemoria = { estado: "offline", atualizadoEm: null };
 
 function atualizarStatusMemoria(ok, opts = {}) {
   let degradado = opts.degradado === true;
-  // Sticky: após koffi/soft-dead, não pintar OFFLINE por StatusServico flaky.
+  // Sticky só enquanto soft-dead ativo (handle abandonado recente) — não para sempre.
   if (!ok && !degradado) {
     try {
       const session = require("./fiscal/drivers/acbrLibSession");
-      if (session.recentlyHadKoffiDead() || session.isSoftDead()) {
+      if (session.isSoftDead()) {
         degradado = true;
       }
     } catch (_) {}

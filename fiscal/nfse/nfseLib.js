@@ -208,8 +208,7 @@ async function emitirNfseViaNativeLib(payload) {
           koffiDead ? "koffi_dead" : "operation_error",
           "nfse",
         );
-        // Soft-dead: sem retry Inicializar (mesma regra NFe).
-        if (koffiDead) throw err;
+        if (koffiDead) acbrLibSession.clearSoftDead("nfse");
         session = await runOnce();
       }
       const inst = session.inst;

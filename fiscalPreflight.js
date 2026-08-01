@@ -201,11 +201,17 @@ async function validarEmissaoRapida() {
         return cacheRapido.resultado;
       }
       const msg = String(err?.message || err || "");
-      if (/void \*\*|unexpected external|invalid handle/i.test(msg)) {
+      if (/void \*\*|unexpected external|invalid handle|sessão nativa|session disposed|em recuperação/i.test(msg)) {
         try {
           if (typeof fiscalDriver.invalidateNativeSession === "function") {
             await fiscalDriver.invalidateNativeSession("koffi_dead");
           }
+          if (typeof fiscalDriver.refreshLibRuntimeConfig === "function") {
+            /* clearSoftDead já ocorre em operator paths; força recovery explícito */
+          }
+          try {
+            require("./fiscal/drivers/acbrLibSession").clearSoftDead("nfe");
+          } catch (_) {}
         } catch (_) {}
         try {
           ({ resposta, p } = await validarSefazOperacional());

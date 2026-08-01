@@ -588,13 +588,26 @@ async function runNativeOpWithRetry(opName, runtime, LibClass, fn) {
         koffiDead ? "koffi_dead" : "operation_error",
         slot,
       );
-      // void**/soft-dead: NÃO re-Inicializar no mesmo processo — evita empilhar handles.
+      // Soft-dead / void**: libera cooldown e tenta UMA nova Inicializar.
       if (koffiDead) {
+        acbrLibSession.clearSoftDead(slot);
         log.warn(
           { opName, err: err.message, slot },
-          "[ACBrLib] Soft-dead — reinicie o serviço (sem retry Inicializar)",
+          "[ACBrLib] Soft-dead — retry único com nova sessão",
         );
-        throw err;
+        try {
+          return await runOnce();
+        } catch (err2) {
+          if (acbrLibSession.shouldInvalidateOnError(err2)) {
+            await acbrLibSession.invalidateNativeSession(
+              acbrLibSession.isKoffiDeadHandleError(err2)
+                ? "koffi_dead"
+                : "operation_error",
+              slot,
+            );
+          }
+          throw err2;
+        }
       }
       log.warn(
         { opName, err: err.message, slot },
@@ -692,12 +705,20 @@ async function testarLib() {
       try {
         await acbr.withAcbrLock(async () => {
           await acbrLibSession.invalidateNativeSession("testar_soft", "nfe");
+          acbrLibSession.clearSoftDead("nfe");
         }, "testar_soft");
       } catch (_) {}
       invalidateStatusServicoCache();
-      // Soft-dead: sem re-Inicializar — Diagnóstico fica degradado até recycle.
-      acbr.atualizarStatusMemoria(false, { degradado: true });
-      return false;
+      try {
+        const st2 = await statusServicoLib();
+        const ok2 = st2.operacional !== false;
+        acbr.atualizarStatusMemoria(ok2, ok2 ? {} : { degradado: true });
+        return ok2;
+      } catch (err2) {
+        log.warn({ err: err2.message }, "[ACBrLib] testar() retry falhou");
+        acbr.atualizarStatusMemoria(false, { degradado: true });
+        return false;
+      }
     }
     acbr.atualizarStatusMemoria(false);
     return false;
