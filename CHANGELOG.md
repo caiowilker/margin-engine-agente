@@ -11,7 +11,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 ### Corrigido
 
 - **EMISSAO_FISCAL vivo:** drivers Lib/Monitor não congelam mais o flag no boot (`wrapAcbrExports`); salvar no painel passa a valer na fila e no Diagnóstico sem reinício.
-- **Sessão ACBrLib / koffi:** INI staging só regrava se mudou; fingerprint por identidade estável (sem hash do INI — a Lib regrava em runtime); slots NFe≠NFS-e (+ staging separado); idle sob mutex (busy check *antes* do lock); `withAcbrLock` reentrante (ALS); prepare/DLL sync sob mutex + `dllPinned` pós soft-abandon; void** = soft-reset + retry; StatusServico cache longo só positivo; Motor OK em `degradado`; emissão off = `desligado`.
+- **Sessão ACBrLib / koffi:** INI staging só regrava se mudou; fingerprint estável; slots NFe≠NFS-e (+ staging separado); idle sob mutex; `withAcbrLock` reentrante; prepare/DLL sob mutex + `dllPinned`; soft-dead sem re-Inicializar até recycle; StatusServico negativo TTL curto; Motor `degradado` sticky; PosPrinter pin com worker; emissão off = `desligado`.
 - Self-heal `garantirEmissaoFiscalAtiva` na fila e nas rotas `/fiscal/emitir*` antes de recusar emissão.
 - NF-e painel com `forcarEmissao` não depende mais só de `isNfeModelo55Habilitado()` (que exigia toggle on).
 - Boot reaplica autoridade local → runtime antes do HTTP/worker.
