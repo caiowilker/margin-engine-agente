@@ -11,15 +11,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 ### Corrigido
 
 - **EMISSAO_FISCAL vivo:** drivers Lib/Monitor não congelam mais o flag no boot (`wrapAcbrExports`); salvar no painel passa a valer na fila e no Diagnóstico sem reinício.
-- **Sessão ACBrLib:** INI de staging só regrava se o conteúdo mudou; fingerprint por hash SHA — elimina `Unexpected External value, expected void **` e contingência EPEC falsa a cada StatusServico.
-- **Lib koffi (hotfix):** staging não sobrescreve DLL com sessão ativa; abandon soft sem Finalizar; retry único; watchdog não abre contingência EPEC em void**.
-- **Lib koffi (sólido):** slots NFe≠NFS-e; idle finalize sob mutex; cache StatusServico 45s; memória `degradado` em vez de OFFLINE em void**; LogNivel staging=0.
-- **Lib koffi (fechamento):** fingerprint sem hash do INI (Lib regrava em runtime); Motor OK em degradado; emissão off=`desligado`; PosPrinter sem overwrite DLL ativa; watchdog 5 falhas + guarda koffi.
+- **Sessão ACBrLib / koffi:** INI staging só regrava se mudou; fingerprint por identidade estável (sem hash do INI — a Lib regrava em runtime); slots NFe≠NFS-e; idle sob mutex; sem overwrite de DLL ativa; void** = soft-reset + retry; StatusServico em cache; watchdog sem EPEC falso; Motor OK em `degradado`; emissão off = `desligado`.
 - Self-heal `garantirEmissaoFiscalAtiva` na fila e nas rotas `/fiscal/emitir*` antes de recusar emissão.
 - NF-e painel com `forcarEmissao` não depende mais só de `isNfeModelo55Habilitado()` (que exigia toggle on).
 - Boot reaplica autoridade local → runtime antes do HTTP/worker.
 - `VERSION` alinhado a `package.json` (1.0.6).
-- **Win10 impressora/status:** `posprinter.ini` SSOT em ProgramData (migra install-dir legado); status/poll trata porta RAW/TCP salva como conectada mesmo se Get-Printer falhar/timeout; janela `impressaoRecenteOk` 15 min; cache lista Windows 90s.
+- **Win10 impressora/status:** `posprinter.ini` SSOT em ProgramData (migra install-dir legado); status/poll trata porta RAW/TCP salva como conectada mesmo se Get-Printer falhar/timeout; janela `impressaoRecenteOk` 15 min; cache lista Windows 90s; PosPrinter sem overwrite DLL com sessão ativa.
 
 ### Alterado
 
