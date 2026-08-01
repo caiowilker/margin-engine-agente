@@ -756,6 +756,41 @@ async function withPosPrinterSession(fn, opts = {}) {
     }
   }
 
+  // In-process Pos e ACBrLib NFe compartilham process.chdir — nunca em paralelo.
+  try {
+    const coord = require("./printFiscalCoordination");
+    if (coord.fiscalEmUso()) {
+      await coord.aguardarFiscalLivre(
+        parseInt(process.env.PRINT_FISCAL_WAIT_CHDIR_MS || "3000", 10),
+      );
+    }
+    if (coord.fiscalEmUso()) {
+      const e = new Error(
+        "Fiscal ACBr ocupado — Pos in-process bloqueado (evita corrida de cwd)",
+      );
+      e.code = "ACBR_POS_FISCAL_BUSY_CHDIR";
+      e.fallbackNative = true;
+      throw e;
+    }
+    const st = require("../fiscal/drivers/acbrLibSession").getSessionStatus?.();
+    if (st?.ativa) {
+      const e = new Error(
+        "Sessão ACBrLib NFe ativa — Pos in-process bloqueado (evita corrida de cwd)",
+      );
+      e.code = "ACBR_POS_FISCAL_SESSION_ACTIVE";
+      e.fallbackNative = true;
+      throw e;
+    }
+  } catch (err) {
+    if (
+      err?.code === "ACBR_POS_FISCAL_BUSY_CHDIR" ||
+      err?.code === "ACBR_POS_FISCAL_SESSION_ACTIVE"
+    ) {
+      throw err;
+    }
+    /* coord/session opcional em testes */
+  }
+
   const SESSION_IDLE_MS = parseInt(process.env.ACBR_POS_SESSION_IDLE_MS || "45000", 10);
   let _activeSession = withPosPrinterSession._session;
   let _refCount = withPosPrinterSession._refCount || 0;
@@ -1387,6 +1422,13 @@ function shouldOpenCircuitFromError(err) {
   const msg = String(err?.message || err || "");
   if (err?.code === "PRINTER_NOT_THERMAL" || err?.permanente) return false;
   if (err?.code === "ACBR_POS_WORKER_OWNS_SESSION") return false;
+  // Contenção temporária com fiscal (chdir) — não abre circuito permanente.
+  if (
+    err?.code === "ACBR_POS_FISCAL_BUSY_CHDIR" ||
+    err?.code === "ACBR_POS_FISCAL_SESSION_ACTIVE"
+  ) {
+    return false;
+  }
   if (err?.acbrRet === -10 || /\(-10\)/.test(msg) || /ret\s*=\s*-10\b/i.test(msg)) return true;
   if (/expected \d+ arguments, got \d+/i.test(msg)) return true;
   if (

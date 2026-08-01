@@ -16,6 +16,7 @@
 8. **Memória:** falha koffi → `degradado` sticky enquanto soft-dead/koffi recente; emissão off → `desligado`.
 9. **PosPrinter:** não overwrite DLL com sessão, `_dllPinned` ou worker ativo com staged lib.
 10. **Watchdog:** nunca EPEC por soft-dead / degradado / koffi recente.
+11. **chdir:** Pos in-process recusa se fiscal busy ou sessão NFe ativa (worker default evita o problema).
 
 ## Consequências
 
