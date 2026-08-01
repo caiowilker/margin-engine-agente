@@ -1,10 +1,10 @@
 {
   "versao": "1.0.6",
-  "geradoEm": "2026-08-01T01:13:56.095Z",
+  "geradoEm": "2026-08-01T01:22:15.018Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
-      "sha256": "2cfc79c76623fff397ba4637b84e0490e4bb65c9cbb4725388ecc462c93a61ee"
+      "sha256": "4d30782490ee1201300b4b6cf04691409b07fd4300ecc17a60238361e52cf325"
     },
     {
       "arquivo": "acbrLibResposta.js",
@@ -92,7 +92,7 @@
     },
     {
       "arquivo": "fiscal/drivers/acbrLibDriver.js",
-      "sha256": "806a3124b8573d2c494853475adfc6c50c0ea215b27dd62f1bb070b0d0df2136"
+      "sha256": "50110993ca2515882f4d453dffafdca3cde23e1c58da80828c45b1d175f4f9aa"
     },
     {
       "arquivo": "fiscal/drivers/acbrLibRuntime.js",
@@ -100,7 +100,7 @@
     },
     {
       "arquivo": "fiscal/drivers/acbrLibSession.js",
-      "sha256": "a3c2898e01af5515c0800d1bfffbf18dc4f81b116d8b55f82aea379aaf611849"
+      "sha256": "1963e725c08054a0a2823dc062cd032bf83ed8ae20f4c6f2cf6e6794e9cd59fc"
     },
     {
       "arquivo": "fiscal/drivers/acbrMonitorDriver.js",
@@ -140,7 +140,7 @@
     },
     {
       "arquivo": "fiscal/nfse/nfseLib.js",
-      "sha256": "58d2622d1b21fea4e55f0c516d150c8212405b8c91b17425a0a2c24fc2bb8d2f"
+      "sha256": "d809d34a1c2fe3cf543c8d970989c46fafdfe44280d5580b7d9b59e7d06cf084"
     },
     {
       "arquivo": "fiscal/nfse/nfseValidate.js",
@@ -5128,7 +5128,7 @@
     },
     {
       "arquivo": "print/acbrPosPrinterRuntime.js",
-      "sha256": "0638ac8a5987746f8c916fcb14e83b785d3ba46df99d8ffc6f6235467c1b825b"
+      "sha256": "e99a8912809ae08e2eddae6de2098364ec324748894334c35455418b74c654cc"
     },
     {
       "arquivo": "print/acbrPosWorkerPool.js",
@@ -5400,7 +5400,7 @@
     },
     {
       "arquivo": "watchdog.js",
-      "sha256": "ecee3c13517ac467b4daf86b16903fa6e7822fb6075c17859805cbc4191c6397"
+      "sha256": "b026c95029cbc90714e6e6583f32e6379f680a941ad9c950497699406888d34f"
     }
   ]
 }
