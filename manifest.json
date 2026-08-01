@@ -1,10 +1,10 @@
 {
   "versao": "1.0.6",
-  "geradoEm": "2026-08-01T01:10:25.036Z",
+  "geradoEm": "2026-08-01T01:13:56.095Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
-      "sha256": "d19b820dd854fb70a5d94b50cfbc8f9ab9586af8f86dd635ef2a6dccb41fbabb"
+      "sha256": "2cfc79c76623fff397ba4637b84e0490e4bb65c9cbb4725388ecc462c93a61ee"
     },
     {
       "arquivo": "acbrLibResposta.js",
@@ -92,15 +92,15 @@
     },
     {
       "arquivo": "fiscal/drivers/acbrLibDriver.js",
-      "sha256": "b889cc0a2704999e2408853f306a7bb2a4ad28a4eb322edac80e2d8114835f06"
+      "sha256": "806a3124b8573d2c494853475adfc6c50c0ea215b27dd62f1bb070b0d0df2136"
     },
     {
       "arquivo": "fiscal/drivers/acbrLibRuntime.js",
-      "sha256": "685e616a192dd5107bd7bc1bbee83391e2cb79af31f48f0af04087d2331c4277"
+      "sha256": "6ece7a3bd397fc4fbf417a1281eb4bc9dae3c3560f7e272f0986a6addde2ff4f"
     },
     {
       "arquivo": "fiscal/drivers/acbrLibSession.js",
-      "sha256": "8aa527d816f62663773c45a2b2c0e3e9c6a58e2fdee9ec6a6445c5026649832d"
+      "sha256": "a3c2898e01af5515c0800d1bfffbf18dc4f81b116d8b55f82aea379aaf611849"
     },
     {
       "arquivo": "fiscal/drivers/acbrMonitorDriver.js",
@@ -140,7 +140,7 @@
     },
     {
       "arquivo": "fiscal/nfse/nfseLib.js",
-      "sha256": "99ff417e64188bcce1534b62bceef20903cc7b53b09d8ecd7229136112ab0573"
+      "sha256": "58d2622d1b21fea4e55f0c516d150c8212405b8c91b17425a0a2c24fc2bb8d2f"
     },
     {
       "arquivo": "fiscal/nfse/nfseValidate.js",
