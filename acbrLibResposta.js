@@ -148,14 +148,23 @@ function extrairDocsDistribuicaoDFe(resposta) {
 }
 
 function parseRespostaLib(resposta) {
-  const bruto = String(resposta ?? "");
+  const rawObject =
+    resposta && typeof resposta === "object" && !Array.isArray(resposta)
+      ? resposta
+      : null;
+  const bruto =
+    rawObject?.raw != null && String(rawObject.raw).trim() !== ""
+      ? String(rawObject.raw)
+      : rawObject
+        ? JSON.stringify(rawObject)
+        : String(resposta ?? "");
   const fromJson = parseJsonAcbrLib(bruto);
-  if (fromJson?.cStat) {
-    return { ...fromJson, raw: resposta, native: true };
+  if (fromJson && fromJson.cStat != null && String(fromJson.cStat).trim() !== "") {
+    return { ...fromJson, raw: bruto, native: true };
   }
 
-  const base = acbr.parseResposta(resposta);
-  if (base.cStat) {
+  const base = acbr.parseResposta(bruto);
+  if (base.cStat != null && String(base.cStat).trim() !== "") {
     return {
       ...base,
       ultNSU: fromJson?.ultNSU || null,
@@ -167,6 +176,7 @@ function parseRespostaLib(resposta) {
   const cStat =
     fromJson?.cStat ||
     base.cStat ||
+    (rawObject?.cStat != null ? String(rawObject.cStat) : null) ||
     bruto.match(/CStat\s*[=:]\s*(\d+)/i)?.[1] ||
     bruto.match(/cStat\s*[=:]\s*(\d+)/i)?.[1] ||
     bruto.match(/"CStat"\s*:\s*"?(\d+)"?/i)?.[1] ||
@@ -175,6 +185,7 @@ function parseRespostaLib(resposta) {
   const xMotivo =
     fromJson?.xMotivo ||
     base.xMotivo ||
+    rawObject?.xMotivo ||
     bruto.match(/XMotivo\s*[=:]\s*(.+)/i)?.[1]?.trim() ||
     bruto.match(/xMotivo\s*[=:]\s*(.+)/i)?.[1]?.trim() ||
     null;
@@ -193,7 +204,7 @@ function parseRespostaLib(resposta) {
     tpAmb: fromJson?.tpAmb || base.tpAmb,
     ultNSU: fromJson?.ultNSU || null,
     maxNSU: fromJson?.maxNSU || null,
-    raw: resposta,
+    raw: bruto,
     native: true,
   };
 }

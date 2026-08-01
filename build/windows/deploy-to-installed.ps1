@@ -30,6 +30,17 @@ $xf = @(".env")
 & robocopy $Src $Dest /MIR /NFL /NDL /NJH /NJS /NC /NS /NP /XD $xd /XF $xf | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy falhou com codigo $LASTEXITCODE" }
 
+# ACBr base aloca o handle e o bridge declara a FFI: cópias aninhadas de
+# koffi geram External incompatível ("expected void **"). O node_modules
+# existente é preservado, mas estas cópias redundantes devem ser removidas.
+foreach ($pkg in @("acbrlib-base-node", "acbrlib-dfe-node", "acbrlib-nfe-node", "acbrlib-nfse-node")) {
+    $nestedKoffi = Join-Path $Dest "node_modules\@projetoacbr\$pkg\node_modules\koffi"
+    if (Test-Path $nestedKoffi) {
+        Remove-Item -Recurse -Force $nestedKoffi
+        Write-Host "  Removido koffi aninhado: $pkg"
+    }
+}
+
 & robocopy (Join-Path $Src "frontend-dist") (Join-Path $Dest "frontend-dist") /MIR /NFL /NDL /NJH /NJS /NC /NS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy frontend-dist falhou" }
 

@@ -27,6 +27,7 @@ const fiscalTrace = require("../../fiscalTraceLog");
 const fiscalEmissionLock = require("../fiscalEmissionLock");
 const fiscalDhEmiIni = require("../fiscalDhEmiIni");
 const { wrapAcbrExports } = require("../wrapAcbrExports");
+const { isMainThread } = require("worker_threads");
 
 const AGENT_ROOT = path.resolve(__dirname, "../..");
 
@@ -104,6 +105,26 @@ function getIntegrationMode() {
   if (canLoadNativeLib()) return "native";
   if (process.env.ACBR_LIB_ALLOW_PARITY === "true") return "parity";
   return "unconfigured";
+}
+
+/**
+ * O processo HTTP nunca carrega koffi em produção Windows. A mesma superfície
+ * do driver é executada no filho fiscal, que pode ser reiniciado isoladamente.
+ */
+function usarWorkerFiscal() {
+  return (
+    isMainThread &&
+    process.env.ACBR_LIB_WORKER_CHILD !== "true" &&
+    getIntegrationMode() === "native" &&
+    String(process.env.ACBR_LIB_WORKER || "true").toLowerCase() !== "false"
+  );
+}
+
+function executarNativo(method, local, timeoutMs) {
+  return async (...args) => {
+    if (!usarWorkerFiscal()) return local(...args);
+    return require("../acbrLibWorkerPool").call(method, args, { timeoutMs });
+  };
 }
 
 function isNativeLibConfigured() {
@@ -558,6 +579,15 @@ async function withNativeLib(opName, fn) {
   if (getIntegrationMode() !== "native") {
     throw new Error(`[ACBrLib] ${opName} requer biblioteca nativa configurada`);
   }
+  // No processo HTTP, toda FFI pertence ao filho fiscal. Isto impede que uma
+  // rota esquecida (ex.: PDF) volte a carregar koffi no processo que atende 9100.
+  if (usarWorkerFiscal()) {
+    const err = new Error(
+      `[ACBrLib] ${opName} bloqueado no processo principal; use o worker fiscal`,
+    );
+    err.code = "ACBR_LIB_WORKER_OWNS_SESSION";
+    throw err;
+  }
   const LibClass = loadAcbrLibNFeMT();
   return acbr.withAcbrLock(async () => {
     const runtime = buildNativeRuntime();
@@ -567,8 +597,10 @@ async function withNativeLib(opName, fn) {
 }
 
 /**
- * Executa op nativa com retry único em handle koffi morto.
- * Assume caller já segura withAcbrLock (ou usa via withNativeLib).
+ * Executa op nativa.
+ * Handle koffi morto (void **): NÃO cria nova sessão no mesmo processo
+ * (Inicializar sem Finalizar da instância abandonada corrompe o koffi).
+ * Única recuperação = recycle do processo.
  */
 async function runNativeOpWithRetry(opName, runtime, LibClass, fn) {
   const processRecycle = require("./acbrLibProcessRecycle");
@@ -594,33 +626,23 @@ async function runNativeOpWithRetry(opName, runtime, LibClass, fn) {
     } catch (err) {
       if (!acbrLibSession.shouldInvalidateOnError(err)) throw err;
       const slot = acbrLibSession.resolveSlotKey(runtime);
-      const koffiDead = acbrLibSession.isKoffiDeadHandleError(err) || err?.softDead === true;
+      const koffiDead =
+        acbrLibSession.isKoffiDeadHandleError(err) || err?.softDead === true;
       await acbrLibSession.invalidateNativeSession(
         koffiDead ? "koffi_dead" : "operation_error",
         slot,
       );
       if (koffiDead) {
-        // Uma tentativa de nova sessão — sem dispose/Finalizar no abandon.
-        acbrLibSession.clearSoftDead(slot);
-        log.warn(
-          { opName, err: err.message, slot },
-          "[ACBrLib] Soft-dead — retry único com nova sessão",
+        // Proibido: novo Inicializar com handle anterior ainda vivo na DLL.
+        log.error(
+          { opName, err: err.message, slot, metric: "acbrlib.koffi_no_inplace_retry" },
+          "[ACBrLib] void** — reciclando processo (sem nova sessão in-process)",
         );
-        try {
-          return await runOnce();
-        } catch (err2) {
-          if (acbrLibSession.isKoffiDeadHandleError(err2) || err2?.processPoisoned) {
-            processRecycle.markProcessPoisoned(`retry_failed:${opName}`);
-          } else if (acbrLibSession.shouldInvalidateOnError(err2)) {
-            await acbrLibSession.invalidateNativeSession(
-              acbrLibSession.isKoffiDeadHandleError(err2)
-                ? "koffi_dead"
-                : "operation_error",
-              slot,
-            );
-          }
-          throw err2;
-        }
+        processRecycle.markProcessPoisoned(`koffi_dead:${opName}`);
+        err.reiniciarAcbr = true;
+        err.processPoisoned = true;
+        err.retryable = true;
+        throw err;
       }
       log.warn(
         { opName, err: err.message, slot },
@@ -636,6 +658,9 @@ async function runNativeOpWithRetry(opName, runtime, LibClass, fn) {
               : "operation_error",
             slot,
           );
+          if (acbrLibSession.isKoffiDeadHandleError(err2) || err2?.processPoisoned) {
+            processRecycle.markProcessPoisoned(`retry_failed:${opName}`);
+          }
         }
         throw err2;
       }
@@ -702,6 +727,18 @@ async function statusServicoLib() {
         native: true,
         cached: false,
       };
+      if (!operacional) {
+        log.warn(
+          {
+            cStat: p.cStat,
+            xMotivo: p.xMotivo || null,
+            tpAmb: p.tpAmb || null,
+            raw: String(resposta || "").slice(0, 4000),
+            metric: "acbrlib.status_servico_indisponivel",
+          },
+          "[ACBrLib] StatusServico não operacional",
+        );
+      }
       // Cache positivo no TTL longo; negativo só no TTL curto (gravado com mesmo at).
       statusServicoCache = { at: Date.now(), value: { ...value, cached: true } };
       return value;
@@ -720,6 +757,11 @@ async function testarLib() {
   if (getIntegrationMode() !== "native") {
     return acbr.testar();
   }
+  // Paridade com acbr.testar() / probe /status — sem StatusServico nativo se emissão off.
+  if (!acbr.EMISSAO_FISCAL) {
+    acbr.atualizarStatusMemoria(false);
+    return false;
+  }
   const processRecycle = require("./acbrLibProcessRecycle");
   if (processRecycle.isProcessPoisoned()) {
     acbr.atualizarStatusMemoria(false, { degradado: true });
@@ -733,29 +775,20 @@ async function testarLib() {
     return ok;
   } catch (err) {
     log.warn({ err: err.message }, "[ACBrLib] testar() falhou");
+    if (acbrLibSession.isKoffiDeadHandleError(err) || err?.processPoisoned) {
+      // withNativeLib já marcou poison + recycle — não abrir nova sessão aqui.
+      acbr.atualizarStatusMemoria(false, { degradado: true });
+      return false;
+    }
     if (acbrLibSession.shouldInvalidateOnError(err) || err?.softDead) {
       try {
         await acbr.withAcbrLock(async () => {
           await acbrLibSession.invalidateNativeSession("testar_soft", "nfe");
-          acbrLibSession.clearSoftDead("nfe");
         }, "testar_soft");
       } catch (_) {}
       invalidateStatusServicoCache();
-      try {
-        const st2 = await statusServicoLib();
-        const ok2 = st2.operacional !== false;
-        acbr.atualizarStatusMemoria(ok2, ok2 ? {} : { degradado: true });
-        return ok2;
-      } catch (err2) {
-        log.warn({ err: err2.message }, "[ACBrLib] testar() retry falhou");
-        if (acbrLibSession.isKoffiDeadHandleError(err2) || err2?.processPoisoned) {
-          processRecycle.markProcessPoisoned("testar_retry_void");
-        }
-        acbr.atualizarStatusMemoria(false, { degradado: true });
-        return false;
-      }
     }
-    acbr.atualizarStatusMemoria(false);
+    acbr.atualizarStatusMemoria(false, { degradado: true });
     return false;
   }
 }
@@ -1340,37 +1373,66 @@ async function invalidateNativeSession(reason) {
   }, reason || "invalidate");
 }
 
-module.exports = wrapAcbrExports({
+const exportedDriver = wrapAcbrExports({
   getDriverInfo,
   getIntegrationMode,
   DRIVER_INFO,
   patchNumeracaoIniLib,
   parseResposta: (resposta) => acbrLibResposta.parseRespostaLib(resposta),
-  emitirNfce: emitirNfceLib,
-  emitirNfe: emitirNfeLib,
-  emitirNfse: emitirNfseLib,
+  emitirNfce: executarNativo("emitirNfce", emitirNfceLib, resolveEmissaoTimeoutMs()),
+  emitirNfe: executarNativo("emitirNfe", emitirNfeLib, resolveEmissaoTimeoutMs()),
+  emitirNfse: executarNativo("emitirNfse", emitirNfseLib, resolveEmissaoTimeoutMs()),
   isNfseHabilitado: () => acbr.isNfseHabilitado(),
-  emitirViaNativeLib,
-  statusServico: statusServicoLib,
-  testar: testarLib,
-  testarLibDetalhe,
-  consultarChave: consultarChaveLib,
-  consultarChaveEntrada: consultarChaveEntradaLib,
-  cancelarNfce: cancelarNfceLib,
-  inutilizarNfce: inutilizarNfceLib,
-  enviarEventoFiscal: enviarEventoFiscalLib,
-  distribuicaoDFePorUltNsu: distribuicaoDFePorUltNsuLib,
-  distribuicaoDFePorChave: distribuicaoDFePorChaveLib,
-  manifestarCienciaOperacao: manifestarCienciaOperacaoLib,
-  manifestarEventoDestinatario: manifestarEventoDestinatarioLib,
-  refreshLibRuntimeConfig,
-  invalidateNativeSession,
-  getLibSessionStatus: () => acbrLibSession.getSessionStatus(),
-  gerarPdfFiscal: gerarPdfFiscalLib,
-  gerarPdfDanfce: (chave, xmlPath, opts) => gerarPdfFiscalLib(chave, xmlPath, "65", opts),
-  gerarPdfDanfe: (chave, xmlPath) => gerarPdfFiscalLib(chave, xmlPath, "55"),
+  emitirViaNativeLib: executarNativo("emitirViaNativeLib", emitirViaNativeLib, resolveEmissaoTimeoutMs()),
+  statusServico: executarNativo("statusServico", statusServicoLib, 30_000),
+  testar: executarNativo("testar", testarLib, 30_000),
+  testarLibDetalhe: executarNativo("testarLibDetalhe", testarLibDetalhe, 30_000),
+  consultarChave: executarNativo("consultarChave", consultarChaveLib, 60_000),
+  consultarChaveEntrada: executarNativo("consultarChaveEntrada", consultarChaveEntradaLib, 60_000),
+  cancelarNfce: executarNativo("cancelarNfce", cancelarNfceLib, resolveEmissaoTimeoutMs()),
+  inutilizarNfce: executarNativo("inutilizarNfce", inutilizarNfceLib, resolveEmissaoTimeoutMs()),
+  enviarEventoFiscal: executarNativo("enviarEventoFiscal", enviarEventoFiscalLib, resolveEmissaoTimeoutMs()),
+  distribuicaoDFePorUltNsu: executarNativo("distribuicaoDFePorUltNsu", distribuicaoDFePorUltNsuLib, 60_000),
+  distribuicaoDFePorChave: executarNativo("distribuicaoDFePorChave", distribuicaoDFePorChaveLib, 60_000),
+  manifestarCienciaOperacao: executarNativo("manifestarCienciaOperacao", manifestarCienciaOperacaoLib, 60_000),
+  manifestarEventoDestinatario: executarNativo("manifestarEventoDestinatario", manifestarEventoDestinatarioLib, 60_000),
+  refreshLibRuntimeConfig: executarNativo("refreshLibRuntimeConfig", refreshLibRuntimeConfig, 30_000),
+  invalidateNativeSession: executarNativo("invalidateNativeSession", invalidateNativeSession, 30_000),
+  getLibSessionStatus: () => ({
+    ...acbrLibSession.getSessionStatus(),
+    worker: usarWorkerFiscal()
+      ? require("../acbrLibWorkerPool").status()
+      : { enabled: false, online: false },
+  }),
+  gerarPdfFiscal: executarNativo("gerarPdfFiscal", gerarPdfFiscalLib, resolveEmissaoTimeoutMs()),
+  gerarPdfDanfce: executarNativo(
+    "gerarPdfDanfce",
+    (chave, xmlPath, opts) => gerarPdfFiscalLib(chave, xmlPath, "65", opts),
+    resolveEmissaoTimeoutMs(),
+  ),
+  gerarPdfDanfe: executarNativo(
+    "gerarPdfDanfe",
+    (chave, xmlPath) => gerarPdfFiscalLib(chave, xmlPath, "55"),
+    resolveEmissaoTimeoutMs(),
+  ),
   warnIfSelectedAtBoot,
   // exportados para teste / diagnóstico DistDFe
   aplicarModeloDfNfeParaDistDfe,
   restaurarModeloDfNfce,
 });
+
+// A emissão fiscal pode mudar em runtime pelo configSync. O filho recebe um
+// snapshot de env/estado no fork; descartá-lo é a forma segura de não manter
+// certificado, INI ou toggle de emissão obsoleto.
+const setRuntimeEmissaoOriginal = exportedDriver.setRuntimeEmissaoFiscal;
+exportedDriver.setRuntimeEmissaoFiscal = (valor) => {
+  const anterior = exportedDriver.getRuntimeEmissaoFiscal?.();
+  setRuntimeEmissaoOriginal(valor);
+  // configSync reaplica o mesmo valor periodicamente. Reciclar o filho nesse
+  // caso interrompe StatusServico/emissão sem atualizar qualquer configuração.
+  if (usarWorkerFiscal() && anterior !== Boolean(valor)) {
+    void require("../acbrLibWorkerPool").terminate("runtime_config_changed");
+  }
+};
+
+module.exports = exportedDriver;

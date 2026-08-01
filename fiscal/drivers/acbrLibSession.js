@@ -3,13 +3,15 @@
  *
  * Regras de solidez (Windows + koffi + @projetoacbr):
  * - NFe e NFS-e têm slots separados (DLLs/classes diferentes).
- * - Handle morto (void**): abandonar SEM Finalizar e SEM Symbol.dispose
+ * - Handle morto (void **): abandonar SEM Finalizar e SEM Symbol.dispose
  *   (dispose do wrapper oficial chama Finalizar e envenena o koffi).
  * - Processo envenenado → recycle automático do serviço (exit 1).
  * - Idle Finalizar desligado por padrão (ACBR_LIB_SESSION_IDLE_MS=0).
  * - withAcbrLock é reentrante (ALS).
  */
 const path = require("path");
+const fs = require("fs");
+const crypto = require("crypto");
 const log = require("../../logger").child({ modulo: "acbr_lib_session" });
 const processRecycle = require("./acbrLibProcessRecycle");
 
@@ -78,6 +80,20 @@ function resolveSlotKey(runtimeOrLibPath) {
 
 function normPath(p) {
   return path.normalize(String(p || "")).toLowerCase();
+}
+
+function nativeArtifactProof(libPath) {
+  try {
+    const buf = fs.readFileSync(libPath);
+    const machine = buf.length > 0x40 ? buf.readUInt16LE(buf.readUInt32LE(0x3c) + 4) : null;
+    return {
+      bytes: buf.length,
+      sha256: crypto.createHash("sha256").update(buf).digest("hex"),
+      peMachine: machine === 0x8664 ? "x64" : machine ? `0x${machine.toString(16)}` : null,
+    };
+  } catch (_) {
+    return { bytes: null, sha256: null, peMachine: null };
+  }
 }
 
 function fingerprintRuntime(runtime) {
@@ -219,28 +235,13 @@ async function destroySession(reason, slotKey) {
   }
 }
 
-const SOFTDEAD_COOLDOWN_MS = parseInt(
-  process.env.ACBR_LIB_SOFTDEAD_COOLDOWN_MS || "1500",
-  10,
-);
-
 /**
- * Soft-dead: após abandonar handle vivo, espera cooldown curto e tenta Inicializar de novo.
- * Nunca bloqueia o caixa para sempre — só evita reentrada imediata no mesmo tick.
+ * Soft-dead após handle koffi morto (void **): TERMINAL neste processo.
+ * Novo Inicializar sem Finalizar da instância abandonada corrompe o koffi.
+ * Recuperação = recycle do processo Node (serviço Windows).
  */
 function allowSoftDeadRecovery(key) {
   if (!softDeadUntilRecycle[key]) return true;
-  const at = softDeadAt[key] || lastKoffiDeadAt || 0;
-  const age = Date.now() - at;
-  if (age >= Math.max(500, SOFTDEAD_COOLDOWN_MS)) {
-    softDeadUntilRecycle[key] = false;
-    softDeadAt[key] = 0;
-    log.info(
-      { slot: key, cooldownMs: age },
-      "[ACBrLibSession] Soft-dead liberado — nova Inicializar permitida",
-    );
-    return true;
-  }
   return false;
 }
 
@@ -263,11 +264,13 @@ async function ensureSession(runtime, LibClass) {
   }
   if (softDeadUntilRecycle[key] && !allowSoftDeadRecovery(key)) {
     const e = new Error(
-      "ACBrLib sessão nativa em recuperação — aguarde 1–2s e tente novamente",
+      "ACBrLib koffi soft-dead — reciclando processo (sem nova Inicializar in-process)",
     );
     e.reiniciarAcbr = true;
     e.softDead = true;
+    e.processPoisoned = true;
     e.retryable = true;
+    processRecycle.markProcessPoisoned(`soft_dead_block:${key}`);
     throw e;
   }
   const fp = fingerprintRuntime(runtime);
@@ -280,16 +283,36 @@ async function ensureSession(runtime, LibClass) {
   await destroySession("config_changed", key);
   if (softDeadUntilRecycle[key] && !allowSoftDeadRecovery(key)) {
     const e = new Error(
-      "ACBrLib sessão nativa em recuperação — aguarde 1–2s e tente novamente",
+      "ACBrLib koffi soft-dead — reciclando processo (sem nova Inicializar in-process)",
     );
     e.reiniciarAcbr = true;
     e.softDead = true;
+    e.processPoisoned = true;
     e.retryable = true;
+    processRecycle.markProcessPoisoned(`soft_dead_block:${key}`);
     throw e;
   }
 
   const instPaths = require("./acbrLibRuntime").resolveInstPaths(runtime);
   const gen = ++generationSeq;
+  let koffiVer = null;
+  try {
+    koffiVer = require("koffi/package.json").version;
+  } catch (_) {}
+  log.info(
+    {
+      slot: key,
+      libPath: instPaths.libPath,
+      iniConfig: instPaths.iniConfig,
+      arch: process.arch,
+      node: process.version,
+      koffi: koffiVer,
+      cwd: process.cwd(),
+      artifact: nativeArtifactProof(instPaths.libPath),
+      metric: "acbrlib.inicializar_begin",
+    },
+    "[ACBrLibSession] Antes de Inicializar",
+  );
   const inst = new LibClass(
     instPaths.libPath,
     instPaths.iniConfig,
@@ -300,11 +323,24 @@ async function ensureSession(runtime, LibClass) {
     dllPinned = true;
     softDeadUntilRecycle[key] = false;
     softDeadAt[key] = 0;
+    log.info(
+      { slot: key, generation: gen, metric: "acbrlib.inicializar_ok" },
+      "[ACBrLibSession] Inicializar OK",
+    );
   } catch (err) {
     lastKoffiDeadAt = Date.now();
     dllPinned = true;
     softDeadUntilRecycle[key] = true;
     softDeadAt[key] = Date.now();
+    log.error(
+      {
+        slot: key,
+        err: err.message,
+        libPath: instPaths.libPath,
+        metric: "acbrlib.inicializar_fail",
+      },
+      "[ACBrLibSession] Inicializar FALHOU",
+    );
     throw err;
   }
   require("./acbrLibRuntime").applyNativeRuntimeConfig(inst, runtime);

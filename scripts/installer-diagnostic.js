@@ -42,7 +42,7 @@ function readEnvFile() {
 
 function addIssue(report, severity, code, message, solution) {
   report.issues.push({ severity, code, message, solution });
-  if (severity === "error") report.ok = false;
+  if (severity === "error" || severity === "critical") report.ok = false;
 }
 
 function checkPortOpen(port) {
@@ -269,7 +269,7 @@ async function runDiagnostic() {
   if (!portOpen) {
     addIssue(
       report,
-      "warning",
+      "critical",
       "ME-012",
       `O agente Margin Engine não está respondendo na porta ${PORT}.`,
       "Inicie o serviço Windows «Margin Engine» (SCM: marginengine.exe). Legado: pdvmarginengine.exe. Ou execute Reparar no instalador.",

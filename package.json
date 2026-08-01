@@ -38,6 +38,7 @@
     "manifest": "node scripts/generate-manifest.js",
     "predeploy": "node scripts/pre-deploy-check.js",
     "smoke": "node scripts/smoke-test.js",
+    "probe:acbrlib": "node scripts/probe-acbrlib-native.js",
     "smoke:integration": "node scripts/smoke-integration.js",
     "homolog:agente": "node scripts/homologacao-agente-1.0.js",
     "homolog:agente:live": "node scripts/homologacao-agente-1.0.js --live",
@@ -50,8 +51,8 @@
   },
   "dependencies": {
     "@napi-rs/keyring": "^1.1.4",
-    "@projetoacbr/acbrlib-nfe-node": "^1.0.11",
-    "@projetoacbr/acbrlib-nfse-node": "^1.0.12",
+    "@projetoacbr/acbrlib-nfe-node": "1.0.11",
+    "@projetoacbr/acbrlib-nfse-node": "1.0.12",
     "better-sqlite3": "^11.10.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
@@ -59,12 +60,17 @@
     "escpos-network": "^3.0.0-alpha.5",
     "escpos-usb": "^3.0.0-alpha.4",
     "express": "^4.18.2",
-    "koffi": "^2.16.3",
+    "koffi": "2.16.3",
     "node-fetch": "^2.7.0",
     "node-windows": "^1.0.0-beta.8",
     "pino": "^8.20.0",
     "qr-image": "^3.2.0",
     "sharp": "^0.33.5"
+  },
+  "overrides": {
+    "@projetoacbr/acbrlib-base-node": "1.0.12",
+    "@projetoacbr/acbrlib-dfe-node": "1.0.12",
+    "koffi": "2.16.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

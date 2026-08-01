@@ -27,6 +27,11 @@ async function tick(restartAcbrFn, hooks = {}) {
   if (fiscalDriver.isAcbrBusy?.() || filaFiscal.estaProcessando?.()) {
     return;
   }
+  // Instalação fresca: EMISSAO_FISCAL=false — não chamar StatusServico/DLL (evita void** → recycle).
+  if (!fiscalDriver.EMISSAO_FISCAL) {
+    falhasConsecutivas = 0;
+    return;
+  }
   try {
     const recycle = require("./fiscal/drivers/acbrLibProcessRecycle");
     if (recycle.isProcessPoisoned()) {
@@ -135,9 +140,14 @@ async function tick(restartAcbrFn, hooks = {}) {
 
 function iniciar(restartAcbrFn, hooks = {}) {
   if (timer) return;
+  const delayMs = parseInt(process.env.ACBR_WATCHDOG_BOOT_DELAY_MS || "60000", 10);
   const run = () => tick(restartAcbrFn, hooks);
   timer = setInterval(run, INTERVAL_MS);
-  run();
+  // NÃO martelar StatusServico/DLL no segundo 0 do boot — deixa HTTP :9100 estabilizar
+  // (ativação do terminal / ME-012). Primeiro tick após delay.
+  const first = setTimeout(run, Math.max(5000, delayMs));
+  if (typeof first.unref === "function") first.unref();
+  if (typeof timer.unref === "function") timer.unref();
 }
 
 function parar() {

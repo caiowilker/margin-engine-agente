@@ -114,6 +114,14 @@ function statusFiscalFailSafe(err) {
   if (err?.esgotouRecuperacao539 || (meta.cStat === "539" && err?.permanente)) {
     return "ERRO_FISCAL";
   }
+  // Cadastro/certificado/configuração não se recuperam por retry. Reportá-los
+  // como pendentes induz o PDV a aguardar uma ação que nunca ocorrerá.
+  if (
+    !meta.recuperavel &&
+    ["NCM", "CFOP", "CST", "CERTIFICADO", "CONFIGURACAO"].includes(meta.motivoFiscal)
+  ) {
+    return "ERRO_FISCAL";
+  }
   if (meta.recuperavel || ["NCM", "CFOP", "CST", "CERTIFICADO", "CONFIGURACAO", "DRIVER", "TIMEOUT", "NETWORK", "SEFAZ"].includes(meta.motivoFiscal)) {
     return "PENDENTE_FISCAL";
   }

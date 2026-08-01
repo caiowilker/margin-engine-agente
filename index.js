@@ -76,6 +76,21 @@ initLogging({
   patchConsole: process.env.LOG_PATCH_CONSOLE !== "false",
 });
 
+// ACBr base e bridge devem compartilhar a MESMA instância koffi. Instalações
+// antigas preservavam node_modules com cópias aninhadas e produziam
+// "Unexpected External value, expected void **" já no NFE_Inicializar.
+try {
+  const topology = require("./runtime/acbrKoffiTopology").enforceSingleKoffi();
+  if (topology.removed.length) {
+    console.warn(
+      `[boot] corrigidas ${topology.removed.length} cópia(s) aninhada(s) de koffi; usando ${topology.rootVersion}`,
+    );
+  }
+} catch (error) {
+  console.error("[boot] topologia koffi inválida:", error?.message || error);
+  process.exit(1);
+}
+
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
@@ -201,6 +216,9 @@ async function encerrarGracefully(signal, code = 0) {
       if (typeof libDriver.invalidateNativeSession === "function") {
         await libDriver.invalidateNativeSession("shutdown");
       }
+    } catch (_) {}
+    try {
+      require("./fiscal/acbrLibWorkerPool").terminate("agent_shutdown");
     } catch (_) {}
     filaFiscal.close();
     fiscalMetrics.close();
@@ -1545,7 +1563,20 @@ function iniciarServidor() {
 
   // ── Rotas básicas ────────────────────────────────────────────────────────────
   app.get("/health", privateNetworkHeaders, (req, res) => {
-    res.json({ ok: true, versao: VERSAO_ATUAL, uptime: process.uptime() });
+    const fiscal = resumoEstadoFiscal();
+    // Compatível: ok continua significando HTTP vivo. O consumidor que precisa
+    // prontidão fiscal usa fiscal.pronto, sem confundir porta aberta com SEFAZ.
+    res.json({
+      ok: true,
+      versao: VERSAO_ATUAL,
+      uptime: process.uptime(),
+      fiscal: {
+        ...fiscal,
+        pronto:
+          fiscalDriver.EMISSAO_FISCAL !== true ||
+          (!fiscal.motorRecuperando && !fiscal.watchdogDegraded),
+      },
+    });
   });
 
   /** Probe fiscal leve — não bloqueia no mutex ACBr durante emissão/PDF. */
@@ -1569,6 +1600,18 @@ function iniciarServidor() {
       acbrOcupado: false,
       fiscalProcessando: filaFiscal.estaProcessando(),
       acbrEstadoMemoria: fiscalDriver.obterStatusMemoria(wd.degraded),
+    };
+  }
+
+  function resumoEstadoFiscal() {
+    const watchdogStatus = watchdog.statusWatchdog();
+    const worker = fiscalDriver.getLibSessionStatus?.()?.worker || null;
+    const filaStatus = filaFiscal.status?.() || {};
+    return {
+      worker,
+      watchdogDegraded: watchdogStatus.degraded === true,
+      motorRecuperando: worker?.restarting === true || worker?.online === false,
+      filaPausada: filaStatus.pausada === true,
     };
   }
 
@@ -1729,6 +1772,7 @@ function iniciarServidor() {
         ocupado: fiscalProbe.acbrOcupado,
         processando: fiscalProbe.fiscalProcessando,
         estadoMemoria: fiscalProbe.acbrEstadoMemoria,
+        ...resumoEstadoFiscal(),
         ambienteSefaz: (() => {
           if (!fiscalDriver.EMISSAO_FISCAL) return null;
           try {
@@ -1849,6 +1893,7 @@ function iniciarServidor() {
         temFrontend: fs.existsSync(path.join(__dirname, "frontend-dist", "index.html")),
         filaOffline: { pendentes, falhas },
         contingencia: { ativa: contingencia.ativa, epecPendentes },
+        fiscalEstado: resumoEstadoFiscal(),
       });
     },
   );

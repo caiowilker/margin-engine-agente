@@ -208,7 +208,14 @@ async function emitirNfseViaNativeLib(payload) {
           koffiDead ? "koffi_dead" : "operation_error",
           "nfse",
         );
-        if (koffiDead) acbrLibSession.clearSoftDead("nfse");
+        if (koffiDead) {
+          const processRecycle = require("../drivers/acbrLibProcessRecycle");
+          processRecycle.markProcessPoisoned("koffi_dead:nfse");
+          err.reiniciarAcbr = true;
+          err.processPoisoned = true;
+          err.retryable = true;
+          throw err;
+        }
         session = await runOnce();
       }
       const inst = session.inst;

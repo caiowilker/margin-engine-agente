@@ -343,12 +343,14 @@ function npmInstallIfNeeded() {
   if (nativeDepsReady()) {
     initBootstrapLog().info({ acao: "skip_npm_ci" }, "Dependências nativas já empacotadas no instalador");
     ensureKoffi();
+    require(path.join(appDir, "runtime", "acbrKoffiTopology")).enforceSingleKoffi({ appRoot: appDir });
     return;
   }
   initBootstrapLog().info({ acao: "npm_ci" }, "Instalando dependências (primeira execução ou pacote sem node_modules)");
   runNpm(["ci", "--omit=dev"], { inherit: true });
   runNpm(["rebuild", "better-sqlite3"], { inherit: true });
   ensureKoffi();
+  require(path.join(appDir, "runtime", "acbrKoffiTopology")).enforceSingleKoffi({ appRoot: appDir });
 }
 
 function stopAgentService() {
@@ -384,11 +386,13 @@ function npmRepairSteps() {
   if (nativeDepsReady()) {
     initBootstrapLog().info({ acao: "skip_npm_repair" }, "node_modules presente — reparo sem npm ci");
     ensureKoffi();
+    require(path.join(appDir, "runtime", "acbrKoffiTopology")).enforceSingleKoffi({ appRoot: appDir });
     return;
   }
   runNpm(["ci", "--omit=dev"], { inherit: true });
   runNpm(["rebuild", "better-sqlite3"], { inherit: true });
   ensureKoffi();
+  require(path.join(appDir, "runtime", "acbrKoffiTopology")).enforceSingleKoffi({ appRoot: appDir });
 }
 
 function validatePostUpdate() {

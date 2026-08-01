@@ -15,6 +15,48 @@ test("acbrLibProcessRecycle marca poison e agenda recycle", () => {
   delete process.env.ACBR_LIB_AUTO_RECYCLE;
 });
 
+test("graça de boot bloqueia recycle (mantém porta 9100)", () => {
+  const recycle = require("../fiscal/drivers/acbrLibProcessRecycle");
+  recycle.resetForTests();
+  process.env.ACBR_LIB_AUTO_RECYCLE = "true";
+  process.env.ACBR_LIB_RECYCLE_BOOT_GRACE_MS = "120000";
+  process.env.EMISSAO_FISCAL = "false";
+  try {
+    require("../acbr").setRuntimeEmissaoFiscal?.(false);
+  } catch (_) {}
+  recycle.markProcessPoisoned("boot_test");
+  const st = recycle.getRecycleStatus();
+  assert.equal(st.poisoned, true);
+  assert.equal(st.bootGrace, true);
+  assert.equal(st.recycleScheduled, false);
+  assert.equal(recycle.inBootGrace(), true);
+  recycle.resetForTests();
+  delete process.env.ACBR_LIB_AUTO_RECYCLE;
+  delete process.env.ACBR_LIB_RECYCLE_BOOT_GRACE_MS;
+});
+
+test("com emissão fiscal ativa recycle não espera graça de boot", () => {
+  const recycle = require("../fiscal/drivers/acbrLibProcessRecycle");
+  recycle.resetForTests();
+  process.env.ACBR_LIB_AUTO_RECYCLE = "false"; // não exit no teste
+  process.env.ACBR_LIB_RECYCLE_BOOT_GRACE_MS = "120000";
+  process.env.EMISSAO_FISCAL = "true";
+  try {
+    require("../acbr").setRuntimeEmissaoFiscal?.(true);
+  } catch (_) {}
+  recycle.markProcessPoisoned("emissao_on");
+  const st = recycle.getRecycleStatus();
+  assert.equal(st.poisoned, true);
+  assert.equal(st.bootGrace, false);
+  recycle.resetForTests();
+  try {
+    require("../acbr").setRuntimeEmissaoFiscal?.(null);
+  } catch (_) {}
+  delete process.env.ACBR_LIB_AUTO_RECYCLE;
+  delete process.env.ACBR_LIB_RECYCLE_BOOT_GRACE_MS;
+  delete process.env.EMISSAO_FISCAL;
+});
+
 test("soft abandon não usa Symbol.dispose (wrapper oficial Finalizar)", async () => {
   const session = require("../fiscal/drivers/acbrLibSession");
   await session.invalidateNativeSession("test");

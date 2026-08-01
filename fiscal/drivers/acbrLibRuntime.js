@@ -227,6 +227,76 @@ function copyDirRecursiveIfNeeded(src, dest) {
   return n;
 }
 
+/**
+ * Staging seletivo — NÃO copiar acbrlib/lib inteiro.
+ *
+ * Motivo (auditoria dep 2026-08-01):
+ * - ACBrNFe/NFSe NÃO linkam OpenSSL/libxml no PE; fazem LoadLibrary pelo cwd.
+ * - Pasta lib traz CTe/MDFe + libcrypto 1.1 E 3 + árvore OpenSSL/* → DLL hell no Windows.
+ * - PosPrinter usa só OpenSSL 1.1; misturar no mesmo processo/cwd é risco de heap/FFI.
+ */
+const STAGING_RUNTIME_DLLS = [
+  "libxml2.dll",
+  "libxslt.dll",
+  "libexslt.dll",
+  "libiconv.dll",
+  "legacy.dll",
+];
+
+function opensslPairForStaging() {
+  // Preferir 1.1 (alinha PosPrinter). Override: ACBR_LIB_OPENSSL=3
+  const v = String(process.env.ACBR_LIB_OPENSSL || "1.1").trim();
+  if (v === "3" || v === "3.0") {
+    return ["libcrypto-3-x64.dll", "libssl-3-x64.dll"];
+  }
+  return ["libcrypto-1_1-x64.dll", "libssl-1_1-x64.dll"];
+}
+
+function stageNativeLibBundle(libPath, stagingRoot) {
+  if (!libPath || !stagingRoot || !fs.existsSync(libPath)) return 0;
+  let n = 0;
+  const mainDll = path.basename(libPath);
+  const libDir = path.dirname(libPath);
+  // Staging antigo podia conter DLLs de CTe/MDFe/NFS-e e duas famílias OpenSSL.
+  // ACBr faz LoadLibrary pelo cwd; remover artefatos estranhos antes do primeiro
+  // Inicializar elimina resolução não determinística.
+  const foreign = [
+    "ACBrCTe64.dll",
+    "ACBrMDFe64.dll",
+    "ACBrNFSe64.dll",
+    "libcrypto-3-x64.dll",
+    "libssl-3-x64.dll",
+  ];
+  if (/nfse/i.test(mainDll)) {
+    foreign.splice(foreign.indexOf("ACBrNFSe64.dll"), 1);
+  }
+  for (const name of foreign) {
+    try {
+      fs.rmSync(path.join(stagingRoot, name), { force: true });
+    } catch (_) {}
+  }
+  try {
+    fs.rmSync(path.join(stagingRoot, "OpenSSL"), { recursive: true, force: true });
+  } catch (_) {}
+  if (copyFileIfNeeded(libPath, path.join(stagingRoot, mainDll))) n += 1;
+
+  const wanted = new Set([
+    mainDll.toLowerCase(),
+    ...STAGING_RUNTIME_DLLS.map((x) => x.toLowerCase()),
+    ...opensslPairForStaging().map((x) => x.toLowerCase()),
+  ]);
+
+  for (const name of fs.readdirSync(libDir)) {
+    if (!name.toLowerCase().endsWith(".dll")) continue;
+    if (!wanted.has(name.toLowerCase())) continue;
+    const src = path.join(libDir, name);
+    if (!fs.statSync(src).isFile()) continue;
+    if (copyFileIfNeeded(src, path.join(stagingRoot, name))) n += 1;
+  }
+  return n;
+}
+
+
 function isNativeSessionActiveSafe() {
   try {
     return require("./acbrLibSession").getSessionStatus().ativa === true;
@@ -332,10 +402,10 @@ function prepareNativeRuntime({ libPath, iniConfigPath, assets, stagingRoot, for
   if (blockDllOverwrite) {
     const stagedLib = path.join(staging, path.basename(libPath));
     if (!fs.existsSync(stagedLib)) {
-      copyFileIfNeeded(libPath, stagedLib);
+      stageNativeLibBundle(libPath, staging);
     }
   } else {
-    copyDirRecursiveIfNeeded(libDir, staging);
+    stageNativeLibBundle(libPath, staging);
   }
   if (schemasDir) {
     if (
@@ -602,9 +672,14 @@ function applyNativeRuntimeConfig(inst, runtime) {
     ["NFe", "CSC", runtime.csc || ""],
     ["NFCe", "IdCSC", runtime.idCsc || "000001"],
     ["NFCe", "CSC", runtime.csc || ""],
-    ["DFe", "SSLCryptLib", "1"],
-    ["DFe", "SSLHttpLib", "3"],
+    // WinCrypt + WinINet usa a pilha TLS do Windows. Os valores anteriores
+    // (OpenSSL/WinHTTP) produziam Status.CStat=0 sem mensagem em alguns
+    // ambientes MG, embora a DLL e o endpoint estivessem corretos.
+    ["DFe", "SSLCryptLib", "3"],
+    ["DFe", "SSLHttpLib", "2"],
     ["DFe", "SSLXmlSignLib", "4"],
+    // LT_TLSv1_2 — exigido pelos WebServices NF-e/NFC-e atuais.
+    ["DFe", "SSLType", "5"],
   ];
   for (const [sec, key, val] of sets) {
     if (val == null || val === "") continue;
@@ -686,6 +761,7 @@ module.exports = {
   fileNeedsSync,
   copyFileIfNeeded,
   copyDirRecursiveIfNeeded,
+  stageNativeLibBundle,
   ensureNativeDocumentPath,
   resolveNativeDocumentIniPath,
   resolveNativeLibRelativePath,

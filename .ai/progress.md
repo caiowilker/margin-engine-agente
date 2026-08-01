@@ -1,8 +1,22 @@
 # PROGRESS — Agente Local
 
 **Última atualização:** 2026-08-01  
-**Versão:** `1.0.6` — **FECHADO** para produção (fiscal + koffi + impressora Win10)
+**Versão:** `1.0.6` — hotfix pós-install (HTTP :9100 estável no boot)
 
+## Auditoria deps ACBr/koffi (2026-08-01)
+
+- Tree OK: koffi único 2.16.3; Node Win 20.18.1 x64; nfe 1.0.11 / base+dfe+nfse 1.0.12.
+- Risco: staging copiava `acbrlib/lib` inteiro (CTe/MDFe + OpenSSL 1.1 **e** 3) — DLLs carregam companheiros via `LoadLibrary` no cwd.
+- Fix: `stageNativeLibBundle` seletivo; pins/`overrides` no package.json.
+- ADR: `.ai/decisions/ADR-auditoria-deps-acbrlib-koffi-20260801.md`.
+
+## Hotfix agente offline pós-install (2026-08-01)
+
+- **Sintoma:** ME-012 / “Agente local offline — inicie o serviço PDV”; ativação do terminal bloqueada; porta 9100 sem resposta após build/instalação.
+- **Causa:** auto-recycle (`process.exit(1)`) + watchdog `testar()` no segundo 0 do boot → crash-loop do serviço Windows antes do HTTP estabilizar. Em install fresco `EMISSAO_FISCAL=false` mas `testarLib` ainda abria StatusServico nativo.
+- **Fix:** graça de boot 120s sem recycle; rate-limit 3 recycles/hora; watchdog delay 60s + skip se emissão off; `testarLib` early-return se `!EMISSAO_FISCAL`; ME-012 critical no diagnóstico.
+- Arquivos: `acbrLibProcessRecycle.js`, `watchdog.js`, `acbrLibDriver.js`, `installer-diagnostic.js`.
+- Sync: `C:\build\pdv-agente` atualizado.
 ## Fechamento final 1.0.6
 
 - Suíte `npm test` verde; release alignment OK (agente/back/front).

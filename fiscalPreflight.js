@@ -109,6 +109,18 @@ function validarAmbienteConfigurado(ambienteEsperado) {
   return cfgAmb;
 }
 
+function formatarRespostaFiscal(resposta) {
+  if (resposta == null) return "sem resposta da ACBrLib";
+  if (typeof resposta === "string") return resposta;
+  const raw = resposta.raw;
+  if (raw != null && String(raw).trim()) return String(raw);
+  try {
+    return JSON.stringify(resposta);
+  } catch {
+    return "resposta fiscal não serializável";
+  }
+}
+
 async function validarSefazOperacional() {
   const resposta = await fiscalDriver.statusServico();
   const p = fiscalDriver.parseResposta(
@@ -122,7 +134,9 @@ async function validarSefazOperacional() {
     );
   }
   if (cStat !== "107" && cStat !== "108") {
-    throw new Error(`SEFAZ indisponível (cStat ${cStat}): ${xMotivo || resposta}`);
+    throw new Error(
+      `SEFAZ indisponível (cStat ${cStat}): ${xMotivo || formatarRespostaFiscal(resposta)}`,
+    );
   }
   return {
     resposta: typeof resposta === "object" ? resposta.raw || JSON.stringify(resposta) : resposta,
@@ -201,24 +215,24 @@ async function validarEmissaoRapida() {
         return cacheRapido.resultado;
       }
       const msg = String(err?.message || err || "");
-      if (/void \*\*|unexpected external|invalid handle|sessão nativa|session disposed|em recuperação/i.test(msg)) {
-        try {
-          if (typeof fiscalDriver.invalidateNativeSession === "function") {
-            await fiscalDriver.invalidateNativeSession("koffi_dead");
-          }
-          if (typeof fiscalDriver.refreshLibRuntimeConfig === "function") {
-            /* clearSoftDead já ocorre em operator paths; força recovery explícito */
-          }
+      if (/void \*\*|unexpected external|invalid handle|sessão nativa|session disposed|em recuperação|envenenado|processPoisoned/i.test(msg)) {
+        // O erro veio do processo fiscal isolado: reciclar SOMENTE o filho.
+        // Nunca envenenar/reiniciar o processo HTTP por uma falha FFI remota.
+        if (err?.workerIsolated === true || /^ACBR_LIB_WORKER|^ACBR_LIB_KOFFI/.test(String(err?.code || ""))) {
           try {
-            require("./fiscal/drivers/acbrLibSession").clearSoftDead("nfe");
+            await require("./fiscal/acbrLibWorkerPool").terminate("preflight_koffi");
           } catch (_) {}
-        } catch (_) {}
-        try {
-          ({ resposta, p } = await validarSefazOperacional());
-        } catch (err2) {
-          cacheRapido = null;
-          throw new Error(`Emissor fiscal indisponível: ${err2.message}`);
+        } else {
+          try {
+            require("./fiscal/drivers/acbrLibProcessRecycle").markProcessPoisoned(
+              "preflight_void",
+            );
+          } catch (_) {}
         }
+        cacheRapido = null;
+        throw new Error(
+          `Emissor fiscal indisponível (koffi) — worker fiscal reiniciando: ${msg}`,
+        );
       } else {
         cacheRapido = null;
         throw new Error(`Emissor fiscal indisponível: ${err.message}`);

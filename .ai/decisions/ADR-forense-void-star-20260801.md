@@ -76,10 +76,12 @@ Em `runNativeOpWithRetry`, o `err` do warn de retry é o erro anterior, não o d
 - **Certeza média:** a faísca *inicial* do primeiro `void **` pode ser Finalizar/uso de handle morto / churn de sessão — por isso recycle + sessão quente + sem dispose.
 - **Operação obrigatória:** deploy do hotfix `09b1592`/`e6519aa` + **restart limpo do serviço**. Processo já envenenado **não** se cura com “Atualizar” no Diagnóstico.
 
-## 5. Como validar no caixa (prova objetiva)
+## 6. Atualização 2026-08-01 (logs caixa Caixa 1)
 
-1. Deploy + restart do serviço.
-2. Emitir NFC-e homolog **uma vez**.
-3. Nos logs, **não** deve aparecer `Symbol.dispose` / “abandonada” seguida de `void **` em loop.
-4. Se aparecer `void **` de novo: deve aparecer `Reciclando processo` e o serviço sobe sozinho em ~2–3s; segunda emissão após recycle deve passar.
-5. Se após recycle limpo a **primeira** emissão (sem soft-abandon prévio) já der `void **`, aí a faísca inicial é outra (DLL/path/cert/chdir) — abrir pacote de diagnóstico com o trecho completo desde o boot.
+Evidência de campo: `void **` no **primeiro** `statusServico` (~2s de uptime) → soft-retry com nova `Inicializar` → poison → graça de boot segurava recycle 2 min com emissão bloqueada → UI “SEFAZ off” / FALHA_TEMPORARIA.
+
+**Correção adicional:**
+- Em `void **`, **não** criar nova sessão in-process (Inicializar sem Finalizar da abandonada corrompe o heap).
+- Com `EMISSAO_FISCAL=true`, **não** adiar recycle pela graça de boot.
+
+**Sobre “usar só o npm do ACBr”:** `@projetoacbr/acbrlib-*-node` **é** FFI via **koffi**. Não existe caminho Lib sem koffi. Alternativa sem FFI: `ACBR_DRIVER=monitor` (ACBr Monitor TCP) — era o modo antigo estável.

@@ -1,12 +1,19 @@
 /**
  * Reciclagem do processo Node quando koffi/ACBrLib fica irrecuperável (void**).
- * No Windows (serviço), exit(1) faz o SCM/node-windows subir o agente limpo.
+ *
+ * Regras de produção (agente HTTP tem que ficar UP):
+ * - Graça de boot: NÃO exit nos primeiros N segundos (ativação do terminal / ME-012).
+ * - Rate limit: no máximo N recycles por janela; depois mantém processo vivo em degradado.
+ * - Preferir agente online (9100) com fiscal degradado a crash-loop do serviço Windows.
  */
 const log = require("../../logger").child({ modulo: "acbr_lib_recycle" });
+
+const PROCESS_STARTED_AT = Date.now();
 
 let processPoisoned = false;
 let recycleScheduled = false;
 let recycleAt = 0;
+let recycleCountWindow = [];
 let onRecycleHook = null;
 
 function isAutoRecycleEnabled() {
@@ -17,8 +24,35 @@ function recycleDelayMs() {
   return parseInt(process.env.ACBR_LIB_RECYCLE_DELAY_MS || "2500", 10);
 }
 
+function bootGraceMs() {
+  return parseInt(process.env.ACBR_LIB_RECYCLE_BOOT_GRACE_MS || "120000", 10);
+}
+
+function maxRecyclesPerHour() {
+  return parseInt(process.env.ACBR_LIB_RECYCLE_MAX_PER_HOUR || "3", 10);
+}
+
 function isProcessPoisoned() {
   return processPoisoned === true;
+}
+
+function inBootGrace() {
+  return Date.now() - PROCESS_STARTED_AT < Math.max(0, bootGraceMs());
+}
+
+/** Com emissão fiscal ativa, recycle imediato — não segurar processo envenenado 2 min. */
+function shouldDeferRecycleForBoot() {
+  if (!inBootGrace()) return false;
+  try {
+    const acbr = require("../../acbr");
+    if (acbr.EMISSAO_FISCAL) return false;
+  } catch (_) {}
+  return true;
+}
+
+function pruneRecycleWindow() {
+  const hourAgo = Date.now() - 60 * 60 * 1000;
+  recycleCountWindow = recycleCountWindow.filter((t) => t >= hourAgo);
 }
 
 function markProcessPoisoned(reason = "koffi_void") {
@@ -26,7 +60,7 @@ function markProcessPoisoned(reason = "koffi_void") {
     processPoisoned = true;
     log.error(
       { reason, metric: "acbrlib.process_poisoned" },
-      "[ACBrLib] Processo envenenado (koffi) — emissão nativa bloqueada até recycle",
+      "[ACBrLib] Processo envenenado (koffi) — emissão nativa bloqueada",
     );
   }
   scheduleRecycle(reason);
@@ -40,10 +74,40 @@ function scheduleRecycle(reason = "koffi_void") {
     );
     return false;
   }
+
+  if (shouldDeferRecycleForBoot()) {
+    log.warn(
+      {
+        reason,
+        bootGraceMs: bootGraceMs(),
+        uptimeMs: Date.now() - PROCESS_STARTED_AT,
+        metric: "acbrlib.recycle_deferred_boot",
+      },
+      "[ACBrLib] Recycle adiado — graça de boot (mantém porta 9100 no ar)",
+    );
+    return false;
+  }
+
+  pruneRecycleWindow();
+  const max = Math.max(1, maxRecyclesPerHour());
+  if (recycleCountWindow.length >= max) {
+    log.error(
+      {
+        reason,
+        recyclesLastHour: recycleCountWindow.length,
+        max,
+        metric: "acbrlib.recycle_rate_limited",
+      },
+      "[ACBrLib] Recycle bloqueado (rate limit) — agente permanece ONLINE com fiscal degradado. Reinicie o serviço manualmente se necessário.",
+    );
+    return false;
+  }
+
   if (recycleScheduled) return true;
   recycleScheduled = true;
   const delay = Math.max(500, recycleDelayMs());
   recycleAt = Date.now() + delay;
+  recycleCountWindow.push(Date.now());
   log.error(
     { reason, delayMs: delay, metric: "acbrlib.process_recycle" },
     "[ACBrLib] Reciclando processo do agente para limpar koffi/DLL",
@@ -68,11 +132,15 @@ function setRecycleHook(fn) {
 }
 
 function getRecycleStatus() {
+  pruneRecycleWindow();
   return {
     poisoned: processPoisoned,
     recycleScheduled,
     recycleAt: recycleAt || null,
     auto: isAutoRecycleEnabled(),
+    bootGrace: shouldDeferRecycleForBoot(),
+    uptimeMs: Date.now() - PROCESS_STARTED_AT,
+    recyclesLastHour: recycleCountWindow.length,
   };
 }
 
@@ -80,6 +148,7 @@ function resetForTests() {
   processPoisoned = false;
   recycleScheduled = false;
   recycleAt = 0;
+  recycleCountWindow = [];
 }
 
 module.exports = {
@@ -89,4 +158,5 @@ module.exports = {
   setRecycleHook,
   getRecycleStatus,
   resetForTests,
+  inBootGrace,
 };

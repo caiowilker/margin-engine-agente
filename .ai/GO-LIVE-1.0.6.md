@@ -19,6 +19,14 @@
 4. Confirmar: Emissão Ativa · Motor OK · Impressora Online · Status ONLINE.
 5. Cupom teste + NFC-e homologação (e NF-e se usada).
 
+## Agente offline na ativação (ME-012)
+
+1. `sc query "Margin Engine"` — deve estar `RUNNING`.
+2. Se parado: `sc start "Margin Engine"` e aguarde ~15s.
+3. Teste: `http://localhost:9100/health` no navegador do caixa.
+4. Se crash-loop: veja `%ProgramData%\MarginEngine\Logs` e use **Reparar** no instalador (não apague ProgramData).
+5. Hotfix 1.0.6: recycle com graça de boot + watchdog atrasado — recompile/instale antes de validar de novo.
+
 ## Não fazer
 
 - Não apagar `%ProgramData%\MarginEngine` no update.
