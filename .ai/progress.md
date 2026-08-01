@@ -40,7 +40,7 @@
 - **Causa raiz emissão:** `Object.assign({}, acbr)` nos drivers Lib/Monitor congelava `EMISSAO_FISCAL` no boot. PUT `/config/fiscal` atualizava runtime/`acbr`, mas `fiscalDriver.EMISSAO_FISCAL` permanecia `false` → `FALHA_PERMANENTE: EMISSAO_FISCAL desabilitada` e Diagnóstico “Desativada” após salvar.
 - **Fix:** `fiscal/wrapAcbrExports.js` reexpõe getter vivo + set/get runtime; Proxy do `fiscalDriver` respeita getters.
 - **Causa raiz StatusServico:** staging Windows regrava `acbrlib.runtime.ini` a cada chamada (mtime muda) → fingerprint invalida sessão → `NFE_Finalizar`+`Inicializar` → koffi `Unexpected External value, expected void **` a cada 30s e contingência EPEC falsa.
-- **Fix:** `writeFileIfChanged` + fingerprint por **hash SHA** do INI (não mtime); invalidação também em erros `void **`.
+- **Fix:** `writeFileIfChanged` + fingerprint por **identidade estável sem hash do INI** (a Lib regrava o INI em runtime); invalidação também em erros `void **`.
 - Boot: `sincronizarEmissaoFiscalLocal` logo após carregar autoridade e após migrar segredos.
 - Reconciliação quieta (log só em transição) + autoridade SSOT quando mais recente que `.env`.
 - `AMBIENTE_SEFAZ`: `process.env` prevalece sobre arquivo (runtime / testes isolados).
