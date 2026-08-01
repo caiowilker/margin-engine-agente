@@ -235,6 +235,16 @@ function isNativeSessionActiveSafe() {
   }
 }
 
+/** Sessão ativa OU DLL já mapeada (soft-abandon) — não sobrescrever no disco. */
+function shouldBlockDllOverwriteSafe() {
+  try {
+    const s = require("./acbrLibSession");
+    return s.isDllPinned() === true || s.getSessionStatus().ativa === true;
+  } catch (_) {
+    return false;
+  }
+}
+
 function copyDirRecursive(src, dest) {
   if (!fs.existsSync(src)) return;
   fs.mkdirSync(dest, { recursive: true });
@@ -246,8 +256,12 @@ function copyDirRecursive(src, dest) {
   }
 }
 
-function getWinStagingRoot(custom) {
-  return custom || process.env.ACBR_WIN_STAGING || resolveStagingDir("margin-acbrlib");
+function getWinStagingRoot(custom, libPathHint) {
+  if (custom) return custom;
+  if (process.env.ACBR_WIN_STAGING) return process.env.ACBR_WIN_STAGING;
+  const base = path.basename(String(libPathHint || "")).toLowerCase();
+  const slot = base.includes("nfse") ? "margin-acbrlib-nfse" : "margin-acbrlib";
+  return resolveStagingDir(slot);
 }
 
 /**
@@ -298,7 +312,7 @@ function prepareNativeRuntime({ libPath, iniConfigPath, assets, stagingRoot, for
     };
   }
 
-  const staging = getWinStagingRoot(stagingRoot);
+  const staging = getWinStagingRoot(stagingRoot, libPath);
   const dirs = {
     root: staging,
     config: path.join(staging, "config"),
@@ -313,10 +327,9 @@ function prepareNativeRuntime({ libPath, iniConfigPath, assets, stagingRoot, for
     if (d !== staging) fs.mkdirSync(d, { recursive: true });
   }
 
-  // Nunca regravar DLL/deps enquanto a sessão nativa está ativa — overwrite no Windows
-  // corrompe o handle koffi → "Unexpected External value, expected void **".
-  const sessionAtiva = isNativeSessionActiveSafe();
-  if (sessionAtiva) {
+  // Nunca regravar DLL/deps com sessão ativa OU após soft-abandon (DLL ainda mapeada no koffi).
+  const blockDllOverwrite = shouldBlockDllOverwriteSafe();
+  if (blockDllOverwrite) {
     const stagedLib = path.join(staging, path.basename(libPath));
     if (!fs.existsSync(stagedLib)) {
       copyFileIfNeeded(libPath, stagedLib);
@@ -325,7 +338,11 @@ function prepareNativeRuntime({ libPath, iniConfigPath, assets, stagingRoot, for
     copyDirRecursiveIfNeeded(libDir, staging);
   }
   if (schemasDir) {
-    if (!sessionAtiva || !fs.existsSync(dirs.schemas) || fs.readdirSync(dirs.schemas).length < 5) {
+    if (
+      !blockDllOverwrite ||
+      !fs.existsSync(dirs.schemas) ||
+      fs.readdirSync(dirs.schemas).length < 5
+    ) {
       copyDirRecursiveIfNeeded(schemasDir, dirs.schemas);
     }
   }
@@ -478,8 +495,10 @@ function listKnownStagingRoots() {
     process.env.ACBR_WIN_STAGING,
     path.join(temp, "margin-acbrlib-prod-test"),
     path.join(temp, "margin-acbrlib"),
+    path.join(temp, "margin-acbrlib-nfse"),
     resolveStagingDir("margin-acbrlib-prod-test"),
     resolveStagingDir("margin-acbrlib"),
+    resolveStagingDir("margin-acbrlib-nfse"),
   ].filter(Boolean);
   return [...new Set(roots)];
 }

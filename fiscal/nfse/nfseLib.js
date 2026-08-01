@@ -164,15 +164,16 @@ async function emitirNfseViaNativeLib(payload) {
   fs.mkdirSync(path.dirname(iniPath), { recursive: true });
   fs.writeFileSync(iniPath, iniBase, "utf8");
 
-  const runtime = buildNativeNfseRuntime();
-  const nativeIniPath = acbrLibRuntime.resolveNativeDocumentIniPath(iniPath, runtime);
   const { ACBrLibNFSeMT: LibClass, NFSeModoEnvio: ModoEnvio } = loadAcbrLibNfse();
   const lote = String(payload.numeroLote || payload.lote || "1");
   const modoEnvio = resolveModoEnvio(ModoEnvio);
 
   return acbr.withAcbrLock(async () => {
+    // Runtime sob mutex — evita TOCTOU de DLL com outro slot/Inicializar.
+    const runtime = buildNativeNfseRuntime();
+    const nativeIni = acbrLibRuntime.resolveNativeDocumentIniPath(iniPath, runtime);
     fiscalTrace.trace("ACBrLibNFSe", "Início emissão nativa", {
-      ini: nativeIniPath,
+      ini: nativeIni,
       lote,
       modoEnvio,
     });
@@ -180,7 +181,7 @@ async function emitirNfseViaNativeLib(payload) {
       {
         libPath: runtime.libPath,
         iniConfig: runtime.iniConfig,
-        iniPath: nativeIniPath,
+        iniPath: nativeIni,
         transport: "ffi",
         class: "ACBrLibNFSeMT",
         lote,
@@ -208,6 +209,7 @@ async function emitirNfseViaNativeLib(payload) {
         session = await runOnce();
       }
       const inst = session.inst;
+      acbrLibSession.assertSessionAlive(session);
 
       try {
         try {
@@ -216,8 +218,8 @@ async function emitirNfseViaNativeLib(payload) {
           /* ignore */
         }
 
-        inst.carregarINI(nativeIniPath);
-        log.info({ iniPath: nativeIniPath }, "[ACBrLib NFSe] CarregarINI OK");
+        inst.carregarINI(nativeIni);
+        log.info({ iniPath: nativeIni }, "[ACBrLib NFSe] CarregarINI OK");
 
         acbrLibRuntime.reloadNativeCertAfterCarregarIni(inst, runtime);
 
@@ -228,6 +230,7 @@ async function emitirNfseViaNativeLib(payload) {
         log.info("[ACBrLib NFSe] Validar OK");
 
         const emissaoTimeoutMs = resolveEmissaoTimeoutMs();
+        acbrLibSession.assertSessionAlive(session);
         const resposta = await Promise.race([
           Promise.resolve().then(() => inst.emitir(lote, modoEnvio, false)),
           new Promise((_, reject) =>

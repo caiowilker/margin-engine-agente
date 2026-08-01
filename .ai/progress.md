@@ -8,6 +8,7 @@
 - Suíte `npm test` verde; release alignment OK (agente/back/front).
 - Build Windows syncado em `/mnt/c/build/pdv-agente`.
 - Checklist operacional: `.ai/GO-LIVE-1.0.6.md`.
+- **P0 pós-auditoria koffi:** lock reentrante; idle Finalizar real; DLL sync sob mutex + pin; staging NFe/NFSe separado; StatusServico negativo TTL curto.
 
 ## Fechamento produção 1.0.6
 

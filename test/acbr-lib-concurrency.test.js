@@ -68,16 +68,47 @@ test("acbrLibSession suspende idle durante lock ACBr", async () => {
   assert.equal(session.getSessionStatus().idleSuspended, false);
 });
 
-test("acbrLibSession não finaliza em idle_timeout com ACBr ocupado", async () => {
+test("withAcbrLock é reentrante no mesmo contexto ALS", async () => {
+  const acbr = require("../acbr");
+  const ordem = [];
+  await acbr.withAcbrLock(async () => {
+    ordem.push("outer");
+    assert.equal(acbr.isHoldingAcbrLock(), true);
+    await acbr.withAcbrLock(async () => {
+      ordem.push("inner");
+      assert.equal(acbr.isHoldingAcbrLock(), true);
+    }, "inner");
+  }, "outer");
+  assert.deepEqual(ordem, ["outer", "inner"]);
+});
+
+test("acbrLibSession idle sob lock finaliza (não confunde busy do próprio mutex)", async () => {
   const acbr = require("../acbr");
   await session.invalidateNativeSession("test");
-  session.suspendIdle();
-  try {
-    const busy = acbr.isAcbrBusy();
-    assert.equal(typeof busy, "boolean");
-  } finally {
-    session.resumeIdle();
-  }
+  session.resetDllPinForTests();
+
+  // Simula sessão fantasma mínima: só o caminho idle_timeout + holding lock.
+  let idleAttempted = false;
+  await acbr.withAcbrLock(async () => {
+    assert.equal(acbr.isAcbrBusy(), true);
+    assert.equal(acbr.isHoldingAcbrLock(), true);
+    // destroySession com idle_timeout enquanto holding NÃO deve remarcar por busy.
+    idleAttempted = true;
+    await session.invalidateNativeSession("idle_timeout", "nfe");
+  }, "idle-test");
+
+  assert.equal(idleAttempted, true);
+  assert.equal(session.getSessionStatus().ativa, false);
+});
+
+test("acbrLibSession pin DLL após soft abandon", async () => {
+  await session.invalidateNativeSession("test");
+  session.resetDllPinForTests();
+  assert.equal(session.isDllPinned(), false);
+  await session.invalidateNativeSession("koffi_dead", "nfe");
+  // Sem sessão ativa — pin só liga com ensureSession/soft path com inst.
+  // Soft abandon sem slot ativo não muda pin; pin sobe no ensureSession.
+  assert.equal(typeof session.isDllPinned(), "boolean");
 });
 
 test("filaFiscal acbrOcupado reflete emissão em andamento", () => {

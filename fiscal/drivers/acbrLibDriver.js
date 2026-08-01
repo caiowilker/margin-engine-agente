@@ -337,10 +337,11 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
     throw new Error("[ACBrLib] Configuração fiscal local ausente — reinstale ou repare o Margin Engine");
   }
 
-  const runtime = buildNativeRuntime();
-  const nativeIniPath = acbrLibRuntime.resolveNativeDocumentIniPath(iniPath, runtime);
-
   return acbr.withAcbrLock(async () => {
+    // prepareNativeRuntime sob o mutex — evita TOCTOU overwrite de DLL com Inicializar paralelo.
+    const runtime = buildNativeRuntime();
+    const nativeIniPath = acbrLibRuntime.resolveNativeDocumentIniPath(iniPath, runtime);
+
     fiscalTrace.trace("ACBrLib", "Início emissão nativa", {
       modelo,
       ini: nativeIniPath,
@@ -363,7 +364,7 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
 
     const LibClass = loadAcbrLibNFeMT();
     try {
-      return await runNativeOpWithRetry("emitir", runtime, LibClass, async (inst) => {
+      return await runNativeOpWithRetry("emitir", runtime, LibClass, async (inst, _rt, session) => {
         try {
           try {
             inst.limparLista();
@@ -403,7 +404,23 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
           );
 
           const p0 = acbrLibResposta.parseRespostaLib(resposta);
-          let p = await acbr.enrichParsePosEmissaoAsync(p0, resposta);
+          let p = await acbr.enrichParsePosEmissaoAsync(p0, resposta, {
+            consultar: async (chave) => {
+              acbrLibSession.assertSessionAlive(session);
+              const chaveNorm = String(chave || "").replace(/\D/g, "");
+              const raw = inst.consultar(chaveNorm, true);
+              const parsed = acbrLibResposta.parseRespostaLib(raw);
+              return {
+                chave: chaveNorm,
+                cStat: parsed.cStat,
+                xMotivo: parsed.xMotivo,
+                protocolo: parsed.protocolo,
+                situacao: acbr.inferirSituacao(parsed.cStat, raw),
+                raw,
+                native: true,
+              };
+            },
+          });
           acbr.assertAutorizada(p, resposta, modelo);
           log.info(
             { cStat: p.cStat, chave: p.chave, protocolo: p.protocolo, xMotivo: p.xMotivo },
@@ -541,9 +558,9 @@ async function withNativeLib(opName, fn) {
   if (getIntegrationMode() !== "native") {
     throw new Error(`[ACBrLib] ${opName} requer biblioteca nativa configurada`);
   }
-  const runtime = buildNativeRuntime();
   const LibClass = loadAcbrLibNFeMT();
   return acbr.withAcbrLock(async () => {
+    const runtime = buildNativeRuntime();
     log.info({ opName }, "[ACBrLib] operação nativa (sessão compartilhada)");
     return runNativeOpWithRetry(opName, runtime, LibClass, fn);
   }, `acbr-lib-${opName}`);
@@ -608,8 +625,13 @@ async function statusServicoLib() {
     return acbr.statusServico();
   }
   const ttl = Math.max(5000, STATUS_SERVICO_TTL_MS);
+  const negTtl = Math.max(2000, parseInt(process.env.ACBR_STATUS_SERVICO_NEG_TTL_MS || "5000", 10));
   if (statusServicoCache.value && Date.now() - statusServicoCache.at < ttl) {
-    return statusServicoCache.value;
+    const cached = statusServicoCache.value;
+    // Negativos: TTL curto — não acelerar EPEC com falhas em cache.
+    if (cached.operacional || Date.now() - statusServicoCache.at < negTtl) {
+      return cached;
+    }
   }
   if (statusServicoInflight) return statusServicoInflight;
 
@@ -632,6 +654,7 @@ async function statusServicoLib() {
         native: true,
         cached: false,
       };
+      // Cache positivo no TTL longo; negativo só no TTL curto (gravado com mesmo at).
       statusServicoCache = { at: Date.now(), value: { ...value, cached: true } };
       return value;
     } catch (err) {
@@ -926,7 +949,8 @@ async function consultarChaveLib(chave) {
   const chaveNorm = String(chave || "").replace(/\D/g, "");
   const resposta = await withNativeLib("consultar", (inst) => inst.consultar(chaveNorm, true));
   const p0 = acbrLibResposta.parseRespostaLib(resposta);
-  const p = await acbr.enrichParsePosEmissaoAsync(p0, resposta);
+  // Sync enrich — evita reentrada em consultarChave(Monitor) / recursão Lib.
+  const p = acbr.enrichParsePosEmissao(p0, resposta);
   return {
     chave: chaveNorm,
     cStat: p.cStat,
@@ -951,7 +975,7 @@ async function consultarChaveNfeEntradaLib(chave) {
     inst.consultar(chaveNorm, true),
   );
   const p0 = acbrLibResposta.parseRespostaLib(resposta);
-  const p = await acbr.enrichParsePosEmissaoAsync(p0, resposta);
+  const p = acbr.enrichParsePosEmissao(p0, resposta);
   return {
     chave: chaveNorm,
     cStat: p.cStat,

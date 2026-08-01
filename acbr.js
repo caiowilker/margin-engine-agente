@@ -1,6 +1,7 @@
 // PDV Margin Engine — Módulo ACBr Monitor (mutex global + consultas fiscais)
 require("dotenv").config();
 const net = require("net");
+const { AsyncLocalStorage } = require("async_hooks");
 const { unidadeFiscalDoItem } = require("./unidadeFiscal");
 
 const ACBR_HOST = process.env.ACBR_HOST || "127.0.0.1";
@@ -141,23 +142,37 @@ function touchLibSessionIdleHooks(acquired) {
   } catch (_) {}
 }
 
+/** Reentrante no mesmo contexto ALS — evita deadlock emit→enrich→consultar sob o mesmo mutex. */
+const acbrLockAls = new AsyncLocalStorage();
+
 function withAcbrLock(fn, label = "acbr") {
-  const run = acbrLock.then(async () => {
-    acbrBusyDepth++;
-    touchLibSessionIdleHooks(true);
-    try {
-      return await fn();
-    } finally {
-      acbrBusyDepth--;
-      touchLibSessionIdleHooks(false);
-    }
-  });
+  const store = acbrLockAls.getStore();
+  if (store?.locked) {
+    return Promise.resolve().then(() => fn());
+  }
+  const run = acbrLock.then(async () =>
+    acbrLockAls.run({ locked: true }, async () => {
+      acbrBusyDepth++;
+      touchLibSessionIdleHooks(true);
+      try {
+        return await fn();
+      } finally {
+        acbrBusyDepth--;
+        touchLibSessionIdleHooks(false);
+      }
+    }),
+  );
   acbrLock = run.catch(() => {});
   return run;
 }
 
 function isAcbrBusy() {
   return acbrBusyDepth > 0;
+}
+
+/** True se o contexto atual já segura o mutex (reentrada). */
+function isHoldingAcbrLock() {
+  return !!acbrLockAls.getStore()?.locked;
 }
 
 /**
@@ -1467,7 +1482,7 @@ function enrichParsePosEmissao(p, resposta) {
   };
 }
 
-async function enrichParsePosEmissaoAsync(p, resposta) {
+async function enrichParsePosEmissaoAsync(p, resposta, opts = {}) {
   let atual = enrichParsePosEmissao(p, resposta);
   if (isCStatAutorizado(atual.cStat)) return atual;
 
@@ -1477,7 +1492,9 @@ async function enrichParsePosEmissaoAsync(p, resposta) {
       await new Promise((resolve) => setTimeout(resolve, esperaMs));
     }
     try {
-      const consulta = await consultarChave(atual.chave);
+      const consultar =
+        typeof opts.consultar === "function" ? opts.consultar : consultarChave;
+      const consulta = await consultar(atual.chave);
       const cs = String(consulta.cStat || "");
       if (
         consulta.situacao === "AUTORIZADA" ||
@@ -2620,6 +2637,7 @@ module.exports = {
   enviarNfeComandos,
   withAcbrLock,
   isAcbrBusy,
+  isHoldingAcbrLock,
   setRuntimeEmissaoFiscal,
   getRuntimeEmissaoFiscal: getEmissaoFiscalAtivo,
   get EMISSAO_FISCAL() {
@@ -2635,6 +2653,7 @@ module.exports = {
   patchNumeracaoIni,
   normalizarResultado,
   enrichParsePosEmissaoAsync,
+  enrichParsePosEmissao,
   assertAutorizada,
   /** @internal testes / diagnóstico */
   resolverTpAmb,

@@ -4,11 +4,11 @@
  * Regras de solidez (Windows + koffi):
  * - NFe e NFS-e têm slots separados (DLLs/classes diferentes).
  * - Idle finalize SEMPRE sob withAcbrLock (sem corrida com emissão).
- * - Handle morto (void**): abandonar sem Finalizar.
+ * - Handle morto (void**): abandonar sem Finalizar; DLL fica pinned até recycle do processo.
  * - Generation id: nunca reutilizar inst após dispose.
+ * - withAcbrLock é reentrante (ALS) — idle sob lock não confunde busy com "outro dono".
  */
 const path = require("path");
-const fs = require("fs");
 const log = require("../../logger").child({ modulo: "acbr_lib_session" });
 
 /** @type {Record<string, { inst: object, runtime: object, createdAt: number, generation: number, slot: string }|null>} */
@@ -17,12 +17,16 @@ const slots = { nfe: null, nfse: null };
 const fingerprints = { nfe: null, nfse: null };
 /** @type {Record<string, ReturnType<typeof setTimeout>|null>} */
 const idleTimers = { nfe: null, nfse: null };
+/** @type {Record<string, object|null>} */
+const cachedRuntimes = { nfe: null, nfse: null };
+/** @type {Record<string, string|null>} */
+const cachedRuntimeFps = { nfe: null, nfse: null };
 
-let cachedRuntime = null;
-let cachedRuntimeFp = null;
 let idleSuspended = 0;
 let lastKoffiDeadAt = 0;
 let generationSeq = 0;
+/** Após Inicializar ou soft-abandon, não sobrescrever DLLs mapeadas no processo. */
+let dllPinned = false;
 
 const IDLE_MS = parseInt(process.env.ACBR_LIB_SESSION_IDLE_MS || "300000", 10);
 const IDLE_BUSY_POLL_MS = parseInt(process.env.ACBR_LIB_IDLE_BUSY_POLL_MS || "5000", 10);
@@ -34,6 +38,14 @@ const KOFFI_WATCHDOG_GRACE_MS = parseInt(
 function isAcbrBusySafe() {
   try {
     return require("../../acbr").isAcbrBusy();
+  } catch (_) {
+    return false;
+  }
+}
+
+function isHoldingAcbrLockSafe() {
+  try {
+    return require("../../acbr").isHoldingAcbrLock() === true;
   } catch (_) {
     return false;
   }
@@ -110,6 +122,7 @@ function scheduleIdleFinalizeSlot(slotKey = "nfe") {
   const key = slotKey === "nfse" ? "nfse" : "nfe";
   clearIdleTimer(key);
   if (idleSuspended > 0 || !slots[key]) return;
+  // Busy check ANTES do lock — dentro do lock isAcbrBusy sempre true (depth++).
   if (isAcbrBusySafe()) {
     idleTimers[key] = setTimeout(() => scheduleIdleFinalizeSlot(key), IDLE_BUSY_POLL_MS);
     if (typeof idleTimers[key].unref === "function") idleTimers[key].unref();
@@ -150,7 +163,12 @@ async function destroySession(reason, slotKey) {
     clearIdleTimer(key);
     const active = slots[key];
     if (!active) continue;
-    if (isAcbrBusySafe() && reason === "idle_timeout") {
+    // Só adia idle se outro dono segura o recurso — sob o próprio lock (reentrante) finaliza.
+    if (
+      reason === "idle_timeout" &&
+      isAcbrBusySafe() &&
+      !isHoldingAcbrLockSafe()
+    ) {
       scheduleIdleFinalizeSlot(key);
       continue;
     }
@@ -165,6 +183,12 @@ async function destroySession(reason, slotKey) {
       reason === "sefaz_status_soft"
     ) {
       lastKoffiDeadAt = Date.now();
+      dllPinned = true;
+      try {
+        if (typeof inst?.[Symbol.dispose] === "function") inst[Symbol.dispose]();
+      } catch (_) {
+        /* ignore */
+      }
       log.warn({ reason, slot: key }, "[ACBrLibSession] Sessão abandonada sem Finalizar");
       continue;
     }
@@ -174,6 +198,7 @@ async function destroySession(reason, slotKey) {
       log.info({ reason, slot: key }, "[ACBrLibSession] Sessão finalizada");
     } catch (err) {
       lastKoffiDeadAt = Date.now();
+      dllPinned = true;
       log.warn(
         { err: err.message, reason, slot: key },
         "[ACBrLibSession] Finalizar falhou — sessão abandonada",
@@ -206,8 +231,10 @@ async function ensureSession(runtime, LibClass) {
   );
   try {
     inst.inicializar();
+    dllPinned = true;
   } catch (err) {
     lastKoffiDeadAt = Date.now();
+    dllPinned = true;
     throw err;
   }
   require("./acbrLibRuntime").applyNativeRuntimeConfig(inst, runtime);
@@ -243,26 +270,38 @@ function assertSessionAlive(session) {
 }
 
 function cacheRuntime(runtime) {
+  const key = resolveSlotKey(runtime);
   const fp = fingerprintRuntime(runtime);
-  if (cachedRuntime && cachedRuntimeFp === fp) return cachedRuntime;
-  cachedRuntime = runtime;
-  cachedRuntimeFp = fp;
-  return cachedRuntime;
+  if (cachedRuntimes[key] && cachedRuntimeFps[key] === fp) return cachedRuntimes[key];
+  cachedRuntimes[key] = runtime;
+  cachedRuntimeFps[key] = fp;
+  return cachedRuntimes[key];
 }
 
-function invalidateRuntimeCache() {
-  cachedRuntime = null;
-  cachedRuntimeFp = null;
+function invalidateRuntimeCache(slotKey) {
+  if (slotKey === "nfe" || slotKey === "nfse") {
+    cachedRuntimes[slotKey] = null;
+    cachedRuntimeFps[slotKey] = null;
+    return;
+  }
+  cachedRuntimes.nfe = null;
+  cachedRuntimes.nfse = null;
+  cachedRuntimeFps.nfe = null;
+  cachedRuntimeFps.nfse = null;
 }
 
 async function invalidateNativeSession(reason = "manual", slotKey) {
-  invalidateRuntimeCache();
+  invalidateRuntimeCache(slotKey);
   await destroySession(reason, slotKey);
 }
 
 function recentlyHadKoffiDead(graceMs = KOFFI_WATCHDOG_GRACE_MS) {
   if (!lastKoffiDeadAt) return false;
   return Date.now() - lastKoffiDeadAt < Math.max(5000, graceMs);
+}
+
+function isDllPinned() {
+  return dllPinned === true;
 }
 
 function getSessionStatus() {
@@ -277,6 +316,7 @@ function getSessionStatus() {
     idleSuspended: idleSuspended > 0,
     runtimeFingerprint: fingerprints.nfe || fingerprints.nfse || null,
     lastKoffiDeadAt: lastKoffiDeadAt || null,
+    dllPinned,
   };
 }
 
@@ -289,6 +329,12 @@ function scheduleIdleFinalize(slotKey) {
   if (slots.nfse) scheduleIdleFinalizeSlot("nfse");
 }
 
+/** Testes: limpa pin sem reciclar o processo. */
+function resetDllPinForTests() {
+  dllPinned = false;
+  lastKoffiDeadAt = 0;
+}
+
 module.exports = {
   ensureSession,
   assertSessionAlive,
@@ -299,9 +345,11 @@ module.exports = {
   shouldInvalidateOnError,
   isKoffiDeadHandleError,
   recentlyHadKoffiDead,
+  isDllPinned,
   scheduleIdleFinalize,
   suspendIdle,
   resumeIdle,
   fingerprintRuntime,
   resolveSlotKey,
+  resetDllPinForTests,
 };
