@@ -1,6 +1,6 @@
 {
   "versao": "1.0.6",
-  "geradoEm": "2026-08-01T19:23:17.017Z",
+  "geradoEm": "2026-08-01T19:35:05.851Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -5160,7 +5160,7 @@
     },
     {
       "arquivo": "print/cupomAcbrTags.js",
-      "sha256": "02261256ed04a866321a8606e4df2acd1790b5bac69e1e0719cbce507ee3f8c6"
+      "sha256": "70515c50004496155e28d7b1f8ac74e26ede7c903d9ecc138848d4170b9060ee"
     },
     {
       "arquivo": "print/cupomContraste.js",
@@ -5192,7 +5192,7 @@
     },
     {
       "arquivo": "print/escpos/impressoraCore.js",
-      "sha256": "178fc8fbe1fee5f57f5859356fbe343fa32dbfa8da564f0731161d23f54d4f92"
+      "sha256": "93ec27e2c0ebdd441ca97d1048e1bed51aefa8ce7e4591a7207a03dcc0ead098"
     },
     {
       "arquivo": "print/factory.js",

@@ -1629,7 +1629,7 @@ async function renderCupomConteudo(printer, payload) {
   printer.text(sepDash());
 
   itens.forEach((item, idx) => {
-    const nome = tx(String(item.nome || ""));
+    const nome = tx(String(item.nome || item.codigo || "Item"));
     const total = item.total ?? item.precoUnitario * item.quantidade;
     const valUnit = Number(item.precoUnitario).toLocaleString("pt-BR", {
       minimumFractionDigits: 2,
