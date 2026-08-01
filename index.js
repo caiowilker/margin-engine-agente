@@ -1605,13 +1605,17 @@ function iniciarServidor() {
 
   function resumoEstadoFiscal() {
     const watchdogStatus = watchdog.statusWatchdog();
-    const worker = fiscalDriver.getLibSessionStatus?.()?.worker || null;
+    const libStatus = fiscalDriver.getLibSessionStatus?.() || null;
+    const worker = libStatus?.worker || null;
     const filaStatus = filaFiscal.status?.() || {};
     return {
       worker,
       watchdogDegraded: watchdogStatus.degraded === true,
       motorRecuperando: worker?.restarting === true || worker?.online === false,
       filaPausada: filaStatus.pausada === true,
+      certificado: libStatus?.certificado || null,
+      logNivel: libStatus?.logNivel ?? null,
+      logNativoAtivo: libStatus?.logNativoAtivo === true,
     };
   }
 

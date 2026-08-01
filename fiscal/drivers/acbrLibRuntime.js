@@ -4,8 +4,113 @@
  */
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { resolveTempRoot, resolveStagingDir } = require("../../runtime/windowsEnv");
 const fiscalSecrets = require("../../fiscalSecrets");
+const certProof = require("../certProof");
+const acbrLibCrypt = require("../acbrLibCrypt");
+
+let lastCertProof = null;
+
+function resolveAcbrLogNivel() {
+  // Default 4 = paridade com a última emissão OK (19/07). Sem isso o log nativo
+  // fica mudo e StatusServico CStat=0 vira "falha operacional" sem causa.
+  const raw = String(process.env.ACBR_LIB_LOG_NIVEL ?? "4").trim();
+  return raw === "" ? "4" : raw;
+}
+
+/**
+ * Prova do PFX a partir do disco (pai HTTP ou diagnóstico) — sem depender do worker.
+ * Metadados (thumbprint/NotAfter) só via OpenSSL/PowerShell quando o hash muda
+ * ou quando opts.forceMeta=true — evita custo a cada poll de /status.
+ */
+function probeCertProofFromDisk(opts = {}) {
+  const { resolveProgramDataRoot, resolveStagingDir } = require("../../runtime/windowsEnv");
+  let sourcePath =
+    opts.sourcePath ||
+    process.env.CERT_A1_PATH ||
+    process.env.ACBR_CERT_PATH ||
+    null;
+  if (sourcePath) sourcePath = String(sourcePath).replace(/\\\\/g, "\\").trim();
+  if (!sourcePath || !fs.existsSync(sourcePath)) {
+    try {
+      const root = resolveProgramDataRoot().root;
+      const candidate = path.join(root, "cert", "cert.pfx");
+      if (fs.existsSync(candidate)) sourcePath = candidate;
+    } catch (_) {}
+  }
+  const stagedPath = path.join(resolveStagingDir("margin-acbrlib"), "cert", "cert.pfx");
+  const stagedExists = fs.existsSync(stagedPath);
+  const sourceExists = sourcePath && fs.existsSync(sourcePath);
+  const sourceSha256 = sourceExists ? certProof.sha256File(sourcePath) : null;
+  const stagedSha256 = stagedExists ? certProof.sha256File(stagedPath) : null;
+  const hashKey = `${sourceSha256 || ""}|${stagedSha256 || ""}`;
+  const prevKey = lastCertProof
+    ? `${lastCertProof.sourceSha256 || ""}|${lastCertProof.stagedSha256 || ""}`
+    : null;
+  const hashChanged = hashKey !== prevKey;
+
+  let password = opts.password || "";
+  if (!password) {
+    try {
+      password = fiscalSecrets.lerSync()?.certificadoSenha || "";
+    } catch (_) {}
+  }
+  if (!password) {
+    password = process.env.ACBR_CERT_SENHA || process.env.CERT_A1_PASS || "";
+  }
+  password = certProof.normalizeCertPassword(password);
+
+  const needMeta =
+    opts.forceMeta === true ||
+    hashChanged ||
+    !lastCertProof ||
+    (password && !lastCertProof.thumbprint && !lastCertProof.notAfter);
+
+  if (!needMeta && lastCertProof) {
+    return {
+      ...lastCertProof,
+      sourcePath: sourceExists ? sourcePath : null,
+      stagedPath: stagedExists ? stagedPath : null,
+      sourceSha256,
+      stagedSha256,
+      hashMatch:
+        sourceSha256 && stagedSha256
+          ? sourceSha256 === stagedSha256
+          : sourceSha256 == null && stagedSha256 == null,
+      senhaPresente: !!password,
+    };
+  }
+
+  const proof = certProof.buildCertProof({
+    sourcePath: sourceExists ? sourcePath : null,
+    stagedPath: stagedExists ? stagedPath : null,
+    password: needMeta ? password : "",
+    synced: false,
+  });
+  // Se pulamos meta por senha vazia no build, preservar meta anterior do mesmo hash.
+  if (!needMeta && lastCertProof?.thumbprint) {
+    proof.thumbprint = lastCertProof.thumbprint;
+    proof.notBefore = lastCertProof.notBefore;
+    proof.notAfter = lastCertProof.notAfter;
+    proof.expired = lastCertProof.expired;
+    proof.subject = lastCertProof.subject;
+    proof.metaSource = lastCertProof.metaSource;
+  }
+  lastCertProof = proof;
+  return proof;
+}
+
+function getLastCertProof(opts = {}) {
+  if (opts.refresh || opts.forceMeta || !lastCertProof) {
+    try {
+      return probeCertProofFromDisk(opts);
+    } catch (_) {
+      return lastCertProof;
+    }
+  }
+  return lastCertProof;
+}
 
 function isUncPath(p) {
   return /wsl\.localhost|wsl\$|^\\\\/i.test(String(p || ""));
@@ -87,13 +192,14 @@ function readIniValues(iniPath) {
   const vault = fiscalSecrets.lerSync();
   const senhaIni = get("Senha") || getSec("Certificado", "Senha") || "";
   const cscIni = getSec("NFCe", "CSC") || getSec("NFe", "CSC") || get("CSC") || "";
+  const senhaBruta =
+    vault.certificadoSenha ||
+    (senhaIni && senhaIni !== "__VAULT__" ? senhaIni : "") ||
+    process.env.ACBR_CERT_SENHA ||
+    process.env.CERT_A1_PASS ||
+    "";
   return {
-    senha:
-      vault.certificadoSenha ||
-      (senhaIni && senhaIni !== "__VAULT__" ? senhaIni : "") ||
-      process.env.ACBR_CERT_SENHA ||
-      process.env.CERT_A1_PASS ||
-      "",
+    senha: certProof.normalizeCertPassword(senhaBruta),
     idCsc: getSec("NFCe", "IdCSC") || getSec("NFe", "IdCSC") || get("IdCSC") || "000001",
     csc:
       vault.nfceCsc ||
@@ -105,7 +211,23 @@ function readIniValues(iniPath) {
       iniDir,
       get("PathSchemas") || getSec("ACBrNFe", "PathSchemas") || getSec("NFe", "PathSchemas"),
     ),
-    certFile: resolveRel(getSec("Certificado", "Arquivo") || get("Arquivo")),
+    certFile: (() => {
+      const fromIni = resolveRel(
+        getSec("Certificado", "Arquivo") ||
+          getSec("DFe", "ArquivoPFX") ||
+          get("Arquivo"),
+      );
+      if (fromIni && fs.existsSync(fromIni)) return fromIni;
+      const envPath = process.env.CERT_A1_PATH || process.env.ACBR_CERT_PATH || "";
+      const envNorm = String(envPath).replace(/\\\\/g, "\\").trim();
+      if (envNorm && fs.existsSync(envNorm)) return envNorm;
+      try {
+        const { resolveProgramDataRoot } = require("../../runtime/windowsEnv");
+        const candidate = path.join(resolveProgramDataRoot().root, "cert", "cert.pfx");
+        if (fs.existsSync(candidate)) return candidate;
+      } catch (_) {}
+      return fromIni || envNorm || null;
+    })(),
     servicos: resolveRel(
       get("ArquivoServicos") || getSec("ACBrNFe", "ArquivoServicos") || getSec("NFe", "IniServicos") || get("IniServicos"),
     ),
@@ -201,8 +323,12 @@ function fileNeedsSync(src, dest) {
     const s = fs.statSync(src);
     const d = fs.statSync(dest);
     if (s.size !== d.size) return true;
-    // Destino mais novo/igual → já sincronizado (copy atualiza mtime do dest).
-    return Math.floor(s.mtimeMs) > Math.floor(d.mtimeMs) + 500;
+    // Certificado pode ser substituído preservando tamanho/mtime (backup,
+    // restauração ou cópia administrativa). Para artefatos nativos, conteúdo
+    // é a autoridade: nunca reutilizar PFX/DLL antigo só pela data.
+    const sourceHash = crypto.createHash("sha256").update(fs.readFileSync(src)).digest("hex");
+    const destHash = crypto.createHash("sha256").update(fs.readFileSync(dest)).digest("hex");
+    return sourceHash !== destHash;
   } catch (_) {
     return true;
   }
@@ -244,12 +370,46 @@ const STAGING_RUNTIME_DLLS = [
 ];
 
 function opensslPairForStaging() {
-  // Preferir 1.1 (alinha PosPrinter). Override: ACBR_LIB_OPENSSL=3
+  // Preferir 1.1 (alinha PosPrinter + evita PKCS12_parse/legacy do OpenSSL 3).
+  // Override: ACBR_LIB_OPENSSL=3 (só com legacy.dll no cwd).
   const v = String(process.env.ACBR_LIB_OPENSSL || "1.1").trim();
   if (v === "3" || v === "3.0") {
     return ["libcrypto-3-x64.dll", "libssl-3-x64.dll"];
   }
   return ["libcrypto-1_1-x64.dll", "libssl-1_1-x64.dll"];
+}
+
+/** Pastas oficiais do pacote ACBrLib (\dep\ / OpenSSL / LibXml2) — mesma arch da DLL. */
+function officialDepCandidateDirs(libDir) {
+  const dirs = [libDir];
+  const opensslRoot = path.join(libDir, "OpenSSL");
+  const libxmlRoot = path.join(libDir, "LibXml2");
+  // Preferir 1.1.x; se ACBR_LIB_OPENSSL=3, priorizar 3.x.
+  const prefer3 = /^(3|3\.0)$/.test(String(process.env.ACBR_LIB_OPENSSL || "1.1").trim());
+  const opensslVers = prefer3
+    ? ["3.1.3", "3.0", "1.1.1.10", "1.1.1"]
+    : ["1.1.1.10", "1.1.1", "3.1.3"];
+  for (const ver of opensslVers) {
+    dirs.push(path.join(opensslRoot, ver, "x64"));
+    dirs.push(path.join(opensslRoot, ver, "X64"));
+  }
+  dirs.push(path.join(libxmlRoot, "x64"));
+  dirs.push(path.join(libxmlRoot, "X64"));
+  return dirs.filter((d) => d && fs.existsSync(d));
+}
+
+function findDepDll(libDir, fileName) {
+  const needle = String(fileName).toLowerCase();
+  for (const dir of officialDepCandidateDirs(libDir)) {
+    try {
+      for (const name of fs.readdirSync(dir)) {
+        if (name.toLowerCase() !== needle) continue;
+        const full = path.join(dir, name);
+        if (fs.statSync(full).isFile()) return full;
+      }
+    } catch (_) {}
+  }
+  return null;
 }
 
 function stageNativeLibBundle(libPath, stagingRoot) {
@@ -270,6 +430,14 @@ function stageNativeLibBundle(libPath, stagingRoot) {
   if (/nfse/i.test(mainDll)) {
     foreign.splice(foreign.indexOf("ACBrNFSe64.dll"), 1);
   }
+  // Se estamos no modo 1.1, nunca deixar crypto-3 no cwd (PKCS12_parse / legacy).
+  // Se modo 3, não deixar crypto-1.1 competir.
+  const prefer3 = /^(3|3\.0)$/.test(String(process.env.ACBR_LIB_OPENSSL || "1.1").trim());
+  if (!prefer3) {
+    /* already in foreign */
+  } else {
+    foreign.push("libcrypto-1_1-x64.dll", "libssl-1_1-x64.dll", "libcrypto-1_1.dll", "libssl-1_1.dll");
+  }
   for (const name of foreign) {
     try {
       fs.rmSync(path.join(stagingRoot, name), { force: true });
@@ -280,17 +448,16 @@ function stageNativeLibBundle(libPath, stagingRoot) {
   } catch (_) {}
   if (copyFileIfNeeded(libPath, path.join(stagingRoot, mainDll))) n += 1;
 
-  const wanted = new Set([
-    mainDll.toLowerCase(),
-    ...STAGING_RUNTIME_DLLS.map((x) => x.toLowerCase()),
-    ...opensslPairForStaging().map((x) => x.toLowerCase()),
-  ]);
+  const wantedNames = [
+    ...STAGING_RUNTIME_DLLS,
+    ...opensslPairForStaging(),
+  ];
+  // legacy.dll sempre — necessário se alguma chamada cair no OpenSSL 3.
+  if (!wantedNames.includes("legacy.dll")) wantedNames.push("legacy.dll");
 
-  for (const name of fs.readdirSync(libDir)) {
-    if (!name.toLowerCase().endsWith(".dll")) continue;
-    if (!wanted.has(name.toLowerCase())) continue;
-    const src = path.join(libDir, name);
-    if (!fs.statSync(src).isFile()) continue;
+  for (const name of wantedNames) {
+    const src = findDepDll(libDir, name);
+    if (!src) continue;
     if (copyFileIfNeeded(src, path.join(stagingRoot, name))) n += 1;
   }
   return n;
@@ -361,6 +528,13 @@ function prepareNativeRuntime({ libPath, iniConfigPath, assets, stagingRoot, for
     const certAbs = certFile && fs.existsSync(certFile) ? certFile : null;
     const certRel = certAbs ? path.basename(certAbs) : null;
     const schemasResolved = resolveSchemasDir(path.dirname(iniConfigPath), schemasDir);
+    const proof = certProof.buildCertProof({
+      sourcePath: certAbs,
+      stagedPath: certAbs,
+      password: iniVals.senha,
+      synced: false,
+    });
+    lastCertProof = proof;
     return {
       root,
       libPath,
@@ -371,6 +545,11 @@ function prepareNativeRuntime({ libPath, iniConfigPath, assets, stagingRoot, for
       servicos: servicosFile,
       cert: certAbs,
       certRel,
+      certSha256: proof.stagedSha256 || proof.sourceSha256 || null,
+      certSourceSha256: proof.sourceSha256 || null,
+      certProof: proof,
+      certSynced: false,
+      logNivel: resolveAcbrLogNivel(),
       config: path.dirname(iniConfigPath),
       senha: iniVals.senha,
       idCsc: iniVals.idCsc,
@@ -419,8 +598,12 @@ function prepareNativeRuntime({ libPath, iniConfigPath, assets, stagingRoot, for
   if (servicosFile) {
     copyFileIfNeeded(servicosFile, path.join(dirs.config, path.basename(servicosFile)));
   }
+  let certSynced = false;
   if (certFile) {
-    copyFileIfNeeded(certFile, path.join(dirs.cert, path.basename(certFile) || "cert.pfx"));
+    certSynced = copyFileIfNeeded(
+      certFile,
+      path.join(dirs.cert, path.basename(certFile) || "cert.pfx"),
+    );
   }
 
   const stagedCert = path.join(dirs.cert, path.basename(certFile || "cert.pfx"));
@@ -431,10 +614,30 @@ function prepareNativeRuntime({ libPath, iniConfigPath, assets, stagingRoot, for
   const ambLib = iniVals.ambienteLib || tpAmbToAmbienteLib(tpAmb);
   const ambSefaz = iniVals.ambienteSefaz || (tpAmb === "1" ? "producao" : "homologacao");
   const certIniPath = stagedCert;
+  const logNivel = resolveAcbrLogNivel();
+
+  const proof = certProof.buildCertProof({
+    sourcePath: certFile || null,
+    stagedPath: fs.existsSync(stagedCert) ? stagedCert : null,
+    password: iniVals.senha,
+    synced: certSynced,
+  });
+  lastCertProof = proof;
+  try {
+    const log = require("../../logger").child({ modulo: "acbr_lib_runtime" });
+    log.info(
+      { cert: certProof.certProofForLog(proof), logNivel, metric: "acbrlib.cert_proof" },
+      certSynced
+        ? "[ACBrLib] Certificado sincronizado no staging — sessão deve reiniciar"
+        : "[ACBrLib] Prova do certificado A1 (staging)",
+    );
+  } catch (_) {
+    /* logger opcional em scripts isolados */
+  }
 
   const iniContent = `[Principal]
 TipoResposta=2
-LogNivel=${(process.env.ACBR_LIB_LOG_NIVEL || "0").trim() || "0"}
+LogNivel=${logNivel}
 LogPath=${dirs.log}
 
 [Sistema]
@@ -478,13 +681,16 @@ Timeout=30000
 
 [Certificado]
 Arquivo=${certIniPath}
-Senha=${iniVals.senha}
+Senha=${iniVals.senha || ""}
 
 [DFe]
 UF=${iniVals.uf}
+ArquivoPFX=${certIniPath}
+Senha=${iniVals.senha ? acbrLibCrypt.stringToB64Crypt(iniVals.senha) : ""}
 SSLCryptLib=1
 SSLHttpLib=3
 SSLXmlSignLib=4
+SSLType=5
 
 [DANFE]
 PathPDF=${path.join("pdf")}
@@ -513,6 +719,11 @@ CSC=${iniVals.csc}
     schemas: dirs.schemas,
     cert: stagedCert,
     certRel: stagedCertRel,
+    certSha256: proof.stagedSha256 || proof.sourceSha256 || null,
+    certSourceSha256: proof.sourceSha256 || null,
+    certProof: proof,
+    certSynced,
+    logNivel,
     config: dirs.config,
     senha: iniVals.senha,
     idCsc: iniVals.idCsc,
@@ -672,13 +883,12 @@ function applyNativeRuntimeConfig(inst, runtime) {
     ["NFe", "CSC", runtime.csc || ""],
     ["NFCe", "IdCSC", runtime.idCsc || "000001"],
     ["NFCe", "CSC", runtime.csc || ""],
-    // WinCrypt + WinINet usa a pilha TLS do Windows. Os valores anteriores
-    // (OpenSSL/WinHTTP) produziam Status.CStat=0 sem mensagem em alguns
-    // ambientes MG, embora a DLL e o endpoint estivessem corretos.
-    ["DFe", "SSLCryptLib", "3"],
-    ["DFe", "SSLHttpLib", "2"],
+    // A1 em arquivo .pfx (como em 19/07/2026, última emissão OK): OpenSSL + LibXml2 + TLS 1.2.
+    // WinCrypt (3/2/4) abria o PFX mas StatusServico voltava CStat=0 vazio neste PDV.
+    // SSLCryptLib: 1=OpenSSL · SSLHttpLib: 3=OpenSSL · SSLXmlSignLib: 4=LibXml2 · SSLType: 5=TLS1.2
+    ["DFe", "SSLCryptLib", "1"],
+    ["DFe", "SSLHttpLib", "3"],
     ["DFe", "SSLXmlSignLib", "4"],
-    // LT_TLSv1_2 — exigido pelos WebServices NF-e/NFC-e atuais.
     ["DFe", "SSLType", "5"],
   ];
   for (const [sec, key, val] of sets) {
@@ -694,16 +904,33 @@ function applyNativeRuntimeConfig(inst, runtime) {
 
 function applyNativeCertConfig(inst, runtime) {
   const certPath = runtime.cert || runtime.certRel;
-  if (!certPath || !runtime.senha) return;
+  const senha = certProof.normalizeCertPassword(runtime.senha);
+  if (!certPath) return;
+  if (!senha) {
+    try {
+      const log = require("../../logger").child({ modulo: "acbr_lib_runtime" });
+      log.error(
+        { metric: "acbrlib.cert_senha_ausente" },
+        "[ACBrLib] Senha do certificado ausente no cofre — serviço Windows não lê keyring do usuário. Regrave a senha em Configuração Fiscal.",
+      );
+    } catch (_) {}
+    return;
+  }
   const cert = String(certPath);
-  const senha = String(runtime.senha);
+  // Paridade 19/07 (emissão OK): Certificado.* + DFe.* via API com senha plaintext.
+  // SEFAZ-MG exige mTLS — sem Certificado.Senha o HTTP sobe sem client cert e
+  // StatusServico volta CStat=0 vazio (handshake failure). Logs nativos 28–30/07
+  // mostram PrecisaCriptografar(Certificado,Senha)=False e (DFe,Senha)=True.
   try {
     inst.configGravarValor("Certificado", "Arquivo", cert);
     inst.configGravarValor("Certificado", "Senha", senha);
     inst.configGravarValor("DFe", "ArquivoPFX", cert);
     inst.configGravarValor("DFe", "Senha", senha);
-  } catch (_) {
-    /* ignore */
+  } catch (err) {
+    try {
+      const log = require("../../logger").child({ modulo: "acbr_lib_runtime" });
+      log.warn({ err: err?.message, metric: "acbrlib.cert_senha_api_fail" }, "[ACBrLib] Falha ao gravar certificado/senha");
+    } catch (_) {}
   }
 }
 
@@ -774,4 +1001,7 @@ module.exports = {
   reloadNativeCertAfterCarregarIni,
   withNativeLibSession,
   resolveInstPaths,
+  getLastCertProof,
+  probeCertProofFromDisk,
+  resolveAcbrLogNivel,
 };

@@ -251,6 +251,7 @@ UF=${cfg.uf || "MG"}
 SSLCryptLib=1
 SSLHttpLib=3
 SSLXmlSignLib=4
+SSLType=5
 
 [NFCe]
 IdCSC=${cfg.cscId || "000001"}

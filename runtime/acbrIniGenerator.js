@@ -68,6 +68,7 @@ UF=${uf}
 SSLCryptLib=1
 SSLHttpLib=3
 SSLXmlSignLib=4
+SSLType=5
 
 [NFCe]
 IdCSC=${idCsc}

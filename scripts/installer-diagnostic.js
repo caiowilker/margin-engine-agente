@@ -206,7 +206,17 @@ async function runDiagnostic() {
     fiscalReady = fs.readdirSync(fiscalModule).some((f) => /\.dll$/i.test(f));
   }
   const emissao = String(env.EMISSAO_FISCAL || "").toLowerCase() === "true";
-  report.checks.fiscal = { configured: emissao, modulePresent: fiscalReady };
+  const logNivel = String(env.ACBR_LIB_LOG_NIVEL || "0").trim() || "0";
+  report.checks.fiscal = {
+    configured: emissao,
+    modulePresent: fiscalReady,
+    logNivel,
+    logNativoAtivo: logNivel !== "0",
+  };
+  if (logNivel === "0") {
+    report.checks.fiscal.logHint =
+      "Log nativo do emissor desligado (LogNivel=0). Use os logs JSON do agente. Para depurar o emissor nativo: ACBR_LIB_LOG_NIVEL=4 no .env e reinicie o serviço.";
+  }
   if (emissao) {
     const certPath = env.CERT_A1_PATH;
     const certFs = certPath ? certPath.replace(/\\\\/g, "\\") : "";
@@ -218,6 +228,44 @@ async function runDiagnostic() {
         "Emissão fiscal ativada, mas o certificado digital não está configurado.",
         "Configure o certificado no painel do Margin Engine (http://localhost:9100).",
       );
+    } else {
+      try {
+        const { probeCertProofFromDisk, resolveAcbrLogNivel } = require("../fiscal/drivers/acbrLibRuntime");
+        const { certProofForLog } = require("../fiscal/certProof");
+        const proof = probeCertProofFromDisk({ sourcePath: certFs, forceMeta: true });
+        report.checks.certificado = certProofForLog(proof);
+        report.checks.fiscal.logNivel = resolveAcbrLogNivel();
+        report.checks.fiscal.logNativoAtivo = resolveAcbrLogNivel() !== "0";
+        if (proof.stagedSha256 && proof.sourceSha256 && !proof.hashMatch) {
+          addIssue(
+            report,
+            "error",
+            "ME-009b",
+            "O certificado em uso pelo emissor (cópia temporária) não é o mesmo arquivo configurado.",
+            "Salve novamente o certificado em Configuração Fiscal e reinicie o serviço Margin Engine.",
+          );
+        }
+        if (proof.expired === true) {
+          addIssue(
+            report,
+            "error",
+            "ME-009c",
+            "O certificado digital configurado está expirado.",
+            "Importe um certificado A1 válido em Configuração Fiscal → Certificado.",
+          );
+        }
+        if (!proof.senhaPresente) {
+          addIssue(
+            report,
+            "warning",
+            "ME-009d",
+            "Senha do certificado digital não encontrada no cofre local.",
+            "Informe a senha do PFX em Configuração Fiscal → Certificado.",
+          );
+        }
+      } catch (_) {
+        /* prova opcional — não bloqueia diagnóstico básico */
+      }
     }
   } else if (!fiscalReady) {
     addIssue(
@@ -310,6 +358,20 @@ function writeReports(report, dmRoot) {
     `Resultado: ${report.ok ? "OK" : "ATENÇÃO NECESSÁRIA"}`,
     "",
   ];
+
+  if (report.checks?.fiscal?.logHint) {
+    lines.push(report.checks.fiscal.logHint);
+    lines.push("");
+  }
+  if (report.checks?.certificado) {
+    const c = report.checks.certificado;
+    lines.push("Certificado digital:");
+    if (c.thumbprint) lines.push(`  Identificador: ${c.thumbprint}`);
+    if (c.notAfter) lines.push(`  Válido até: ${c.notAfter}`);
+    if (c.sourceSha256) lines.push(`  Hash: ${String(c.sourceSha256).slice(0, 16)}…`);
+    if (c.hashMatch === false) lines.push("  Atenção: cópia temporária diverge do arquivo configurado.");
+    lines.push("");
+  }
 
   if (report.issues.length === 0) {
     lines.push("Nenhum problema detectado. O agente está pronto para ativação no painel.");

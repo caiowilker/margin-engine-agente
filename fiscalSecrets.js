@@ -1,6 +1,11 @@
 /**
  * Cofre de segredos fiscais (senha A1, CSC) — fora de .env/INI em texto puro.
- * Usa o mesmo backend do credenciais.js (@napi-rs/keyring ou vault criptografado).
+ *
+ * IMPORTANTE (serviço Windows):
+ * - @napi-rs/keyring é por usuário. O SCM costuma rodar como LocalSystem.
+ * - Senha salva no keyring do usuário interativo NÃO aparece no serviço.
+ * - Por isso SEMPRE espelhamos no arquivo .fiscal-vault (ProgramData) e
+ *   na leitura fazemos merge keyring + arquivo.
  */
 const path = require("path");
 const fs = require("fs");
@@ -56,42 +61,71 @@ function decriptar(base64) {
   return decipher.update(enc) + decipher.final("utf8");
 }
 
-async function salvar(dados) {
-  const json = JSON.stringify(dados || {});
-  const entry = getEntry();
-  if (entry) {
-    try {
-      entry.setPassword(json);
-      return;
-    } catch (err) {
-      log.warn({ err: err.message }, "keyring fiscal falhou ao salvar");
-    }
+function lerArquivoVault() {
+  if (!fs.existsSync(fallbackVaultPath())) return {};
+  try {
+    return JSON.parse(decriptar(fs.readFileSync(fallbackVaultPath(), "utf8")));
+  } catch (err) {
+    log.error({ err: err.message }, "Falha ao decriptar vault fiscal");
+    return {};
   }
+}
+
+function gravarArquivoVault(dados) {
   const dir = path.dirname(fallbackVaultPath());
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(fallbackVaultPath(), encriptar(json), "utf8");
+  fs.writeFileSync(fallbackVaultPath(), encriptar(JSON.stringify(dados || {})), "utf8");
+}
+
+function lerKeyring() {
+  const entry = getEntry();
+  if (!entry) return null;
+  try {
+    const json = entry.getPassword();
+    if (json) return JSON.parse(json);
+  } catch (err) {
+    if (!err.message?.includes("No entry")) {
+      log.warn({ err: err.message }, "keyring fiscal falhou ao ler");
+    }
+  }
+  return null;
+}
+
+function gravarKeyring(dados) {
+  const entry = getEntry();
+  if (!entry) return false;
+  try {
+    entry.setPassword(JSON.stringify(dados || {}));
+    return true;
+  } catch (err) {
+    log.warn({ err: err.message }, "keyring fiscal falhou ao salvar");
+    return false;
+  }
+}
+
+/** Prefere o lado que tem senha/CSC preenchidos. */
+function mergeSecrets(a, b) {
+  const left = a && typeof a === "object" ? a : {};
+  const right = b && typeof b === "object" ? b : {};
+  return {
+    ...right,
+    ...left,
+    certificadoSenha: left.certificadoSenha || right.certificadoSenha || "",
+    nfceCsc: left.nfceCsc || right.nfceCsc || "",
+  };
+}
+
+async function salvar(dados) {
+  const merged = mergeSecrets(dados || {}, lerSync());
+  const okKeyring = gravarKeyring(merged);
+  gravarArquivoVault(merged);
+  if (!okKeyring) {
+    log.info({ metric: "fiscal_secrets.file_only" }, "Segredos fiscais gravados só no arquivo (sem keyring)");
+  }
 }
 
 async function ler() {
-  const entry = getEntry();
-  if (entry) {
-    try {
-      const json = entry.getPassword();
-      if (json) return JSON.parse(json);
-    } catch (err) {
-      if (!err.message?.includes("No entry")) {
-        log.warn({ err: err.message }, "keyring fiscal falhou ao ler");
-      }
-    }
-  }
-  if (fs.existsSync(fallbackVaultPath())) {
-    try {
-      return JSON.parse(decriptar(fs.readFileSync(fallbackVaultPath(), "utf8")));
-    } catch (err) {
-      log.error({ err: err.message }, "Falha ao decriptar vault fiscal");
-    }
-  }
-  return {};
+  return lerSync();
 }
 
 async function limpar() {
@@ -107,42 +141,30 @@ async function limpar() {
 }
 
 function salvarSync(dados) {
-  const atual = lerSync();
-  const merged = { ...atual, ...(dados || {}) };
-  const json = JSON.stringify(merged);
-  const entry = getEntry();
-  if (entry) {
-    try {
-      entry.setPassword(json);
-      return merged;
-    } catch (err) {
-      log.warn({ err: err.message }, "keyring fiscal falhou ao salvar (sync)");
-    }
+  const merged = mergeSecrets(dados || {}, lerSync());
+  const okKeyring = gravarKeyring(merged);
+  gravarArquivoVault(merged);
+  if (!okKeyring) {
+    log.info({ metric: "fiscal_secrets.file_only" }, "Segredos fiscais gravados só no arquivo (sem keyring)");
   }
-  const dir = path.dirname(fallbackVaultPath());
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(fallbackVaultPath(), encriptar(json), "utf8");
   return merged;
 }
 
 function lerSync() {
-  const entry = getEntry();
-  if (entry) {
-    try {
-      const json = entry.getPassword();
-      if (json) return JSON.parse(json);
-    } catch (err) {
-      if (!err.message?.includes("No entry")) {
-        log.warn({ err: err.message }, "keyring fiscal falhou ao ler (sync)");
-      }
-    }
+  const fromKeyring = lerKeyring();
+  const fromFile = lerArquivoVault();
+  const merged = mergeSecrets(fromKeyring || {}, fromFile);
+  if (!merged.certificadoSenha && (fromKeyring || Object.keys(fromFile).length)) {
+    log.warn(
+      {
+        keyring: !!fromKeyring?.certificadoSenha,
+        fileVault: !!fromFile.certificadoSenha,
+        metric: "fiscal_secrets.senha_ausente",
+      },
+      "Cofre fiscal sem senha do certificado — serviço Windows pode não ver o keyring do usuário",
+    );
   }
-  if (!fs.existsSync(fallbackVaultPath())) return {};
-  try {
-    return JSON.parse(decriptar(fs.readFileSync(fallbackVaultPath(), "utf8")));
-  } catch (_) {
-    return {};
-  }
+  return merged;
 }
 
-module.exports = { salvar, salvarSync, ler, lerSync, limpar };
+module.exports = { salvar, salvarSync, ler, lerSync, limpar, fallbackVaultPath };

@@ -3,6 +3,31 @@
 **Última atualização:** 2026-08-01  
 **Versão:** `1.0.6` — hotfix pós-install (HTTP :9100 estável no boot)
 
+## StatusServico: JSON oco vs XML 107 (2026-08-01)
+
+- Após wipe+reinstall: mTLS OK — `%TEMP%\margin-acbrlib\notas\*-sta.xml` traz `cStat=107 Serviço em Operação`.
+- ACBrLib JSON (`TipoResposta=2`) ainda devolve `{Status:{CStat:0,...}}` vazio → Diagnóstico OFFLINE falso.
+- Fix: detectar JSON oco; fallback lê `*-sta.xml` (SalvarWS); `[Certificado] Senha=` plaintext no runtime.ini (paridade 19/07; DFe.Senha continua B64Crypt).
+- Arquivos: `acbrLibResposta.js`, `acbrLibDriver.js`, `acbrLibRuntime.js`.
+- ADR: `.ai/decisions/ADR-statusservico-json-oco-xml-20260801.md`.
+- Validado em campo: `operacional=true`, `cStat=107`, `statusSource=sta_xml`; contingência encerrada; build sync `C:\build\pdv-agente`.
+
+## CStat=0 também = mTLS sem client cert (2026-08-01)
+
+- SEFAZ-MG `hnfce.fazenda.mg.gov.br` exige certificado de cliente no handshake TLS.
+- Sem client cert → alert handshake failure → ACBr devolve `CStat=0` vazio em ~50ms.
+- Prova: `curl`+PFX → `cStat=107 Serviço em Operação`; sem PFX → falha SSL.
+- Senha `12345678` OK no PFX novo; senha antiga `1978` inválida.
+- Causa no agente: `applyNativeCertConfig` gravava só `DFe.*` e omitia `Certificado.Arquivo/Senha` (paridade 19/07).
+- Fix: API restaura `Certificado.*` + `DFe.*`; `LogNivel` default 4; status loga `ultimoRetorno`.
+
+## Certificado A1 + logs concretos (2026-08-01)
+
+- Prova de identidade do PFX (SHA256 origem×staging, thumbprint/NotAfter best-effort) em runtime, `/status` e diagnóstico.
+- Fingerprint de sessão inclui SHA256 do PFX + hash da senha; troca reinicia sessão + worker.
+- `logSuggestions` diferencia senha errada vs certificado expirado.
+- `LogNivel=0` explícito no diagnóstico; checklist em `docs/CHECKLIST-CERTIFICADO-FISCAL.md`.
+
 ## Auditoria deps ACBr/koffi (2026-08-01)
 
 - Tree OK: koffi único 2.16.3; Node Win 20.18.1 x64; nfe 1.0.11 / base+dfe+nfse 1.0.12.

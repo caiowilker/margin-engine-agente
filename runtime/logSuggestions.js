@@ -3,9 +3,19 @@
  */
 const SUGESTOES = [
   {
-    teste: /certificado|a1|pfx|expir/i,
-    causa: "Certificado expirado.",
-    acao: "Abra Configuração Fiscal → Certificado.",
+    teste: /senha informada está errada|senha.*errada|mac verify failure|pkcs12_parse|senha do certificado/i,
+    causa: "Senha do certificado A1 incorreta.",
+    acao: "Confira a senha do PFX em Configuração Fiscal → Certificado e salve novamente.",
+  },
+  {
+    teste: /validade do certificado já expirou|certificado.*expir|expirad/i,
+    causa: "Certificado digital expirado.",
+    acao: "Importe um certificado A1 válido em Configuração Fiscal → Certificado.",
+  },
+  {
+    teste: /erro ao ler informações do certificado|certificado|a1|\.pfx|pfx/i,
+    causa: "Falha ao carregar o certificado A1.",
+    acao: "Verifique o arquivo PFX, a senha e reinicie o serviço Margin Engine.",
   },
   {
     teste: /csc|idtoken/i,

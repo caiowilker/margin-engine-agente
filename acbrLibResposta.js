@@ -147,6 +147,36 @@ function extrairDocsDistribuicaoDFe(resposta) {
   return { xmls, resumos };
 }
 
+/**
+ * Extrai cStat/xMotivo de retConsStatServ (arquivo *-sta.xml salvo com SalvarWS=1).
+ * ACBrLib 1.5.x às vezes devolve JSON Status com CStat=0 vazio mesmo com SEFAZ 107 no XML.
+ */
+function parseRetConsStatServXml(xml) {
+  const s = String(xml || "");
+  if (!/<retConsStatServ[\s>]/i.test(s)) return null;
+  const cStat = s.match(/<cStat>\s*(\d+)\s*<\/cStat>/i)?.[1] || null;
+  if (cStat == null || String(cStat).trim() === "") return null;
+  return {
+    cStat: String(cStat),
+    xMotivo: s.match(/<xMotivo>\s*([^<]*)\s*<\/xMotivo>/i)?.[1]?.trim() || null,
+    tpAmb: s.match(/<tpAmb>\s*(\d+)\s*<\/tpAmb>/i)?.[1] || null,
+    raw: s,
+    native: true,
+    source: "retConsStatServ_xml",
+  };
+}
+
+/** JSON Status com CStat 0 e sem motivo = serialização vazia da Lib (não é rejeição SEFAZ). */
+function isHollowStatusJson(parsed) {
+  if (!parsed) return true;
+  const c = String(parsed.cStat ?? "").trim();
+  const motivo = String(parsed.xMotivo || "").trim();
+  if (c === "" || c === "0") {
+    return !motivo || /^[\s{}\[\]"']*$/.test(motivo) || /"CStat"\s*:\s*0/i.test(motivo);
+  }
+  return false;
+}
+
 function parseRespostaLib(resposta) {
   const rawObject =
     resposta && typeof resposta === "object" && !Array.isArray(resposta)
@@ -158,8 +188,17 @@ function parseRespostaLib(resposta) {
       : rawObject
         ? JSON.stringify(rawObject)
         : String(resposta ?? "");
+  const fromXmlInline = parseRetConsStatServXml(bruto);
+  if (fromXmlInline) {
+    return fromXmlInline;
+  }
   const fromJson = parseJsonAcbrLib(bruto);
-  if (fromJson && fromJson.cStat != null && String(fromJson.cStat).trim() !== "") {
+  if (
+    fromJson &&
+    fromJson.cStat != null &&
+    String(fromJson.cStat).trim() !== "" &&
+    !isHollowStatusJson(fromJson)
+  ) {
     return { ...fromJson, raw: bruto, native: true };
   }
 
@@ -209,4 +248,10 @@ function parseRespostaLib(resposta) {
   };
 }
 
-module.exports = { parseRespostaLib, parseJsonAcbrLib, extrairDocsDistribuicaoDFe };
+module.exports = {
+  parseRespostaLib,
+  parseJsonAcbrLib,
+  parseRetConsStatServXml,
+  isHollowStatusJson,
+  extrairDocsDistribuicaoDFe,
+};

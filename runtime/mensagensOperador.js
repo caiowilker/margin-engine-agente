@@ -20,10 +20,22 @@ const REGRAS = [
     comoResolver: "Revise o produto em Configurações → Dados fiscais.",
   },
   {
+    teste: /senha informada está errada|senha.*errada|mac verify failure/i,
+    problema: "Senha do certificado digital incorreta.",
+    causa: "A senha do arquivo PFX não confere.",
+    comoResolver: "Corrija a senha em Configuração Fiscal → Certificado.",
+  },
+  {
+    teste: /validade do certificado já expirou|certificado.*expir/i,
+    problema: "Certificado digital expirado.",
+    causa: "A validade do certificado A1 encerrou.",
+    comoResolver: "Importe um certificado A1 válido em Configuração Fiscal.",
+  },
+  {
     teste: /certificado|a1|pfx/i,
     problema: "Problema com o certificado digital.",
-    causa: "Certificado ausente, inválido ou vencido.",
-    comoResolver: "Importe certificado A1 em Configuração Fiscal.",
+    causa: "Certificado ausente, inválido ou com senha incorreta.",
+    comoResolver: "Importe certificado A1 e confira a senha em Configuração Fiscal.",
   },
   {
     teste: /sefaz|cstat|rejei/i,

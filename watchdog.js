@@ -79,9 +79,32 @@ async function tick(restartAcbrFn, hooks = {}) {
         return;
       }
     } catch (_) {}
+    // Certificado/senha é falha permanente de config — EPEC só mascara o problema.
+    try {
+      const lastErr = String(
+        fiscalDriver.getLastTestarErro?.() ||
+          fiscalDriver.getLibSessionStatus?.()?.lastTestarErro ||
+          "",
+      );
+      if (/senha|certificado|pfx|pkcs12|wincrypt/i.test(lastErr)) {
+        console.warn(
+          "[Watchdog ACBr] Falha de certificado/senha — sem contingência EPEC:",
+          lastErr.slice(0, 160),
+        );
+        falhasConsecutivas = 0;
+        return;
+      }
+    } catch (_) {}
     throw new Error("NFE.StatusServico falhou");
   } catch (err) {
     const msg = String(err?.message || err || "");
+    if (/senha|certificado|pfx|pkcs12|wincrypt/i.test(msg)) {
+      console.warn(
+        "[Watchdog ACBr] Falha de certificado/senha — sem contingência EPEC",
+      );
+      falhasConsecutivas = 0;
+      return;
+    }
     let softKoffi = /void \*\*|unexpected external|invalid handle|session disposed/i.test(
       msg,
     );

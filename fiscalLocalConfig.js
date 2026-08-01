@@ -449,7 +449,8 @@ async function salvar(updates) {
   }
 
   if (updates.certificadoSenha != null && updates.certificadoSenha !== "") {
-    vaultPatch.certificadoSenha = String(updates.certificadoSenha);
+    const { normalizeCertPassword } = require("./fiscal/certProof");
+    vaultPatch.certificadoSenha = normalizeCertPassword(updates.certificadoSenha);
     for (const sec of SECOES_CERT) {
       raw = upsertIniKey(raw, sec, "Senha", "__VAULT__");
     }
@@ -605,6 +606,30 @@ function sincronizarSegredosDoEnv() {
   const certPath = desescaparValorEnv(map.CERT_A1_PATH || "");
   const cscId = String(map.NFE_CSC_ID || "").trim();
 
+  let iniPath = resolveLibIniPath();
+  if (!iniPath || !fs.existsSync(iniPath)) {
+    iniPath = ensureIniFile(iniPath);
+  }
+
+  let raw = fs.readFileSync(iniPath, "utf8");
+  let iniChanged = false;
+  const sections = parseIni(raw);
+  const senhaIni = getIniValue(sections, [["Certificado", "Senha"], ["DFe", "Senha"]]);
+  // Migra senha plaintext do INI → cofre (serviço Windows não usa keyring do usuário).
+  if (!vault.certificadoSenha && senhaIni && senhaIni !== "__VAULT__") {
+    const { normalizeCertPassword } = require("./fiscal/certProof");
+    const { stringToB64Crypt, b64CryptToString } = require("./fiscal/acbrLibCrypt");
+    const plain = normalizeCertPassword(senhaIni);
+    let jaEhB64Crypt = false;
+    try {
+      const dec = b64CryptToString(plain);
+      jaEhB64Crypt = !!dec && stringToB64Crypt(dec) === plain;
+    } catch (_) {}
+    if (plain && !jaEhB64Crypt) {
+      vaultPatch.certificadoSenha = plain;
+    }
+  }
+
   if (!vault.certificadoSenha && certPass) {
     vaultPatch.certificadoSenha = certPass;
   }
@@ -614,14 +639,6 @@ function sincronizarSegredosDoEnv() {
   if (Object.keys(vaultPatch).length === 0 && !certPath && !cscId) {
     return { aplicado: false };
   }
-
-  let iniPath = resolveLibIniPath();
-  if (!iniPath || !fs.existsSync(iniPath)) {
-    iniPath = ensureIniFile(iniPath);
-  }
-
-  let raw = fs.readFileSync(iniPath, "utf8");
-  let iniChanged = false;
 
   if (certPath) {
     const certIni = getIniValue(parseIni(raw), [["Certificado", "Arquivo"]]);

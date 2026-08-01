@@ -100,6 +100,13 @@ function fingerprintRuntime(runtime) {
   if (!runtime) return "";
   // NÃO hashear o conteúdo do INI: a Lib grava valores em runtime (configGravarValor)
   // e isso invalidava a sessão → Finalizar/Inicializar → void** no koffi.
+  // SHA256 do PFX + fingerprint da senha forçam reinício quando o certificado muda.
+  const { senhaFingerprint } = require("../certProof");
+  const certSha =
+    runtime.certSha256 ||
+    runtime.certProof?.stagedSha256 ||
+    runtime.certProof?.sourceSha256 ||
+    "";
   return [
     resolveSlotKey(runtime),
     normPath(runtime.libPath),
@@ -108,8 +115,9 @@ function fingerprintRuntime(runtime) {
     String(runtime.ambienteLib || ""),
     String(runtime.ambienteSefaz || ""),
     normPath(runtime.cert || runtime.certRel || ""),
+    String(certSha),
+    senhaFingerprint(runtime.senha),
     String(runtime.idCsc || ""),
-    runtime.senha ? "1" : "0",
     runtime.csc ? "1" : "0",
   ].join("|");
 }
@@ -280,6 +288,20 @@ async function ensureSession(runtime, LibClass) {
     return active;
   }
 
+  if (active && fingerprints[key] && fingerprints[key] !== fp) {
+    log.info(
+      {
+        slot: key,
+        certSha256: runtime.certSha256 || runtime.certProof?.stagedSha256 || null,
+        certSynced: runtime.certSynced === true,
+        thumbprint: runtime.certProof?.thumbprint || null,
+        notAfter: runtime.certProof?.notAfter || null,
+        metric: "acbrlib.cert_session_refresh",
+      },
+      "[ACBrLibSession] Certificado/config atualizado — sessão nativa reiniciada",
+    );
+  }
+
   await destroySession("config_changed", key);
   if (softDeadUntilRecycle[key] && !allowSoftDeadRecovery(key)) {
     const e = new Error(
@@ -431,6 +453,14 @@ function clearSoftDead(slotKey) {
 function getSessionStatus() {
   const nfe = slots.nfe;
   const nfse = slots.nfse;
+  let cert = null;
+  try {
+    const { getLastCertProof } = require("./acbrLibRuntime");
+    const { certProofForLog } = require("../certProof");
+    cert = certProofForLog(getLastCertProof({ refresh: true }));
+  } catch (_) {
+    cert = null;
+  }
   return {
     ativa: !!(nfe || nfse),
     nfeAtiva: !!nfe,
@@ -446,6 +476,7 @@ function getSessionStatus() {
     softDeadNfse: softDeadUntilRecycle.nfse,
     processPoisoned: processRecycle.isProcessPoisoned(),
     recycle: processRecycle.getRecycleStatus(),
+    certificado: cert,
   };
 }
 

@@ -680,6 +680,51 @@ function invalidateStatusServicoCache() {
   statusServicoCache = { at: 0, value: null };
 }
 
+/**
+ * ACBrLib (TipoResposta=JSON) às vezes devolve Status CStat=0 vazio enquanto
+ * SalvarWS=1 grava *-sta.xml com cStat real da SEFAZ (ex.: 107).
+ */
+function readLatestStatusFromNotasXml(notasDir, maxAgeMs = 120000) {
+  try {
+    if (!notasDir || !fs.existsSync(notasDir)) return null;
+    const cutoff = Date.now() - Math.max(5000, maxAgeMs);
+    const files = fs
+      .readdirSync(notasDir)
+      .filter((f) => /-sta\.xml$/i.test(f) && !/-ped-sta/i.test(f))
+      .map((f) => {
+        const full = path.join(notasDir, f);
+        try {
+          return { full, mtimeMs: fs.statSync(full).mtimeMs };
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.mtimeMs - a.mtimeMs);
+    for (const file of files.slice(0, 5)) {
+      if (file.mtimeMs < cutoff) continue;
+      const xml = fs.readFileSync(file.full, "utf8");
+      const parsed = acbrLibResposta.parseRetConsStatServXml(xml);
+      if (parsed?.cStat) {
+        return { ...parsed, file: file.full, mtimeMs: file.mtimeMs };
+      }
+    }
+  } catch (_) {
+    /* ignore */
+  }
+  return null;
+}
+
+function resolveStatusNotasDirs() {
+  const temp = process.env.TEMP || process.env.TMP || os.tmpdir();
+  const dirs = [
+    path.join(temp, "margin-acbrlib", "notas"),
+    PATHS?.xml,
+    path.join(AGENT_ROOT, "notas"),
+  ];
+  return [...new Set(dirs.filter(Boolean))];
+}
+
 async function statusServicoLib() {
   if (getIntegrationMode() !== "native") {
     return acbr.statusServico();
@@ -710,29 +755,87 @@ async function statusServicoLib() {
 
   statusServicoInflight = (async () => {
     try {
-      const resposta = await withNativeLib("statusServico", (inst) =>
-        inst.statusServico(),
-      );
-      const p = acbrLibResposta.parseRespostaLib(resposta);
+      const { resposta, configEfetiva, ultimoRetorno } = await withNativeLib("statusServico", (inst) => {
+        const read = (secao, chave) => {
+          try {
+            return String(inst.configLerValor(secao, chave) || "");
+          } catch {
+            return null;
+          }
+        };
+        const resposta = inst.statusServico();
+        let ultimoRetorno = "";
+        try {
+          if (typeof inst.ultimoRetorno === "function") {
+            ultimoRetorno = String(inst.ultimoRetorno() || "");
+          }
+        } catch (_) {}
+        return {
+          resposta,
+          ultimoRetorno,
+          configEfetiva: {
+            ambiente: read("NFe", "Ambiente"),
+            ambienteSefaz: read("NFe", "AmbienteSefaz"),
+            sslCryptLib: read("DFe", "SSLCryptLib"),
+            sslHttpLib: read("DFe", "SSLHttpLib"),
+            sslXmlSignLib: read("DFe", "SSLXmlSignLib"),
+            sslType: read("DFe", "SSLType"),
+            uf: read("DFe", "UF"),
+            arquivoPfx: read("DFe", "ArquivoPFX"),
+            certificadoArquivo: read("Certificado", "Arquivo"),
+          },
+        };
+      });
+      let p = acbrLibResposta.parseRespostaLib(resposta);
+      let statusSource = "json";
+      if (acbrLibResposta.isHollowStatusJson(p)) {
+        for (const dir of resolveStatusNotasDirs()) {
+          const fromXml = readLatestStatusFromNotasXml(dir);
+          if (fromXml?.cStat) {
+            p = fromXml;
+            statusSource = "sta_xml";
+            log.info(
+              {
+                cStat: fromXml.cStat,
+                xMotivo: fromXml.xMotivo,
+                file: fromXml.file,
+                metric: "acbrlib.status_servico_xml_fallback",
+              },
+              "[ACBrLib] StatusServico recuperado do XML WS (JSON nativo vazio)",
+            );
+            break;
+          }
+        }
+      }
       const operacional =
         p.cStat === "107" ||
         p.cStat === "108" ||
-        String(resposta || "").toUpperCase().includes("SERVICO EM OPERACAO");
+        String(p.xMotivo || resposta || "")
+          .toUpperCase()
+          .includes("SERVICO EM OPERACAO");
+      const xMotivo =
+        p.xMotivo ||
+        (!operacional && ultimoRetorno ? String(ultimoRetorno).slice(0, 280) : null);
       const value = {
         operacional,
         cStat: p.cStat,
-        xMotivo: p.xMotivo,
+        xMotivo,
         tpAmb: p.tpAmb,
-        raw: resposta,
+        raw: statusSource === "sta_xml" ? p.raw : resposta,
         native: true,
+        statusSource,
+        configEfetiva,
+        ultimoRetorno: ultimoRetorno ? String(ultimoRetorno).slice(0, 500) : null,
         cached: false,
       };
       if (!operacional) {
         log.warn(
           {
             cStat: p.cStat,
-            xMotivo: p.xMotivo || null,
+            xMotivo: xMotivo || null,
             tpAmb: p.tpAmb || null,
+            configEfetiva,
+            ultimoRetorno: value.ultimoRetorno,
             raw: String(resposta || "").slice(0, 4000),
             metric: "acbrlib.status_servico_indisponivel",
           },
@@ -753,6 +856,13 @@ async function statusServicoLib() {
   return statusServicoInflight;
 }
 
+/** Último erro de testar/statusServico — watchdog usa para não abrir EPEC em falha de certificado. */
+let lastTestarErro = null;
+
+function getLastTestarErro() {
+  return lastTestarErro;
+}
+
 async function testarLib() {
   if (getIntegrationMode() !== "native") {
     return acbr.testar();
@@ -771,10 +881,45 @@ async function testarLib() {
   try {
     const st = await statusServicoLib();
     const ok = st.operacional !== false;
+    lastTestarErro = ok ? null : st.erro || st.xMotivo || "StatusServico não operacional";
     acbr.atualizarStatusMemoria(ok, ok ? {} : { degradado: true });
     return ok;
   } catch (err) {
-    log.warn({ err: err.message }, "[ACBrLib] testar() falhou");
+    lastTestarErro = err?.message || String(err);
+    let cert = null;
+    let senhaProbe = null;
+    try {
+      const { certProofForLog, validatePfxPassword } = require("../certProof");
+      const proof = acbrLibRuntime.getLastCertProof({ refresh: true });
+      cert = certProofForLog(proof);
+      const pfx = proof?.stagedPath || proof?.sourcePath;
+      let senhaEfetiva = "";
+      try {
+        senhaEfetiva = acbrLibRuntime.readIniValues(resolveLibIniPath()).senha || "";
+      } catch (_) {}
+      if (pfx) {
+        const probe = validatePfxPassword(pfx, senhaEfetiva);
+        // Chaves sem "senha/cert" — sanitizer não engole o diagnóstico.
+        senhaProbe = {
+          pfxOk: probe.ok === true,
+          reason: probe.reason || null,
+          vaultHasPassword: !!senhaEfetiva,
+          thumbprint: probe.meta?.thumbprint || null,
+          notAfter: probe.meta?.notAfter || null,
+        };
+      } else {
+        senhaProbe = { pfxOk: false, reason: "arquivo_ausente", vaultHasPassword: !!senhaEfetiva };
+      }
+    } catch (_) {}
+    log.warn(
+      {
+        err: err.message,
+        cert,
+        pfxPasswordProbe: senhaProbe,
+        metric: "acbrlib.cert_password_probe",
+      },
+      "[ACBrLib] testar() falhou",
+    );
     if (acbrLibSession.isKoffiDeadHandleError(err) || err?.processPoisoned) {
       // withNativeLib já marcou poison + recycle — não abrir nova sessão aqui.
       acbr.atualizarStatusMemoria(false, { degradado: true });
@@ -1398,12 +1543,23 @@ const exportedDriver = wrapAcbrExports({
   manifestarEventoDestinatario: executarNativo("manifestarEventoDestinatario", manifestarEventoDestinatarioLib, 60_000),
   refreshLibRuntimeConfig: executarNativo("refreshLibRuntimeConfig", refreshLibRuntimeConfig, 30_000),
   invalidateNativeSession: executarNativo("invalidateNativeSession", invalidateNativeSession, 30_000),
-  getLibSessionStatus: () => ({
-    ...acbrLibSession.getSessionStatus(),
-    worker: usarWorkerFiscal()
-      ? require("../acbrLibWorkerPool").status()
-      : { enabled: false, online: false },
-  }),
+  getLastTestarErro,
+  getLibSessionStatus: () => {
+    const session = acbrLibSession.getSessionStatus();
+    let logNivel = null;
+    try {
+      logNivel = acbrLibRuntime.resolveAcbrLogNivel();
+    } catch (_) {}
+    return {
+      ...session,
+      logNivel,
+      logNativoAtivo: String(logNivel || "0") !== "0",
+      lastTestarErro,
+      worker: usarWorkerFiscal()
+        ? require("../acbrLibWorkerPool").status()
+        : { enabled: false, online: false },
+    };
+  },
   gerarPdfFiscal: executarNativo("gerarPdfFiscal", gerarPdfFiscalLib, resolveEmissaoTimeoutMs()),
   gerarPdfDanfce: executarNativo(
     "gerarPdfDanfce",
@@ -1433,6 +1589,22 @@ exportedDriver.setRuntimeEmissaoFiscal = (valor) => {
   if (usarWorkerFiscal() && anterior !== Boolean(valor)) {
     void require("../acbrLibWorkerPool").terminate("runtime_config_changed");
   }
+};
+
+// refresh roda no worker via IPC; o pai descarta o filho para novo PFX/senha.
+const refreshLibRuntimeOriginal = exportedDriver.refreshLibRuntimeConfig;
+exportedDriver.refreshLibRuntimeConfig = async (...args) => {
+  const result = await refreshLibRuntimeOriginal(...args);
+  if (usarWorkerFiscal()) {
+    try {
+      await require("../acbrLibWorkerPool").terminate("cert_or_config_refresh");
+      log.info(
+        { metric: "acbrlib.cert_session_refresh" },
+        "[ACBrLib] Certificado atualizado — sessão nativa reiniciada (worker)",
+      );
+    } catch (_) {}
+  }
+  return result;
 };
 
 module.exports = exportedDriver;
