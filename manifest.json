@@ -1,6 +1,6 @@
 {
   "versao": "1.0.6",
-  "geradoEm": "2026-08-01T00:35:24.165Z",
+  "geradoEm": "2026-08-01T00:36:50.017Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -224,7 +224,7 @@
     },
     {
       "arquivo": "fiscalService.js",
-      "sha256": "bc570e9616da272bfb580ef0db4811ffcd1a83ada4c516b26243e278000199a3"
+      "sha256": "73f809dae3dd49a806eb27bf08ef21955972c384cc388a8ec8726226527148bf"
     },
     {
       "arquivo": "fiscalStorage.js",
@@ -5080,7 +5080,7 @@
     },
     {
       "arquivo": "index.js",
-      "sha256": "b32ce7b8b5e520c42bcb0611f19896cbaacc455a8bdcde9431a40249443a1ebc"
+      "sha256": "879f654ac343410dbe68138365c9e8afe32ff39e2c7614aa275e89ccf7e40019"
     },
     {
       "arquivo": "install-service.js",
@@ -5204,7 +5204,7 @@
     },
     {
       "arquivo": "print/printerLocalConfig.js",
-      "sha256": "2640e0df18c565b2538d9245a5c0ccf465774a506cdd5711124d92d0502be260"
+      "sha256": "dd1d8aeb8f24f04ace3ddf74d381aada64d798924ed03d0d53d43a8662772b13"
     },
     {
       "arquivo": "print/printerLogo.js",

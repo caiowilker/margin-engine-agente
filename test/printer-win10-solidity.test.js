@@ -103,6 +103,43 @@ test("resolveIniPath respeita override de teste fora de ProgramData/AGENT_ROOT",
   }
 });
 
+test("sanitizarConfigPersistida grava ACBR_POSPRINTER_INI ProgramData no .env", () => {
+  delete process.env.ACBR_POSPRINTER_INI;
+  const envFile = path.join(ROOT, "printer-local.env");
+  process.env.PRINTER_LOCAL_ENV_OVERRIDE = envFile;
+  fs.writeFileSync(envFile, "PRINTER_PROVIDER=acbr-posprinter\n", "utf8");
+
+  const runtime = require("../print/acbrPosPrinterRuntime");
+  const plc = require("../print/printerLocalConfig");
+  const ini = runtime.resolveIniPath();
+  fs.mkdirSync(path.dirname(ini), { recursive: true });
+  fs.writeFileSync(
+    ini,
+    "[PosPrinter]\nPorta=RAW:SanitizarEnvPrinter\nModelo=1\n",
+    "utf8",
+  );
+  // Simula .env legado apontando para install-dir
+  process.env.ACBR_POSPRINTER_INI = path.join(AGENT_ROOT, "data", "posprinter.ini");
+
+  plc.sanitizarConfigPersistida();
+
+  const raw = fs.readFileSync(envFile, "utf8");
+  assert.match(raw, /ACBR_POSPRINTER_INI=/);
+  const m = raw.match(/^ACBR_POSPRINTER_INI=(.*)$/m);
+  assert.ok(m);
+  const written = m[1].replace(/\\\\/g, "\\").trim();
+  assert.strictEqual(
+    path.normalize(written).toLowerCase(),
+    path.normalize(ini).toLowerCase(),
+  );
+  assert.strictEqual(
+    path.normalize(process.env.ACBR_POSPRINTER_INI).toLowerCase(),
+    path.normalize(ini).toLowerCase(),
+  );
+
+  delete process.env.PRINTER_LOCAL_ENV_OVERRIDE;
+});
+
 test("resolverConectada — porta SSOT vale mesmo com probe false/timeout (Win10)", () => {
   delete process.env.ACBR_POSPRINTER_INI;
   const runtime = require("../print/acbrPosPrinterRuntime");

@@ -1097,6 +1097,11 @@ async function enfileirarEmissaoNfe(cfg, body, opts = {}) {
 }
 
 async function enfileirarEmissaoNfse(cfg, body, opts = {}) {
+  try {
+    require("./fiscalLocalConfig").garantirEmissaoFiscalAtiva();
+  } catch (_) {
+    /* best-effort — mesma classe de bug do flag congelado na NFC-e */
+  }
   const habilitado =
     typeof fiscalDriver.isNfseHabilitado === "function"
       ? fiscalDriver.isNfseHabilitado()

@@ -475,15 +475,21 @@ function sanitizarConfigPersistida() {
   }
 
   // Garante .env com caminho ProgramData (após migrate de resolveIniPath).
+  // Compara o arquivo em disco — process.env já pode ter sido realinhado na mesma chamada.
   if (iniPath) {
-    const curNorm = String(process.env.ACBR_POSPRINTER_INI || "")
-      .replace(/\\\\/g, "\\")
-      .trim();
+    let fileVal = "";
+    try {
+      const envPath = resolveEnvPath();
+      if (fs.existsSync(envPath)) {
+        const rawEnv = fs.readFileSync(envPath, "utf8");
+        const m = rawEnv.match(/^ACBR_POSPRINTER_INI=(.*)$/m);
+        if (m) fileVal = String(m[1] || "").replace(/\\\\/g, "\\").trim();
+      }
+    } catch (_) {}
     if (
-      path.normalize(curNorm).toLowerCase() !==
+      path.normalize(fileVal || "").toLowerCase() !==
       path.normalize(iniPath).toLowerCase()
     ) {
-      // .env Windows: barras escapadas; process.env fica com path real.
       envPatch.ACBR_POSPRINTER_INI = String(iniPath).replace(/\\/g, "\\\\");
     }
   }

@@ -2340,7 +2340,7 @@ function iniciarServidor() {
       },
       req,
     );
-    if (!fiscalDriver.EMISSAO_FISCAL) return res.json({ fiscal: false });
+    if (!ensureEmissaoFiscalGate(false)) return res.json({ fiscal: false });
     const numeroVenda = req.body?.numeroVenda;
     if (!numeroVenda) {
       auditLog.registrar(
@@ -2471,6 +2471,12 @@ function iniciarServidor() {
   });
 
   app.post("/fiscal/nfse/emitir", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    // Self-heal EMISSAO_FISCAL antes de isNfseHabilitado (depende do toggle vivo).
+    if (!ensureEmissaoFiscalGate(false)) {
+      return res.status(503).json({
+        erro: "NFS-e desabilitada (NFSE_ENABLED ou EMISSAO_FISCAL)",
+      });
+    }
     const habilitado =
       typeof fiscalDriver.isNfseHabilitado === "function"
         ? fiscalDriver.isNfseHabilitado()
@@ -2562,6 +2568,9 @@ function iniciarServidor() {
   });
 
   app.post("/fiscal/lib/emitir-nfse", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    if (!ensureEmissaoFiscalGate(false)) {
+      return res.status(503).json({ erro: "NFS-e desabilitada" });
+    }
     const habilitado =
       typeof fiscalDriver.isNfseHabilitado === "function"
         ? fiscalDriver.isNfseHabilitado()
