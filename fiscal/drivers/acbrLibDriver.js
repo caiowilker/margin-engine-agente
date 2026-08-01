@@ -120,10 +120,37 @@ function usarWorkerFiscal() {
   );
 }
 
+/**
+ * StatusServico/testar atualizam memória no worker; o Diagnóstico lê o processo HTTP.
+ * Espelha o resultado no pai para Motor/statusGeral ficarem alinhados ao SEFAZ.
+ */
+function syncStatusMemoriaFromWorkerResult(method, result) {
+  if (method === "statusServico" && result && typeof result === "object") {
+    if (result.operacional === true) {
+      acbr.atualizarStatusMemoria(true);
+    } else if (result.operacional === false) {
+      acbr.atualizarStatusMemoria(false, { degradado: true });
+    }
+    return;
+  }
+  if (method === "testar") {
+    acbr.atualizarStatusMemoria(!!result, result ? {} : { degradado: true });
+    return;
+  }
+  if (method === "testarLibDetalhe" && result && typeof result === "object") {
+    const ok = result.ok === true || result.operacional === true;
+    acbr.atualizarStatusMemoria(ok, ok ? {} : { degradado: true });
+  }
+}
+
 function executarNativo(method, local, timeoutMs) {
   return async (...args) => {
     if (!usarWorkerFiscal()) return local(...args);
-    return require("../acbrLibWorkerPool").call(method, args, { timeoutMs });
+    const result = await require("../acbrLibWorkerPool").call(method, args, { timeoutMs });
+    try {
+      syncStatusMemoriaFromWorkerResult(method, result);
+    } catch (_) {}
+    return result;
   };
 }
 
@@ -748,6 +775,8 @@ async function statusServicoLib() {
     const cached = statusServicoCache.value;
     // Negativos: TTL curto — não acelerar EPEC com falhas em cache.
     if (cached.operacional || Date.now() - statusServicoCache.at < negTtl) {
+      // Diagnóstico lê obterStatusMemoria — manter alinhado ao StatusServico (incl. cache).
+      acbr.atualizarStatusMemoria(!!cached.operacional, cached.operacional ? {} : { degradado: true });
       return cached;
     }
   }
@@ -844,6 +873,8 @@ async function statusServicoLib() {
       }
       // Cache positivo no TTL longo; negativo só no TTL curto (gravado com mesmo at).
       statusServicoCache = { at: Date.now(), value: { ...value, cached: true } };
+      // Alinha Motor/statusGeral do Diagnóstico (não depender só de testar()).
+      acbr.atualizarStatusMemoria(operacional, operacional ? {} : { degradado: true });
       return value;
     } catch (err) {
       invalidateStatusServicoCache();

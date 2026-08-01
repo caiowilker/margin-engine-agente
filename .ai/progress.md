@@ -3,6 +3,14 @@
 **Última atualização:** 2026-08-01  
 **Versão:** `1.0.6` — hotfix pós-install (HTTP :9100 estável no boot)
 
+## Diagnóstico Motor / memória worker (2026-08-01)
+
+- Sintoma: SEFAZ 107 + `/acbr/sefaz/status` operacional, Diagnóstico Motor ✗ Verificar / OFFLINE.
+- Causa: memória fiscal no worker; Diagnóstico no processo HTTP; hotpatch sem SHA no manifest → `manifestOk=false`.
+- Fix: sync memória no pai após IPC; IE só dígitos no INI; regenerar manifest pós-hotpatch.
+- Validado: `statusGeral=ONLINE`, Motor OK, `manifestOk=true`. Rejeições 230/781 = homologação SEFAZ (não Motor).
+- ADR: `.ai/decisions/ADR-diagnostico-motor-memoria-worker-20260801.md`.
+
 ## CarregarINI XmlNode / LibXml2 (2026-08-01)
 
 - Sintoma: emissão `-10: XmlNode não pode ser nulo` no `NFE_CarregarINI` (StatusServico 107 OK).

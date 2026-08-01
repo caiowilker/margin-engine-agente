@@ -1,10 +1,10 @@
 {
   "versao": "1.0.6",
-  "geradoEm": "2026-08-01T18:52:44.859Z",
+  "geradoEm": "2026-08-01T19:21:59.367Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
-      "sha256": "9d1ce816dd53cc09a964cddfec5671215657ceb3a50b447475d7b2615f3f60fe"
+      "sha256": "b1754caebcb48d25883e0b8c81c7185a78310d0e5bf4ceb93e026087f81b52ed"
     },
     {
       "arquivo": "acbrLibResposta.js",
@@ -104,7 +104,7 @@
     },
     {
       "arquivo": "fiscal/drivers/acbrLibDriver.js",
-      "sha256": "301d69ec68e683daba6f8eaf070b786e4735cbd66b09ea69e52e6d7f52b4a441"
+      "sha256": "00c19933bdff85f7968ded6e0997e1679b4d8832501a511ad4922088a9cd9e00"
     },
     {
       "arquivo": "fiscal/drivers/acbrLibProcessRecycle.js",

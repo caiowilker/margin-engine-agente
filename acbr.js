@@ -1141,7 +1141,7 @@ function montarIniNfce(payload, numeracao) {
   ini += `CNPJCPF=${cnpj}\n`;
   ini += `xNome=${razao}\n`;
   ini += `xFant=${fantasia}\n`;
-  ini += `IE=${sanitizeAcbrText(empresa.inscricaoEstadual, 20)}\n`;
+  ini += `IE=${String(empresa.inscricaoEstadual || "").replace(/\D/g, "")}\n`;
   ini += `CRT=${crt}\n`;
   ini += `xLgr=${logradouro}\n`;
   ini += `nro=${numero}\n`;
@@ -1349,7 +1349,7 @@ function montarIniNfe(payload, numeracao, destinatario) {
   ini += `CNPJCPF=${cnpj}\n`;
   ini += `xNome=${razao}\n`;
   ini += `xFant=${fantasia}\n`;
-  ini += `IE=${sanitizeAcbrText(empresa.inscricaoEstadual, 20)}\n`;
+  ini += `IE=${String(empresa.inscricaoEstadual || "").replace(/\D/g, "")}\n`;
   ini += `CRT=${crt}\n`;
   ini += `xLgr=${logradouro}\n`;
   ini += `nro=${numero}\n`;
