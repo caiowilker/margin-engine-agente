@@ -190,9 +190,24 @@ async function emitirNfseViaNativeLib(payload) {
     );
 
     return acbrLibRuntime.withNativeLibSession(runtime, async () => {
-      const session = await acbrLibSession.ensureSession(runtime, LibClass);
+      const runOnce = async () => {
+        const session = await acbrLibSession.ensureSession(runtime, LibClass);
+        acbrLibSession.assertSessionAlive(session);
+        acbrLibSession.scheduleIdleFinalize(session.slot);
+        return session;
+      };
+      let session;
+      try {
+        session = await runOnce();
+      } catch (err) {
+        if (!acbrLibSession.shouldInvalidateOnError(err)) throw err;
+        await acbrLibSession.invalidateNativeSession(
+          acbrLibSession.isKoffiDeadHandleError(err) ? "koffi_dead" : "operation_error",
+          "nfse",
+        );
+        session = await runOnce();
+      }
       const inst = session.inst;
-      acbrLibSession.scheduleIdleFinalize();
 
       try {
         try {
@@ -267,7 +282,10 @@ async function emitirNfseViaNativeLib(payload) {
         });
         log.error({ err: err.message, ultimoRetorno: ultimo }, "[ACBrLib NFSe] Falha na emissão nativa");
         if (acbrLibSession.shouldInvalidateOnError(err)) {
-          await acbrLibSession.invalidateNativeSession("nfse_emissao_error");
+          await acbrLibSession.invalidateNativeSession(
+            acbrLibSession.isKoffiDeadHandleError(err) ? "koffi_dead" : "nfse_emissao_error",
+            "nfse",
+          );
         }
         throw err;
       }

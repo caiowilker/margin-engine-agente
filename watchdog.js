@@ -27,6 +27,17 @@ async function tick(restartAcbrFn, hooks = {}) {
   if (fiscalDriver.isAcbrBusy?.() || filaFiscal.estaProcessando?.()) {
     return;
   }
+  // Memória online recente: não martela StatusServico (DLL/SEFAZ).
+  try {
+    const det = fiscalDriver.obterStatusDetalhe?.(false);
+    if (det?.estado === "online" && det.atualizadoEm) {
+      const age = Date.now() - new Date(det.atualizadoEm).getTime();
+      if (Number.isFinite(age) && age >= 0 && age < 45000) {
+        falhasConsecutivas = 0;
+        return;
+      }
+    }
+  } catch (_) {}
   try {
     const ok = await fiscalDriver.testar();
     if (ok) {
@@ -46,8 +57,9 @@ async function tick(restartAcbrFn, hooks = {}) {
     throw new Error("NFE.StatusServico falhou");
   } catch (err) {
     const msg = String(err?.message || err || "");
-    // koffi/sessão: reset suave — NÃO abre contingência EPEC (falso positivo Win).
-    let softKoffi = /void \*\*|unexpected external|invalid handle/i.test(msg);
+    let softKoffi = /void \*\*|unexpected external|invalid handle|session disposed/i.test(
+      msg,
+    );
     if (!softKoffi) {
       try {
         softKoffi = require("./fiscal/drivers/acbrLibSession").recentlyHadKoffiDead();

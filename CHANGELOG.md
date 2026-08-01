@@ -13,6 +13,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - **EMISSAO_FISCAL vivo:** drivers Lib/Monitor não congelam mais o flag no boot (`wrapAcbrExports`); salvar no painel passa a valer na fila e no Diagnóstico sem reinício.
 - **Sessão ACBrLib:** INI de staging só regrava se o conteúdo mudou; fingerprint por hash SHA — elimina `Unexpected External value, expected void **` e contingência EPEC falsa a cada StatusServico.
 - **Lib koffi (hotfix):** staging não sobrescreve DLL com sessão ativa; abandon soft sem Finalizar; retry único; watchdog não abre contingência EPEC em void**.
+- **Lib koffi (sólido):** slots NFe≠NFS-e; idle finalize sob mutex; cache StatusServico 45s; memória `degradado` em vez de OFFLINE em void**; LogNivel staging=0.
 - Self-heal `garantirEmissaoFiscalAtiva` na fila e nas rotas `/fiscal/emitir*` antes de recusar emissão.
 - NF-e painel com `forcarEmissao` não depende mais só de `isNfeModelo55Habilitado()` (que exigia toggle on).
 - Boot reaplica autoridade local → runtime antes do HTTP/worker.

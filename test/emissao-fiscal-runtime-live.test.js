@@ -161,6 +161,23 @@ test("isKoffiDeadHandleError e recentlyHadKoffiDead", async () => {
   assert.strictEqual(session.recentlyHadKoffiDead(60_000), true);
 });
 
+test("slots NFe e NFS-e são separados no fingerprint", () => {
+  const session = require("../fiscal/drivers/acbrLibSession");
+  assert.strictEqual(session.resolveSlotKey({ libPath: "C:\\x\\ACBrNFe64.dll" }), "nfe");
+  assert.strictEqual(session.resolveSlotKey({ libPath: "C:\\x\\ACBrNFSe64.dll" }), "nfse");
+  const fpNfe = session.fingerprintRuntime({
+    libPath: "C:/a/ACBrNFe64.dll",
+    iniConfig: null,
+    tpAmb: "2",
+  });
+  const fpNfse = session.fingerprintRuntime({
+    libPath: "C:/a/ACBrNFSe64.dll",
+    iniConfig: null,
+    tpAmb: "2",
+  });
+  assert.notStrictEqual(fpNfe, fpNfse);
+});
+
 acbr.setRuntimeEmissaoFiscal(null);
 process.env.ACBR_DRIVER = "monitor";
 factory.resetFiscalDriver();

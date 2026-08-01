@@ -557,18 +557,21 @@ async function runNativeOpWithRetry(opName, runtime, LibClass, fn) {
   return acbrLibRuntime.withNativeLibSession(runtime, async () => {
     const runOnce = async () => {
       const session = await acbrLibSession.ensureSession(runtime, LibClass);
-      acbrLibSession.scheduleIdleFinalize();
-      return await fn(session.inst, runtime);
+      acbrLibSession.scheduleIdleFinalize(session.slot);
+      acbrLibSession.assertSessionAlive(session);
+      return await fn(session.inst, runtime, session);
     };
     try {
       return await runOnce();
     } catch (err) {
       if (!acbrLibSession.shouldInvalidateOnError(err)) throw err;
+      const slot = acbrLibSession.resolveSlotKey(runtime);
       await acbrLibSession.invalidateNativeSession(
         acbrLibSession.isKoffiDeadHandleError(err) ? "koffi_dead" : "operation_error",
+        slot,
       );
       log.warn(
-        { opName, err: err.message },
+        { opName, err: err.message, slot },
         "[ACBrLib] Sessão invalidada — retry único",
       );
       try {
@@ -579,6 +582,7 @@ async function runNativeOpWithRetry(opName, runtime, LibClass, fn) {
             acbrLibSession.isKoffiDeadHandleError(err2)
               ? "koffi_dead"
               : "operation_error",
+            slot,
           );
         }
         throw err2;
@@ -587,24 +591,58 @@ async function runNativeOpWithRetry(opName, runtime, LibClass, fn) {
   });
 }
 
+/** Cache curto de StatusServico — Diagnóstico/watchdog/front não martelam a SEFAZ/DLL. */
+let statusServicoCache = { at: 0, value: null };
+let statusServicoInflight = null;
+const STATUS_SERVICO_TTL_MS = parseInt(
+  process.env.ACBR_STATUS_SERVICO_TTL_MS || "45000",
+  10,
+);
+
+function invalidateStatusServicoCache() {
+  statusServicoCache = { at: 0, value: null };
+}
+
 async function statusServicoLib() {
   if (getIntegrationMode() !== "native") {
     return acbr.statusServico();
   }
-  const resposta = await withNativeLib("statusServico", (inst) => inst.statusServico());
-  const p = acbrLibResposta.parseRespostaLib(resposta);
-  const operacional =
-    p.cStat === "107" ||
-    p.cStat === "108" ||
-    String(resposta || "").toUpperCase().includes("SERVICO EM OPERACAO");
-  return {
-    operacional,
-    cStat: p.cStat,
-    xMotivo: p.xMotivo,
-    tpAmb: p.tpAmb,
-    raw: resposta,
-    native: true,
-  };
+  const ttl = Math.max(5000, STATUS_SERVICO_TTL_MS);
+  if (statusServicoCache.value && Date.now() - statusServicoCache.at < ttl) {
+    return statusServicoCache.value;
+  }
+  if (statusServicoInflight) return statusServicoInflight;
+
+  statusServicoInflight = (async () => {
+    try {
+      const resposta = await withNativeLib("statusServico", (inst) =>
+        inst.statusServico(),
+      );
+      const p = acbrLibResposta.parseRespostaLib(resposta);
+      const operacional =
+        p.cStat === "107" ||
+        p.cStat === "108" ||
+        String(resposta || "").toUpperCase().includes("SERVICO EM OPERACAO");
+      const value = {
+        operacional,
+        cStat: p.cStat,
+        xMotivo: p.xMotivo,
+        tpAmb: p.tpAmb,
+        raw: resposta,
+        native: true,
+        cached: false,
+      };
+      statusServicoCache = { at: Date.now(), value: { ...value, cached: true } };
+      return value;
+    } catch (err) {
+      invalidateStatusServicoCache();
+      throw err;
+    } finally {
+      statusServicoInflight = null;
+    }
+  })();
+
+  return statusServicoInflight;
 }
 
 async function testarLib() {
@@ -618,11 +656,11 @@ async function testarLib() {
     return ok;
   } catch (err) {
     log.warn({ err: err.message }, "[ACBrLib] testar() falhou");
-    // koffi/void**: não marque offline definitivo — sessão será recriada no próximo uso.
     if (acbrLibSession.shouldInvalidateOnError(err)) {
       try {
-        await acbrLibSession.invalidateNativeSession("testar_soft");
+        await acbrLibSession.invalidateNativeSession("testar_soft", "nfe");
       } catch (_) {}
+      invalidateStatusServicoCache();
       try {
         const st2 = await statusServicoLib();
         const ok2 = st2.operacional !== false;
@@ -630,6 +668,9 @@ async function testarLib() {
         return ok2;
       } catch (err2) {
         log.warn({ err: err2.message }, "[ACBrLib] testar() retry falhou");
+        // Soft: degradado (não OFFLINE no Diagnóstico) após koffi.
+        acbr.atualizarStatusMemoria(false, { degradado: true });
+        return false;
       }
     }
     acbr.atualizarStatusMemoria(false);
@@ -1195,6 +1236,7 @@ async function consultarChaveEntradaLib(chave, cnpjDestinatario, ufAutor) {
 /** Invalida sessão nativa — próxima operação reinicializa a biblioteca. */
 async function refreshLibRuntimeConfig() {
   return acbr.withAcbrLock(async () => {
+    invalidateStatusServicoCache();
     await acbrLibSession.invalidateNativeSession("config_refresh");
     acbrLibSession.invalidateRuntimeCache();
     return { refreshed: getIntegrationMode() === "native", mode: getIntegrationMode() };

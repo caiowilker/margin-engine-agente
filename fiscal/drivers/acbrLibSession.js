@@ -1,26 +1,35 @@
 /**
- * Sessão persistente ACBrLib — evita NFE_Inicializar/Finalizar por operação.
- * Uma emissão por vez (mutex global em acbr.withAcbrLock + fiscalEmissionLock).
+ * Sessão persistente ACBrLib — evita Inicializar/Finalizar por operação.
+ *
+ * Regras de solidez (Windows + koffi):
+ * - NFe e NFS-e têm slots separados (DLLs/classes diferentes).
+ * - Idle finalize SEMPRE sob withAcbrLock (sem corrida com emissão).
+ * - Handle morto (void**): abandonar sem Finalizar.
+ * - Generation id: nunca reutilizar inst após dispose.
  */
+const path = require("path");
+const fs = require("fs");
 const log = require("../../logger").child({ modulo: "acbr_lib_session" });
 
-let activeSession = null;
-let runtimeFingerprint = null;
+/** @type {Record<string, { inst: object, runtime: object, createdAt: number, generation: number, slot: string }|null>} */
+const slots = { nfe: null, nfse: null };
+/** @type {Record<string, string|null>} */
+const fingerprints = { nfe: null, nfse: null };
+/** @type {Record<string, ReturnType<typeof setTimeout>|null>} */
+const idleTimers = { nfe: null, nfse: null };
+
 let cachedRuntime = null;
 let cachedRuntimeFp = null;
-let idleTimer = null;
 let idleSuspended = 0;
-/** Timestamp do último abandon soft por koffi — watchdog não abre contingência. */
 let lastKoffiDeadAt = 0;
+let generationSeq = 0;
 
-const IDLE_MS = parseInt(process.env.ACBR_LIB_SESSION_IDLE_MS || "120000", 10);
+const IDLE_MS = parseInt(process.env.ACBR_LIB_SESSION_IDLE_MS || "300000", 10);
 const IDLE_BUSY_POLL_MS = parseInt(process.env.ACBR_LIB_IDLE_BUSY_POLL_MS || "5000", 10);
 const KOFFI_WATCHDOG_GRACE_MS = parseInt(
-  process.env.ACBR_LIB_KOFFI_WATCHDOG_GRACE_MS || "90000",
+  process.env.ACBR_LIB_KOFFI_WATCHDOG_GRACE_MS || "120000",
   10,
 );
-
-const fs = require("fs");
 
 function isAcbrBusySafe() {
   try {
@@ -28,6 +37,29 @@ function isAcbrBusySafe() {
   } catch (_) {
     return false;
   }
+}
+
+function withAcbrLockSafe(fn, label) {
+  try {
+    return require("../../acbr").withAcbrLock(fn, label);
+  } catch (_) {
+    return fn();
+  }
+}
+
+/** Slot por DLL: NFe vs NFS-e nunca compartilham o mesmo handle koffi. */
+function resolveSlotKey(runtimeOrLibPath) {
+  const lib =
+    typeof runtimeOrLibPath === "string"
+      ? runtimeOrLibPath
+      : runtimeOrLibPath?.libPath || "";
+  const base = path.basename(String(lib)).toLowerCase();
+  if (base.includes("nfse")) return "nfse";
+  return "nfe";
+}
+
+function normPath(p) {
+  return path.normalize(String(p || "")).toLowerCase();
 }
 
 function fingerprintRuntime(runtime) {
@@ -42,14 +74,15 @@ function fingerprintRuntime(runtime) {
     }
   }
   return [
-    runtime.libPath,
-    runtime.iniConfig,
+    resolveSlotKey(runtime),
+    normPath(runtime.libPath),
+    normPath(runtime.iniConfig),
     iniFp,
-    runtime.tpAmb,
-    runtime.ambienteLib || "",
-    runtime.ambienteSefaz || "",
-    runtime.cert || runtime.certRel || "",
-    runtime.idCsc || "",
+    String(runtime.tpAmb || ""),
+    String(runtime.ambienteLib || ""),
+    String(runtime.ambienteSefaz || ""),
+    normPath(runtime.cert || runtime.certRel || ""),
+    String(runtime.idCsc || ""),
     runtime.senha ? "1" : "0",
     runtime.csc ? "1" : "0",
   ].join("|");
@@ -57,109 +90,164 @@ function fingerprintRuntime(runtime) {
 
 function suspendIdle() {
   idleSuspended++;
-  if (idleTimer) {
-    clearTimeout(idleTimer);
-    idleTimer = null;
+  for (const key of Object.keys(idleTimers)) {
+    if (idleTimers[key]) {
+      clearTimeout(idleTimers[key]);
+      idleTimers[key] = null;
+    }
   }
 }
 
 function resumeIdle() {
   idleSuspended = Math.max(0, idleSuspended - 1);
-  if (idleSuspended === 0 && activeSession) {
-    scheduleIdleFinalize();
+  if (idleSuspended === 0) {
+    for (const key of Object.keys(slots)) {
+      if (slots[key]) scheduleIdleFinalizeSlot(key);
+    }
   }
 }
 
-function scheduleIdleFinalize() {
-  if (idleTimer) clearTimeout(idleTimer);
-  if (idleSuspended > 0 || !activeSession) return;
+function clearIdleTimer(key) {
+  if (idleTimers[key]) {
+    clearTimeout(idleTimers[key]);
+    idleTimers[key] = null;
+  }
+}
+
+function scheduleIdleFinalizeSlot(slotKey = "nfe") {
+  const key = slotKey === "nfse" ? "nfse" : "nfe";
+  clearIdleTimer(key);
+  if (idleSuspended > 0 || !slots[key]) return;
   if (isAcbrBusySafe()) {
-    idleTimer = setTimeout(() => scheduleIdleFinalize(), IDLE_BUSY_POLL_MS);
-    if (typeof idleTimer.unref === "function") idleTimer.unref();
+    idleTimers[key] = setTimeout(() => scheduleIdleFinalizeSlot(key), IDLE_BUSY_POLL_MS);
+    if (typeof idleTimers[key].unref === "function") idleTimers[key].unref();
     return;
   }
-  idleTimer = setTimeout(() => {
-    void invalidateNativeSession("idle_timeout");
+  idleTimers[key] = setTimeout(() => {
+    // CRÍTICO: idle finalize sob o mesmo mutex das operações nativas.
+    void withAcbrLockSafe(async () => {
+      await destroySession("idle_timeout", key);
+    }, `lib-idle-${key}`);
   }, IDLE_MS);
-  if (typeof idleTimer.unref === "function") idleTimer.unref();
+  if (typeof idleTimers[key].unref === "function") idleTimers[key].unref();
 }
 
 function shouldInvalidateOnError(err) {
   const msg = String(err?.message || err || "").toLowerCase();
   return (
-    /inicializar|finalizar|dll|access violation|invalid handle|biblioteca|unexpected external|void \*\*/i.test(
+    /inicializar|finalizar|dll|access violation|invalid handle|biblioteca|unexpected external|void \*\*|session disposed/i.test(
       msg,
     ) || err?.reiniciarAcbr === true
   );
 }
 
-/** Handle koffi já morto — Finalizar piora / repete void**. */
 function isKoffiDeadHandleError(err) {
   const msg = String(err?.message || err || "").toLowerCase();
-  return /unexpected external|void \*\*|access violation|invalid handle/i.test(msg);
+  return /unexpected external|void \*\*|access violation|invalid handle|session disposed/i.test(
+    msg,
+  );
 }
 
-async function destroySession(reason) {
-  if (idleTimer) {
-    clearTimeout(idleTimer);
-    idleTimer = null;
-  }
-  if (!activeSession) return;
-  if (isAcbrBusySafe() && reason === "idle_timeout") {
-    scheduleIdleFinalize();
-    return;
-  }
-  const { inst } = activeSession;
-  activeSession = null;
-  runtimeFingerprint = null;
+/**
+ * @param {string} reason
+ * @param {string} [slotKey]
+ */
+async function destroySession(reason, slotKey) {
+  const keys = slotKey ? [slotKey === "nfse" ? "nfse" : "nfe"] : ["nfe", "nfse"];
+  for (const key of keys) {
+    clearIdleTimer(key);
+    const active = slots[key];
+    if (!active) continue;
+    if (isAcbrBusySafe() && reason === "idle_timeout") {
+      scheduleIdleFinalizeSlot(key);
+      continue;
+    }
+    const { inst } = active;
+    slots[key] = null;
+    fingerprints[key] = null;
 
-  // Sessão morta (koffi): abandonar sem Finalizar — evita cascata void**.
-  if (
-    reason === "koffi_dead" ||
-    reason === "testar_soft" ||
-    reason === "watchdog_soft" ||
-    reason === "sefaz_status_soft"
-  ) {
-    lastKoffiDeadAt = Date.now();
-    log.warn({ reason }, "[ACBrLibSession] Sessão abandonada sem Finalizar (handle inválido)");
-    return;
-  }
+    if (
+      reason === "koffi_dead" ||
+      reason === "testar_soft" ||
+      reason === "watchdog_soft" ||
+      reason === "sefaz_status_soft"
+    ) {
+      lastKoffiDeadAt = Date.now();
+      log.warn({ reason, slot: key }, "[ACBrLibSession] Sessão abandonada sem Finalizar");
+      continue;
+    }
 
-  try {
-    inst.finalizar();
-    log.info({ reason }, "[ACBrLibSession] Sessão finalizada");
-  } catch (err) {
-    log.warn(
-      { err: err.message, reason },
-      "[ACBrLibSession] Finalizar falhou — sessão abandonada",
-    );
+    try {
+      inst.finalizar();
+      log.info({ reason, slot: key }, "[ACBrLibSession] Sessão finalizada");
+    } catch (err) {
+      lastKoffiDeadAt = Date.now();
+      log.warn(
+        { err: err.message, reason, slot: key },
+        "[ACBrLibSession] Finalizar falhou — sessão abandonada",
+      );
+    }
   }
 }
 
 /**
  * @param {object} runtime
- * @param {typeof import('@projetoacbr/acbrlib-nfe-node/dist/src').default} LibClass
+ * @param {new (...args: any[]) => any} LibClass
  */
 async function ensureSession(runtime, LibClass) {
+  const key = resolveSlotKey(runtime);
   const fp = fingerprintRuntime(runtime);
-  if (activeSession && runtimeFingerprint === fp) {
-    scheduleIdleFinalize();
-    return activeSession;
+  const active = slots[key];
+  if (active && fingerprints[key] === fp) {
+    scheduleIdleFinalizeSlot(key);
+    return active;
   }
 
-  await destroySession("config_changed");
+  await destroySession("config_changed", key);
 
   const instPaths = require("./acbrLibRuntime").resolveInstPaths(runtime);
-  const inst = new LibClass(instPaths.libPath, instPaths.iniConfig, process.env.ACBR_LIB_CRYPT_KEY || "");
-  inst.inicializar();
+  const gen = ++generationSeq;
+  const inst = new LibClass(
+    instPaths.libPath,
+    instPaths.iniConfig,
+    process.env.ACBR_LIB_CRYPT_KEY || "",
+  );
+  try {
+    inst.inicializar();
+  } catch (err) {
+    lastKoffiDeadAt = Date.now();
+    throw err;
+  }
   require("./acbrLibRuntime").applyNativeRuntimeConfig(inst, runtime);
   require("./acbrLibRuntime").applyNativeCertConfig(inst, runtime);
 
-  activeSession = { inst, runtime, createdAt: Date.now() };
-  runtimeFingerprint = fp;
-  scheduleIdleFinalize();
-  log.info("[ACBrLibSession] Sessão nativa inicializada (reuso ativo)");
-  return activeSession;
+  const session = {
+    inst,
+    runtime,
+    createdAt: Date.now(),
+    generation: gen,
+    slot: key,
+  };
+  slots[key] = session;
+  fingerprints[key] = fp;
+  scheduleIdleFinalizeSlot(key);
+  log.info({ slot: key, generation: gen }, "[ACBrLibSession] Sessão nativa inicializada");
+  return session;
+}
+
+/** Garante que o handle ainda é o da sessão corrente. */
+function assertSessionAlive(session) {
+  if (!session?.slot) {
+    const e = new Error("ACBrLib session disposed");
+    e.reiniciarAcbr = true;
+    throw e;
+  }
+  const current = slots[session.slot];
+  if (!current || current.generation !== session.generation || current.inst !== session.inst) {
+    const e = new Error("ACBrLib session disposed");
+    e.reiniciarAcbr = true;
+    throw e;
+  }
 }
 
 function cacheRuntime(runtime) {
@@ -175,9 +263,9 @@ function invalidateRuntimeCache() {
   cachedRuntimeFp = null;
 }
 
-async function invalidateNativeSession(reason = "manual") {
+async function invalidateNativeSession(reason = "manual", slotKey) {
   invalidateRuntimeCache();
-  await destroySession(reason);
+  await destroySession(reason, slotKey);
 }
 
 function recentlyHadKoffiDead(graceMs = KOFFI_WATCHDOG_GRACE_MS) {
@@ -186,18 +274,32 @@ function recentlyHadKoffiDead(graceMs = KOFFI_WATCHDOG_GRACE_MS) {
 }
 
 function getSessionStatus() {
+  const nfe = slots.nfe;
+  const nfse = slots.nfse;
   return {
-    ativa: !!activeSession,
-    criadaEm: activeSession?.createdAt || null,
+    ativa: !!(nfe || nfse),
+    nfeAtiva: !!nfe,
+    nfseAtiva: !!nfse,
+    criadaEm: nfe?.createdAt || nfse?.createdAt || null,
     idleMs: IDLE_MS,
     idleSuspended: idleSuspended > 0,
-    runtimeFingerprint: runtimeFingerprint || null,
+    runtimeFingerprint: fingerprints.nfe || fingerprints.nfse || null,
     lastKoffiDeadAt: lastKoffiDeadAt || null,
   };
 }
 
+/** Compat: sem args renova slots ativos. */
+function scheduleIdleFinalize(slotKey) {
+  if (slotKey === "nfe" || slotKey === "nfse") {
+    return scheduleIdleFinalizeSlot(slotKey);
+  }
+  if (slots.nfe) scheduleIdleFinalizeSlot("nfe");
+  if (slots.nfse) scheduleIdleFinalizeSlot("nfse");
+}
+
 module.exports = {
   ensureSession,
+  assertSessionAlive,
   cacheRuntime,
   invalidateRuntimeCache,
   invalidateNativeSession,
@@ -209,4 +311,5 @@ module.exports = {
   suspendIdle,
   resumeIdle,
   fingerprintRuntime,
+  resolveSlotKey,
 };

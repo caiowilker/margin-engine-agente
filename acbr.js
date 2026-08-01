@@ -85,10 +85,9 @@ let acbrBusyDepth = 0;
 let ultimoModeloSessao = null;
 let ultimoStatusMemoria = { estado: "offline", atualizadoEm: null };
 
-function atualizarStatusMemoria(ok) {
-  const anterior = ultimoStatusMemoria.estado;
+function atualizarStatusMemoria(ok, opts = {}) {
   ultimoStatusMemoria = {
-    estado: ok ? "online" : "offline",
+    estado: ok ? "online" : opts.degradado ? "degradado" : "offline",
     atualizadoEm: new Date().toISOString(),
   };
   try {

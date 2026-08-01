@@ -347,7 +347,7 @@ function prepareNativeRuntime({ libPath, iniConfigPath, assets, stagingRoot, for
 
   const iniContent = `[Principal]
 TipoResposta=2
-LogNivel=4
+LogNivel=${(process.env.ACBR_LIB_LOG_NIVEL || "0").trim() || "0"}
 LogPath=${dirs.log}
 
 [Sistema]

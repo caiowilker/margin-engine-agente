@@ -15,6 +15,13 @@
 - Causa: staging regravava DLL a cada StatusServico com sessão ativa → koffi `void **` → watchdog → CONTINGÊNCIA/OFFLINE.
 - Fix: sync de DLL só se ausente/origem mais nova; abandon soft sem Finalizar; retry único na op nativa; watchdog/preflight sem EPEC em koffi.
 
+## Sessão koffi sólida (2026-08-01)
+
+- Slots NFe ≠ NFS-e; idle finalize sob `withAcbrLock`; generation/assertSessionAlive.
+- Cache StatusServico 45s + watchdog skip se online recente.
+- Memória `degradado` em void** (Diagnóstico não vira OFFLINE).
+- Staging LogNivel=0; ADR `ADR-acbrlib-koffi-session-solidity-20260801.md`.
+
 ## Changelog (2026-08-01) — Impressora/status sólido no Win10
 
 - **Sintoma:** no Win11 impressora (e percepção de “busca”/caixa) estável; no Win10 oscila, some e config não persiste após update.
