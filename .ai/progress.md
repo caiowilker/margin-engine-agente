@@ -1,7 +1,13 @@
 # PROGRESS — Agente Local
 
 **Última atualização:** 2026-08-01  
-**Versão:** `1.0.6` — fechamento produção: fiscal vivo + Lib estável + impressora Win10 + manifest alinhado
+**Versão:** `1.0.6` — **FECHADO** para produção (fiscal + koffi + impressora Win10)
+
+## Fechamento final 1.0.6
+
+- Suíte `npm test` verde; release alignment OK (agente/back/front).
+- Build Windows syncado em `/mnt/c/build/pdv-agente`.
+- Checklist operacional: `.ai/GO-LIVE-1.0.6.md`.
 
 ## Fechamento produção 1.0.6
 
