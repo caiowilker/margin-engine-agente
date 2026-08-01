@@ -1,6 +1,6 @@
 {
   "versao": "1.0.6",
-  "geradoEm": "2026-08-01T01:50:49.629Z",
+  "geradoEm": "2026-08-01T02:05:48.047Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -92,7 +92,11 @@
     },
     {
       "arquivo": "fiscal/drivers/acbrLibDriver.js",
-      "sha256": "d0e24bee428fafef7a84cd08173f6703a77b87eb653924c3b92f1d1896a20248"
+      "sha256": "ffdd143e9e12e4d3aa3e328bff86fa0ead52003a3cbfd347dde845598b3d53a4"
+    },
+    {
+      "arquivo": "fiscal/drivers/acbrLibProcessRecycle.js",
+      "sha256": "9dc9d0576872ffae19431b3c2ab379c0c0b6ae2706c78b2010960ef63d9302ff"
     },
     {
       "arquivo": "fiscal/drivers/acbrLibRuntime.js",
@@ -100,7 +104,7 @@
     },
     {
       "arquivo": "fiscal/drivers/acbrLibSession.js",
-      "sha256": "4d9da4dd8757e1bd1784841ca4a7134cf8bce4e69c1483df7b8e2484d711d047"
+      "sha256": "409f2db9879a5f99a1c85d1452fdf20adef77aa95cd3d7d35961ca7e23651048"
     },
     {
       "arquivo": "fiscal/drivers/acbrMonitorDriver.js",
@@ -5080,7 +5084,7 @@
     },
     {
       "arquivo": "index.js",
-      "sha256": "ded6470739c6275c6d3d9af80fc3deda3e464eb52cf1ed92cfc532b2222c9002"
+      "sha256": "8ba402e393b87db596a736eef29d994078ae595c7eedffc488bbba9646411fce"
     },
     {
       "arquivo": "install-service.js",
@@ -5116,7 +5120,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "6e502f6e720d5c17e1931b9b799a3d50eb9dfa6c97725b16cc8e38a709191af2"
+      "sha256": "7960afea71cca00cf09ff171e19708ef0cacb2be2afe0f378536933afeade09d"
     },
     {
       "arquivo": "print/acbrPosExports.js",
@@ -5400,7 +5404,7 @@
     },
     {
       "arquivo": "watchdog.js",
-      "sha256": "b026c95029cbc90714e6e6583f32e6379f680a941ad9c950497699406888d34f"
+      "sha256": "5e460eb51ce224f6eba21e8c251bb761c607db74bff344e0f1bf8042df088e9d"
     }
   ]
 }
