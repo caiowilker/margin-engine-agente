@@ -27,6 +27,8 @@ let lastKoffiDeadAt = 0;
 let generationSeq = 0;
 /** Após Inicializar ou soft-abandon, não sobrescrever DLLs mapeadas no processo. */
 let dllPinned = false;
+/** Soft-dead por slot: não re-Inicializar até recycle do processo (ou reset operador). */
+const softDeadUntilRecycle = { nfe: false, nfse: false };
 
 const IDLE_MS = parseInt(process.env.ACBR_LIB_SESSION_IDLE_MS || "300000", 10);
 const IDLE_BUSY_POLL_MS = parseInt(process.env.ACBR_LIB_IDLE_BUSY_POLL_MS || "5000", 10);
@@ -159,10 +161,22 @@ function isKoffiDeadHandleError(err) {
  */
 async function destroySession(reason, slotKey) {
   const keys = slotKey ? [slotKey === "nfse" ? "nfse" : "nfe"] : ["nfe", "nfse"];
+  const softReason =
+    reason === "koffi_dead" ||
+    reason === "testar_soft" ||
+    reason === "watchdog_soft" ||
+    reason === "sefaz_status_soft";
   for (const key of keys) {
     clearIdleTimer(key);
     const active = slots[key];
-    if (!active) continue;
+    if (!active) {
+      if (softReason) {
+        lastKoffiDeadAt = Date.now();
+        dllPinned = true;
+        softDeadUntilRecycle[key] = true;
+      }
+      continue;
+    }
     // Só adia idle se outro dono segura o recurso — sob o próprio lock (reentrante) finaliza.
     if (
       reason === "idle_timeout" &&
@@ -176,14 +190,10 @@ async function destroySession(reason, slotKey) {
     slots[key] = null;
     fingerprints[key] = null;
 
-    if (
-      reason === "koffi_dead" ||
-      reason === "testar_soft" ||
-      reason === "watchdog_soft" ||
-      reason === "sefaz_status_soft"
-    ) {
+    if (softReason) {
       lastKoffiDeadAt = Date.now();
       dllPinned = true;
+      softDeadUntilRecycle[key] = true;
       try {
         if (typeof inst?.[Symbol.dispose] === "function") inst[Symbol.dispose]();
       } catch (_) {
@@ -199,6 +209,7 @@ async function destroySession(reason, slotKey) {
     } catch (err) {
       lastKoffiDeadAt = Date.now();
       dllPinned = true;
+      softDeadUntilRecycle[key] = true;
       log.warn(
         { err: err.message, reason, slot: key },
         "[ACBrLibSession] Finalizar falhou — sessão abandonada",
@@ -213,6 +224,14 @@ async function destroySession(reason, slotKey) {
  */
 async function ensureSession(runtime, LibClass) {
   const key = resolveSlotKey(runtime);
+  if (softDeadUntilRecycle[key]) {
+    const e = new Error(
+      "ACBrLib sessão nativa inválida — reinicie o serviço do agente no caixa",
+    );
+    e.reiniciarAcbr = true;
+    e.softDead = true;
+    throw e;
+  }
   const fp = fingerprintRuntime(runtime);
   const active = slots[key];
   if (active && fingerprints[key] === fp) {
@@ -221,6 +240,15 @@ async function ensureSession(runtime, LibClass) {
   }
 
   await destroySession("config_changed", key);
+  // destroySession soft-dead path não se aplica a config_changed; se Finalizar falhou, softDead set.
+  if (softDeadUntilRecycle[key]) {
+    const e = new Error(
+      "ACBrLib sessão nativa inválida — reinicie o serviço do agente no caixa",
+    );
+    e.reiniciarAcbr = true;
+    e.softDead = true;
+    throw e;
+  }
 
   const instPaths = require("./acbrLibRuntime").resolveInstPaths(runtime);
   const gen = ++generationSeq;
@@ -304,6 +332,21 @@ function isDllPinned() {
   return dllPinned === true;
 }
 
+function isSoftDead(slotKey) {
+  if (slotKey === "nfe" || slotKey === "nfse") return softDeadUntilRecycle[slotKey] === true;
+  return softDeadUntilRecycle.nfe || softDeadUntilRecycle.nfse;
+}
+
+/** Operador / recycle controlado — libera nova Inicializar após soft-dead. */
+function clearSoftDead(slotKey) {
+  if (slotKey === "nfe" || slotKey === "nfse") {
+    softDeadUntilRecycle[slotKey] = false;
+    return;
+  }
+  softDeadUntilRecycle.nfe = false;
+  softDeadUntilRecycle.nfse = false;
+}
+
 function getSessionStatus() {
   const nfe = slots.nfe;
   const nfse = slots.nfse;
@@ -317,6 +360,9 @@ function getSessionStatus() {
     runtimeFingerprint: fingerprints.nfe || fingerprints.nfse || null,
     lastKoffiDeadAt: lastKoffiDeadAt || null,
     dllPinned,
+    softDead: softDeadUntilRecycle.nfe || softDeadUntilRecycle.nfse,
+    softDeadNfe: softDeadUntilRecycle.nfe,
+    softDeadNfse: softDeadUntilRecycle.nfse,
   };
 }
 
@@ -329,10 +375,12 @@ function scheduleIdleFinalize(slotKey) {
   if (slots.nfse) scheduleIdleFinalizeSlot("nfse");
 }
 
-/** Testes: limpa pin sem reciclar o processo. */
+/** Testes: limpa pin/soft-dead sem reciclar o processo. */
 function resetDllPinForTests() {
   dllPinned = false;
   lastKoffiDeadAt = 0;
+  softDeadUntilRecycle.nfe = false;
+  softDeadUntilRecycle.nfse = false;
 }
 
 module.exports = {
@@ -346,6 +394,8 @@ module.exports = {
   isKoffiDeadHandleError,
   recentlyHadKoffiDead,
   isDllPinned,
+  isSoftDead,
+  clearSoftDead,
   scheduleIdleFinalize,
   suspendIdle,
   resumeIdle,

@@ -166,8 +166,18 @@ function prepareRuntimePaths() {
     process.env.ACBR_POS_WIN_STAGING || resolveStagingDir("margin-acbr-posprinter");
   const stagedLib = path.join(staging, path.basename(sourceLib));
   const sessionActive = !!withPosPrinterSession._session;
+  const dllPinned = withPosPrinterSession._dllPinned === true;
+  let workerOwns = false;
+  try {
+    workerOwns = require("./acbrPosWorkerPool").isPosWorkerEnabled() === true;
+  } catch (_) {
+    /* pool ausente em testes */
+  }
+  // Worker mapeia a DLL no processo filho — nunca refresh mtime enquanto staged existe.
+  const blockOverwrite =
+    sessionActive || dllPinned || (workerOwns && fs.existsSync(stagedLib));
 
-  // Nunca sobrescrever DLL PosPrinter com sessão koffi ativa (mesmo padrão da NFe).
+  // Nunca sobrescrever DLL PosPrinter com sessão/worker mapeando a lib.
   const needsLib =
     !fs.existsSync(stagedLib) ||
     (() => {
@@ -180,7 +190,7 @@ function prepareRuntimePaths() {
       }
     })();
 
-  if (!sessionActive && needsLib) {
+  if (!blockOverwrite && needsLib) {
     copyDirRecursive(path.dirname(sourceLib), staging);
   } else if (!fs.existsSync(stagedLib)) {
     copyFileEnsureDir(sourceLib, stagedLib);
@@ -832,6 +842,7 @@ async function withPosPrinterSession(fn, opts = {}) {
 
     _activeSession = { bundle, configKey: key, cwdBefore, iniForLib, iniPath };
     withPosPrinterSession._session = _activeSession;
+    withPosPrinterSession._dllPinned = true;
   }
 
   withPosPrinterSession._refCount = (_refCount += 1);
@@ -944,6 +955,9 @@ async function imprimirTagsViaWorker(tags) {
     cryptKey: process.env.ACBR_POSPRINTER_CRYPT_KEY || process.env.ACBR_LIB_CRYPT_KEY || "",
     values,
     tags,
+  }).then((r) => {
+    withPosPrinterSession._dllPinned = true;
+    return r;
   });
 }
 

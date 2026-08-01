@@ -583,10 +583,19 @@ async function runNativeOpWithRetry(opName, runtime, LibClass, fn) {
     } catch (err) {
       if (!acbrLibSession.shouldInvalidateOnError(err)) throw err;
       const slot = acbrLibSession.resolveSlotKey(runtime);
+      const koffiDead = acbrLibSession.isKoffiDeadHandleError(err) || err?.softDead === true;
       await acbrLibSession.invalidateNativeSession(
-        acbrLibSession.isKoffiDeadHandleError(err) ? "koffi_dead" : "operation_error",
+        koffiDead ? "koffi_dead" : "operation_error",
         slot,
       );
+      // void**/soft-dead: NÃO re-Inicializar no mesmo processo — evita empilhar handles.
+      if (koffiDead) {
+        log.warn(
+          { opName, err: err.message, slot },
+          "[ACBrLib] Soft-dead — reinicie o serviço (sem retry Inicializar)",
+        );
+        throw err;
+      }
       log.warn(
         { opName, err: err.message, slot },
         "[ACBrLib] Sessão invalidada — retry único",
@@ -679,22 +688,16 @@ async function testarLib() {
     return ok;
   } catch (err) {
     log.warn({ err: err.message }, "[ACBrLib] testar() falhou");
-    if (acbrLibSession.shouldInvalidateOnError(err)) {
+    if (acbrLibSession.shouldInvalidateOnError(err) || err?.softDead) {
       try {
-        await acbrLibSession.invalidateNativeSession("testar_soft", "nfe");
+        await acbr.withAcbrLock(async () => {
+          await acbrLibSession.invalidateNativeSession("testar_soft", "nfe");
+        }, "testar_soft");
       } catch (_) {}
       invalidateStatusServicoCache();
-      try {
-        const st2 = await statusServicoLib();
-        const ok2 = st2.operacional !== false;
-        acbr.atualizarStatusMemoria(ok2);
-        return ok2;
-      } catch (err2) {
-        log.warn({ err: err2.message }, "[ACBrLib] testar() retry falhou");
-        // Soft: degradado (não OFFLINE no Diagnóstico) após koffi.
-        acbr.atualizarStatusMemoria(false, { degradado: true });
-        return false;
-      }
+      // Soft-dead: sem re-Inicializar — Diagnóstico fica degradado até recycle.
+      acbr.atualizarStatusMemoria(false, { degradado: true });
+      return false;
     }
     acbr.atualizarStatusMemoria(false);
     return false;
@@ -902,8 +905,7 @@ async function gerarPdfFiscalLib(chave, xmlPath, modeloDocumento = "65", opts = 
 
   fs.mkdirSync(path.dirname(destino), { recursive: true });
 
-  const runtime = buildNativeRuntime();
-  await withNativeLib("imprimirPDF", (inst) => {
+  await withNativeLib("imprimirPDF", (inst, runtime) => {
     const xmlRel = acbrLibRuntime.resolveNativeLibRelativePath(xmlAbs, runtime);
     inst.limparLista();
     inst.carregarXML(xmlRel);
@@ -1070,9 +1072,8 @@ async function enviarEventoFiscalLib(payload) {
     `evento-lib-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.ini`,
   );
   fs.writeFileSync(iniPath, String(documentIni), "utf8");
-  const runtime = buildNativeRuntime();
-  const nativeIniPath = acbrLibRuntime.resolveNativeDocumentIniPath(iniPath, runtime);
-  const resposta = await withNativeLib("enviarEvento", (inst) => {
+  const resposta = await withNativeLib("enviarEvento", (inst, runtime) => {
+    const nativeIniPath = acbrLibRuntime.resolveNativeDocumentIniPath(iniPath, runtime);
     if (typeof inst.limparListaEventos === "function") {
       inst.limparListaEventos();
     } else {
@@ -1207,9 +1208,8 @@ async function manifestarEventoDestinatarioLib(chave, cnpjDestinatario, tpEvento
     `manifesto-lib-${tp}-${Date.now()}-${chaveNorm.slice(-8)}.ini`,
   );
   fs.writeFileSync(iniPath, documentIni, "utf8");
-  const runtime = buildNativeRuntime();
-  const nativeIniPath = acbrLibRuntime.resolveNativeDocumentIniPath(iniPath, runtime);
-  const resposta = await withNativeLibModeloNfe("manifestarEventoDestinatario", (inst) => {
+  const resposta = await withNativeLibModeloNfe("manifestarEventoDestinatario", (inst, runtime) => {
+    const nativeIniPath = acbrLibRuntime.resolveNativeDocumentIniPath(iniPath, runtime);
     if (typeof inst.limparListaEventos === "function") {
       inst.limparListaEventos();
     } else {
@@ -1262,6 +1262,7 @@ async function refreshLibRuntimeConfig() {
   return acbr.withAcbrLock(async () => {
     invalidateStatusServicoCache();
     await acbrLibSession.invalidateNativeSession("config_refresh");
+    acbrLibSession.clearSoftDead();
     acbrLibSession.invalidateRuntimeCache();
     return { refreshed: getIntegrationMode() === "native", mode: getIntegrationMode() };
   }, "config_refresh");
@@ -1270,6 +1271,15 @@ async function refreshLibRuntimeConfig() {
 async function invalidateNativeSession(reason) {
   return acbr.withAcbrLock(async () => {
     await acbrLibSession.invalidateNativeSession(reason || "external");
+    // Reset operador / shutdown: libera soft-dead DEPOIS do destroy.
+    if (
+      reason === "config_refresh" ||
+      reason === "operator_reset" ||
+      reason === "shutdown" ||
+      reason === "watchdog_restart"
+    ) {
+      acbrLibSession.clearSoftDead();
+    }
     acbrLibSession.invalidateRuntimeCache();
   }, reason || "invalidate");
 }

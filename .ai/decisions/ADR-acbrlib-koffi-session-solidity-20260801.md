@@ -11,10 +11,11 @@
 3. **INI staging** só regrava se conteúdo mudou; **fingerprint de sessão NÃO inclui hash do INI** (Lib grava em runtime).
 4. **Idle finalize** sob `withAcbrLock`; busy check **antes** do lock; dentro do lock (`isHoldingAcbrLock`) idle **pode** `Finalizar`.
 5. **`withAcbrLock` reentrante** (AsyncLocalStorage) — emit → enrich cStat 104 → consultar sem deadlock.
-6. **Handle morto:** abandonar sem `Finalizar`; inst disposed; retry único; watchdog/preflight sem EPEC.
+6. **Handle morto:** abandonar sem `Finalizar`; **soft-dead até recycle** (sem re-Inicializar em loop); `clearSoftDead` só em refresh/shutdown/operator_reset.
 7. **StatusServico:** single-flight + cache longo só para positivo; negativo TTL curto (~5s).
-8. **Memória:** falha koffi → `degradado`; emissão off → `desligado` (não OFFLINE no Diagnóstico).
-9. **PosPrinter:** mesmo padrão — não overwrite DLL com sessão ativa.
+8. **Memória:** falha koffi → `degradado` sticky enquanto soft-dead/koffi recente; emissão off → `desligado`.
+9. **PosPrinter:** não overwrite DLL com sessão, `_dllPinned` ou worker ativo com staged lib.
+10. **Watchdog:** nunca EPEC por soft-dead / degradado / koffi recente.
 
 ## Consequências
 

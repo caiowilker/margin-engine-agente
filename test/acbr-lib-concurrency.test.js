@@ -101,14 +101,13 @@ test("acbrLibSession idle sob lock finaliza (não confunde busy do próprio mute
   assert.equal(session.getSessionStatus().ativa, false);
 });
 
-test("acbrLibSession pin DLL após soft abandon", async () => {
+test("acbrLibSession soft-dead bloqueia ensureSession até clearSoftDead", async () => {
   await session.invalidateNativeSession("test");
   session.resetDllPinForTests();
-  assert.equal(session.isDllPinned(), false);
   await session.invalidateNativeSession("koffi_dead", "nfe");
-  // Sem sessão ativa — pin só liga com ensureSession/soft path com inst.
-  // Soft abandon sem slot ativo não muda pin; pin sobe no ensureSession.
-  assert.equal(typeof session.isDllPinned(), "boolean");
+  assert.equal(session.isSoftDead("nfe"), true);
+  session.clearSoftDead("nfe");
+  assert.equal(session.isSoftDead("nfe"), false);
 });
 
 test("filaFiscal acbrOcupado reflete emissão em andamento", () => {

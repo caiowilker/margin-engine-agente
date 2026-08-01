@@ -54,6 +54,16 @@ async function tick(restartAcbrFn, hooks = {}) {
       degraded = false;
       return;
     }
+    // Memória degradada (koffi) sem throw — não conta para EPEC.
+    try {
+      const det = fiscalDriver.obterStatusDetalhe?.(false);
+      if (det?.estado === "degradado") {
+        console.warn(
+          "[Watchdog ACBr] Motor degradado (koffi) — sem contingência",
+        );
+        return;
+      }
+    } catch (_) {}
     throw new Error("NFE.StatusServico falhou");
   } catch (err) {
     const msg = String(err?.message || err || "");
@@ -78,11 +88,12 @@ async function tick(restartAcbrFn, hooks = {}) {
     }
     falhasConsecutivas++;
     if (falhasConsecutivas >= MAX_FALHAS && !degraded) {
-      // Última guarda: nunca abrir EPEC por glitch koffi recente.
+      // Última guarda: nunca abrir EPEC por glitch koffi recente / soft-dead.
       try {
-        if (require("./fiscal/drivers/acbrLibSession").recentlyHadKoffiDead()) {
+        const session = require("./fiscal/drivers/acbrLibSession");
+        if (session.recentlyHadKoffiDead() || session.isSoftDead()) {
           console.warn(
-            "[Watchdog ACBr] Falhas consecutivas ignoradas — koffi recente (sem contingência)",
+            "[Watchdog ACBr] Falhas consecutivas ignoradas — koffi/soft-dead (sem contingência)",
           );
           falhasConsecutivas = 0;
           return;
