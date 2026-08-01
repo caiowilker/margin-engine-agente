@@ -1,7 +1,32 @@
 # PROGRESS — Agente Local
 
-**Última atualização:** 2026-07-31  
-**Versão:** `1.0.5` — fail-fast worker + TCP válido + config UI sólida
+**Última atualização:** 2026-08-01  
+**Versão:** `1.0.6` — fechamento produção: fiscal vivo + Lib estável + impressora Win10 + manifest alinhado
+
+## Fechamento produção 1.0.6
+
+- Manifest regenerado **1.0.6** (antes ficava 1.0.5 — bloqueava updater).
+- `/diagnostico` usa `resolverConectada` (mesma regra de status).
+- `sanitizarConfigPersistida` grava `ACBR_POSPRINTER_INI` → ProgramData no `.env` (path real em `process.env`).
+- Suíte: `emissao-fiscal-runtime-live` + `printer-win10-solidity` no `npm test`.
+
+## Changelog (2026-08-01) — Impressora/status sólido no Win10
+
+- **Sintoma:** no Win11 impressora (e percepção de “busca”/caixa) estável; no Win10 oscila, some e config não persiste após update.
+- **Causas:** (1) `posprinter.ini` / `ACBR_POSPRINTER_INI` no diretório de instalação (apagado no update); (2) Get-Printer/spooler lento → probe false → PDV marca impressora off / timeout no poll (agente “offline”).
+- **Fix:** INI SSOT em `%ProgramData%\MarginEngine\Config` com migração do legado; `resolverConectada` em `/status`, `/status-basico`, `/impressora/status` e `printerService.testar`; janela recente 15 min; cache lista Win 90s.
+- Testes: `test/printer-win10-solidity.test.js`.
+
+## Changelog (2026-08-01) — EMISSAO_FISCAL persistente + sessão Lib estável
+
+- **Causa raiz emissão:** `Object.assign({}, acbr)` nos drivers Lib/Monitor congelava `EMISSAO_FISCAL` no boot. PUT `/config/fiscal` atualizava runtime/`acbr`, mas `fiscalDriver.EMISSAO_FISCAL` permanecia `false` → `FALHA_PERMANENTE: EMISSAO_FISCAL desabilitada` e Diagnóstico “Desativada” após salvar.
+- **Fix:** `fiscal/wrapAcbrExports.js` reexpõe getter vivo + set/get runtime; Proxy do `fiscalDriver` respeita getters.
+- **Causa raiz StatusServico:** staging Windows regrava `acbrlib.runtime.ini` a cada chamada (mtime muda) → fingerprint invalida sessão → `NFE_Finalizar`+`Inicializar` → koffi `Unexpected External value, expected void **` a cada 30s e contingência EPEC falsa.
+- **Fix:** `writeFileIfChanged` + fingerprint por **hash SHA** do INI (não mtime); invalidação também em erros `void **`.
+- Boot: `sincronizarEmissaoFiscalLocal` logo após carregar autoridade e após migrar segredos.
+- Reconciliação quieta (log só em transição) + autoridade SSOT quando mais recente que `.env`.
+- `AMBIENTE_SEFAZ`: `process.env` prevalece sobre arquivo (runtime / testes isolados).
+- Testes: `emissao-fiscal-runtime-live`, autoridade×env, fingerprint, fiscal-driver tpAmb produção, contract 20/20.
 
 ## Changelog (2026-07-31) — Emissão NFC-e rápida e sólida
 

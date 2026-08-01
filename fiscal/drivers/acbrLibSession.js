@@ -26,18 +26,19 @@ function isAcbrBusySafe() {
 
 function fingerprintRuntime(runtime) {
   if (!runtime) return "";
-  let iniMtime = "";
+  let iniFp = "";
   if (runtime.iniConfig) {
     try {
-      iniMtime = String(fs.statSync(runtime.iniConfig).mtimeMs);
+      const raw = fs.readFileSync(runtime.iniConfig, "utf8");
+      iniFp = require("crypto").createHash("sha256").update(raw).digest("hex").slice(0, 20);
     } catch (_) {
-      iniMtime = String(runtime.iniConfig);
+      iniFp = String(runtime.iniConfig);
     }
   }
   return [
     runtime.libPath,
     runtime.iniConfig,
-    iniMtime,
+    iniFp,
     runtime.tpAmb,
     runtime.ambienteLib || "",
     runtime.ambienteSefaz || "",
@@ -80,8 +81,9 @@ function scheduleIdleFinalize() {
 function shouldInvalidateOnError(err) {
   const msg = String(err?.message || err || "").toLowerCase();
   return (
-    /inicializar|finalizar|dll|access violation|invalid handle|biblioteca/i.test(msg) ||
-    err?.reiniciarAcbr === true
+    /inicializar|finalizar|dll|access violation|invalid handle|biblioteca|unexpected external|void \*\*/i.test(
+      msg,
+    ) || err?.reiniciarAcbr === true
   );
 }
 
@@ -170,4 +172,5 @@ module.exports = {
   scheduleIdleFinalize,
   suspendIdle,
   resumeIdle,
+  fingerprintRuntime,
 };

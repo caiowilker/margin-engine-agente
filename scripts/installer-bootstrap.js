@@ -207,7 +207,17 @@ function writeDefaultConfigs() {
     cut: "partial",
     nomeImpressora: "",
     libPath: path.join(appDir, "posprinter", "lib", "ACBrPosPrinter64.dll"),
-    iniPath: path.join(appDir, "data", "posprinter.ini"),
+    // ProgramData: sobrevive a update/reparo (install dir em Win10 era apagado → impressora “sumia”).
+    iniPath: (() => {
+      try {
+        const { getDirectoryManager } = require(path.join(appDir, "runtime", "directoryManager"));
+        const dm = getDirectoryManager();
+        dm.ensurePath(dm.PATHS.config, "config");
+        return path.join(dm.PATHS.config, "posprinter.ini");
+      } catch (_) {
+        return path.join(appDir, "data", "posprinter.ini");
+      }
+    })(),
     testarImpressao: false,
   };
 

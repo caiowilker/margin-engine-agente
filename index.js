@@ -372,6 +372,12 @@ async function boot() {
   try {
     require("./fiscalConfigAuthority").carregarPersistido();
   } catch (_) {}
+  // SSOT fiscal antes do HTTP/worker — autoridade local + .env → runtime vivo
+  try {
+    require("./configSync").sincronizarEmissaoFiscalLocal();
+  } catch (err) {
+    console.warn("[Boot] Reconciliação EMISSAO_FISCAL:", err.message);
+  }
   try {
     fiscalStorage.recoverCorruptedBootDbs(
       (process.env.FISCAL_INTEGRITY_STRICT || "true").toLowerCase() === "true",
@@ -1096,6 +1102,18 @@ function coletarDadosAlertas() {
   return payload;
 }
 
+/** Gate de emissão HTTP — self-heal autoridade/.env antes de recusar. */
+function ensureEmissaoFiscalGate(forcarEmissao) {
+  if (forcarEmissao === true) return true;
+  if (fiscalDriver.EMISSAO_FISCAL) return true;
+  try {
+    require("./fiscalLocalConfig").garantirEmissaoFiscalAtiva();
+  } catch (_) {
+    /* best-effort */
+  }
+  return !!fiscalDriver.EMISSAO_FISCAL;
+}
+
 function iniciarServidor() {
   // ── FIX CRÍTICO: ordem dos middlewares de CORS ────────────────────────────
   // O pacote `cors` (preflightContinue=false por padrão) responde sozinho a
@@ -1181,13 +1199,22 @@ function iniciarServidor() {
     async (req, res) => {
       config = await lerConfig();
 
-      const [impressoraOk, impressoraInfo, acbrOk] = await Promise.all([
-        impressora.testar().catch(() => false),
+      const [impProbe, impressoraInfoRaw, acbrOk] = await Promise.all([
+        (async () => {
+          const ok = await impressora.testar().catch(() => false);
+          return { ok };
+        })(),
         impressora.getInfo().catch(() => null),
         fiscalDriver.EMISSAO_FISCAL
           ? fiscalDriver.testar().catch(() => false)
           : Promise.resolve(false),
       ]);
+      const printerBootstrap = require("./print/printerBootstrap");
+      const stImp = printerBootstrap.resolverConectada({
+        probeOk: impProbe.ok,
+      });
+      const impressoraOk = stImp.conectada;
+      const impressoraInfo = impressoraInfoRaw;
       _diagImpressoraCache = { ok: impressoraOk, info: impressoraInfo, at: Date.now() };
 
       const { pendentes: filaOffline, falhas: filaFalhas } = await fila.contadores();
@@ -1240,6 +1267,8 @@ function iniciarServidor() {
           const impSt = printerBootstrap.resolverStatusExibicao(impressoraInfo);
           return {
             ok: impressoraOk,
+            fonte: stImp.fonte,
+            assumida: !!stImp.assumida,
             tipo: impSt.metodo || process.env.PRINTER_TYPE || "auto",
             host: impSt.host,
             porta: impSt.porta,
@@ -1532,23 +1561,40 @@ function iniciarServidor() {
 
   /** Probe impressora leve — prioriza impressão recente; evita Get-Printer no poll. */
   async function probeImpressoraLeve(opts = {}) {
+    const printerBootstrap = require("./print/printerBootstrap");
     const fiscalOcupado =
       fiscalDriver.isAcbrBusy() || filaFiscal.estaProcessando();
     const printBusy =
       typeof impressora.printJobService?.impressaoEmAndamento === "function" &&
       impressora.printJobService.impressaoEmAndamento();
-    // Durante envio físico: não abrir sessão/ACBr nem Get-Printer
-    if ((fiscalOcupado || printBusy) && !opts.force) {
-      const recente =
-        typeof impressora.printJobService?.impressaoRecenteOk === "function" &&
-        impressora.printJobService.impressaoRecenteOk();
-      return { ok: recente || printBusy ? true : null, info: null, skipped: true };
-    }
     const recente =
       typeof impressora.printJobService?.impressaoRecenteOk === "function" &&
       impressora.printJobService.impressaoRecenteOk();
+
+    // Durante envio físico: não abrir sessão/ACBr nem Get-Printer
+    if ((fiscalOcupado || printBusy) && !opts.force) {
+      const st = printerBootstrap.resolverConectada({
+        probeOk: null,
+        printBusy: !!printBusy,
+        recente: !!recente,
+        skipped: true,
+      });
+      return {
+        ok: st.conectada,
+        info: null,
+        skipped: true,
+        fonte: st.fonte,
+        assumida: !!st.assumida,
+      };
+    }
     if (recente && !opts.force) {
-      return { ok: true, info: null, skipped: true, recente: true };
+      return {
+        ok: true,
+        info: null,
+        skipped: true,
+        recente: true,
+        fonte: "recente",
+      };
     }
     // Deadline duro — poll do PDV não pode esperar spooler/ACBr (Offline + AbortError).
     const probeMs = parseInt(process.env.PRINTER_STATUS_PROBE_MS || "1500", 10);
@@ -1562,7 +1608,22 @@ function iniciarServidor() {
         Math.max(400, probeMs),
       ),
     );
-    return Promise.race([work, timed]);
+    const raw = await Promise.race([work, timed]);
+    const st = printerBootstrap.resolverConectada({
+      probeOk: raw.ok,
+      printBusy: false,
+      recente: false,
+      timedOut: !!raw.timedOut,
+      skipped: !!raw.skipped,
+    });
+    return {
+      ok: st.conectada,
+      info: raw.info,
+      skipped: !!raw.skipped,
+      timedOut: !!raw.timedOut,
+      fonte: st.fonte,
+      assumida: !!st.assumida,
+    };
   }
 
   // Status reduzido e PÚBLICO — alimenta a página "/" (status.html).
@@ -1629,8 +1690,14 @@ function iniciarServidor() {
       impressora: (() => {
         const printerBootstrap = require("./print/printerBootstrap");
         const impSt = printerBootstrap.resolverStatusExibicao(impressoraInfo);
+        const st = printerBootstrap.resolverConectada({
+          probeOk: impressoraOk,
+          timedOut: !!impProbe.timedOut,
+          skipped: !!impProbe.skipped,
+          recente: !!impProbe.recente,
+        });
         return {
-          ok: impressoraOk === null ? null : impressoraOk,
+          ok: st.conectada,
           tipo: impSt.metodo || process.env.PRINTER_TYPE || "auto",
           detectada: impressoraInfo?.impressora || impSt.detectada || null,
           host: impSt.host,
@@ -1638,6 +1705,8 @@ function iniciarServidor() {
           nome: impSt.nome,
           metodo: impSt.metodo,
           acbrPorta: impSt.acbrPorta,
+          fonte: st.fonte,
+          assumida: !!st.assumida,
         };
       })(),
 
@@ -1728,11 +1797,7 @@ function iniciarServidor() {
         probeImpressoraLeve({ force: forceProbe }),
         probeStatusFiscal({ memoryOnly: memoryOnlyFiscal }),
       ]);
-      const impressoraOk =
-        impProbe.ok === true ||
-        (impProbe.ok === null
-          ? null
-          : impProbe.ok);
+      const impressoraOk = impProbe.ok;
       const { pendentes, falhas } = await fila.contadores();
       const contingencia = lerContingencia();
 
@@ -1746,14 +1811,18 @@ function iniciarServidor() {
         epecPendentes = row ? row.n : 0;
       }
 
+      const printerBootstrap = require("./print/printerBootstrap");
+      const stImp = printerBootstrap.resolverConectada({
+        probeOk: impressoraOk,
+        timedOut: !!impProbe.timedOut,
+        skipped: !!impProbe.skipped,
+        recente: !!impProbe.recente,
+      });
+
       res.json({
         online: true,
-        impressoraConectada:
-          impressoraOk === null
-            ? typeof impressora.printJobService?.impressaoRecenteOk === "function"
-              ? impressora.printJobService.impressaoRecenteOk()
-              : null
-            : impressoraOk,
+        impressoraConectada: stImp.conectada,
+        impressoraFonte: stImp.fonte,
         acbrConectado: fiscalDriver.EMISSAO_FISCAL ? fiscalProbe.acbrOk : false,
         acbrOcupado: fiscalProbe.acbrOcupado,
         fiscalProcessando: fiscalProbe.fiscalProcessando,
@@ -2315,7 +2384,7 @@ function iniciarServidor() {
 
   app.post("/fiscal/emitir", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     const forcarEmissao = req.body?.forcarEmissao === true;
-    if (!fiscalDriver.EMISSAO_FISCAL && !forcarEmissao) return res.json({ fiscal: false });
+    if (!ensureEmissaoFiscalGate(forcarEmissao)) return res.json({ fiscal: false });
     try {
       const cfg = await lerConfig();
       const correlationId =
@@ -2357,7 +2426,10 @@ function iniciarServidor() {
   });
 
   app.post("/fiscal/emitir-nfe", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
-    if (!fiscalDriver.isNfeModelo55Habilitado()) {
+    const forcarEmissao = req.body?.forcarEmissao === true;
+    const nfeEnvOk =
+      (process.env.ACBR_NFE_ENABLED || "true").toLowerCase() === "true";
+    if (!nfeEnvOk || !ensureEmissaoFiscalGate(forcarEmissao)) {
       return res.status(503).json({
         erro: "NF-e modelo 55 desabilitada (ACBR_NFE_ENABLED ou EMISSAO_FISCAL)",
       });
@@ -2442,7 +2514,7 @@ function iniciarServidor() {
   app.post("/fiscal/lib/emitir", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     req.body = { ...(req.body || {}), acbrDriver: "lib" };
     const forcarEmissao = req.body?.forcarEmissao === true;
-    if (!fiscalDriver.EMISSAO_FISCAL && !forcarEmissao) return res.json({ fiscal: false });
+    if (!ensureEmissaoFiscalGate(forcarEmissao)) return res.json({ fiscal: false });
     try {
       const cfg = await lerConfig();
       const correlationId = req.headers["x-correlation-id"] || req.body.correlationId;
@@ -2465,7 +2537,10 @@ function iniciarServidor() {
   });
 
   app.post("/fiscal/lib/emitir-nfe", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
-    if (!fiscalDriver.isNfeModelo55Habilitado()) {
+    const forcarEmissao = req.body?.forcarEmissao === true;
+    const nfeEnvOk =
+      (process.env.ACBR_NFE_ENABLED || "true").toLowerCase() === "true";
+    if (!nfeEnvOk || !ensureEmissaoFiscalGate(forcarEmissao)) {
       return res.status(503).json({ erro: "NF-e modelo 55 desabilitada" });
     }
     try {
@@ -3420,6 +3495,7 @@ function iniciarServidor() {
         await impressora.detectar(true);
       } catch (_) {}
     }
+    const printerBootstrap = require("./print/printerBootstrap");
     // Mesma regra de probeImpressoraLeve — não disputar spooler durante job.
     const printBusy =
       typeof impressora.printJobService?.impressaoEmAndamento === "function" &&
@@ -3428,21 +3504,31 @@ function iniciarServidor() {
       typeof impressora.printJobService?.impressaoRecenteOk === "function"
         ? impressora.printJobService.impressaoRecenteOk() === true
         : false;
-    let ok = recente || printBusy;
+    let probeOk = null;
     let info = null;
     const skipLive = (printBusy || recente) && !forceDetect;
     if (!skipLive) {
-      ok = await impressora.testar(forceDetect).catch(() => false);
+      probeOk = await impressora.testar(forceDetect).catch(() => false);
       info = await impressora.getInfo(forceDetect).catch(() => null);
     }
-    const conectada =
-      recente ||
-      printBusy ||
-      ok === true ||
-      info?.conectada === true ||
-      info?.ok === true;
+    const st = printerBootstrap.resolverConectada({
+      probeOk:
+        probeOk === true ||
+        info?.conectada === true ||
+        info?.ok === true
+          ? true
+          : skipLive
+            ? null
+            : probeOk,
+      printBusy: !!printBusy,
+      recente,
+      skipped: skipLive,
+    });
+    const impSt = printerBootstrap.resolverStatusExibicao(info);
     res.json({
-      conectada,
+      conectada: st.conectada === true,
+      fonte: st.fonte,
+      assumida: !!st.assumida,
       tipo: process.env.PRINTER_TYPE || "auto",
       provider: typeof impressora.getProviderName === "function" ? impressora.getProviderName() : null,
       requestedProvider:
@@ -3455,11 +3541,13 @@ function iniciarServidor() {
       printBusy: !!printBusy,
       detectada:
         info?.impressora?.nome ||
+        impSt.nome ||
         (info?.impressora?.host
           ? `${info.impressora.host}:${info.impressora.porta || info.impressora.port || process.env.PRINTER_PORT || "9100"}`
           : null) ||
         info?.impressora ||
         null,
+      acbrPorta: impSt.acbrPorta,
       ultimaUsada: info?.ultimaUsada || null,
       jobs: impressora.printJobService?.observabilidade?.() || null,
       ...(info ? { info } : {}),
@@ -3815,6 +3903,8 @@ function iniciarServidor() {
   try {
     const fiscalLocalConfig = require("./fiscalLocalConfig");
     fiscalLocalConfig.sincronizarSegredosDoEnv();
+    // Reforço: após migrar segredos, reaplica emissão (autoridade/.env → runtime)
+    require("./configSync").sincronizarEmissaoFiscalLocal();
   } catch (err) {
     log.warn({ err: err.message }, "[Agente] Falha ao sincronizar segredos fiscais do .env");
   }

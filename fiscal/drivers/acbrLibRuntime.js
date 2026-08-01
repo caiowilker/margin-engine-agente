@@ -179,6 +179,20 @@ function copyFileEnsureDir(src, dest) {
   return true;
 }
 
+/** Grava só se o conteúdo mudou — evita mtime falso-positivo no fingerprint da sessão Lib. */
+function writeFileIfChanged(filePath, content) {
+  try {
+    if (fs.existsSync(filePath) && fs.readFileSync(filePath, "utf8") === content) {
+      return false;
+    }
+  } catch (_) {
+    /* regrava */
+  }
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, content, "utf8");
+  return true;
+}
+
 function copyDirRecursive(src, dest) {
   if (!fs.existsSync(src)) return;
   fs.mkdirSync(dest, { recursive: true });
@@ -342,7 +356,9 @@ LarguraCodProd=72
 IdCSC=${iniVals.idCsc}
 CSC=${iniVals.csc}
 `;
-  fs.writeFileSync(runtimeIni, iniContent, "utf8");
+  // Só regrava se o conteúdo mudou — write sempre muda mtime e o fingerprint
+  // da sessão forçava NFE_Finalizar+Inicializar a cada statusServico (void** no koffi).
+  writeFileIfChanged(runtimeIni, iniContent);
 
   const stagedLib = path.join(staging, path.basename(libPath));
   return {
@@ -591,6 +607,7 @@ module.exports = {
   resolveSchemasDir,
   tpAmbToAmbienteLib,
   prepareNativeRuntime,
+  writeFileIfChanged,
   ensureNativeDocumentPath,
   resolveNativeDocumentIniPath,
   resolveNativeLibRelativePath,

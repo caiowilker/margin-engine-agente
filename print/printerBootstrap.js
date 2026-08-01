@@ -188,6 +188,55 @@ function resolverStatusExibicao(impressoraInfo) {
   };
 }
 
+/** Porta RAW/TCP válida persistida (INI ProgramData / legacy). */
+function portaPersistidaValida() {
+  try {
+    const { portaAcbrValida } = require("./printerModelMap");
+    const local = require("./printerLocalConfig").ler();
+    return portaAcbrValida(local?.porta);
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Conectividade para UI/poll (Win10 sólido).
+ * Get-Printer/spooler lento NÃO pode marcar offline se a porta SSOT está salva —
+ * impressão RAW/TCP não depende da listagem do PrintManagement.
+ *
+ * @param {{ probeOk?: boolean|null, printBusy?: boolean, recente?: boolean, timedOut?: boolean, skipped?: boolean }} opts
+ */
+function resolverConectada(opts = {}) {
+  const probeOk = opts.probeOk;
+  const printBusy = opts.printBusy === true;
+  const recente = opts.recente === true;
+  const timedOut = opts.timedOut === true;
+  const skipped = opts.skipped === true;
+
+  if (recente || printBusy) {
+    return { conectada: true, fonte: recente ? "recente" : "busy" };
+  }
+  if (probeOk === true) {
+    return { conectada: true, fonte: "probe" };
+  }
+
+  if (portaPersistidaValida()) {
+    return {
+      conectada: true,
+      fonte: "configurada",
+      assumida: true,
+      timedOut,
+      skipped,
+      probeOk: probeOk === false ? false : probeOk,
+    };
+  }
+
+  if (probeOk === false) {
+    return { conectada: false, fonte: "probe" };
+  }
+  return { conectada: null, fonte: "desconhecida", timedOut, skipped };
+}
+
 /**
  * Garante porta ACBr válida antes de qualquer impressão física.
  * Tenta auto-detecção quando INI/.env estão vazios ou inválidos.
@@ -255,5 +304,7 @@ module.exports = {
   garantirPortaImpressao,
   aplicarConfigInstalador,
   resolverStatusExibicao,
+  portaPersistidaValida,
+  resolverConectada,
   noBoot,
 };

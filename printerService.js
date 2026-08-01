@@ -44,9 +44,25 @@ async function testar(force = false) {
     return _probeCache.result;
   }
   const result = await factory.getPrintProvider().testar(force).catch(() => false);
-  _probeCache.result = result;
+  if (result) {
+    _probeCache.result = true;
+    _probeCache.at = Date.now();
+    return true;
+  }
+  // Win10: Get-Printer/spooler falha com frequência mesmo com RAW válido —
+  // não cachear false permanente; porta SSOT conta como ok para poll.
+  try {
+    const { resolverConectada } = require("./print/printerBootstrap");
+    const st = resolverConectada({ probeOk: false });
+    if (st.conectada === true) {
+      _probeCache.result = true;
+      _probeCache.at = Date.now();
+      return true;
+    }
+  } catch (_) {}
+  _probeCache.result = false;
   _probeCache.at = Date.now();
-  return result;
+  return false;
 }
 
 /** Invalida o cache de probe — chamado quando a config da impressora muda. */

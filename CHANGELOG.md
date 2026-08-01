@@ -6,6 +6,22 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-08-01
+
+### Corrigido
+
+- **EMISSAO_FISCAL vivo:** drivers Lib/Monitor não congelam mais o flag no boot (`wrapAcbrExports`); salvar no painel passa a valer na fila e no Diagnóstico sem reinício.
+- **Sessão ACBrLib:** INI de staging só regrava se o conteúdo mudou; fingerprint por hash SHA — elimina `Unexpected External value, expected void **` e contingência EPEC falsa a cada StatusServico.
+- Self-heal `garantirEmissaoFiscalAtiva` na fila e nas rotas `/fiscal/emitir*` antes de recusar emissão.
+- NF-e painel com `forcarEmissao` não depende mais só de `isNfeModelo55Habilitado()` (que exigia toggle on).
+- Boot reaplica autoridade local → runtime antes do HTTP/worker.
+- `VERSION` alinhado a `package.json` (1.0.6).
+- **Win10 impressora/status:** `posprinter.ini` SSOT em ProgramData (migra install-dir legado); status/poll trata porta RAW/TCP salva como conectada mesmo se Get-Printer falhar/timeout; janela `impressaoRecenteOk` 15 min; cache lista Windows 90s.
+
+### Alterado
+
+- Versão instalador/manifest **1.0.6**.
+- Bootstrap do instalador grava `ACBR_POSPRINTER_INI` em `%ProgramData%\MarginEngine\Config`.
 ## [1.0.5] - 2026-07-31
 
 ### Corrigido

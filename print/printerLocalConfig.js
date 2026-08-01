@@ -353,6 +353,16 @@ function projetarSalvar(updates, valsBase) {
 
 function envPatchSemMudanca(envPatch) {
   for (const [key, val] of Object.entries(envPatch)) {
+    if (key === "ACBR_POSPRINTER_INI") {
+      const a = String(process.env[key] || "").replace(/\\\\/g, "\\").trim();
+      const b = String(val ?? "").replace(/\\\\/g, "\\").trim();
+      if (
+        path.normalize(a).toLowerCase() !== path.normalize(b).toLowerCase()
+      ) {
+        return false;
+      }
+      continue;
+    }
     if (!eqStr(process.env[key], val)) return false;
   }
   return true;
@@ -464,6 +474,20 @@ function sanitizarConfigPersistida() {
     }
   }
 
+  // Garante .env com caminho ProgramData (após migrate de resolveIniPath).
+  if (iniPath) {
+    const curNorm = String(process.env.ACBR_POSPRINTER_INI || "")
+      .replace(/\\\\/g, "\\")
+      .trim();
+    if (
+      path.normalize(curNorm).toLowerCase() !==
+      path.normalize(iniPath).toLowerCase()
+    ) {
+      // .env Windows: barras escapadas; process.env fica com path real.
+      envPatch.ACBR_POSPRINTER_INI = String(iniPath).replace(/\\/g, "\\\\");
+    }
+  }
+
   // Regrava INI com defaults de produção (LogNivel=0, BytesCount, ControlePorta RAW)
   // sempre que o conteúdo canônico divergir — corrige installs antigos com LogNivel=4.
   const valsForIni = { ...ini, porta: porta || ini.porta || "" };
@@ -486,6 +510,10 @@ function sanitizarConfigPersistida() {
   }
   if (Object.keys(envPatch).length && !envPatchSemMudanca(envPatch)) {
     patchEnv(envPatch);
+    // Paths no .env usam \\ ; process.env deve permanecer path real (resolveIniPath).
+    if (envPatch.ACBR_POSPRINTER_INI && iniPath) {
+      process.env.ACBR_POSPRINTER_INI = iniPath;
+    }
   }
 
   try {

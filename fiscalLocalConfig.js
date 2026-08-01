@@ -251,6 +251,24 @@ function lerEmissaoFiscalRuntime() {
   return lerEmissaoFiscalDoEnv();
 }
 
+/**
+ * Self-heal de produção: reaplica autoridade/.env → runtime antes de recusar emissão.
+ * Idempotente e silencioso quando já alinhado.
+ * @returns {boolean}
+ */
+function garantirEmissaoFiscalAtiva() {
+  try {
+    reconciliarEmissaoComEnv();
+  } catch (_) {
+    /* best-effort */
+  }
+  try {
+    return !!require("./acbr").getRuntimeEmissaoFiscal();
+  } catch (_) {
+    return lerEmissaoFiscalDoEnv();
+  }
+}
+
 function ler() {
   const iniPath = resolveLibIniPath();
   const libPath = resolveLibPath();
@@ -275,10 +293,9 @@ function ler() {
       ["NFe", "AmbienteSefaz"],
     ]),
   );
-  const ambienteEnv = String(
-    env.AMBIENTE_SEFAZ || process.env.AMBIENTE_SEFAZ || "",
-  ).toLowerCase();
-  const ambienteEnvNorm = normalizarAmbienteSefaz(ambienteEnv);
+  const ambienteEnvNorm =
+    normalizarAmbienteSefaz(process.env.AMBIENTE_SEFAZ) ||
+    normalizarAmbienteSefaz(env.AMBIENTE_SEFAZ);
   const ambienteSefaz =
     ambienteEnvNorm ||
     ambienteSefazIni ||
@@ -510,46 +527,67 @@ function aplicarAmbiente(ambienteSefaz) {
 
 /**
  * Se o .env foi editado manualmente após um save do painel, prioriza EMISSAO_FISCAL do .env.
- * Evita bloqueio quando o operador salva certificado/CSC com o checkbox desmarcado por engano.
+ * Autoridade local (PUT /config/fiscal) é SSOT quando mais recente que o .env.
  */
 function reconciliarEmissaoComEnv() {
-  const { path: envPath, map } = lerEnvMap();
+  const { path: envPath } = lerEnvMap();
   if (!envPath || !fs.existsSync(envPath)) return null;
 
   const envEmissao = lerEmissaoFiscalDoEnv();
 
+  const runtimeAtual = () => {
+    try {
+      return require("./acbr").getRuntimeEmissaoFiscal();
+    } catch (_) {
+      return envEmissao;
+    }
+  };
+
+  const aplicarComLog = (valor, motivo, extra = {}) => {
+    const alvo = !!valor;
+    const antes = runtimeAtual();
+    aplicarEmissaoFiscalRuntime(alvo);
+    if (antes !== alvo) {
+      log.info({ de: antes, para: alvo, motivo, ...extra }, "[FiscalLocalConfig] Emissão fiscal reconciliada");
+    }
+    return alvo;
+  };
+
   try {
     const fiscalConfigAuthority = require("./fiscalConfigAuthority");
     const authority = fiscalConfigAuthority.obterStatus();
-    if (!authority.ativo || authority.localEmissaoFiscal === envEmissao) {
-      return null;
+    if (!authority.ativo) {
+      return aplicarComLog(envEmissao, "env_sem_autoridade");
+    }
+
+    if (authority.localEmissaoFiscal === envEmissao) {
+      return aplicarComLog(envEmissao, "env_e_autoridade_iguais");
     }
 
     // Instalador ou edição manual no .env com EMISSAO_FISCAL=true prevalece sobre
     // autoridade local=false (ex.: operador salvou certificado com checkbox desmarcado).
     if (envEmissao && !authority.localEmissaoFiscal) {
-      log.info(
-        { envEmissao, authority: authority.localEmissaoFiscal },
-        "[FiscalLocalConfig] .env=true — realinhando autoridade local e runtime",
-      );
       fiscalConfigAuthority.marcarAutoridadeLocal(true);
-      aplicarEmissaoFiscalRuntime(true);
-      return true;
+      return aplicarComLog(true, "env_true_realinha_autoridade", {
+        authority: false,
+      });
     }
 
     const envMtime = fs.statSync(envPath).mtimeMs;
     const authMtime = new Date(authority.localAuthorityAt).getTime();
-    if (envMtime <= authMtime) return null;
+    if (envMtime > authMtime) {
+      fiscalConfigAuthority.marcarAutoridadeLocal(envEmissao);
+      return aplicarComLog(envEmissao, "env_mais_recente", {
+        authority: authority.localEmissaoFiscal,
+      });
+    }
 
-    log.info(
-      { envEmissao, authority: authority.localEmissaoFiscal },
-      "[FiscalLocalConfig] .env mais recente que autoridade local — priorizando EMISSAO_FISCAL do .env",
-    );
-    fiscalConfigAuthority.marcarAutoridadeLocal(envEmissao);
-    aplicarEmissaoFiscalRuntime(envEmissao);
-    return envEmissao;
+    // Autoridade local mais recente (ou empate) — SSOT do painel; aplica só no runtime.
+    return aplicarComLog(authority.localEmissaoFiscal, "autoridade_local_ssot", {
+      envEmissao,
+    });
   } catch (_) {
-    return null;
+    return aplicarComLog(envEmissao, "fallback_env");
   }
 }
 
@@ -634,6 +672,7 @@ module.exports = {
   lerEmissaoFiscalDoEnv,
   lerEmissaoFiscalRuntime,
   aplicarEmissaoFiscalRuntime,
+  garantirEmissaoFiscalAtiva,
   salvar,
   aplicarAmbiente,
   reconciliarEmissaoComEnv,

@@ -23,11 +23,24 @@ module.exports = new Proxy(fiscalDriverApi, {
       return typeof val === "function" ? val.bind(target) : val;
     }
     const driver = factory.getFiscalDriver();
+    const desc = Object.getOwnPropertyDescriptor(driver, prop);
+    if (desc && (desc.get || desc.set)) {
+      if (desc.get) return desc.get.call(driver);
+      return undefined;
+    }
     if (prop in driver) {
       const val = driver[prop];
       if (typeof val === "function") return val.bind(driver);
       return val;
     }
     return undefined;
+  },
+  has(target, prop) {
+    if (prop in target) return true;
+    try {
+      return prop in factory.getFiscalDriver();
+    } catch (_) {
+      return false;
+    }
   },
 });

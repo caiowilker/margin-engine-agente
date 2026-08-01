@@ -2,7 +2,7 @@
  * Driver fiscal via ACBr Monitor (TCP :9200) — implementação em produção.
  * Delega integralmente para acbr.js (não duplicar lógica).
  */
-const acbr = require("../../acbr");
+const { wrapAcbrExports } = require("../wrapAcbrExports");
 
 const DRIVER_INFO = {
   provider: "acbr-monitor",
@@ -15,7 +15,7 @@ function getDriverInfo() {
   return { ...DRIVER_INFO };
 }
 
-module.exports = Object.assign({}, acbr, {
+module.exports = wrapAcbrExports({
   getDriverInfo,
   DRIVER_INFO,
 });

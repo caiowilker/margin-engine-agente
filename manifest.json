@@ -1,6 +1,6 @@
 {
-  "versao": "1.0.5",
-  "geradoEm": "2026-07-31T23:46:18.838Z",
+  "versao": "1.0.6",
+  "geradoEm": "2026-08-01T00:34:56.074Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -92,19 +92,19 @@
     },
     {
       "arquivo": "fiscal/drivers/acbrLibDriver.js",
-      "sha256": "48fe24bb5e178f10334dec3bf828df8633660646eb9c3379998817e134cf22d0"
+      "sha256": "61411be3ad539af3717b7e90fc66be77f82e0775b3eb84fe5051b59dd073bf14"
     },
     {
       "arquivo": "fiscal/drivers/acbrLibRuntime.js",
-      "sha256": "86d99c2179b3d432e8ee7d3484cb13ef477b31ad6c32598825bd98842334779c"
+      "sha256": "b7bf0af516ce2279befa811417370695761fd58ad08804c6d375f278262909b3"
     },
     {
       "arquivo": "fiscal/drivers/acbrLibSession.js",
-      "sha256": "a915082caede164455c0a84e512c522833fa92fd9283f98a586a26c5f20870c9"
+      "sha256": "5d28b55c95f927530bf055d94f86534a15943ad496621b0f029039d3a5f148b2"
     },
     {
       "arquivo": "fiscal/drivers/acbrMonitorDriver.js",
-      "sha256": "46a6aa5fe285c0b11d191fea90e4072a14f9e5988d551cead904749e5b4ce57f"
+      "sha256": "738736efc40ad0c10d94bfc130efb284860728bb7afba714d1c8441e8500f726"
     },
     {
       "arquivo": "fiscal/factory.js",
@@ -151,6 +151,10 @@
       "sha256": "32c16a681b48abb7add0718c2236345d91f8dbe2fabc9ae7c925d2ec3b0e4dcb"
     },
     {
+      "arquivo": "fiscal/wrapAcbrExports.js",
+      "sha256": "4bcff5897f147395be86c02a0efa3b20c12e23ca1b5285e9c99f92d222214f8b"
+    },
+    {
       "arquivo": "fiscalAlertas.js",
       "sha256": "42efb7320c6cb799c629142be07945870c2b2d1fc264ef895dba8ee82ea92b3b"
     },
@@ -160,7 +164,7 @@
     },
     {
       "arquivo": "fiscalDriver.js",
-      "sha256": "3847423dcacb49154362757ddda697410b4070ffe44b6ae8be572e4b059c256f"
+      "sha256": "7119be2c790f9785fa486c13dc878e0899f033d48f838828ccce0b46c6729b24"
     },
     {
       "arquivo": "fiscalDriverNfceSetup.js",
@@ -176,7 +180,7 @@
     },
     {
       "arquivo": "fiscalLocalConfig.js",
-      "sha256": "d9731f479abcdb2b246cdb74453a122121ae63bf44ba6258244a7660135eb7a9"
+      "sha256": "1320b971d997a547704e66794fdff11006cc31d8b658a80cb56cfc21c5be88af"
     },
     {
       "arquivo": "fiscalMetrics.js",
@@ -220,7 +224,7 @@
     },
     {
       "arquivo": "fiscalService.js",
-      "sha256": "42614d593144dcc560be8435d831f823ade7579f7ca83ae8766b8679c17e7117"
+      "sha256": "bc570e9616da272bfb580ef0db4811ffcd1a83ada4c516b26243e278000199a3"
     },
     {
       "arquivo": "fiscalStorage.js",
@@ -5076,7 +5080,7 @@
     },
     {
       "arquivo": "index.js",
-      "sha256": "a8e37e24fd7328f464a0ddaa4ddcad0921022cf882e5f45530773e68934fa834"
+      "sha256": "b32ce7b8b5e520c42bcb0611f19896cbaacc455a8bdcde9431a40249443a1ebc"
     },
     {
       "arquivo": "install-service.js",
@@ -5112,7 +5116,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "8737554a4bd7beec7fa6a4cca4d1b67a4503da0985f0187374154d556e0ef0de"
+      "sha256": "6e502f6e720d5c17e1931b9b799a3d50eb9dfa6c97725b16cc8e38a709191af2"
     },
     {
       "arquivo": "print/acbrPosExports.js",
@@ -5124,7 +5128,7 @@
     },
     {
       "arquivo": "print/acbrPosPrinterRuntime.js",
-      "sha256": "fdb2f58f0d10d01695cf893dd222f076c9db77be9282c0414275f9fd5faa741e"
+      "sha256": "dfc8cc6e9f58d448957455da0b7a34043d77bf3d338f68d41ef2c0934b7ad5e4"
     },
     {
       "arquivo": "print/acbrPosWorkerPool.js",
@@ -5176,7 +5180,7 @@
     },
     {
       "arquivo": "print/escpos/impressoraCore.js",
-      "sha256": "6566c3898e6285ae4e47acfe97dd6e7182d88693e9b9cc3af5b67c90157e24c1"
+      "sha256": "178fc8fbe1fee5f57f5859356fbe343fa32dbfa8da564f0731161d23f54d4f92"
     },
     {
       "arquivo": "print/factory.js",
@@ -5196,11 +5200,11 @@
     },
     {
       "arquivo": "print/printerBootstrap.js",
-      "sha256": "0eff97c1d17a70ab9caeddb2a213365485e7b8bd03e51a739304687652d74398"
+      "sha256": "7a31f8d27d9276e4b4f36f3b5b68a39649f910e3fa20a0fe77d22a1a08aad59a"
     },
     {
       "arquivo": "print/printerLocalConfig.js",
-      "sha256": "acabb6c1b278eac702a307672be55891a98b9f18b9a3d3a57347bc999926e7a0"
+      "sha256": "2640e0df18c565b2538d9245a5c0ccf465774a506cdd5711124d92d0502be260"
     },
     {
       "arquivo": "print/printerLogo.js",
@@ -5240,7 +5244,7 @@
     },
     {
       "arquivo": "print/printJobService.js",
-      "sha256": "2762433b1ea3d7ed60cfb7393bf3ef19c2a8f00a63bfe49d7bc8b89e7fec8ca3"
+      "sha256": "2e28acd77eb82388e626f66c5a6e2243753beb76fdd107fcdeb4c6a65adffe97"
     },
     {
       "arquivo": "print/printJobStore.js",
@@ -5284,7 +5288,7 @@
     },
     {
       "arquivo": "printerService.js",
-      "sha256": "bf80621229801941c3e38c2eb5a6e206577f48e26add7c293cf34471bfcf9fde"
+      "sha256": "d972c758ac25d9f52eebfbb44844e41b8f15e4d01df5205e2a6b64a53935610a"
     },
     {
       "arquivo": "reconciliacaoFiscal.js",
@@ -5392,7 +5396,7 @@
     },
     {
       "arquivo": "VERSION",
-      "sha256": "59854984853104df5c353e2f681a15fc7924742f9a2e468c29af248dce45ce03"
+      "sha256": "51c18dc8694861beb47a67894e61044864214435389f6d3a274704d9566ff96c"
     },
     {
       "arquivo": "watchdog.js",

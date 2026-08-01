@@ -491,7 +491,7 @@ function observabilidade() {
 }
 
 const RECENT_OK_WINDOW_MS = parseInt(
-  process.env.PRINTER_RECENT_OK_WINDOW_MS || "300000",
+  process.env.PRINTER_RECENT_OK_WINDOW_MS || "900000",
   10,
 );
 

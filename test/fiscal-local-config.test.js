@@ -158,6 +158,48 @@ AMBIENTE_SEFAZ=homologacao
     assert.strictEqual(fiscalLocalConfig.lerEmissaoFiscalRuntime(), true);
   });
 
+  await test("reconciliarEmissaoComEnv autoridade true prevalece sobre .env=false mais antigo", () => {
+    const authority = require("../fiscalConfigAuthority");
+    authority.resetAutoridadeLocal();
+
+    fs.writeFileSync(
+      ENV,
+      `EMISSAO_FISCAL=false
+ACBR_DRIVER=lib
+AMBIENTE_SEFAZ=homologacao
+`,
+      "utf8",
+    );
+    const passado = (Date.now() - 60_000) / 1000;
+    fs.utimesSync(ENV, passado, passado);
+    authority.marcarAutoridadeLocal(true);
+
+    const reconciliado = fiscalLocalConfig.reconciliarEmissaoComEnv();
+    assert.strictEqual(reconciliado, true);
+    assert.strictEqual(fiscalLocalConfig.lerEmissaoFiscalRuntime(), true);
+    assert.strictEqual(require("../acbr").EMISSAO_FISCAL, true);
+  });
+
+  await test("garantirEmissaoFiscalAtiva realinha runtime a partir da autoridade", () => {
+    const authority = require("../fiscalConfigAuthority");
+    const acbr = require("../acbr");
+    authority.resetAutoridadeLocal();
+    fs.writeFileSync(
+      ENV,
+      `EMISSAO_FISCAL=false
+ACBR_DRIVER=lib
+AMBIENTE_SEFAZ=homologacao
+`,
+      "utf8",
+    );
+    const passado = (Date.now() - 60_000) / 1000;
+    fs.utimesSync(ENV, passado, passado);
+    authority.marcarAutoridadeLocal(true);
+    acbr.setRuntimeEmissaoFiscal(false);
+    assert.strictEqual(fiscalLocalConfig.garantirEmissaoFiscalAtiva(), true);
+    assert.strictEqual(acbr.EMISSAO_FISCAL, true);
+  });
+
   await test("sincronizarSegredosDoEnv migra senha e CSC do .env para INI/cofre", async () => {
     const fiscalSecrets = require("../fiscalSecrets");
     await fiscalSecrets.limpar();

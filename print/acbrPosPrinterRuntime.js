@@ -59,11 +59,78 @@ function resolveLibPath() {
   return candidates.find((p) => fs.existsSync(p)) || null;
 }
 
+function samePath(a, b) {
+  if (!a || !b) return false;
+  const norm = (p) =>
+    path.normalize(String(p).replace(/\\\\/g, "\\")).toLowerCase();
+  return norm(a) === norm(b);
+}
+
+function isUnderDir(filePath, dir) {
+  if (!filePath || !dir) return false;
+  const f = path.normalize(filePath).toLowerCase();
+  const d = path.normalize(dir).toLowerCase();
+  return f === d || f.startsWith(d + path.sep);
+}
+
+/**
+ * SSOT do posprinter.ini:
+ * - Preferir %ProgramData%\MarginEngine\Config (sobrevive a update do instalador).
+ * - ACBR_POSPRINTER_INI em install dir (legado) é migrado — Win10 perdia config no update.
+ * - Override de teste: caminho fora de AGENT_ROOT e fora de ProgramData.
+ */
 function resolveIniPath() {
-  const explicit = process.env.ACBR_POSPRINTER_INI;
-  if (explicit) return explicit;
-  const candidates = [path.join(AGENT_ROOT, "data", "posprinter.ini")];
-  return candidates.find((p) => fs.existsSync(p)) || candidates[0];
+  const explicit = String(process.env.ACBR_POSPRINTER_INI || "").trim();
+  const legacyIni = path.join(AGENT_ROOT, "data", "posprinter.ini");
+
+  let programDataIni = null;
+  let programDataRoot = null;
+  try {
+    const { getDirectoryManager } = require("../runtime/directoryManager");
+    const dm = getDirectoryManager();
+    dm.ensurePath(dm.PATHS.config, "config");
+    programDataIni = path.join(dm.PATHS.config, "posprinter.ini");
+    programDataRoot = dm.PATHS.root || path.dirname(dm.PATHS.config);
+  } catch (_) {
+    /* testes / boot precoce */
+  }
+
+  // Testes / override explícito fora do install e do ProgramData.
+  if (
+    explicit &&
+    programDataIni &&
+    !samePath(explicit, programDataIni) &&
+    !samePath(explicit, legacyIni) &&
+    !isUnderDir(explicit, AGENT_ROOT) &&
+    !isUnderDir(explicit, programDataRoot)
+  ) {
+    return path.normalize(explicit);
+  }
+
+  if (programDataIni) {
+    if (!fs.existsSync(programDataIni)) {
+      const sources = [explicit, legacyIni].filter(
+        (p) => p && fs.existsSync(p) && !samePath(p, programDataIni),
+      );
+      for (const src of sources) {
+        try {
+          fs.mkdirSync(path.dirname(programDataIni), { recursive: true });
+          fs.copyFileSync(src, programDataIni);
+          break;
+        } catch (_) {
+          /* tenta próximo */
+        }
+      }
+    }
+    // Runtime aponta para ProgramData; .env é alinhado em sanitizarConfigPersistida.
+    if (!samePath(process.env.ACBR_POSPRINTER_INI, programDataIni)) {
+      process.env.ACBR_POSPRINTER_INI = programDataIni;
+    }
+    return programDataIni;
+  }
+
+  if (explicit) return path.normalize(explicit);
+  return legacyIni;
 }
 
 function copyFileEnsureDir(src, dest) {

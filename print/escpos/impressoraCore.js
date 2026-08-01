@@ -68,7 +68,8 @@ const NAO_TERMICA_RX =
   /l4260|l3250|l3210|l1250|l3150|l4150|l5290|inkjet|deskjet|officejet|laserjet|ecosys|brother\s*hl|dcp-|mfc-|et-2|et-2[78]|workforce|stylus|pixma|onenote|microsoft\s*print\s*to\s*pdf|fax|xps|onenote|send\s*to\s*onenote|pdf|microsoft\s*xps|anydesk|snagit|adobe\s*pdf/i;
 
 const REDE_PORTAS = [9100, 9101, 515];
-const CACHE_TTL_MS = 30000;
+/** Win10 Get-Printer é mais lento/instável — cache maior reduz oscilação no poll do PDV. */
+const CACHE_TTL_MS = parseInt(process.env.PRINTER_WIN_LIST_CACHE_MS || "90000", 10);
 const AGENT_PORT = parseInt(process.env.PORT || "9100", 10);
 const IMPRIMIR_QR_NFCE =
   (process.env.IMPRIMIR_QR_NFCE ?? "true").toLowerCase() !== "false";

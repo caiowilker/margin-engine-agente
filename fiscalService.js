@@ -1064,7 +1064,24 @@ async function enfileirarEmissao(cfg, body, opts = {}) {
 }
 
 async function enfileirarEmissaoNfe(cfg, body, opts = {}) {
-  if (!fiscalDriver.isNfeModelo55Habilitado()) {
+  const nfeEnvOk =
+    (process.env.ACBR_NFE_ENABLED || "true").toLowerCase() === "true";
+  if (!nfeEnvOk) {
+    const err = new Error(
+      "NF-e modelo 55 desabilitada (ACBR_NFE_ENABLED ou EMISSAO_FISCAL)",
+    );
+    err.permanente = true;
+    throw err;
+  }
+  const forcar = body?.forcarEmissao === true;
+  if (!forcar && !fiscalDriver.EMISSAO_FISCAL) {
+    try {
+      require("./fiscalLocalConfig").garantirEmissaoFiscalAtiva();
+    } catch (_) {
+      /* best-effort */
+    }
+  }
+  if (!forcar && !fiscalDriver.EMISSAO_FISCAL) {
     const err = new Error(
       "NF-e modelo 55 desabilitada (ACBR_NFE_ENABLED ou EMISSAO_FISCAL)",
     );
@@ -1636,7 +1653,16 @@ function registrarHandlersFila(lerConfigFn) {
   filaFiscal.registrarHandler("EMISSAO", async (payload, job) => {
     const cfg = await lerConfigFn();
     // Painel / emissão manual: forcarEmissao ignora o toggle da frente (EMISSAO_FISCAL).
-    if (!fiscalDriver.EMISSAO_FISCAL && payload?.forcarEmissao !== true) {
+    let emissaoOk = fiscalDriver.EMISSAO_FISCAL === true || payload?.forcarEmissao === true;
+    if (!emissaoOk) {
+      try {
+        require("./fiscalLocalConfig").garantirEmissaoFiscalAtiva();
+      } catch (_) {
+        /* best-effort */
+      }
+      emissaoOk = fiscalDriver.EMISSAO_FISCAL === true || payload?.forcarEmissao === true;
+    }
+    if (!emissaoOk) {
       throw Object.assign(new Error("EMISSAO_FISCAL desabilitada no agente"), { permanente: true });
     }
     const correlationId = payload.correlationId || job.correlation_id;

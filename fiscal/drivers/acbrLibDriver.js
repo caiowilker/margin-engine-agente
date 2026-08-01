@@ -26,6 +26,7 @@ const { validarPayloadNfe } = require("../../fiscalValidacaoNfe");
 const fiscalTrace = require("../../fiscalTraceLog");
 const fiscalEmissionLock = require("../fiscalEmissionLock");
 const fiscalDhEmiIni = require("../fiscalDhEmiIni");
+const { wrapAcbrExports } = require("../wrapAcbrExports");
 
 const AGENT_ROOT = path.resolve(__dirname, "../..");
 
@@ -1173,7 +1174,7 @@ async function invalidateNativeSession(reason) {
   }, reason || "invalidate");
 }
 
-module.exports = Object.assign({}, acbr, {
+module.exports = wrapAcbrExports({
   getDriverInfo,
   getIntegrationMode,
   DRIVER_INFO,
