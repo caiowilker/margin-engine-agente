@@ -30,7 +30,8 @@ const { getDirectoryManager } = require("./runtime/directoryManager");
 const DB_PATH = process.env.DB_PATH || getDirectoryManager().file("agent", "fila.db");
 const CONFIG_PATH = getDirectoryManager().file("agent", "config.json");
 const MAX_TENTATIVAS = parseInt(process.env.MAX_TENTATIVAS || "10", 10);
-const TIMEOUT_MS = parseInt(process.env.BACKEND_TIMEOUT_MS || "5000", 10);
+/** Sync nuvem — carrinho grande + validações no backend precisam de margem. */
+const TIMEOUT_MS = parseInt(process.env.BACKEND_TIMEOUT_MS || "45000", 10);
 const OFFLINE_QUEUE_WARN = parseInt(process.env.OFFLINE_QUEUE_WARN || "50", 10);
 const OFFLINE_QUEUE_CRITICAL = parseInt(process.env.OFFLINE_QUEUE_CRITICAL || "200", 10);
 
