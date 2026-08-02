@@ -281,6 +281,25 @@ async function processarDocumentoDist(fiscalApi, item, cnpj, uf, notasOut) {
     }
   }
 
+  // Após ciência, consultar situação da NF-e para obter cStat de AUTORIZAÇÃO (100/101/etc)
+  // — necessário para escrituração fiscal (cStat de ciência 135/136 não é autorização).
+  let autorizacaoCStat = null;
+  let autorizacaoXMotivo = null;
+  let autorizacaoSituacao = null;
+  try {
+    const consulta = await fiscalApi.consultarChave(chave, cnpj, uf);
+    if (consulta?.cStat != null) {
+      autorizacaoCStat = String(consulta.cStat);
+      autorizacaoXMotivo = consulta.xMotivo || consulta.situacao || null;
+      autorizacaoSituacao = consulta.situacao || null;
+    }
+  } catch (consultaErr) {
+    log.debug(
+      { chave, err: consultaErr.message },
+      "Consulta autorização opcional — tentativa registrada (não bloqueia sync)",
+    );
+  }
+
   let xmlCompleto = item.xml && /<NFe[\s>]/i.test(item.xml) ? item.xml : null;
   if (!xmlCompleto) {
     try {
@@ -306,6 +325,9 @@ async function processarDocumentoDist(fiscalApi, item, cnpj, uf, notasOut) {
     cienciaRegistrada: cienciaOk,
     cienciaCStat,
     ultimoTpEvento: cienciaOk ? "210210" : null,
+    autorizacaoCStat,
+    autorizacaoXMotivo,
+    autorizacaoSituacao,
   });
 }
 
