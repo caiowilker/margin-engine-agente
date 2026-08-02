@@ -1,6 +1,6 @@
 {
   "versao": "1.0.6",
-  "geradoEm": "2026-08-02T14:52:47.162Z",
+  "geradoEm": "2026-08-02T15:14:00.751Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -268,7 +268,7 @@
     },
     {
       "arquivo": "frontend-dist/api-backend.json",
-      "sha256": "402fd2c05cabd05adb90afbe27cb7daa14e6d44a225757a26df6b7e590bd7787"
+      "sha256": "62f093d7cc15c71fe76d946b1c9f107b8bff58f57742bdcdc75886382c25d093"
     },
     {
       "arquivo": "frontend-dist/apple-touch-icon.png",
@@ -5052,7 +5052,7 @@
     },
     {
       "arquivo": "frontend-dist/version.json",
-      "sha256": "e861eb61da0b65213c09704833f95621c53f366320ac2bf4fe8945a517ae0885"
+      "sha256": "7dcf636bb371a8e3bd74d031a6da61b6167cda2ef961dc913b037ab278469722"
     },
     {
       "arquivo": "frontend-dist/workbox-3147e214.js",
@@ -5104,7 +5104,7 @@
     },
     {
       "arquivo": "manifestoDestinatario.js",
-      "sha256": "485a01fb5e724f5a71c12a095b0253bedfc08dc4053f69df4827b2fee83ffe0c"
+      "sha256": "2967dc419429334c8e9a91508181d2d0f523c256cf9614f1dace2afe16efb66d"
     },
     {
       "arquivo": "manifestUpdater.js",
