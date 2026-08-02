@@ -178,6 +178,12 @@
 - `killProcessTree`: hard deadline 6s.
 - ADR: [ADR-print-failfast-tcp-list-20260731.md](./decisions/ADR-print-failfast-tcp-list-20260731.md).
 
+## Changelog (2026-08-01) — UI gaveta + loja sem gaveta
+
+- Config Impressão: bloco **Tem gaveta Sim/Não** + botão **Abrir gaveta (teste)**.
+- Agente Local: mesmo botão ao lado do toggle operacional; label explica “Não = só impressora”.
+- `PUT /config/impressora` aceita `drawer` → `PRINTER_DRAWER` (caminho gaveta continua ESC/POS nativo).
+
 ## Changelog (2026-08-01) — PosPrinter ACBr primário (RAW)
 
 - Removido bypass incondicional `RAW:` → ESC/POS nativo (`preferNativeEscPos` + `printExecutor`).

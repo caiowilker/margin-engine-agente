@@ -157,6 +157,23 @@ test("sanitizar — RAW válido zera host fantasma", () => {
   assert.ok(/^RAW:/i.test(cfg.ler({ fresh: true }).porta));
 });
 
+test("salvar — drawer=false grava PRINTER_DRAWER (loja sem gaveta)", () => {
+  cfg.salvar({
+    porta: "RAW:POSPrinter POS80",
+    modelo: "1",
+    drawer: false,
+  });
+  assert.strictEqual(process.env.PRINTER_DRAWER, "false");
+  assert.strictEqual(cfg.ler({ fresh: true }).drawer, false);
+  cfg.salvar({
+    porta: "RAW:POSPrinter POS80",
+    modelo: "1",
+    drawer: true,
+  });
+  assert.strictEqual(process.env.PRINTER_DRAWER, "true");
+  assert.strictEqual(cfg.ler({ fresh: true }).drawer, true);
+});
+
 test("gerarIni — produção: LogNivel=0 + BytesCount + ControlePorta RAW=0", () => {
   const raw = cfg.gerarIniContent({
     modelo: "1",

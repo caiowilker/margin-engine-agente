@@ -546,7 +546,8 @@ const CATALOGO = {
     tipo: "boolean",
     default: true,
     grupo: "impressora",
-    label: "Abrir gaveta (teste, dinheiro, abertura/sangria)",
+    label:
+      "Tem gaveta de dinheiro — abre no dinheiro, abertura/sangria e teste (Não = só impressora)",
   },
   printerModel: {
     env: "PRINTER_MODEL",

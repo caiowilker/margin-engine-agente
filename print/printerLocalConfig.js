@@ -353,6 +353,23 @@ function projetarSalvar(updates, valsBase) {
     envPatch.PRINTER_CUT = updates.cut;
     vals.cut = updates.cut;
   }
+  // Sem gaveta física: drawer=false → nunca envia ESC p (dinheiro/teste/botão).
+  if (updates.drawer != null || updates.gaveta != null) {
+    const on =
+      updates.drawer === true ||
+      updates.drawer === "true" ||
+      updates.drawer === 1 ||
+      updates.gaveta === true ||
+      updates.gaveta === "true";
+    const off =
+      updates.drawer === false ||
+      updates.drawer === "false" ||
+      updates.drawer === 0 ||
+      updates.gaveta === false ||
+      updates.gaveta === "false";
+    if (on) envPatch.PRINTER_DRAWER = "true";
+    else if (off) envPatch.PRINTER_DRAWER = "false";
+  }
   if (updates.tipo) envPatch.PRINTER_TYPE = updates.tipo;
   if (updates.serial && typeof updates.serial === "object") {
     if (updates.serial.baud != null) vals.baud = String(updates.serial.baud);
