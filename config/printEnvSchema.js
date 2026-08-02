@@ -50,6 +50,22 @@ const PRINT_ENV_FIELDS = [
       "Após soft kill: quanto segurar o physicalLock antes de liberar (evita 2º cupom no USB ocupado)",
   },
   {
+    env: "PRINT_CORE_LOCK_WAIT_MS",
+    kind: "int",
+    min: 500,
+    max: 15000,
+    default: 4000,
+    comment: "Espera máxima na fila interna ESC/POS antes de falhar sem envio",
+  },
+  {
+    env: "PRINT_PHYSICAL_LOCK_WAIT_MS",
+    kind: "int",
+    min: 500,
+    max: 15000,
+    default: 4000,
+    comment: "Espera máxima no physicalLock (USB/spooler) antes de falhar sem envio",
+  },
+  {
     env: "ACBR_POS_CALL_TIMEOUT_MS",
     kind: "int",
     min: 1000,

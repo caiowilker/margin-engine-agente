@@ -41,6 +41,39 @@ async function run() {
   ]);
   assert.ok(Date.now() - t0 < 90, "keys distintas devem sobrepor");
 
+  // waitMs: segundo job não roda fn se a fila estourar o orçamento
+  lock.resetForTests();
+  let ranLate = false;
+  const slow = lock.run(
+    "wait-key",
+    async () => {
+      await new Promise((r) => setTimeout(r, 80));
+      return "ok";
+    },
+    "slow",
+  );
+  const late = lock
+    .run(
+      "wait-key",
+      async () => {
+        ranLate = true;
+        return "late";
+      },
+      "late",
+      { waitMs: 20 },
+    )
+    .then(
+      () => {
+        throw new Error("deveria ter estourado waitMs");
+      },
+      (err) => {
+        assert.strictEqual(err.code, "PHYSICAL_LOCK_WAIT_TIMEOUT");
+        assert.equal(err.printTimedOut, true);
+      },
+    );
+  await Promise.all([slow, late]);
+  assert.strictEqual(ranLate, false, "fn não deve rodar após wait timeout");
+
   process.env.PHYSICAL_USB_TOPOLOGY = "separate";
   assert.strictEqual(map.resolvePosprinterKey(), "posprinter");
   assert.strictEqual(map.resolveNfeKey(), "nfe");

@@ -94,14 +94,48 @@ let printLock = Promise.resolve();
 /** Cache em memória do escpos.Image — evita get-pixels a cada cupom. */
 let logoEscposImageCache = { key: null, image: null };
 
-const RAW_PRINT_SCRIPT = path.join(os.tmpdir(), "pdv-margin-raw-print.ps1");
-const RAW_HELPER_DLL = path.join(os.tmpdir(), "pdv-margin-raw", "RawPrinterHelper.dll");
-if (IS_WIN) {
+/** Cache processo — hot path NÃO faz readFileSync/writeFileSync do .ps1 a cada cupom. */
+let rawScriptCache = null;
+let rawTmpFallbackWarned = false;
+
+/**
+ * Workdir RAW fora de C:\\Windows\\TEMP (LocalSystem + Defender costuma
+ * segurar writeFileSync ~90–120s e congelar o event loop do agente).
+ * Preferência: ProgramData\\MarginEngine\\impressao\\raw
+ */
+function rawWorkDir() {
   try {
-    fs.mkdirSync(path.dirname(RAW_HELPER_DLL), { recursive: true });
-    fs.writeFileSync(
-      RAW_PRINT_SCRIPT,
-      `$ErrorActionPreference = 'Stop'
+    const { getDirectoryManager } = require("../../runtime/directoryManager");
+    const dm = getDirectoryManager();
+    const dir = path.join(dm.dir("impressao"), "raw");
+    dm.ensurePath(dir, "impressao/raw");
+    return dir;
+  } catch (_) {
+    const dir = path.join(os.tmpdir(), "pdv-margin-raw");
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+    } catch (_) {}
+    if (!rawTmpFallbackWarned) {
+      rawTmpFallbackWarned = true;
+      log.warn(
+        { dir, metric: "print.raw_workdir_tmpdir_fallback" },
+        "[ImpressoraCore] Workdir RAW caiu em tmpdir — risco de lag por antivírus",
+      );
+    }
+    return dir;
+  }
+}
+
+function rawHelperDllPath() {
+  return path.join(rawWorkDir(), "RawPrinterHelper.dll");
+}
+
+function rawPrintScriptPath() {
+  return path.join(rawWorkDir(), "pdv-margin-raw-print.ps1");
+}
+
+function buildRawPrintScriptContent(dllPath) {
+  return `$ErrorActionPreference = 'Stop'
 $cfg = Get-Content -Raw $args[0] | ConvertFrom-Json
 $bytes = [System.IO.File]::ReadAllBytes($cfg.file)
 $timings = [ordered]@{
@@ -114,7 +148,7 @@ function Mark([string]$name) {
   $timings[$name] = [int64]$sw.ElapsedMilliseconds
   $sw.Restart()
 }
-$asm = ${JSON.stringify(RAW_HELPER_DLL)}
+$asm = ${JSON.stringify(dllPath)}
 if (-not ("RawPrinterHelper" -as [type])) {
   if (Test-Path -LiteralPath $asm) {
     Add-Type -Path $asm
@@ -184,9 +218,42 @@ $timings['totalMs'] = [int64]$total.ElapsedMilliseconds
 $json = ($timings | ConvertTo-Json -Compress)
 Write-Output ("RAW_TIMING_JSON:" + $json)
 Remove-Item $cfg.file -Force -ErrorAction SilentlyContinue
-`,
-      "utf8",
+`;
+}
+
+/**
+ * Garante script PowerShell no workdir ProgramData.
+ * Após a 1ª vez no processo, retorna cache em memória (zero I/O sync no cupom).
+ */
+function ensureRawPrintScript() {
+  if (!IS_WIN) return null;
+  if (rawScriptCache) return rawScriptCache;
+  try {
+    const dir = rawWorkDir();
+    const scriptPath = rawPrintScriptPath();
+    const dllPath = rawHelperDllPath();
+    if (!fs.existsSync(scriptPath)) {
+      fs.writeFileSync(scriptPath, buildRawPrintScriptContent(dllPath), "utf8");
+    }
+    rawScriptCache = { dir, scriptPath, dllPath };
+    return rawScriptCache;
+  } catch (err) {
+    log.warn(
+      { err: err?.message, metric: "print.raw_script_ensure_fail" },
+      "[ImpressoraCore] Falha ao garantir script RAW",
     );
+    return null;
+  }
+}
+
+function resetRawScriptCacheForTests() {
+  rawScriptCache = null;
+  rawTmpFallbackWarned = false;
+}
+
+if (IS_WIN) {
+  try {
+    ensureRawPrintScript();
   } catch (_) {}
 }
 
@@ -195,11 +262,13 @@ function warmRawWin32Helper() {
   if (!IS_WIN) return Promise.resolve(false);
   return new Promise((resolve) => {
     try {
-      if (fs.existsSync(RAW_HELPER_DLL)) {
+      ensureRawPrintScript();
+      const dllPath = rawHelperDllPath();
+      if (fs.existsSync(dllPath)) {
         resolve(true);
         return;
       }
-      fs.mkdirSync(path.dirname(RAW_HELPER_DLL), { recursive: true });
+      fs.mkdirSync(path.dirname(dllPath), { recursive: true });
       const child = execFile(
         "powershell",
         [
@@ -207,7 +276,7 @@ function warmRawWin32Helper() {
           "-ExecutionPolicy",
           "Bypass",
           "-Command",
-          `$asm=${JSON.stringify(RAW_HELPER_DLL)}; if (Test-Path -LiteralPath $asm) { exit 0 }; $dir=Split-Path -Parent $asm; New-Item -ItemType Directory -Force -Path $dir | Out-Null; Add-Type -TypeDefinition @'
+          `$asm=${JSON.stringify(dllPath)}; if (Test-Path -LiteralPath $asm) { exit 0 }; $dir=Split-Path -Parent $asm; New-Item -ItemType Directory -Force -Path $dir | Out-Null; Add-Type -TypeDefinition @'
 using System; using System.Runtime.InteropServices;
 public class RawPrinterHelper {
   [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]
@@ -236,7 +305,7 @@ public class RawPrinterHelper {
             resolve(false);
           } else {
             log.info(
-              { dll: RAW_HELPER_DLL, metric: "print.raw_helper_warm" },
+              { dll: dllPath, metric: "print.raw_helper_warm" },
               "[ImpressoraCore] RawPrinterHelper.dll pré-compilada",
             );
             resolve(true);
@@ -297,10 +366,44 @@ function logRawWin32Timing(timings, meta = {}) {
   );
 }
 
+function printCoreLockWaitMs() {
+  return Math.max(
+    500,
+    parseInt(process.env.PRINT_CORE_LOCK_WAIT_MS || "4000", 10) || 4000,
+  );
+}
+
+/**
+ * Serializa impressões nativas. Se a fila interna exceder o orçamento,
+ * falha sem disparar segundo envio físico (anti-dupla / anti-hang ~2min).
+ */
 function comLockImpressao(fn) {
-  const exec = printLock.then(() => fn());
-  printLock = exec.catch(() => {});
-  return exec;
+  const waitMs = printCoreLockWaitMs();
+  const tEnter = Date.now();
+  const run = printLock.then(async () => {
+    const waitedMs = Date.now() - tEnter;
+    if (waitedMs > waitMs) {
+      const err = new Error(
+        `Timeout aguardando fila de impressão (${waitMs}ms; esperou ${waitedMs}ms)`,
+      );
+      err.code = "PRINT_LOCK_WAIT_TIMEOUT";
+      err.printTimedOut = true;
+      log.warn(
+        { waitedMs, waitMs, metric: "print.core_lock_wait_timeout" },
+        "[ImpressoraCore] Lock interno esgotado — sem envio",
+      );
+      throw err;
+    }
+    if (waitedMs > 200) {
+      log.info(
+        { waitedMs, metric: "print.core_lock_wait" },
+        "[ImpressoraCore] Esperou lock interno de impressão",
+      );
+    }
+    return fn();
+  });
+  printLock = run.catch(() => {});
+  return run;
 }
 
 // ── Device em memoria (gera buffer ESC/POS) ───────────────────────────────────
@@ -621,6 +724,13 @@ function assertPortaTermicaOuFalhar(nomeImpressora) {
  * quando WritePrinter/spooler demorava (sintoma: cupom ~140s + AbortError no front).
  * Sob physicalLock (mesma key da PosPrinter) — mesmo cabo USB/spooler.
  */
+function physicalLockWaitMs() {
+  return Math.max(
+    500,
+    parseInt(process.env.PRINT_PHYSICAL_LOCK_WAIT_MS || "4000", 10) || 4000,
+  );
+}
+
 function enviarRawWindows(nomeImpressora, buffer) {
   const physical = require("../../runtime/physicalResourceLock");
   const map = require("../../runtime/physicalResourceMap");
@@ -628,25 +738,40 @@ function enviarRawWindows(nomeImpressora, buffer) {
     map.resolvePosprinterKey(),
     () => enviarRawWindowsUnlocked(nomeImpressora, buffer),
     "native-raw",
+    { waitMs: physicalLockWaitMs() },
   );
 }
 
-function enviarRawWindowsUnlocked(nomeImpressora, buffer) {
+async function enviarRawWindowsUnlocked(nomeImpressora, buffer) {
   assertPortaTermicaOuFalhar(nomeImpressora);
-  const tmpBin = path.join(
-    os.tmpdir(),
-    `pdv-print-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.bin`,
-  );
-  const tmpCfg = path.join(
-    os.tmpdir(),
-    `pdv-print-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`,
-  );
-  fs.writeFileSync(tmpBin, buffer);
-  fs.writeFileSync(
+  const phaseT0 = Date.now();
+  const paths = ensureRawPrintScript();
+  const workDir = paths?.dir || rawWorkDir();
+  const scriptPath = paths?.scriptPath || rawPrintScriptPath();
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const tmpBin = path.join(workDir, `pdv-print-${id}.bin`);
+  const tmpCfg = path.join(workDir, `pdv-print-${id}.json`);
+
+  // Async — nunca writeFileSync no hot path (Defender em TEMP congelava ~112s).
+  const tWrite = Date.now();
+  await fs.promises.writeFile(tmpBin, buffer);
+  await fs.promises.writeFile(
     tmpCfg,
     JSON.stringify({ printer: nomeImpressora, file: tmpBin }),
     "utf8",
   );
+  const writeTmpMs = Date.now() - tWrite;
+  if (writeTmpMs > 500) {
+    log.warn(
+      {
+        writeTmpMs,
+        workDir,
+        bytes: buffer.length,
+        metric: "print.raw_tmp_write_slow",
+      },
+      "[ImpressoraCore] Escrita tmp RAW lenta — verifique antivírus em ProgramData/impressao",
+    );
+  }
 
   return new Promise((resolve, reject) => {
     const t0 = Date.now();
@@ -739,6 +864,18 @@ function enviarRawWindowsUnlocked(nomeImpressora, buffer) {
       });
     };
 
+    log.info(
+      {
+        metric: "print.raw_phase",
+        printer: nomeImpressora,
+        workDir,
+        writeTmpMs,
+        preSpawnMs: Date.now() - phaseT0,
+        bytes: buffer.length,
+      },
+      "[ImpressoraCore] RAW spawn PowerShell",
+    );
+
     const child = execFile(
       "powershell",
       [
@@ -746,7 +883,7 @@ function enviarRawWindowsUnlocked(nomeImpressora, buffer) {
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        RAW_PRINT_SCRIPT,
+        scriptPath,
         tmpCfg,
       ],
       { windowsHide: true, encoding: "utf8" },
@@ -2341,7 +2478,15 @@ function deveAbrirGavetaNoPayload(payload, opts = {}) {
 
 async function imprimirComGavetaOpcional(renderFn, payload, opts = {}) {
   return comLockImpressao(async () => {
+    const tBuf = Date.now();
     let buffer = await gerarBuffer(renderFn);
+    const bufferMs = Date.now() - tBuf;
+    if (bufferMs > 800) {
+      log.warn(
+        { bufferMs, bytes: buffer.length, metric: "print.buffer_slow" },
+        "[ImpressoraCore] Geração de buffer ESC/POS lenta",
+      );
+    }
     if (deveAbrirGavetaNoPayload(payload, opts) && !gavetaPulseRecente()) {
       buffer = Buffer.concat([buffer, drawerPulseBuffer()]);
       markGavetaPulseSent();
@@ -2400,6 +2545,9 @@ module.exports = {
   },
   warmRawWin32Helper,
   warmPrintHotPath,
+  rawWorkDir,
+  ensureRawPrintScript,
+  resetRawScriptCacheForTests,
   resolverPortaAcbrConfigurada,
   resolverNomeRawConfigurado,
   bytesQrGsK,

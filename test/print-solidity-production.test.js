@@ -48,6 +48,41 @@ async function run() {
     assert.ok(src.includes("printTimedOut = true") || src.includes("printTimedOut: true"));
     assert.ok(!/\bexecFileSync\s*\(/.test(src), "P2b: execFileSync proibido no RAW");
     assert.ok(src.includes("listagemWindowsBloqueada"));
+    assert.ok(src.includes("rawWorkDir"), "tmp RAW em ProgramData/impressao/raw");
+    assert.ok(src.includes("fs.promises.writeFile"), "hot path RAW sem writeFileSync");
+    assert.ok(src.includes("print.raw_tmp_write_slow") || src.includes("print.raw_phase"));
+    assert.ok(src.includes("rawScriptCache"), "script PowerShell memoizado no processo");
+    assert.ok(src.includes("PRINT_PHYSICAL_LOCK_WAIT_MS"), "orçamento wait physicalLock");
+    assert.ok(
+      !src.includes("print.event_loop_lag"),
+      "métrica de lag do event loop fica no PrintExecutor",
+    );
+  });
+
+  await test("rawWorkDir usa impressao sob MARGIN_ENGINE_ROOT", () => {
+    const core = require("../print/escpos/impressoraCore");
+    const dir = core.rawWorkDir();
+    assert.ok(dir.includes("impressao") || dir.includes("pdv-margin-raw"), dir);
+    assert.ok(!/Windows[\\/]+TEMP/i.test(dir), `não deve usar Windows\\TEMP: ${dir}`);
+  });
+
+  await test("ensureRawPrintScript memoiza — 2ª chamada idêntica sem recriar", () => {
+    const core = require("../print/escpos/impressoraCore");
+    core.resetRawScriptCacheForTests();
+    // Em Linux IS_WIN=false → null; contrato é idempotência / cache API
+    const a = core.ensureRawPrintScript();
+    const b = core.ensureRawPrintScript();
+    assert.strictEqual(a, b);
+  });
+
+  await test("PrintExecutor detecta event_loop_lag no soft deadline", () => {
+    const src = fs.readFileSync(
+      path.join(__dirname, "../print/printExecutor.js"),
+      "utf8",
+    );
+    assert.ok(src.includes("print.event_loop_lag"));
+    assert.ok(src.includes("print.drain_accepted_after_lag"));
+    assert.ok(src.includes("wallAtDeadline"));
   });
 
   await test("worker timeout rejeita antes de await terminate", () => {

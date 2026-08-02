@@ -3,6 +3,14 @@
 **Última atualização:** 2026-08-01  
 **Versão:** `1.0.6` — hotfix pós-install (HTTP :9100 estável no boot)
 
+## Impressão lenta ~112s neste PC (2026-08-01)
+
+- Sintoma: cupom “Impresso” com `durationMs` ~111–115s; Win32 RAW `totalMs` ~170–300ms; soft 4s só disparava no fim.
+- Causa: event loop congelado **antes** do PowerShell — `writeFileSync` em `C:\Windows\TEMP` (serviço LocalSystem + Defender).
+- Fix: tmp/script/DLL em `ProgramData\...\impressao\raw`; escrita async; script memoizado; waits core/physical 4s; métricas de lag.
+- Solidez: `npm run test:print` OK (solidity 10/10, physical wait timeout, schema, win-kill).
+- ADR: `.ai/decisions/ADR-print-raw-programdata-fast-20260801.md`. Aguardando commit/deploy no caixa.
+
 ## Diagnóstico Motor / memória worker (2026-08-01)
 
 - Sintoma: SEFAZ 107 + `/acbr/sefaz/status` operacional, Diagnóstico Motor ✗ Verificar / OFFLINE.

@@ -246,6 +246,21 @@ async function executarProviderOp(provider, op, args, timeoutMs) {
     timer = setTimeout(() => {
       if (!settled) {
         settled = true;
+        const lagMs = Date.now() - t0 - timeoutMs;
+        if (lagMs > 2000) {
+          log.error(
+            {
+              op,
+              timeoutMs,
+              lagMs,
+              wallMs: Date.now() - t0,
+              metric: "print.event_loop_lag",
+              note:
+                "Soft deadline atrasou — event loop bloqueado (AV/TEMP sync/FFI). Cupom fica lento nesta máquina.",
+            },
+            "[PrintExecutor] Event loop lag — soft timeout atrasado",
+          );
+        }
         resolve(true);
       }
     }, timeoutMs);
@@ -278,8 +293,15 @@ async function executarProviderOp(provider, op, args, timeoutMs) {
   }
 
   const drainMs = hardDrainMs(timeoutMs);
+  const wallAtDeadline = Date.now() - t0;
   log.warn(
-    { op, timeoutMs, drainMs, provider: provider.getProviderName() },
+    {
+      op,
+      timeoutMs,
+      drainMs,
+      wallAtDeadline,
+      provider: provider.getProviderName(),
+    },
     "[PrintExecutor] Deadline — drain curto (anti-hang); sem segundo envio",
   );
 
@@ -299,10 +321,27 @@ async function executarProviderOp(provider, op, args, timeoutMs) {
       }),
     ]);
     const durationMs = Date.now() - t0;
-    log.info(
-      { op, durationMs, late: true },
-      "[PrintExecutor] Envio concluiu no drain — aceito sem reimpressão",
-    );
+    // Soft+drain saudável ≈ 6s. Se wall >> isso, o soft timer só disparou tarde
+    // (event loop lag) — ainda aceita (papel pode ter saído) mas marca métrica.
+    const expectedMax = timeoutMs + drainMs + 1500;
+    if (durationMs > expectedMax) {
+      log.warn(
+        {
+          op,
+          durationMs,
+          expectedMax,
+          lagMs: durationMs - timeoutMs,
+          metric: "print.drain_accepted_after_lag",
+          late: true,
+        },
+        "[PrintExecutor] Envio no drain após lag extremo — investigue AV/TEMP nesta máquina",
+      );
+    } else {
+      log.info(
+        { op, durationMs, late: true },
+        "[PrintExecutor] Envio concluiu no drain — aceito sem reimpressão",
+      );
+    }
     return {
       result,
       durationMs,
