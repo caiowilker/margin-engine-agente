@@ -67,9 +67,9 @@ async function run() {
     assert.strictEqual(ret, 0);
   });
 
-  await testAsync("promise-style sem callback — POS_Imprimir arity 5", async () => {
+  await testAsync("promise-style sem callback — POS_Imprimir arity 5 (flags int)", async () => {
     const wrapped = __wrapKoffiFunc(makeFakeKoffiFunc(5), "POS_Imprimir");
-    const ret = await wrapped.async("tags", true, true, true, 1);
+    const ret = await wrapped.async("tags", 1, 1, 1, 1);
     assert.strictEqual(ret, 0);
   });
 

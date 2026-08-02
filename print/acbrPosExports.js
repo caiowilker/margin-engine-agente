@@ -36,41 +36,43 @@ const POS_FFI_SIGNATURES = {
   POS_Desativar: "int POS_Desativar()",
 
   // ── Impressão ───────────────────────────────────────────────────────────
+  // Boolean ACBr → int (0/1), alinhado ao demo oficial Node (ffi-napi Windows).
+  // koffi `bool` (1 byte) desalinha a stack em várias builds da DLL.
   POS_Imprimir:
-    "int POS_Imprimir(str eString, bool PulaLinha, bool DecodificarTags, bool CodificarPagina, int Copias)",
+    "int POS_Imprimir(str eString, int PulaLinha, int DecodificarTags, int CodificarPagina, int Copias)",
   POS_ImprimirLinha: "int POS_ImprimirLinha(str aString)",
   POS_ImprimirCmd: "int POS_ImprimirCmd(str aString)",
   POS_ImprimirTags: "int POS_ImprimirTags()",
   POS_ImprimirImagemArquivo: "int POS_ImprimirImagemArquivo(str aPath)",
   POS_ImprimirLogo: "int POS_ImprimirLogo(int nAKC1, int nAKC2, int nFatorX, int nFatorY)",
   POS_ImprimirCheque:
-    "int POS_ImprimirCheque(int CodBanco, str AValor, str ADataEmissao, str AFavorecido, str ACidade, str AComplemento, bool LerCMC7, int SegundosEspera)",
+    "int POS_ImprimirCheque(int CodBanco, str AValor, str ADataEmissao, str AFavorecido, str ACidade, str AComplemento, int LerCMC7, int SegundosEspera)",
   POS_ImprimirTextoCheque:
-    "int POS_ImprimirTextoCheque(int X, int Y, str AString, bool AguardaCheque, int SegundosEspera)",
+    "int POS_ImprimirTextoCheque(int X, int Y, str AString, int AguardaCheque, int SegundosEspera)",
 
   // ── Operação / papel / gaveta ───────────────────────────────────────────
   POS_Zerar: "int POS_Zerar()",
   POS_InicializarPos: "int POS_InicializarPos()",
   POS_Reset: "int POS_Reset()",
   POS_PularLinhas: "int POS_PularLinhas(int NumLinhas)",
-  POS_CortarPapel: "int POS_CortarPapel(bool Parcial)",
+  POS_CortarPapel: "int POS_CortarPapel(int Parcial)",
   POS_AbrirGaveta: "int POS_AbrirGaveta()",
 
   // ── Status / portas / logo / cheque ─────────────────────────────────────
   POS_TxRx:
-    "int POS_TxRx(str eCmd, uint8 BytesToRead, int ATimeOut, bool WaitForTerminator, _Out_ uint8 *sResposta, _Inout_ int *esTamanho)",
+    "int POS_TxRx(str eCmd, uint8 BytesToRead, int ATimeOut, int WaitForTerminator, _Out_ uint8 *sResposta, _Inout_ int *esTamanho)",
   POS_LerInfoImpressora: "int POS_LerInfoImpressora(_Out_ uint8 *sInfo, _Inout_ int *esTamanho)",
   POS_LerStatusImpressora: "int POS_LerStatusImpressora(int Tentativas, _Out_ int *status)",
   POS_LerStatusImpressoraFormatado:
     "int POS_LerStatusImpressoraFormatado(int Tentativas, _Out_ uint8 *sStatus, _Inout_ int *esTamanho)",
   POS_RetornarTags:
-    "int POS_RetornarTags(bool IncluiAjuda, _Out_ uint8 *sResposta, _Inout_ int *esTamanho)",
+    "int POS_RetornarTags(int IncluiAjuda, _Out_ uint8 *sResposta, _Inout_ int *esTamanho)",
   POS_AcharPortas: "int POS_AcharPortas(_Out_ uint8 *sPortas, _Inout_ int *esTamanho)",
   POS_GravarLogoArquivo: "int POS_GravarLogoArquivo(str aPath, int nAKC1, int nAKC2)",
   POS_ApagarLogo: "int POS_ApagarLogo(int nAKC1, int nAKC2)",
   POS_LeituraCheque: "int POS_LeituraCheque(_Out_ uint8 *sResposta, _Inout_ int *esTamanho)",
   POS_LerCMC7:
-    "int POS_LerCMC7(bool AguardaCheque, int SegundosEspera, _Out_ uint8 *sResposta, _Inout_ int *esTamanho)",
+    "int POS_LerCMC7(int AguardaCheque, int SegundosEspera, _Out_ uint8 *sResposta, _Inout_ int *esTamanho)",
   POS_EjetarCheque: "int POS_EjetarCheque()",
   POS_PodeLerDaPorta: "int POS_PodeLerDaPorta()",
   POS_LerCaracteristicas:
@@ -122,9 +124,14 @@ const POS_WORKER_EXPORTS = [
 
 const POS_WORKER_REQUIRED = new Set([
   "POS_Inicializar",
-  "POS_Ativar",
-  "POS_Imprimir",
   "POS_Finalizar",
+  "POS_UltimoRetorno",
+  "POS_ConfigGravarValor",
+  "POS_ConfigGravar",
+  "POS_Ativar",
+  "POS_Desativar",
+  "POS_InicializarPos",
+  "POS_Imprimir",
 ]);
 
 /**

@@ -281,13 +281,15 @@ test("printFiscalCoord — fiscalEmUso sem lock ativo", () => {
   delete process.env.PRINTER_PORTA;
   runtime.resetAcbrPosCircuit();
   try {
-    // Sem RAW / circuito: tudo via ACBr (não fast-native)
+    // Padrão: ACBr PosPrinter (mesmo em RAW:) — native só circuito / PRINT_FAST_NATIVE / gaveta
     assert.strictEqual(isFastNativePath({ payload: { naoFiscal: true } }), false);
     assert.strictEqual(isFastNativePath({ op: "imprimirPedido" }), false);
+    assert.strictEqual(isFastNativePath({ op: "abrirGaveta" }), true);
 
     process.env.PRINTER_PORTA = "RAW:POSPrinter POS80";
-    assert.strictEqual(isFastNativePath({ payload: { naoFiscal: true } }), true);
-    assert.strictEqual(isFastNativePath({ op: "imprimirPedido" }), true);
+    assert.strictEqual(isFastNativePath({ payload: { naoFiscal: true } }), false);
+    assert.strictEqual(isFastNativePath({ op: "imprimirPedido" }), false);
+    assert.strictEqual(isFastNativePath({ op: "abrirGaveta" }), true);
 
     delete process.env.PRINTER_PORTA;
     process.env.PRINT_FAST_NATIVE = "true";
@@ -347,7 +349,7 @@ test("preferNativeEscPos — padrão ACBr (PRINT_FAST_NATIVE=false)", () => {
   }
 });
 
-test("preferNativeEscPos — RAW:Windows comercial usa native sem PRINT_FAST_NATIVE", () => {
+test("preferNativeEscPos — RAW:Windows também usa ACBr (sem PRINT_FAST_NATIVE)", () => {
   const { preferNativeEscPos } = require("../print/drivers/acbrPosPrinterProvider");
   const runtime = require("../print/acbrPosPrinterRuntime");
   const prev = process.env.PRINT_FAST_NATIVE;
@@ -356,8 +358,8 @@ test("preferNativeEscPos — RAW:Windows comercial usa native sem PRINT_FAST_NAT
   process.env.PRINTER_PORTA = "RAW:POSPrinter POS80";
   runtime.resetAcbrPosCircuit();
   try {
-    assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), true);
-    assert.strictEqual(preferNativeEscPos({}), true);
+    assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), false);
+    assert.strictEqual(preferNativeEscPos({}), false);
     assert.strictEqual(
       preferNativeEscPos({ chaveNfe: "35" + "0".repeat(42), naoFiscal: false }),
       false,
@@ -450,6 +452,50 @@ test("printErrors — timeout pré-impressão ConfigGravar sugere fallback", () 
   const cls = classifyPrintError(err);
   assert.strictEqual(cls.retryable, false);
   assert.strictEqual(cls.fallbackSuggested, true);
+});
+
+test("printErrors — worker timeout imprimirTags NÃO sugere fallback (anti-dupla)", () => {
+  const { classifyPrintError } = require("../print/printErrors");
+  const err = new Error("Timeout ACBr PosPrinter worker (5000ms) cmd=imprimirTags");
+  err.code = "ACBR_POS_WORKER_KILLED";
+  err.printTimedOut = true;
+  err.acbrPhase = "imprimir";
+  const cls = classifyPrintError(err);
+  assert.strictEqual(cls.retryable, false);
+  assert.strictEqual(cls.fallbackSuggested, false);
+});
+
+test("printErrors — worker timeout init sugere fallback", () => {
+  const { classifyPrintError } = require("../print/printErrors");
+  const err = new Error("Timeout ACBr PosPrinter worker (5000ms) cmd=init");
+  err.code = "ACBR_POS_WORKER_KILLED";
+  err.printTimedOut = true;
+  err.acbrPhase = "init";
+  assert.strictEqual(classifyPrintError(err).fallbackSuggested, true);
+});
+
+test("printerLocalConfig — PaginaDeCodigo UTF8=5 e CortaPapel coerente", () => {
+  const {
+    normalizePaginaDeCodigo,
+    encodingToPaginaDeCodigo,
+    cutToIniFields,
+    gerarIniContent,
+  } = require("../print/printerLocalConfig");
+  assert.strictEqual(normalizePaginaDeCodigo("65001"), "5");
+  assert.strictEqual(encodingToPaginaDeCodigo("UTF8"), "5");
+  assert.deepStrictEqual(cutToIniFields("total"), { cortaPapel: "1", tipoCorte: "0" });
+  assert.deepStrictEqual(cutToIniFields("partial"), { cortaPapel: "1", tipoCorte: "1" });
+  assert.deepStrictEqual(cutToIniFields("none"), { cortaPapel: "0", tipoCorte: "0" });
+  const ini = gerarIniContent({
+    modelo: "1",
+    porta: "RAW:POS80",
+    pageCode: "65001",
+    cut: "total",
+    colunas: "48",
+  });
+  assert.ok(/PaginaDeCodigo=5/.test(ini));
+  assert.ok(/CortaPapel=1/.test(ini));
+  assert.ok(/TipoCorte=0/.test(ini));
 });
 
 test("isFastNativePath — circuito aberto NÃO força fiscal", () => {

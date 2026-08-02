@@ -63,7 +63,8 @@ async function withProvider(fn, opts = {}) {
   let primary = factory.getPrintProvider();
   let primaryName = primary.getProviderName();
 
-  // Por job: gaveta / circuito / RAW comercial / preferNative → native direto (sem ACBr).
+  // Por job: gaveta / circuito / preferNative → native direto (sem ACBr).
+  // RAW:Windows NÃO força bypass — caminho oficial é ACBr PosPrinter (worker).
   // Fiscal/DANFE com chave permanece no ACBr mesmo com circuito aberto.
   if (!opts.forceAcbr && primaryName === "acbr-posprinter") {
     try {
@@ -74,7 +75,6 @@ async function withProvider(fn, opts = {}) {
         op === "abrirGaveta" ||
         (!fiscal &&
           (runtime.isAcbrPosCircuitOpen?.() ||
-            acbrProv.portaEhRawWindows?.() ||
             (payload && acbrProv.preferNativeEscPos?.(payload))));
       if (wantNative) {
         const fbName = factory.resolveFallbackName() || "native";
@@ -90,9 +90,7 @@ async function withProvider(fn, opts = {}) {
                   ? "gaveta"
                   : runtime.isAcbrPosCircuitOpen?.()
                     ? "circuit"
-                    : acbrProv.portaEhRawWindows?.()
-                      ? "raw_windows"
-                      : "prefer_native",
+                    : "prefer_native",
             },
             "[PrintExecutor] Native direto (comercial)",
           );
@@ -131,16 +129,19 @@ async function withProvider(fn, opts = {}) {
       try {
         phase = phase || require("./acbrPosPrinterRuntime").getAcbrPrintPhase?.();
       } catch (_) {}
-      const phasePre =
-        phase === "config" || phase === "ativar" || phase === "init" || phase === "idle";
+      const midPrint =
+        phase === "imprimir" ||
+        /cmd=imprimirtags|pos_imprimir|imprimir\b/i.test(msgLow);
+      const phasePre = phase === "config" || phase === "ativar" || phase === "init";
       const prePrintOnly =
         err?.code !== "RAW_PRINT_TIMEOUT" &&
+        !midPrint &&
         (err?.fallbackNative === true ||
-          ((phasePre ||
-            /pos_configgravar|configgravarvalor|pos_ativar|pos_inicializar/i.test(msgLow) ||
-            err?.acbrRet === -10) &&
-            phase !== "imprimir" &&
-            !/pos_imprimir|imprimir\b/i.test(msgLow)));
+          phasePre ||
+          /pos_configgravar|configgravarvalor|pos_ativar|pos_inicializar\b|cmd=init\b/i.test(
+            msgLow,
+          ) ||
+          err?.acbrRet === -10);
       if (!prePrintOnly) {
         log.warn(
           {

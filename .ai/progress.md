@@ -178,6 +178,14 @@
 - `killProcessTree`: hard deadline 6s.
 - ADR: [ADR-print-failfast-tcp-list-20260731.md](./decisions/ADR-print-failfast-tcp-list-20260731.md).
 
+## Changelog (2026-08-01) — PosPrinter ACBr primário (RAW)
+
+- Removido bypass incondicional `RAW:` → ESC/POS nativo (`preferNativeEscPos` + `printExecutor`).
+- Caminho oficial: ACBr PosPrinter (worker); native só circuito / `PRINT_FAST_NATIVE` / gaveta / fallback pré-impressão.
+- FFI: Boolean de `POS_Imprimir` etc. como `int` 0/1 (demo oficial Windows).
+- ADR: `ADR-posprinter-acbr-primary-20260801.md` (supersede RAW-native-fast).
+- **Solidez:** factory não troca provider por circuito (fiscal permanece ACBr); anti-dupla em timeout `imprimirTags`; `ConfigGravar` via `callPos`; PaginaDeCodigo UTF8=`5` (não 65001); CortaPapel/TipoCorte coerentes; circuito TTL half-open 15 min; worker required exports alinhados ao hot path.
+
 ## Changelog (2026-07-31) — Diagnóstico Win32 + half-open circuito
 
 - **`print.raw_win32_timing`:** OpenPrinter → WritePrinter → EndDocPrinter com `slowest=` no log.

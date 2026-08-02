@@ -128,9 +128,9 @@ const PRINT_ENV_FIELDS = [
     kind: "int",
     min: 0,
     max: 86400000,
-    default: 0,
+    default: 900000,
     comment:
-      "TTL do circuito (0=nunca; só Salvar/Detectar reabre ACBr). >0 = half-open após ms",
+      "TTL half-open do circuito (ms). Padrão 15 min; 0 = só Salvar/Detectar reabre ACBr",
   },
   {
     env: "ACBR_POS_ALLOW_INPROCESS",

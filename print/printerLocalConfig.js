@@ -64,6 +64,50 @@ function paperMmFromColunas(colunas) {
   return 80;
 }
 
+/** Enum ACBr PaginaDeCodigo — nunca Windows code page (65001). */
+function normalizePaginaDeCodigo(raw) {
+  const s = String(raw || "2").trim();
+  if (s === "65001" || s === "5" || /^utf-?8$/i.test(s)) return "5";
+  if (s === "1252" || s === "6") return "6";
+  if (s === "860" || s === "4") return "4";
+  if (s === "850" || s === "2") return "2";
+  const n = parseInt(s, 10);
+  if (Number.isFinite(n) && n >= 0 && n <= 6) return String(n);
+  return "2";
+}
+
+function encodingToPaginaDeCodigo(encoding) {
+  const e = String(encoding || "").toUpperCase();
+  if (e === "UTF8" || e === "UTF-8") return "5";
+  if (e === "1252" || e === "CP1252") return "6";
+  if (e === "CP860" || e === "860") return "4";
+  return "2"; // CP850
+}
+
+/** CortaPapel + TipoCorte → cut lógico (partial|total|none). */
+function resolveCutFromIni(cortaPapel, tipoCorte) {
+  const tipo = String(tipoCorte ?? "").trim();
+  if (String(cortaPapel) === "0") {
+    // Novo: CortaPapel=0 + TipoCorte gravado → sem corte.
+    if (tipo === "0" || tipo === "1") return "none";
+    // Legado: só CortaPapel=0 (sem TipoCorte) era "total" invertido.
+    return "total";
+  }
+  if (tipo === "0") return "total";
+  return "partial";
+}
+
+function cutToIniFields(cut) {
+  const c = String(cut || "partial").toLowerCase();
+  if (c === "none" || c === "off" || c === "false") {
+    return { cortaPapel: "0", tipoCorte: "0" };
+  }
+  if (c === "total" || c === "full") {
+    return { cortaPapel: "1", tipoCorte: "0" };
+  }
+  return { cortaPapel: "1", tipoCorte: "1" };
+}
+
 function lerIniValores(iniPath) {
   const defaults = {
     modelo: "0",
@@ -87,8 +131,13 @@ function lerIniValores(iniPath) {
     modelo: get("PosPrinter", "Modelo") || defaults.modelo,
     porta: get("PosPrinter", "Porta") || defaults.porta,
     colunas: get("PosPrinter", "ColunasFonteNormal") || defaults.colunas,
-    pageCode: get("PosPrinter", "PaginaDeCodigo") || defaults.pageCode,
-    cut: get("PosPrinter", "CortaPapel") === "0" ? "total" : "partial",
+    pageCode: normalizePaginaDeCodigo(
+      get("PosPrinter", "PaginaDeCodigo") || defaults.pageCode,
+    ),
+    cut: resolveCutFromIni(
+      get("PosPrinter", "CortaPapel"),
+      get("PosPrinter", "TipoCorte"),
+    ),
     baud: get("PosPrinter_Device", "Baud") || defaults.baud,
     parity: get("PosPrinter_Device", "Parity") || defaults.parity,
     stopBits: get("PosPrinter_Device", "Stop") || defaults.stopBits,
@@ -112,6 +161,8 @@ ArqLog=
 `;
 
   const deviceBlock = buildDeviceSection(vals, { porta: vals.porta });
+  const cutFields = cutToIniFields(vals.cut);
+  const pageCode = normalizePaginaDeCodigo(vals.pageCode || "2");
 
   const logo = (() => {
     try {
@@ -137,9 +188,10 @@ ${principalLog}
 [PosPrinter]
 Modelo=${vals.modelo || "0"}
 Porta=${vals.porta || ""}
-PaginaDeCodigo=${vals.pageCode || "2"}
+PaginaDeCodigo=${pageCode}
 ColunasFonteNormal=${vals.colunas || "48"}
-CortaPapel=${vals.cut === "total" ? "0" : "1"}
+CortaPapel=${cutFields.cortaPapel}
+TipoCorte=${cutFields.tipoCorte}
 TraduzirTags=1
 IgnorarTags=0
 LinhasBuffer=${process.env.PRINTER_BUFFER_LINES || "0"}
@@ -289,8 +341,13 @@ function projetarSalvar(updates, valsBase) {
     }
   }
   if (updates.encoding) {
-    envPatch.PRINTER_ENCODING = updates.encoding === "UTF8" ? "UTF8" : "CP860";
-    vals.pageCode = updates.encoding === "UTF8" ? "65001" : "2";
+    envPatch.PRINTER_ENCODING =
+      updates.encoding === "UTF8" || updates.encoding === "UTF-8"
+        ? "UTF8"
+        : updates.encoding === "1252"
+          ? "1252"
+          : "CP850";
+    vals.pageCode = encodingToPaginaDeCodigo(updates.encoding);
   }
   if (updates.cut) {
     envPatch.PRINTER_CUT = updates.cut;
@@ -588,7 +645,9 @@ function salvarSemPorta(updates) {
     modelo: updates.modelo != null ? String(updates.modelo) : before.modelo || "0",
     porta: "",
     cut: updates.cut || before.cut || "partial",
-    pageCode: updates.encoding === "UTF8" ? "65001" : before.pageCode || "2",
+    pageCode: updates.encoding
+      ? encodingToPaginaDeCodigo(updates.encoding)
+      : normalizePaginaDeCodigo(before.pageCode || "2"),
   };
 
   if (iniSemMudanca(before, vals) && envPatchSemMudanca(envPatch)) {
@@ -652,4 +711,8 @@ module.exports = {
   paperMmFromColunas,
   projetarSalvar,
   sanitizarConfigPersistida,
+  normalizePaginaDeCodigo,
+  encodingToPaginaDeCodigo,
+  resolveCutFromIni,
+  cutToIniFields,
 };

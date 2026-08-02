@@ -31,7 +31,7 @@ Use em cada PC de caixa antes de liberar o turno.
 9. Timeouts no `.env` devem bater com o bloco `PRINT_ENV_SCHEMA` do `.env.example` (não usar 8000 legado).
 10. Em máquina lenta (~2 min): logs esperados `print.taskkill_attempt` + `print.child_exit` / `print.late_abandoned` com `lateMs`; `/health` e caixa devem continuar OK. Se `print.taskkill_still_alive` → processar checklist USB acima. Notepad na mesma fila é o teste decisivo.
 11. **Diagnóstico Win32 (máquina lenta):** rode `scripts/diagnose-raw-print.ps1` **nessa PC e na PC boa** e compare. No agente, o log `print.raw_win32_timing` mostra `slowest=` (`WritePrinter` / `EndDocPrinter` / `OpenPrinter`). Se a etapa lenta for WritePrinter/EndDocPrinter com fila RAW ok → problema abaixo do agente (USB/driver/spooler).
-12. **Após update / falha ACBr:** o circuito fica aberto (comerciais via native) até **Salvar** porta/modelo ou **Detectar force**. TTL padrão é `0` (não reabre sozinho). Opcional: `ACBR_POS_CIRCUIT_TTL_MS=900000` para half-open em 15 min. Confirme modelo Epson (`1`) e porta `RAW:`/`TCP:` válida.
+12. **Após update / falha ACBr:** circuito abre só em falha de **sessão/Ativar** (não em timeout mid-print). Comerciais → native; fiscal/DANFE continua no ACBr. TTL half-open padrão **15 min** (`ACBR_POS_CIRCUIT_TTL_MS=900000`); `0` = só Salvar/Detectar. Confirme modelo Epson (`1`) e porta `RAW:`/`TCP:` válida.
 
 ## Critérios de aceite rápidos
 

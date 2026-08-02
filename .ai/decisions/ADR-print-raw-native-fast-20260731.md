@@ -1,7 +1,7 @@
 # ADR — RAW:Windows comercial via ESC/POS nativo rápido
 
 **Data:** 2026-07-31  
-**Status:** Aceito (revisado)
+**Status:** Superseded por [ADR-posprinter-acbr-primary-20260801.md](./ADR-posprinter-acbr-primary-20260801.md)
 
 ## Problema
 

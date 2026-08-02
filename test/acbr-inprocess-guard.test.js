@@ -56,11 +56,11 @@ test("classify — INPROCESS_BLOCKED sugere native", () => {
   assert.strictEqual(c.retryable, false);
 });
 
-test("circuito TTL default 0 no schema", () => {
+test("circuito TTL default 15 min no schema", () => {
   const { getPrintEnvField } = require("../config/printEnvSchema");
   const ttl = getPrintEnvField("ACBR_POS_CIRCUIT_TTL_MS");
   assert.ok(ttl);
-  assert.strictEqual(ttl.default, 0);
+  assert.strictEqual(ttl.default, 900000);
 });
 
 console.log("acbr-inprocess-guard OK");

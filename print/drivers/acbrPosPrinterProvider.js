@@ -1,8 +1,9 @@
 /**
  * AcbrPosPrinterProvider — ACBrLib PosPrinter (padrão 1.0).
  *
- * Caminho oficial: tags ACBr via DLL (koffi). ESC/POS nativo fica só como
- * retaguarda (PRINTER_FALLBACK / PRINT_FAST_NATIVE=true / lib ausente).
+ * Caminho oficial: tags ACBr via DLL/worker (também em RAW:Windows).
+ * ESC/POS nativo só retaguarda: circuito, PRINT_FAST_NATIVE, fallback pré-impressão,
+ * gaveta, ou lib ausente.
  */
 const log = require("../../logger").child({ modulo: "acbr_posprinter" });
 const runtime = require("../acbrPosPrinterRuntime");
@@ -15,9 +16,9 @@ const pedidoTags = require("../pedidoAcbrTags");
 
 /**
  * Prefere ESC/POS nativo vs ACBr tags.
- * Padrão: ACBr (PRINT_FAST_NATIVE=false), exceto:
- * - circuito RAW aberto (Ativar/ConfigGravar -10)
- * - porta RAW:Windows em comerciais (ACBr em spooler RAW costuma hang/timeout)
+ * Padrão: ACBr PosPrinter (PRINT_FAST_NATIVE=false), inclusive em RAW:Windows
+ * (worker + sessão quente + ControlePorta=0). Native só como retaguarda:
+ * - circuito aberto (Ativar/ConfigGravar -10 / hang)
  * - PRINT_FAST_NATIVE=true|always
  */
 function isFiscalPayload(payload) {
@@ -29,7 +30,7 @@ function isFiscalPayload(payload) {
   return false;
 }
 
-/** Porta RAW:NomeWindows — ESC/POS nativo é o caminho sólido/rápido. */
+/** Porta RAW:NomeWindows — usada por diagnóstico / gaveta; NÃO força bypass do ACBr. */
 function portaEhRawWindows() {
   try {
     const local = require("../printerLocalConfig").ler()?.porta;
@@ -50,14 +51,10 @@ function preferNativeEscPos(payload) {
   } catch (_) {
     /* runtime opcional em testes */
   }
-  // RAW:Windows + cupom comercial: não pagar timeout ACBr (ConfigGravar/Ativar -10).
-  if (portaEhRawWindows() && !isFiscalPayload(payload)) {
-    return true;
-  }
   const flag = String(process.env.PRINT_FAST_NATIVE || "false").toLowerCase();
   if (flag === "false" || flag === "0" || flag === "") return false;
   if (flag === "always") return true;
-  // PRINT_FAST_NATIVE=true → só ops comerciais no native; fiscal com chave no ACBr
+  // PRINT_FAST_NATIVE=true → comerciais no native; fiscal/DANFE no ACBr
   if (!payload || typeof payload !== "object") return true;
   if (payload.naoFiscal === true || payload.cupomSemFiscal === true) return true;
   if (isFiscalPayload(payload)) return false;

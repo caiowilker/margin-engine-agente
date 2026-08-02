@@ -184,20 +184,41 @@ async function run() {
     }
   });
 
-  await test("factory honra circuito → effective native", () => {
+  await test("factory NÃO troca provider por circuito (fiscal fica no ACBr)", () => {
     const runtime = require("../print/acbrPosPrinterRuntime");
     const factory = require("../print/factory");
+    const { preferNativeEscPos } = require("../print/drivers/acbrPosPrinterProvider");
     const prevProv = process.env.PRINTER_PROVIDER;
+    const prevFast = process.env.PRINT_FAST_NATIVE;
+    const prevParity = process.env.PRINTER_ALLOW_PARITY;
     process.env.PRINTER_PROVIDER = "acbr-posprinter";
+    process.env.PRINTER_ALLOW_PARITY = "true"; // operacional sem DLL no CI
+    delete process.env.PRINT_FAST_NATIVE;
     runtime.resetAcbrPosCircuit();
     factory.resetPrintProvider();
     runtime.openAcbrPosCircuit("test-factory");
     factory.resetPrintProvider();
     try {
-      assert.strictEqual(factory.resolveEffectiveProviderName(), "native");
+      // Cache global permanece acbr — routing comercial é por job
+      assert.strictEqual(factory.resolveEffectiveProviderName(), "acbr-posprinter");
+      assert.strictEqual(
+        factory.resolveEffectiveProviderName({
+          payload: { chaveNfe: "35" + "0".repeat(42) },
+        }),
+        "acbr-posprinter",
+      );
+      assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), true);
+      assert.strictEqual(
+        preferNativeEscPos({ chaveNfe: "35" + "0".repeat(42), naoFiscal: false }),
+        false,
+      );
     } finally {
       runtime.resetAcbrPosCircuit();
       process.env.PRINTER_PROVIDER = prevProv || "mock";
+      if (prevFast === undefined) delete process.env.PRINT_FAST_NATIVE;
+      else process.env.PRINT_FAST_NATIVE = prevFast;
+      if (prevParity === undefined) delete process.env.PRINTER_ALLOW_PARITY;
+      else process.env.PRINTER_ALLOW_PARITY = prevParity;
       factory.resetPrintProvider();
     }
   });

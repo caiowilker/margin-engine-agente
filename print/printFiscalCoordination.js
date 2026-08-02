@@ -117,12 +117,12 @@ function isFastNativePath(opts = {}) {
     if (typeof acbrProv?.preferNativeEscPos === "function") {
       if (payload && typeof payload === "object") {
         if (acbrProv.preferNativeEscPos(payload)) return true;
-      } else if (opts.op && OPS_FAST_NATIVE.has(opts.op)) {
-        // Gaveta/caixa/pedido sem payload: RAW: → native direto
-        if (acbrProv.portaEhRawWindows?.()) return true;
       }
     }
   } catch (_) {}
+
+  // Gaveta: sempre ESC/POS nativo (pulso), sem sessão PosPrinter.
+  if (opts.op === "abrirGaveta") return true;
 
   const flag = String(process.env.PRINT_FAST_NATIVE || "false").toLowerCase();
   if (flag === "false" || flag === "0" || flag === "") return false;

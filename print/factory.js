@@ -77,22 +77,18 @@ function resolveEffectiveProviderName(opts = {}) {
       }
     })();
 
-  // Circuito RAW aberto: comerciais (e status sem payload) → native.
-  // Fiscal/DANFE com chave permanece no ACBr.
-  try {
-    if (
-      requested === "acbr-posprinter" &&
-      !forceAcbr &&
-      !fiscalPayload &&
-      typeof require("./acbrPosPrinterRuntime").isAcbrPosCircuitOpen === "function" &&
-      require("./acbrPosPrinterRuntime").isAcbrPosCircuitOpen()
-    ) {
-      const fb = resolveFallbackName();
-      if (fb && fb !== "mock" && isProviderOperational(fb)) return fb;
-      if (isProviderOperational("native")) return "native";
-    }
-  } catch (_) {
-    /* runtime opcional em testes */
+  // Circuito NÃO troca o provider cacheado aqui (getPrintProvider sem payload).
+  // Comerciais sob circuito → native por job em printExecutor / preferNativeEscPos.
+  // Fiscal/DANFE continua no acbr-posprinter mesmo com circuito aberto.
+  if (
+    requested === "acbr-posprinter" &&
+    !forceAcbr &&
+    opts.preferNative === true &&
+    !fiscalPayload
+  ) {
+    const fb = resolveFallbackName();
+    if (fb && fb !== "mock" && isProviderOperational(fb)) return fb;
+    if (isProviderOperational("native")) return "native";
   }
   if (isProviderOperational(requested)) return requested;
   const fallback = resolveFallbackName();

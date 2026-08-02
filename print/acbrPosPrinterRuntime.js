@@ -519,8 +519,9 @@ async function gravarConfigIni(libBundle, iniPath, values) {
   for (const [sec, keys] of Object.entries(values)) {
     for (const [key, val] of Object.entries(keys)) {
       try {
-        await promisify(
-          libBundle.lib.POS_ConfigGravarValor.async.bind(libBundle.lib.POS_ConfigGravarValor),
+        await callPos(
+          libBundle,
+          libBundle.lib.POS_ConfigGravarValor.async,
           sec,
           key,
           String(val),
@@ -534,7 +535,7 @@ async function gravarConfigIni(libBundle, iniPath, values) {
       }
     }
   }
-  await promisify(libBundle.lib.POS_ConfigGravar.async.bind(libBundle.lib.POS_ConfigGravar), iniPath);
+  await callPos(libBundle, libBundle.lib.POS_ConfigGravar.async, iniPath);
 }
 
 function syncIniFromSource(bundle, iniPath) {
@@ -701,12 +702,15 @@ function buildRuntimeValues() {
 
   const enc = local?.encoding || process.env.PRINTER_ENCODING || "850";
   const pageCode = enc === "UTF8" || enc === "utf8" ? "5" : enc === "1252" ? "6" : "2";
-  const cut = local?.cut || process.env.PRINTER_CUT || "partial";
+  const cut = String(local?.cut || process.env.PRINTER_CUT || "partial").toLowerCase();
   const controlePorta = resolveControlePorta(porta);
   const verificarImpressora =
     process.env.PRINTER_VERIFICAR === "true"
       ? "1"
       : "0";
+  // CortaPapel = habilita corte; TipoCorte 0=total 1=parcial (enum ACBr).
+  const cutOff = cut === "none" || cut === "off" || cut === "false";
+  const cutTotal = cut === "total" || cut === "full";
 
   const serial = local?.serial || {};
   const values = {
@@ -715,12 +719,12 @@ function buildRuntimeValues() {
       Porta: porta,
       PaginaDeCodigo: pageCode,
       ColunasFonteNormal: local?.colunas || process.env.PRINTER_COLUNAS || "48",
-      CortaPapel: cut === "total" ? "0" : "1",
+      CortaPapel: cutOff ? "0" : "1",
       TraduzirTags: "1",
       ControlePorta: controlePorta,
       LinhasBuffer: process.env.PRINTER_BUFFER_LINES || "0",
       VerificarImpressora: verificarImpressora,
-      TipoCorte: cut === "partial" ? "1" : "0",
+      TipoCorte: cutTotal ? "0" : "1",
     },
     PosPrinter_Device: buildDeviceRuntimeValues(
       {
@@ -946,11 +950,10 @@ async function imprimirTagsNativeOnce(bundle, tags) {
   await assertPortaLegivel(bundle);
   setAcbrPrintPhase("init");
   await callPos(bundle, bundle.lib.POS_InicializarPos.async);
-  // POS_Imprimir(eString, PulaLinha, DecodificarTags, CodificarPagina, Copias)
-  // CodificarPagina=true alinha com PaginaDeCodigo do INI (CP850/1252/UTF8).
+  // Demo oficial Windows: POS_Imprimir(texto, 1, 1, 1, 1) — flags int 0/1.
   setAcbrPrintPhase("imprimir");
   try {
-    await callPos(bundle, bundle.lib.POS_Imprimir.async, String(tags || ""), true, true, true, 1);
+    await callPos(bundle, bundle.lib.POS_Imprimir.async, String(tags || ""), 1, 1, 1, 1);
     return { ok: true, native: true };
   } finally {
     setAcbrPrintPhase("idle");
@@ -1351,8 +1354,8 @@ function isAcbrPosCircuitOpen() {
   }
   loadCircuitFromDisk();
   if (!_acbrPosCircuit.open) return false;
-  // Half-open: após TTL tenta ACBr de novo. Default 0 = só Salvar/Detectar reabre (solidez).
-  const ttl = parseInt(process.env.ACBR_POS_CIRCUIT_TTL_MS || "0", 10);
+  // Half-open: após TTL tenta ACBr de novo. Default 15 min (ACBr-primary).
+  const ttl = parseInt(process.env.ACBR_POS_CIRCUIT_TTL_MS || "900000", 10);
   const ttlMs = Number.isFinite(ttl) && ttl > 0 ? ttl : 0;
   if (
     ttlMs > 0 &&
@@ -1420,6 +1423,7 @@ function resetAcbrPosCircuit() {
 
 function shouldOpenCircuitFromError(err) {
   const msg = String(err?.message || err || "");
+  const msgLow = msg.toLowerCase();
   if (err?.code === "PRINTER_NOT_THERMAL" || err?.permanente) return false;
   if (err?.code === "ACBR_POS_WORKER_OWNS_SESSION") return false;
   // Contenção temporária com fiscal (chdir) — não abre circuito permanente.
@@ -1429,21 +1433,34 @@ function shouldOpenCircuitFromError(err) {
   ) {
     return false;
   }
+  // Timeout mid-print: pode já ter ido ao spooler — anti-dupla, sem abandonar ACBr.
+  const midPrint =
+    err?.acbrPhase === "imprimir" ||
+    /cmd=imprimirtags|pos_imprimir/i.test(msgLow);
+  if (midPrint) return false;
+
   if (err?.acbrRet === -10 || /\(-10\)/.test(msg) || /ret\s*=\s*-10\b/i.test(msg)) return true;
   if (/expected \d+ arguments, got \d+/i.test(msg)) return true;
+  if (err?.code === "ACBR_POS_FN_MISSING" || err?.code === "ACBR_POS_INPROCESS_BLOCKED") {
+    return true;
+  }
+  // Sessão/init/ativar instável — comerciais vão native até TTL/Detectar.
   if (
     err?.code === "ACBR_POS_TIMEOUT" ||
-    err?.code === "ACBR_POS_FN_MISSING" ||
     err?.code === "ACBR_POS_WORKER_KILLED" ||
     err?.code === "ACBR_POS_WORKER_EXIT" ||
     err?.code === "ACBR_POS_WORKER_ERROR" ||
     err?.code === "PRINT_HARD_DRAIN" ||
-    err?.code === "ACBR_POS_INPROCESS_BLOCKED" ||
     err?.printTimedOut === true
   ) {
-    return true;
+    const phase = err?.acbrPhase;
+    if (phase === "config" || phase === "ativar" || phase === "init") return true;
+    if (/pos_ativar|pos_inicializar\b|cmd=init\b|configgravar/i.test(msgLow)) return true;
+    // Hard drain genérico (sem fase) = proteção pós-envio → abre circuito.
+    if (err?.code === "PRINT_HARD_DRAIN") return true;
+    return false;
   }
-  if (/POS_Ativar|erro de comunica[cç][aã]o com a impressora|Timeout de impressão/i.test(msg)) {
+  if (/POS_Ativar|erro de comunica[cç][aã]o com a impressora/i.test(msg)) {
     return true;
   }
   return false;

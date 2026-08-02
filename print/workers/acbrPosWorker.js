@@ -34,6 +34,7 @@ function fail(id, code, message, extra = {}) {
       code,
       message: String(message || code),
       ...(extra.acbrRet != null ? { acbrRet: extra.acbrRet } : {}),
+      ...(extra.acbrPhase ? { acbrPhase: extra.acbrPhase } : {}),
     },
   });
 }
@@ -192,9 +193,10 @@ parentPort.on("message", (msg) => {
         ensureSession(msg.values);
         // NÃO re-Ativar — sessão quente
         assertRet("POS_InicializarPos", lib.POS_InicializarPos());
+        // Demo oficial: POS_Imprimir(texto, 1, 1, 1, 1) — Boolean como int.
         assertRet(
           "POS_Imprimir",
-          lib.POS_Imprimir(String(msg.tags || ""), true, true, true, 1),
+          lib.POS_Imprimir(String(msg.tags || ""), 1, 1, 1, 1),
         );
         ok(id, { native: true, worker: true });
         break;
@@ -214,8 +216,15 @@ parentPort.on("message", (msg) => {
         fail(id, "ACBR_POS_WORKER_UNKNOWN_CMD", `cmd=${msg?.cmd}`);
     }
   } catch (err) {
+    const phase =
+      msg?.cmd === "imprimirTags"
+        ? "imprimir"
+        : msg?.cmd === "init"
+          ? "init"
+          : "idle";
     fail(id, err.code || "ACBR_POS_WORKER_ERROR", err.message, {
       acbrRet: err.acbrRet,
+      acbrPhase: phase,
     });
   }
 });

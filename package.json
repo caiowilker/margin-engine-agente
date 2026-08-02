@@ -39,6 +39,8 @@
     "predeploy": "node scripts/pre-deploy-check.js",
     "smoke": "node scripts/smoke-test.js",
     "probe:acbrlib": "node scripts/probe-acbrlib-native.js",
+    "probe:posprinter": "node scripts/probe-acbr-posprinter-native.js",
+    "test:posprinter-dll": "node test/acbr-posprinter-dll-probe.test.js",
     "smoke:integration": "node scripts/smoke-integration.js",
     "homolog:agente": "node scripts/homologacao-agente-1.0.js",
     "homolog:agente:live": "node scripts/homologacao-agente-1.0.js --live",

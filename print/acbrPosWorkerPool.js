@@ -138,6 +138,9 @@ function attachWorker(h, workerData) {
       const e = new Error(msg.error?.message || "ACBr PosPrinter worker error");
       e.code = msg.error?.code || "ACBR_POS_WORKER_ERROR";
       if (msg.error?.acbrRet != null) e.acbrRet = msg.error.acbrRet;
+      if (msg.error?.acbrPhase) e.acbrPhase = msg.error.acbrPhase;
+      else if (pending.cmd === "imprimirTags") e.acbrPhase = "imprimir";
+      else if (pending.cmd === "init") e.acbrPhase = "init";
       pending.reject(e);
     }
   });
@@ -194,6 +197,9 @@ function callRaw(h, cmd, payload, timeoutMs) {
       );
       e.code = "ACBR_POS_WORKER_KILLED";
       e.printTimedOut = true;
+      // init = pré-impressão; imprimirTags = já pode ter ido ao spooler (anti-dupla).
+      e.acbrPhase =
+        cmd === "imprimirTags" ? "imprimir" : cmd === "init" ? "init" : "idle";
       // Rejeita na hora (não prende o job), mas ARMA o latch de kill
       // sincronicamente para o próximo enqueue NÃO spawnar 2ª DLL no RAW.
       const killP = killAndRespawn(h, e);
@@ -201,7 +207,7 @@ function callRaw(h, cmd, payload, timeoutMs) {
       void killP;
     }, timeoutMs);
 
-    h.pending.set(id, { resolve, reject, timer });
+    h.pending.set(id, { resolve, reject, timer, cmd });
     try {
       h.worker.postMessage({
         id,
@@ -267,10 +273,12 @@ async function killAndRespawn(h, cause) {
   });
   try {
     await terminateQuiet(h);
+    // Circuito só em falha de sessão/init — timeout mid-print não abandona ACBr forever.
     try {
-      require("./acbrPosPrinterRuntime").openAcbrPosCircuit(
-        cause?.message || "ACBR_POS_WORKER_KILLED",
-      );
+      const runtime = require("./acbrPosPrinterRuntime");
+      if (runtime.shouldOpenCircuitFromError?.(cause)) {
+        runtime.openAcbrPosCircuit(cause?.message || "ACBR_POS_WORKER_KILLED");
+      }
     } catch (_) {}
     try {
       require("./factory").resetPrintProvider();

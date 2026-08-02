@@ -19,7 +19,8 @@ function classifyPrintError(err) {
     return out;
   }
   // Hard drain / hang após envio: NÃO sugerir fallback (FFI pode ainda imprimir).
-  // Pré-impressão (ConfigGravar/Ativar) pode vir embrulhada em timeout — fallback OK.
+  // Pré-impressão (ConfigGravar/Ativar/init) pode vir embrulhada em timeout — fallback OK.
+  // idle ≠ pré-impressão (worker timeout em imprimirTags deixa phase omissa/idle).
   if (
     err?.code === "PRINT_HARD_DRAIN" ||
     err?.code === "ACBR_POS_TIMEOUT" ||
@@ -30,16 +31,19 @@ function classifyPrintError(err) {
     out.retryable = false;
     const msgLow = msg.toLowerCase();
     const phase = err?.acbrPhase;
-    const phasePre =
-      phase === "config" || phase === "ativar" || phase === "init" || phase === "idle";
+    const midPrint =
+      phase === "imprimir" ||
+      /cmd=imprimirtags|pos_imprimir|imprimir\b/i.test(msgLow);
+    const phasePre = phase === "config" || phase === "ativar" || phase === "init";
     const prePrintOnly =
       err?.code !== "RAW_PRINT_TIMEOUT" &&
+      !midPrint &&
       (err?.fallbackNative === true ||
-        ((phasePre ||
-          /pos_configgravar|configgravarvalor|pos_ativar|pos_inicializar/i.test(msgLow) ||
-          err?.acbrRet === -10) &&
-          phase !== "imprimir" &&
-          !/pos_imprimir|imprimir\b/i.test(msgLow)));
+        phasePre ||
+        /pos_configgravar|configgravarvalor|pos_ativar|pos_inicializar\b|cmd=init\b/i.test(
+          msgLow,
+        ) ||
+        err?.acbrRet === -10);
     out.fallbackSuggested = !!prePrintOnly;
     return out;
   }

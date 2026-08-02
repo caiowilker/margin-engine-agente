@@ -84,18 +84,40 @@ test("reset remove arquivo do disco", () => {
   assert.strictEqual(fs.existsSync(circuitFile), false);
 });
 
-test("shouldOpenCircuitFromError — timeout e hard drain", () => {
+test("shouldOpenCircuitFromError — pré-impressão abre; mid-print não", () => {
   assert.strictEqual(
     runtime.shouldOpenCircuitFromError({ code: "PRINT_HARD_DRAIN", message: "Timeout" }),
     true,
   );
   assert.strictEqual(
-    runtime.shouldOpenCircuitFromError({ code: "ACBR_POS_TIMEOUT" }),
+    runtime.shouldOpenCircuitFromError({
+      code: "ACBR_POS_TIMEOUT",
+      acbrPhase: "ativar",
+      message: "Timeout POS_Ativar",
+    }),
     true,
   );
   assert.strictEqual(
-    runtime.shouldOpenCircuitFromError({ code: "ACBR_POS_WORKER_KILLED" }),
+    runtime.shouldOpenCircuitFromError({
+      code: "ACBR_POS_WORKER_KILLED",
+      acbrPhase: "init",
+      message: "Timeout cmd=init",
+    }),
     true,
+  );
+  // Mid-print: anti-dupla, sem abandonar ACBr
+  assert.strictEqual(
+    runtime.shouldOpenCircuitFromError({
+      code: "ACBR_POS_WORKER_KILLED",
+      acbrPhase: "imprimir",
+      printTimedOut: true,
+      message: "Timeout cmd=imprimirTags",
+    }),
+    false,
+  );
+  assert.strictEqual(
+    runtime.shouldOpenCircuitFromError({ code: "ACBR_POS_TIMEOUT" }),
+    false,
   );
   assert.strictEqual(
     runtime.shouldOpenCircuitFromError({ code: "PRINTER_NOT_THERMAL" }),

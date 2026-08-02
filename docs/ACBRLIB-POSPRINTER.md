@@ -83,7 +83,7 @@ Legenda de uso: **hot** = caminho de cupom/sessão · **support** = API/diagnós
 
 | Método | Assinatura | Uso | Notas |
 |--------|------------|-----|-------|
-| `POS_Imprimir` | `(eString; PulaLinha, DecodificarTags, CodificarPagina; Copias)` | hot | Tags ACBr (`<b>`, `</corte>`, QR…) |
+| `POS_Imprimir` | `(eString; PulaLinha, DecodificarTags, CodificarPagina; Copias)` | hot | Flags como **int 0/1** (demo Node Windows); tags ACBr |
 | `POS_ImprimirLinha` | `(eString)` | support | |
 | `POS_ImprimirCmd` | `(eComando)` | support | ESC/POS bruto |
 | `POS_ImprimirTags` | — | unused | Lista tags na impressora |
@@ -166,6 +166,7 @@ Defaults: `print/posPrinterIniDefaults.js`.
 - Logo: arquivo **BMP**
 - TCP: `TCP:IP:PORTA` com pontos no IP (`192.168.1.50`, não `192168150`)
 - Deps: `npm run check:posprinter-deps`
+- Probe DLL (igual NFe): `npm run probe:posprinter` — PE x64 + 42 exports; no Windows também `Inicializar→Nome→Versão→Finalizar`
 - Spooler Windows: “Imprimir diretamente na impressora”
 
 ---
@@ -176,9 +177,10 @@ Defaults: `print/posPrinterIniDefaults.js`.
 |----------|-----------|
 | `PRINTER_PROVIDER` | `acbr-posprinter` (padrão) |
 | `ACBR_POSPRINTER_LIB_PATH` | `ACBrPosPrinter64.dll` |
-| `ACBR_POSPRINTER_INI` | padrão `data/posprinter.ini` |
+| `ACBR_POSPRINTER_INI` | SSOT `%ProgramData%\MarginEngine\Config\posprinter.ini` |
 | `ACBR_POS_WORKER` | `true` = FFI no worker (padrão) |
 | `ACBR_POS_CALL_TIMEOUT_MS` | soft timeout (padrão 5000) |
+| `ACBR_POS_CIRCUIT_TTL_MS` | half-open (padrão 900000 = 15 min) |
 
 Homologação: `.ai/CHECKLIST-IMPRESSORA-CAMPO.md`, `CHECKLIST-WINDOWS-PRINT.md`  
 Tags: `print/acbrTags.js`, `print/cupomAcbrTags.js`
