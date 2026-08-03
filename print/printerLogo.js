@@ -375,6 +375,7 @@ module.exports = {
   salvar,
   remover,
   ler,
+  lerBuffer,
   isBmpBuffer,
   isBmpPrintable,
   exibirLogoCupomHabilitado,
