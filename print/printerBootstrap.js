@@ -268,14 +268,35 @@ async function garantirPortaImpressao(opts = {}) {
 
 function noBoot(delayMs = 2500) {
   return new Promise((resolve) => {
-    setTimeout(async () => {
+    // CRITICAL: Warm print hot-path IMMEDIATELY — don't wait for setTimeout
+    // This ensures escpos.Image.load() is cached before first cupom
+    setImmediate(async () => {
+      const core = require("./escpos/impressoraCore");
+      const tWarm = performance.now();
       try {
-        // Sempre aquecer hot-path (DLL RAW + logo) — independente do provider.
-        require("./escpos/impressoraCore")
-          .warmPrintHotPath()
-          .catch(() => {});
-      } catch (_) {}
+        const warmOk = await core.warmPrintHotPath();
+        const warmMs = performance.now() - tWarm;
+        if (warmMs > 1000) {
+          log.warn(
+            { warmMs, metric: "print.warm_slow" },
+            "[PrinterBootstrap] Print hot-path warm foi lento",
+          );
+        } else {
+          log.debug(
+            { warmMs, ok: warmOk, metric: "print.warm_ok" },
+            "[PrinterBootstrap] Print hot-path aquecido",
+          );
+        }
+      } catch (err) {
+        log.warn(
+          { err: err?.message, metric: "print.warm_failed" },
+          "[PrinterBootstrap] Falha ao aquecer print hot-path",
+        );
+      }
+    });
 
+    // Continue with auto-detection after delay
+    setTimeout(async () => {
       const tipo = String(process.env.PRINTER_PROVIDER || "acbr-posprinter").toLowerCase();
       if (!tipo.includes("acbr") && tipo !== "posprinter") {
         resolve();
