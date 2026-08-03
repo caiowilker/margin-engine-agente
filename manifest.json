@@ -1,6 +1,6 @@
 {
   "versao": "1.0.6",
-  "geradoEm": "2026-08-02T15:14:00.751Z",
+  "geradoEm": "2026-08-03T12:37:46.145Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -268,7 +268,7 @@
     },
     {
       "arquivo": "frontend-dist/api-backend.json",
-      "sha256": "62f093d7cc15c71fe76d946b1c9f107b8bff58f57742bdcdc75886382c25d093"
+      "sha256": "d057f1beb827d333343d93b87a5005212ce863b1e563e757b4ecf48892148aa1"
     },
     {
       "arquivo": "frontend-dist/apple-touch-icon.png",
@@ -5052,7 +5052,7 @@
     },
     {
       "arquivo": "frontend-dist/version.json",
-      "sha256": "7dcf636bb371a8e3bd74d031a6da61b6167cda2ef961dc913b037ab278469722"
+      "sha256": "190328afd495ced9faf792f4c07435128e805d3b734da38dc9d0f36d4d1e9446"
     },
     {
       "arquivo": "frontend-dist/workbox-3147e214.js",
@@ -5184,7 +5184,7 @@
     },
     {
       "arquivo": "print/escpos/impressoraCore.js",
-      "sha256": "6efdea8c87a49c90eaca09bdcdbad9825c324015fd9c393e05f405100266d9b0"
+      "sha256": "407befe3a6ae2558274c5c656500d26c9986c190f73a55c63494445f31f166d9"
     },
     {
       "arquivo": "print/factory.js",
@@ -5204,7 +5204,7 @@
     },
     {
       "arquivo": "print/printerBootstrap.js",
-      "sha256": "7a31f8d27d9276e4b4f36f3b5b68a39649f910e3fa20a0fe77d22a1a08aad59a"
+      "sha256": "8894e036253b7b432c3cb3993cf5455b5b130e6a3afb4c3648127132660dc309"
     },
     {
       "arquivo": "print/printerLocalConfig.js",
@@ -5212,7 +5212,7 @@
     },
     {
       "arquivo": "print/printerLogo.js",
-      "sha256": "0159d1fe307cae0deb78a747c9f0847be86a69371b772fc73bdd44afc069bb1f"
+      "sha256": "01d9ef0df4b700b7637550b82f923f93fbaf59580dd41f4687111d02735380da"
     },
     {
       "arquivo": "print/printerLogoSize.js",
