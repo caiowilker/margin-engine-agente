@@ -1637,6 +1637,7 @@ function renderCupom(printer, payload) {
 }
 
 async function imprimirLogoCupomEscpos(printer, payload) {
+  const t0 = performance.now();
   try {
     const printerLogo = require("../printerLogo");
     if (!printerLogo.deveExibirLogoCupom(payload)) return;
@@ -1653,12 +1654,23 @@ async function imprimirLogoCupomEscpos(printer, payload) {
     const cacheKey = `${info.sha256 || caminho}|${size.escposWidthDots}|${size.density || "d24"}`;
     let image = logoEscposImageCache.key === cacheKey ? logoEscposImageCache.image : null;
     if (!image) {
+      const tLoad = performance.now();
       image = await new Promise((resolve, reject) => {
         escpos.Image.load(caminho, (err, img) => {
           if (err) reject(err);
           else resolve(img);
         });
       });
+      const loadMs = performance.now() - tLoad;
+      log.warn(
+        {
+          loadMs,
+          bytes: info?.bytes,
+          metric: "print.escpos_image_load_duration",
+          note: "This is the primary suspect for 100+ second delays",
+        },
+        "[ImpressoraCore] escpos.Image.load() TIMING — CRITICAL MEASUREMENT",
+      );
       logoEscposImageCache = { key: cacheKey, image };
     }
     await new Promise((resolve, reject) => {
@@ -1668,12 +1680,18 @@ async function imprimirLogoCupomEscpos(printer, payload) {
       });
     });
     printer.feed(1);
+    const totalMs = performance.now() - t0;
+    log.info(
+      { totalMs, metric: "print.imprimirlogo_total" },
+      "[ImpressoraCore] imprimirLogoCupomEscpos() total timing",
+    );
   } catch (_) {
     /* logo opcional — cupom segue sem imagem */
   }
 }
 
 async function renderCupomConteudo(printer, payload) {
+  const t0RenderCupom = performance.now();
   const COLS = getThermalCols();
   const empresa = payload.empresa || {};
   const itens = payload.itens || [];
@@ -1961,6 +1979,11 @@ async function renderCupomConteudo(printer, payload) {
     .text("")
     .text("")
     .cut();
+  const totalRenderMs = performance.now() - t0RenderCupom;
+  log.info(
+    { totalRenderMs, metric: "print.rendercupomconteudo_total" },
+    "[ImpressoraCore] renderCupomConteudo() TOTAL TIMING — includes logo + items + payments",
+  );
 }
 
 function renderFechamento(printer, payload) {
@@ -2478,9 +2501,18 @@ function deveAbrirGavetaNoPayload(payload, opts = {}) {
 
 async function imprimirComGavetaOpcional(renderFn, payload, opts = {}) {
   return comLockImpressao(async () => {
-    const tBuf = Date.now();
+    const tBuf = performance.now();
     let buffer = await gerarBuffer(renderFn);
-    const bufferMs = Date.now() - tBuf;
+    const bufferMs = performance.now() - tBuf;
+    log.warn(
+      {
+        bufferMs,
+        bytes: buffer.length,
+        metric: "print.buffer_generation_timing",
+        note: "CRITICAL: This is where logo Image.load() happens",
+      },
+      "[ImpressoraCore] Buffer ESC/POS generation timing",
+    );
     if (bufferMs > 800) {
       log.warn(
         { bufferMs, bytes: buffer.length, metric: "print.buffer_slow" },
@@ -2580,5 +2612,7 @@ module.exports = {
     resetGavetaPulse() {
       _lastGavetaPulseAt = 0;
     },
+    gerarBuffer,
+    imprimirLogoCupomEscpos,
   },
 };

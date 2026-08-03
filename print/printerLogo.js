@@ -142,13 +142,14 @@ function remover() {
 }
 
 function ler() {
+  const t0 = performance.now();
   const meta = lerMeta();
   const existe = fs.existsSync(LOGO_BMP);
   const explicitPath = process.env.PRINTER_LOGO_PATH;
   const caminhoAbsoluto =
     existe ? LOGO_BMP : explicitPath && fs.existsSync(explicitPath) ? explicitPath : null;
   const size = resolveLogoPrintSize(meta);
-  return {
+  const result = {
     ...meta,
     ativo: meta.ativo && !!caminhoAbsoluto,
     existe,
@@ -159,9 +160,15 @@ function ler() {
     fatorXEfetivo: size.fatorX,
     fatorYEfetivo: size.fatorY,
   };
+  const elapsedMs = performance.now() - t0;
+  if (elapsedMs > 10) {
+    log.debug({ elapsedMs, metric: "print.logo_ler_duration" }, "[PrinterLogo] ler() timing");
+  }
+  return result;
 }
 
 function lerBuffer() {
+  const t0 = performance.now();
   const meta = lerMeta();
   if (!meta.ativo) return null;
   const explicitPath = process.env.PRINTER_LOGO_PATH;
@@ -175,8 +182,15 @@ function lerBuffer() {
   if (logoBufferCache.sha256 === meta.sha256 && logoBufferCache.buffer) {
     return logoBufferCache.buffer;
   }
+  const tRead = performance.now();
   const buf = fs.readFileSync(caminho);
+  const readMs = performance.now() - tRead;
   logoBufferCache = { sha256: meta.sha256, buffer: buf };
+  const totalMs = performance.now() - t0;
+  log.debug(
+    { totalMs, readMs, bytes: buf.length, metric: "print.logo_lerbuffer_duration" },
+    "[PrinterLogo] lerBuffer() timing",
+  );
   return buf;
 }
 
@@ -185,6 +199,7 @@ function lerBuffer() {
  * @returns {Promise<string|null>} caminho do arquivo de impressão
  */
 async function prepararArquivoEscpos(metaOrInfo) {
+  const t0 = performance.now();
   const info = metaOrInfo?.caminhoAbsoluto ? metaOrInfo : ler();
   if (!info.caminhoAbsoluto) return null;
   const size = info.printSize || resolveLogoPrintSize(info);
@@ -195,12 +210,17 @@ async function prepararArquivoEscpos(metaOrInfo) {
       fs.existsSync(LOGO_PRINT_KEY) &&
       fs.readFileSync(LOGO_PRINT_KEY, "utf8") === cacheKey
     ) {
+      log.debug(
+        { elapsedMs: performance.now() - t0, metric: "print.prepararescpos_cached" },
+        "[PrinterLogo] prepararArquivoEscpos() — cache hit",
+      );
       return LOGO_PRINT_CACHE;
     }
   } catch (_) {}
 
   ensureDir();
   const sharp = require("sharp");
+  const tSharp = performance.now();
   await sharp(info.caminhoAbsoluto)
     .resize({
       width: size.escposWidthDots,
@@ -210,7 +230,20 @@ async function prepararArquivoEscpos(metaOrInfo) {
     })
     .png()
     .toFile(LOGO_PRINT_CACHE);
+  const sharpMs = performance.now() - tSharp;
+  const tWrite = performance.now();
   fs.writeFileSync(LOGO_PRINT_KEY, cacheKey, "utf8");
+  const writeMs = performance.now() - tWrite;
+  const totalMs = performance.now() - t0;
+  log.info(
+    {
+      totalMs,
+      sharpMs,
+      writeMs,
+      metric: "print.prepararescpos_regenerated",
+    },
+    "[PrinterLogo] prepararArquivoEscpos() regenerated — timing breakdown",
+  );
   return LOGO_PRINT_CACHE;
 }
 
