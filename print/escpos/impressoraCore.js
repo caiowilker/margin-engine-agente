@@ -20,6 +20,64 @@ const { killProcessTree } = require("../winProcessKill");
 
 const log = require("../../logger").child({ modulo: "impressora_core" });
 const escpos = require("escpos");
+const escposCommands = require("escpos/commands");
+
+/**
+ * PATCH CRÍTICO — escpos@3.0.0-alpha.6 Printer.prototype.image
+ *
+ * Evidência (node_modules/escpos/index.js):
+ *   bitmap.data.forEach(async (line) => {
+ *     ...
+ *     await new Promise((r) => setTimeout(r, 200)); // 200ms POR LINHA
+ *   });
+ *   return this.lineSpace();
+ *
+ * Problemas comprovados:
+ * 1) forEach+async NÃO aguarda → Promise resolve em ~0ms, mas o API antigo
+ *    usava callback que NUNCA é chamado (assinatura async (image, density)).
+ *    imprimirLogoCupomEscpos envolvia callback → Promise pendente (hang).
+ * 2) Se a espera for sequencial (for…of / versão antiga), altura≈720px /
+ *    density 24 = 30 linhas × 200ms = 6000ms — casa com o pico de ~6,6s.
+ * 3) Delay é para Serial física; MemoryDevice (gerarBuffer) NÃO precisa.
+ *
+ * Correção: escrita síncrona do bitmap, sem setTimeout, Promise+callback.
+ */
+(function patchEscposImageNoDelay() {
+  const Image = escpos.Image;
+  const _ = escposCommands;
+  escpos.Printer.prototype.image = function patchedImage(image, density, callback) {
+    if (typeof density === "function") {
+      callback = density;
+      density = "d24";
+    }
+    density = density || "d24";
+    if (!(image instanceof Image)) {
+      const err = new TypeError("Only escpos.Image supported");
+      if (typeof callback === "function") {
+        callback(err);
+        return this;
+      }
+      return Promise.reject(err);
+    }
+    const n = !!~["d8", "s8"].indexOf(density) ? 1 : 3;
+    const header = _.BITMAP_FORMAT["BITMAP_" + density.toUpperCase()];
+    const bitmap = image.toBitmap(n * 8);
+    this.lineSpace(0);
+    for (let y = 0; y < bitmap.data.length; y++) {
+      const line = bitmap.data[y];
+      this.buffer.write(header);
+      this.buffer.writeUInt16LE(line.length / n);
+      this.buffer.write(line);
+      this.buffer.write(_.EOL);
+    }
+    this.lineSpace();
+    if (typeof callback === "function") {
+      callback(null, this);
+      return this;
+    }
+    return Promise.resolve(this);
+  };
+})();
 
 let escposUSB;
 let escposNetwork;
@@ -91,8 +149,8 @@ let cacheDescobertaEm = 0;
 let cacheImpressoraEscolhida = null;
 let ultimaImpressoraUsada = null;
 let printLock = Promise.resolve();
-/** Cache em memória do escpos.Image — evita get-pixels a cada cupom. */
-let logoEscposImageCache = { key: null, image: null };
+/** Cache em memória do escpos.Image + bytes raster — evita get-pixels a cada cupom. */
+let logoEscposImageCache = { key: null, image: null, paintedAt: 0 };
 
 /** Cache processo — hot path NÃO faz readFileSync/writeFileSync do .ps1 a cada cupom. */
 let rawScriptCache = null;
@@ -1638,6 +1696,7 @@ function renderCupom(printer, payload) {
 
 async function imprimirLogoCupomEscpos(printer, payload) {
   const t0 = performance.now();
+  const phases = { loadMs: 0, paintMs: 0, cacheHit: false };
   try {
     const printerLogo = require("../printerLogo");
     if (!printerLogo.deveExibirLogoCupom(payload)) return;
@@ -1653,6 +1712,7 @@ async function imprimirLogoCupomEscpos(printer, payload) {
     }
     const cacheKey = `${info.sha256 || caminho}|${size.escposWidthDots}|${size.density || "d24"}`;
     let image = logoEscposImageCache.key === cacheKey ? logoEscposImageCache.image : null;
+    phases.cacheHit = !!image;
     if (!image) {
       const tLoad = performance.now();
       image = await new Promise((resolve, reject) => {
@@ -1661,32 +1721,53 @@ async function imprimirLogoCupomEscpos(printer, payload) {
           else resolve(img);
         });
       });
-      const loadMs = performance.now() - tLoad;
+      phases.loadMs = performance.now() - tLoad;
       log.warn(
         {
-          loadMs,
+          loadMs: phases.loadMs,
           bytes: info?.bytes,
           metric: "print.escpos_image_load_duration",
-          note: "This is the primary suspect for 100+ second delays",
+          note: "Cache miss — get-pixels; alvo <50ms após warm",
         },
         "[ImpressoraCore] escpos.Image.load() TIMING — CRITICAL MEASUREMENT",
       );
-      logoEscposImageCache = { key: cacheKey, image };
+      logoEscposImageCache = { key: cacheKey, image, paintedAt: 0 };
     }
-    await new Promise((resolve, reject) => {
-      printer.align("ct").image(image, size.density || "d24", (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+
+    // await da Promise do image() patchado (sem setTimeout/200ms).
+    // NÃO usar callback de 3º arg — na lib original ele era ignorado e a
+    // Promise externa nunca resolvia (hang do event loop / fila de impressão).
+    const tPaint = performance.now();
+    printer.align("ct");
+    await printer.image(image, size.density || "d24");
+    phases.paintMs = performance.now() - tPaint;
     printer.feed(1);
+    logoEscposImageCache.paintedAt = Date.now();
+
     const totalMs = performance.now() - t0;
     log.info(
-      { totalMs, metric: "print.imprimirlogo_total" },
+      {
+        totalMs,
+        ...phases,
+        metric: "print.imprimirlogo_total",
+      },
       "[ImpressoraCore] imprimirLogoCupomEscpos() total timing",
     );
-  } catch (_) {
-    /* logo opcional — cupom segue sem imagem */
+    if (totalMs > 300) {
+      log.warn(
+        { totalMs, ...phases, metric: "print.imprimirlogo_slow" },
+        "[ImpressoraCore] Logo ESC/POS acima do orçamento (300ms)",
+      );
+    }
+  } catch (err) {
+    log.warn(
+      {
+        err: err?.message,
+        phases,
+        metric: "print.imprimirlogo_error",
+      },
+      "[ImpressoraCore] Logo omitida — cupom segue sem imagem",
+    );
   }
 }
 
@@ -2559,20 +2640,29 @@ module.exports = {
   detectarImpressora,
   invalidateDiscoveryCache,
   invalidateLogoEscposImageCache() {
-    logoEscposImageCache = { key: null, image: null };
+    logoEscposImageCache = { key: null, image: null, paintedAt: 0 };
   },
   async warmLogoEscposImage(caminho, info) {
     if (!caminho) return false;
     const size = info?.printSize || require("../printerLogoSize").resolveLogoPrintSize(info || {});
     const cacheKey = `${info?.sha256 || caminho}|${size.escposWidthDots}|${size.density || "d24"}`;
     if (logoEscposImageCache.key === cacheKey && logoEscposImageCache.image) return true;
+    const t0 = performance.now();
     const image = await new Promise((resolve, reject) => {
       escpos.Image.load(caminho, (err, img) => {
         if (err) reject(err);
         else resolve(img);
       });
     });
-    logoEscposImageCache = { key: cacheKey, image };
+    logoEscposImageCache = { key: cacheKey, image, paintedAt: 0 };
+    log.info(
+      {
+        loadMs: performance.now() - t0,
+        cacheKey: cacheKey.slice(0, 24),
+        metric: "print.logo_warm_image",
+      },
+      "[ImpressoraCore] Logo Image aquecida no cache",
+    );
     return true;
   },
   warmRawWin32Helper,
