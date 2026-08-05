@@ -233,9 +233,22 @@ async function executarProviderOp(provider, op, args, timeoutMs) {
 
   if (!(timeoutMs > 0)) {
     const result = await invokePromise;
+    const durationMs = Date.now() - t0;
+    try {
+      const logoMod = require("./printerLogo");
+      const av = logoMod.avaliarExibicaoLogo?.(payload) || { ok: null, reason: null };
+      require("./printMetrics").recordPrintResult({
+        durationMs,
+        provider: provider.getProviderName(),
+        op,
+        logoIncluded: av.ok,
+        logoSkipReason: av.reason,
+        ok: true,
+      });
+    } catch (_) {}
     return {
       result,
-      durationMs: Date.now() - t0,
+      durationMs,
       bytesEnviados: result?.bytes || result?.lines || null,
       ...snap(),
     };
@@ -343,6 +356,18 @@ async function executarProviderOp(provider, op, args, timeoutMs) {
         "[PrintExecutor] Envio concluiu no drain — aceito sem reimpressão",
       );
     }
+    try {
+      const logoMod = require("./printerLogo");
+      const av = logoMod.avaliarExibicaoLogo?.(payload) || { ok: null, reason: null };
+      require("./printMetrics").recordPrintResult({
+        durationMs,
+        provider: provider.getProviderName(),
+        op,
+        logoIncluded: av.ok,
+        logoSkipReason: av.reason,
+        ok: true,
+      });
+    } catch (_) {}
     return {
       result,
       durationMs,

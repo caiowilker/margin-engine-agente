@@ -278,6 +278,19 @@ function ler(opts = {}) {
         ? "parity"
         : "unconfigured",
   };
+  try {
+    const driver = require("./drivers/acbrPosPrinterProvider").getDriverInfo();
+    value.effectiveMode = driver.effectiveMode;
+    value.acbr = driver.acbr;
+    value.acbrCircuitOpen = driver.acbrCircuitOpen;
+    value.lastPrint = driver.lastPrint;
+    value.driver = {
+      provider: driver.provider,
+      label: driver.label,
+      effectiveMode: driver.effectiveMode,
+      ready: driver.ready,
+    };
+  } catch (_) {}
   _lerCache = { at: agora, value };
   return value;
 }

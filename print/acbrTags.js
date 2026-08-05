@@ -98,7 +98,10 @@ function tagLogoArquivo(filePath, opts = {}) {
 function tagLogoHeader(opts = {}) {
   try {
     const logo = require("./printerLogo");
-    if (!logo.deveExibirLogoCupom(opts)) return "";
+    const av = logo.avaliarExibicaoLogo
+      ? logo.avaliarExibicaoLogo(opts)
+      : { ok: logo.deveExibirLogoCupom(opts), reason: null };
+    if (!av.ok) return "";
     const info = logo.ler();
     if (!info.ativo || !info.caminhoAbsoluto) return "";
     if (info.modo === "kc") {
@@ -107,7 +110,10 @@ function tagLogoHeader(opts = {}) {
     const size = info.printSize || require("./printerLogoSize").resolveLogoPrintSize(info);
     const bmp = tagLogoArquivo(info.caminhoAbsoluto, { largura: size.bmpLargura });
     return bmp ? `<ce>${bmp}</ce>\n</linha_simples>\n` : "";
-  } catch (_) {
+  } catch (err) {
+    try {
+      require("./printerLogo").__test?.setLastSkipReason?.("erro");
+    } catch (_) {}
     return "";
   }
 }

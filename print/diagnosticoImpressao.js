@@ -31,8 +31,68 @@ function coletarDiagnosticoImpressaoSync(deps = {}) {
   push("provider_ativo", !!driverInfo.provider, driverInfo.label || driverInfo.provider);
   push("acbr_modo", driverInfo.mode !== "unconfigured", driverInfo.mode || "unconfigured");
 
+  try {
+    const { checkPosprinterDeps } = require("../scripts/check-posprinter-deps");
+    const depsReport = checkPosprinterDeps();
+    push(
+      "acbr_deps",
+      depsReport.ok || process.platform !== "win32",
+      process.platform !== "win32"
+        ? "n/a (não Windows)"
+        : depsReport.ok
+          ? `ok (${depsReport.present?.length || 0} arquivos)`
+          : `faltando: ${(depsReport.missing || []).slice(0, 5).join(", ")}`,
+    );
+  } catch (err) {
+    push("acbr_deps", null, err.message);
+  }
+
+  try {
+    const porta = info?.porta || info?.acbrPorta || driverInfo?.iniPath;
+    const cfgPorta = (() => {
+      try {
+        return require("./printerLocalConfig").ler()?.porta;
+      } catch (_) {
+        return null;
+      }
+    })();
+    const p = String(cfgPorta || info?.porta || "").trim();
+    const portaOk =
+      !p ||
+      /^RAW:/i.test(p) ||
+      /^TCP:\d{1,3}(\.\d{1,3}){3}:\d+$/i.test(p) ||
+      /^COM\d+/i.test(p);
+    push(
+      "porta_raw_valida",
+      portaOk,
+      p
+        ? portaOk
+          ? p
+          : `inválida: ${p} (use RAW:Nome ou TCP:192.168.x.x:9100)`
+        : "sem porta",
+    );
+  } catch (_) {}
+
   const logo = printerLogo.ler();
-  push("logo", true, logo.ativo && logo.existe ? "configurada" : "sem logo (ok)");
+  const logoAv = printerLogo.avaliarExibicaoLogo
+    ? printerLogo.avaliarExibicaoLogo({ exibirLogo: true })
+    : { ok: !!(logo.ativo && logo.existe), reason: null };
+  if (logo.ativo || logo.existe) {
+    push("logo_imprimivel", logoAv.ok, logoAv.ok ? "ok" : `omitida: ${logoAv.reason}`);
+  } else {
+    push("logo", true, "sem logo (ok)");
+  }
+  try {
+    const runtime = require("./acbrPosPrinterRuntime");
+    push("acbr_dll", runtime.canLoadNativeLib(), runtime.resolveLibPath() || "dll_missing");
+    push(
+      "acbr_circuito",
+      !runtime.isAcbrPosCircuitOpen(),
+      runtime.isAcbrPosCircuitOpen()
+        ? `aberto: ${runtime.getAcbrPosCircuit()?.reason || "—"}`
+        : "fechado",
+    );
+  } catch (_) {}
 
   const obs = printJobService.observabilidade();
   push("fila_impressao", (obs.fila?.erro || 0) < 5, `pend=${obs.fila?.pendente || 0} err=${obs.fila?.erro || 0}`);
@@ -50,7 +110,7 @@ function coletarDiagnosticoImpressaoSync(deps = {}) {
     resumo: { total: checks.length, ok: checks.filter((c) => c.ok === true).length, falhas: falhas.length },
     observabilidade: obs,
     driver: driverInfo,
-    logo,
+    logo: { ...logo, imprimivel: logoAv.ok, lastSkipReason: logoAv.reason },
   };
 }
 
@@ -82,6 +142,47 @@ async function executarDiagnosticoImpressao(deps = {}) {
   push("provider_ativo", !!driverInfo.provider, driverInfo.label || driverInfo.provider);
   push("acbr_modo", driverInfo.mode !== "unconfigured", driverInfo.mode || "unconfigured");
 
+  try {
+    const { checkPosprinterDeps } = require("../scripts/check-posprinter-deps");
+    const depsReport = checkPosprinterDeps();
+    push(
+      "acbr_deps",
+      depsReport.ok || process.platform !== "win32",
+      process.platform !== "win32"
+        ? "n/a (não Windows)"
+        : depsReport.ok
+          ? `ok (${depsReport.present?.length || 0} arquivos)`
+          : `faltando: ${(depsReport.missing || []).slice(0, 5).join(", ")}`,
+    );
+  } catch (err) {
+    push("acbr_deps", false, err.message);
+  }
+
+  try {
+    const cfgPorta = (() => {
+      try {
+        return require("./printerLocalConfig").ler()?.porta;
+      } catch (_) {
+        return null;
+      }
+    })();
+    const p = String(cfgPorta || info?.porta || "").trim();
+    const portaOk =
+      !p ||
+      /^RAW:/i.test(p) ||
+      /^TCP:\d{1,3}(\.\d{1,3}){3}:\d+$/i.test(p) ||
+      /^COM\d+/i.test(p);
+    push(
+      "porta_raw_valida",
+      !!p && portaOk,
+      p
+        ? portaOk
+          ? p
+          : `inválida: ${p} (use RAW:Nome ou TCP:192.168.x.x:9100)`
+        : "sem porta",
+    );
+  } catch (_) {}
+
   if (driverInfo.mode === "native") {
     try {
       const runtime = require("./acbrPosPrinterRuntime");
@@ -98,7 +199,58 @@ async function executarDiagnosticoImpressao(deps = {}) {
   }
 
   const logo = printerLogo.ler();
-  push("logo_configurada", logo.ativo && logo.existe, logo.ativo ? "ativa" : "sem logo (ok)");
+  const logoAv = printerLogo.avaliarExibicaoLogo
+    ? printerLogo.avaliarExibicaoLogo({ exibirLogo: true })
+    : { ok: logo.ativo && logo.existe, reason: null };
+  if (logo.ativo || logo.existe) {
+    push(
+      "logo_imprimivel",
+      logoAv.ok,
+      logoAv.ok ? "ok" : `omitida: ${logoAv.reason || "desconhecido"}`,
+    );
+  } else {
+    push("logo_configurada", true, "sem logo (ok)");
+  }
+
+  try {
+    const runtime = require("./acbrPosPrinterRuntime");
+    const loaded = runtime.canLoadNativeLib();
+    push("acbr_dll", loaded, loaded ? runtime.resolveLibPath() : "dll_missing");
+    const circuit = runtime.getAcbrPosCircuit?.() || {};
+    const circuitOpen = runtime.isAcbrPosCircuitOpen?.() || false;
+    push(
+      "acbr_circuito",
+      !circuitOpen,
+      circuitOpen
+        ? `aberto: ${circuit.reason || "—"} — use Detectar para reativar`
+        : "fechado",
+    );
+  } catch (err) {
+    push("acbr_dll", false, err.message);
+  }
+
+  try {
+    const warmState = global.__printWarmState || null;
+    push(
+      "warm_logo",
+      warmState?.ok !== false,
+      warmState
+        ? `ok=${warmState.ok} ms=${warmState.ms}`
+        : "ainda não aquecido (boot)",
+    );
+  } catch (_) {}
+
+  try {
+    const { getLastPrintMetrics } = require("./printMetrics");
+    const lp = getLastPrintMetrics();
+    push(
+      "ultima_impressao",
+      lp.at != null,
+      lp.at
+        ? `${lp.provider || "?"} ${lp.durationMs}ms logo=${lp.logoIncluded}`
+        : "nenhuma",
+    );
+  } catch (_) {}
 
   const obs = printJobService.observabilidade();
   push("fila_impressao", (obs.fila?.erro || 0) < 5, `pend=${obs.fila?.pendente || 0} err=${obs.fila?.erro || 0}`);
@@ -134,7 +286,7 @@ async function executarDiagnosticoImpressao(deps = {}) {
     },
     observabilidade: obs,
     driver: driverInfo,
-    logo,
+    logo: { ...logo, lastSkipReason: logoAv.reason, imprimivel: logoAv.ok },
   };
 }
 

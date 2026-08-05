@@ -2467,6 +2467,8 @@ function imprimirCupom(payload) {
 function imprimirTeste() {
   return imprimirComGavetaOpcional(
     async (printer) => {
+      // Paridade com página de teste ACBr — logo no topo quando BMP imprimível.
+      await imprimirLogoCupomEscpos(printer, { exibirLogo: true });
       printer.font("a").align("ct").style("b").text("TESTE IMPRESSORA").style("normal");
       printer.text("Margin Platform 1.0");
       printer.text(sepDash());

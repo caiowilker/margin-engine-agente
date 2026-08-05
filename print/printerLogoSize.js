@@ -53,7 +53,12 @@ function resolveLogoBmpLargura(cols = getThermalCols(), fator = FATOR_PADRAO) {
   // f1≈0.78× · f2=1× · f3≈1.18× · f4≈1.35×
   const mult = 0.6 + f * 0.2;
   const maxDots = Math.max(160, cols * 8 - 16);
-  return Math.min(maxDots, Math.round(base * mult));
+  // Cap para não estourar soft timeout do worker ACBr (~5s) em USB lento.
+  const hardCap = Math.min(
+    480,
+    Math.max(160, Number(process.env.PRINTER_LOGO_MAX_WIDTH_DOTS || 384) || 384),
+  );
+  return Math.min(hardCap, maxDots, Math.round(base * mult));
 }
 
 /** Tamanho efetivo para todos os drivers de impressão. */

@@ -276,6 +276,7 @@ function noBoot(delayMs = 2500) {
       try {
         const warmOk = await core.warmPrintHotPath();
         const warmMs = performance.now() - tWarm;
+        global.__printWarmState = { ok: !!warmOk, ms: Math.round(warmMs), at: Date.now() };
         if (warmMs > 1000) {
           log.warn(
             { warmMs, metric: "print.warm_slow" },
@@ -288,6 +289,7 @@ function noBoot(delayMs = 2500) {
           );
         }
       } catch (err) {
+        global.__printWarmState = { ok: false, ms: null, at: Date.now(), err: err?.message };
         log.warn(
           { err: err?.message, metric: "print.warm_failed" },
           "[PrinterBootstrap] Falha ao aquecer print hot-path",

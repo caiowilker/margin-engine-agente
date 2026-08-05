@@ -145,35 +145,116 @@ test("renderPayloadTags — cupom longo", () => {
   assert.ok(tags.includes("TOTAL:"));
 });
 
-test("printerLogo — rejeita nao-BMP", () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "logo-test-"));
+test("printerLogo — converte PNG para BMP 1-bpp", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "logo-png-"));
+  process.env.MARGIN_ENGINE_ROOT = tmp;
   process.env.PRINTER_LOCAL_ENV_OVERRIDE = path.join(tmp, ".env");
-  assert.throws(
-    () => printerLogo.salvar({ base64: Buffer.from("PNG").toString("base64") }),
-    /BMP monocromático/,
+  printerLogo.__test.resetCaches();
+  // PNG 1x1 via sharp-friendly buffer: use makeTest path — tiny valid PNG
+  const sharp = require("sharp");
+  const png = await sharp({
+    create: { width: 16, height: 16, channels: 3, background: { r: 0, g: 0, b: 0 } },
+  })
+    .png()
+    .toBuffer();
+  const info = await printerLogo.salvar({ base64: png.toString("base64"), ativo: true });
+  assert.strictEqual(info.ativo, true);
+  assert.ok(info.imprimivel);
+  assert.ok(printerLogo.isBmp1bppPrintable(printerLogo.lerBuffer()));
+  assert.strictEqual(printerLogo.deveExibirLogoCupom({}), true);
+  assert.strictEqual(printerLogo.getLastLogoSkipReason(), null);
+});
+
+test("printerLogo — rejeita lixo sem imagem", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "logo-test-"));
+  process.env.MARGIN_ENGINE_ROOT = tmp;
+  process.env.PRINTER_LOCAL_ENV_OVERRIDE = path.join(tmp, ".env");
+  await assert.rejects(
+    () => printerLogo.salvar({ base64: Buffer.from("not-an-image").toString("base64") }),
+    /Logo inválida/,
   );
 });
 
-test("printerLogo — aceita BMP header", () => {
+test("printerLogo — aceita BMP 1-bpp válido", async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "logo-bmp-"));
+  process.env.MARGIN_ENGINE_ROOT = tmp;
   process.env.PRINTER_LOCAL_ENV_OVERRIDE = path.join(tmp, ".env");
-  const bmp = Buffer.alloc(64);
-  bmp[0] = 0x42;
-  bmp[1] = 0x4d;
-  const info = printerLogo.salvar({ base64: bmp.toString("base64"), ativo: true });
+  printerLogo.__test.resetCaches();
+  const bmp = printerLogo.makeTestBmp1bpp(16, 8);
+  const info = await printerLogo.salvar({ base64: bmp.toString("base64"), ativo: true });
   assert.strictEqual(info.ativo, true);
   assert.ok(info.sha256);
+  assert.ok(info.imprimivel);
 });
 
 test("printerLogo — sem BMP não exibe logo", () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "logo-empty-"));
-  const logoDir = path.join(tmp, "printer");
-  fs.mkdirSync(logoDir, { recursive: true });
-  const prevData = path.join(__dirname, "..", "data", "printer");
+  process.env.MARGIN_ENGINE_ROOT = tmp;
+  printerLogo.__test.resetCaches();
   const { tagLogoHeader } = require("../print/acbrTags");
   printerLogo.remover();
   assert.strictEqual(printerLogo.deveExibirLogoCupom({}), false);
+  assert.strictEqual(printerLogo.getLastLogoSkipReason(), "sem_arquivo");
   assert.strictEqual(tagLogoHeader({}), "");
+});
+
+test("printerLogo — exibirLogo false no payload ignora BMP", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "logo-off-"));
+  process.env.MARGIN_ENGINE_ROOT = tmp;
+  process.env.PRINTER_LOCAL_ENV_OVERRIDE = path.join(tmp, ".env");
+  printerLogo.__test.resetCaches();
+  const bmp = printerLogo.makeTestBmp1bpp(8, 8);
+  await printerLogo.salvar({ base64: bmp.toString("base64"), ativo: true });
+  assert.strictEqual(printerLogo.deveExibirLogoCupom({ exibirLogo: false }), false);
+  assert.strictEqual(printerLogo.getLastLogoSkipReason(), "toggle_off");
+  const { tagLogoHeader } = require("../print/acbrTags");
+  assert.strictEqual(tagLogoHeader({ exibirLogo: false }), "");
+});
+
+test("printerLogo — tagLogoHeader inclui bmp path quando ativo", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "logo-tag-"));
+  process.env.MARGIN_ENGINE_ROOT = tmp;
+  printerLogo.__test.resetCaches();
+  await printerLogo.salvar({
+    base64: printerLogo.makeTestBmp1bpp(8, 8).toString("base64"),
+    ativo: true,
+  });
+  const { tagLogoHeader } = require("../print/acbrTags");
+  const tags = tagLogoHeader({});
+  assert.ok(/<bmp\b/i.test(tags), tags);
+});
+
+test("printMetrics — record/get", () => {
+  const m = require("../print/printMetrics");
+  m.recordPrintResult({
+    durationMs: 120,
+    provider: "acbr-posprinter",
+    op: "imprimirTeste",
+    logoIncluded: true,
+    logoSkipReason: null,
+    ok: true,
+  });
+  const g = m.getLastPrintMetrics();
+  assert.strictEqual(g.durationMs, 120);
+  assert.strictEqual(g.provider, "acbr-posprinter");
+  assert.strictEqual(g.logoIncluded, true);
+});
+
+test("diagnostico — inclui acbr_deps e logo_imprimivel", () => {
+  const diag = require("../print/diagnosticoImpressao");
+  const r = diag.coletarDiagnosticoImpressaoSync({});
+  const ids = r.checks.map((c) => c.id);
+  assert.ok(ids.includes("acbr_deps"), ids.join(","));
+  assert.ok(ids.includes("porta_raw_valida") || ids.includes("acbr_circuito"), ids.join(","));
+});
+
+test("impressoraCore — teste nativo chama logo", () => {
+  const src = fs.readFileSync(
+    path.join(__dirname, "../print/escpos/impressoraCore.js"),
+    "utf8",
+  );
+  const fn = src.slice(src.indexOf("function imprimirTeste"), src.indexOf("function imprimirFechamento"));
+  assert.ok(fn.includes("imprimirLogoCupomEscpos"), "teste native deve imprimir logo");
 });
 
 test("danfeTermico — respeita exibirLogo false", () => {
@@ -184,18 +265,6 @@ test("danfeTermico — respeita exibirLogo false", () => {
     exibirLogo: false,
   });
   assert.ok(!/<logo>/i.test(tags) && !/logo/i.test(tags.split("\n")[1] || ""));
-});
-
-test("printerLogo — exibirLogo false no payload ignora BMP", () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "logo-off-"));
-  process.env.PRINTER_LOCAL_ENV_OVERRIDE = path.join(tmp, ".env");
-  const bmp = Buffer.alloc(64);
-  bmp[0] = 0x42;
-  bmp[1] = 0x4d;
-  printerLogo.salvar({ base64: bmp.toString("base64"), ativo: true });
-  assert.strictEqual(printerLogo.deveExibirLogoCupom({ exibirLogo: false }), false);
-  const { tagLogoHeader } = require("../print/acbrTags");
-  assert.strictEqual(tagLogoHeader({ exibirLogo: false }), "");
 });
 
 test("cupomValidate — segunda via sem QR não bloqueia impressão", () => {

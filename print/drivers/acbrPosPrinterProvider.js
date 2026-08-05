@@ -113,9 +113,40 @@ function getDriverInfo() {
     posWorker = pool.isPosWorkerEnabled();
     posWorkerActive = pool.hasActiveWorker();
   } catch (_) {}
+  let circuit = { open: false, reason: null, openedAt: null };
+  try {
+    circuit = runtime.getAcbrPosCircuit();
+  } catch (_) {}
+  const circuitOpen = (() => {
+    try {
+      return runtime.isAcbrPosCircuitOpen();
+    } catch (_) {
+      return false;
+    }
+  })();
+  let lastPrint = null;
+  try {
+    lastPrint = require("../printMetrics").getLastPrintMetrics();
+  } catch (_) {}
+  let loadReason = null;
+  if (mode !== "native") {
+    if (process.platform !== "win32") loadReason = "not_win32";
+    else if (!runtime.resolveLibPath()) loadReason = "dll_missing";
+    else if (!runtime.canRequireFfiBindings?.()) loadReason = "koffi";
+    else loadReason = "unconfigured";
+  }
+  const effectiveMode =
+    mode === "native" && circuitOpen
+      ? "native_circuit"
+      : mode === "native"
+        ? "acbr"
+        : mode === "parity"
+          ? "parity"
+          : "native_fallback";
   return {
     ...DRIVER_INFO,
     mode,
+    effectiveMode,
     native: mode === "native",
     parity: mode === "parity",
     libPath: runtime.resolveLibPath(),
@@ -125,13 +156,26 @@ function getDriverInfo() {
     posWorker,
     posWorkerActive,
     usbTopology: String(process.env.PHYSICAL_USB_TOPOLOGY || "separate"),
-    acbrCircuitOpen: (() => {
-      try {
-        return runtime.isAcbrPosCircuitOpen();
-      } catch (_) {
-        return false;
-      }
-    })(),
+    acbrCircuitOpen: circuitOpen,
+    acbr: {
+      loaded: mode === "native",
+      libPath: runtime.resolveLibPath(),
+      koffiOk: !!runtime.canRequireFfiBindings?.(),
+      loadReason,
+      circuit: {
+        open: circuitOpen,
+        reason: circuit.reason || null,
+        openedAt: circuit.openedAt || null,
+      },
+      lastPhase: (() => {
+        try {
+          return runtime.getAcbrPrintPhase?.() || null;
+        } catch (_) {
+          return null;
+        }
+      })(),
+    },
+    lastPrint,
   };
 }
 
@@ -194,9 +238,42 @@ async function imprimirSegundaVia(payload) {
 }
 
 async function imprimirTeste() {
+  const t0 = Date.now();
+  const logoMod = require("../printerLogo");
+  const logoAv = logoMod.avaliarExibicaoLogo({ exibirLogo: true });
   const mode = getIntegrationMode();
+  const metrics = require("../printMetrics");
+
   if (mode === "parity" || preferNativeEscPos({ naoFiscal: true })) {
-    return native.imprimirTeste();
+    const res = await native.imprimirTeste();
+    const durationMs = Date.now() - t0;
+    const out = {
+      ...res,
+      ok: true,
+      teste: true,
+      provider: "native",
+      durationMs,
+      logoIncluded: logoAv.ok,
+      logoSkipReason: logoAv.reason,
+      circuitOpen: (() => {
+        try {
+          return runtime.isAcbrPosCircuitOpen();
+        } catch (_) {
+          return false;
+        }
+      })(),
+      hintTcp:
+        "Se USB travar, configure porta TCP:IP:9100 (ex.: TCP:192.168.1.50:9100).",
+    };
+    metrics.recordPrintResult({
+      durationMs,
+      provider: "native",
+      op: "imprimirTeste",
+      logoIncluded: logoAv.ok,
+      logoSkipReason: logoAv.reason,
+      ok: true,
+    });
+    return out;
   }
   const tags = renderPaginaTeste();
   await imprimirTags(tags);
@@ -207,7 +284,24 @@ async function imprimirTeste() {
       log.warn({ err: err.message }, "[ACBrPosPrinter] Gaveta no teste falhou (ignorado)");
     }
   }
-  return { ok: true, teste: true, provider: "acbr-posprinter" };
+  const durationMs = Date.now() - t0;
+  const out = {
+    ok: true,
+    teste: true,
+    provider: "acbr-posprinter",
+    durationMs,
+    logoIncluded: logoAv.ok && /<bmp\b/i.test(tags),
+    logoSkipReason: logoAv.ok ? null : logoAv.reason,
+  };
+  metrics.recordPrintResult({
+    durationMs,
+    provider: "acbr-posprinter",
+    op: "imprimirTeste",
+    logoIncluded: out.logoIncluded,
+    logoSkipReason: out.logoSkipReason,
+    ok: true,
+  });
+  return out;
 }
 
 async function abrirGaveta() {
@@ -291,7 +385,7 @@ module.exports = {
     };
   },
   listar: () => ({ ...native.listar(), provider: "acbr-posprinter", ...getDriverInfo() }),
-  // Operador "Detectar" (force): sync + reset circuito para reavaliar ACBr neste PC.
+  // Operador "Detectar" (force): sync + reset circuito + probe ACBr (1 linha + logo se houver).
   detectar: async (force = true) => {
     const bootstrap = require("../printerBootstrap");
     const forceSync = force !== false;
@@ -303,7 +397,72 @@ module.exports = {
         /* ignore */
       }
     }
-    return result.info || { ok: false };
+
+    let acbrProbe = null;
+    if (forceSync && runtime.canLoadNativeLib()) {
+      const logoMod = require("../printerLogo");
+      const { tagLogoHeader, tagCorte } = require("../acbrTags");
+      const av = logoMod.avaliarExibicaoLogo({ exibirLogo: true });
+      const logoTag = tagLogoHeader({ exibirLogo: true });
+      const tags = `</zera>\n${logoTag}<ce>PROBE ACBr OK</ce>\n${tagCorte("partial")}\n`;
+      const t0 = Date.now();
+      try {
+        await runtime.imprimirTagsNative(tags);
+        acbrProbe = {
+          ok: true,
+          durationMs: Date.now() - t0,
+          logoIncluded: !!(av.ok && /<bmp\b/i.test(logoTag)),
+          logoSkipReason: av.ok ? null : av.reason,
+        };
+        log.info(
+          { ...acbrProbe, metric: "print.acbr_detect_probe_ok" },
+          "[ACBrPosPrinter] Probe pós-Detectar OK",
+        );
+      } catch (err) {
+        acbrProbe = {
+          ok: false,
+          durationMs: Date.now() - t0,
+          error: err?.message || String(err),
+          code: err?.code || err?.acbrRet || null,
+          logoSkipReason: av.reason,
+        };
+        log.warn(
+          { ...acbrProbe, metric: "print.acbr_detect_probe_fail" },
+          "[ACBrPosPrinter] Probe pós-Detectar falhou",
+        );
+        try {
+          if (runtime.shouldOpenCircuitFromError?.(err)) {
+            runtime.openAcbrPosCircuit?.(err.message || "detect_probe_fail");
+          }
+        } catch (_) {}
+      }
+    } else if (forceSync && !runtime.canLoadNativeLib()) {
+      const infoDrv = getDriverInfo();
+      acbrProbe = {
+        ok: false,
+        error: "Biblioteca ACBr PosPrinter indisponível neste PC",
+        loadReason: infoDrv.acbr?.loadReason || "dll_missing",
+      };
+    }
+
+    let base = result.info ? { ...result.info } : {};
+    if (result.ok) {
+      base.ok = true;
+      if (result.skipped) base.skipped = true;
+      if (!base.porta) {
+        try {
+          base.porta = require("../printerLocalConfig").ler({ fresh: true })?.porta;
+        } catch (_) {}
+      }
+    } else {
+      base.ok = false;
+    }
+
+    return {
+      ...base,
+      acbrProbe,
+      driver: getDriverInfo(),
+    };
   },
   imprimirCupom,
   imprimirSegundaVia,

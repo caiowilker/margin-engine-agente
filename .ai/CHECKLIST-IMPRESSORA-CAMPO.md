@@ -46,3 +46,16 @@ Use em cada PC de caixa antes de liberar o turno.
 | RAW soft kill | `printTimedOut` / `RAW_PRINT_TIMEOUT`; physicalLock só libera após kill confirmado ou `PRINTER_RAW_KILL_HOLD_MS` |
 | `PHYSICAL_USB_TOPOLOGY=shared` | NFC-e e print não se sobrepõem no hub |
 | Build | Agente/instalador **1.0.5+** |
+| Logo térmica | Upload PNG/JPG/BMP → convertido 1-bpp; teste mostra `logoIncluded=true`; cupom com `<bmp>` no ACBr |
+| Diagnóstico | `acbr.loaded`, circuito fechado, `logo_imprimivel` ok; painel mostra modo ACBr vs Native |
+| Página de teste | &lt; ~3s com logo visível; toast com provider + durationMs |
+
+## Aceite de campo (por PC) — após update 2026-08
+
+1. Configuração → Impressão: status **Modo: ACBr PosPrinter** (não “Native (circuito)” sem motivo).
+2. Enviar logo (PNG ou BMP) → “Logo térmica configurada (BMP)”.
+3. **Detectar / Reativar ACBr** → deve imprimir “PROBE ACBr OK” (e logo se configurada); painel confirma probe.
+4. Imprimir teste → toast com `logo OK` e tempo; papel com logo no topo (ACBr **ou** native).
+5. Se modo for circuito/native: confira USB/TCP, Detectar de novo, repetir teste.
+6. Cupom de venda: logo + texto; se ACBr falhar só pré-print, native ainda deve trazer logo (não só texto).
+7. Diagnóstico F13: `acbr_deps`, `acbr_circuito` fechado, `logo_imprimivel` ok quando há logo.

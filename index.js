@@ -3686,10 +3686,10 @@ function iniciarServidor() {
     }
   });
 
-  app.put("/impressora/logo", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+  app.put("/impressora/logo", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       const printerLogo = require("./print/printerLogo");
-      const saved = printerLogo.salvar(req.body || {});
+      const saved = await printerLogo.salvar(req.body || {});
       res.json({ ok: true, logo: saved });
     } catch (e) {
       res.status(400).json({ erro: e.message });
@@ -3778,16 +3778,21 @@ function iniciarServidor() {
 
   app.post("/impressora/detectar", exigirAgentToken, async (req, res) => {
     try {
-      const bootstrap = require("./print/printerBootstrap");
-      const result = await bootstrap.autoDetectarESincronizar({ force: true });
-      if (!result.ok) {
+      // Provider: sync porta + reset circuito + probe ACBr (1 linha + logo).
+      const info = await impressora.detectar();
+      const found = !!(info?.ok || info?.impressora || info?.porta || info?.detectada);
+      if (!found && info?.acbrProbe?.ok !== true) {
         return res.status(404).json({
           ok: false,
-          erro: "Nenhuma impressora encontrada",
-          ...result.info,
+          erro: info?.erro || "Nenhuma impressora encontrada",
+          ...info,
         });
       }
-      res.json({ ok: true, ...result.info, config: result.config });
+      let config = null;
+      try {
+        config = require("./print/printerLocalConfig").ler({ fresh: true });
+      } catch (_) {}
+      res.json({ ok: true, ...info, config });
     } catch (err) {
       res.status(500).json({ erro: err.message });
     }
