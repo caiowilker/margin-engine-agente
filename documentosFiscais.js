@@ -253,15 +253,117 @@ function backup(sourceFile) {
   }
 }
 
+function normalizarXmlNfe(raw) {
+  if (raw == null) return null;
+  let s = String(raw).replace(/^\uFEFF/, "").trim();
+  if (!s) return s;
+
+  const starts = [
+    s.search(/<\?xml/i),
+    s.search(/<nfeProc[\s>/]/i),
+    s.search(/<(?:[a-zA-Z0-9_]+:)?NFe[\s>/]/i),
+    s.search(/<procEventoNFe[\s>/]/i),
+  ].filter((i) => i >= 0);
+  if (starts.length) {
+    s = s.slice(Math.min(...starts));
+  }
+
+  const closeRe = /<\/(?:nfeProc|NFe|procEventoNFe|enviNFe)\s*>/gi;
+  let lastEnd = -1;
+  let m;
+  while ((m = closeRe.exec(s)) !== null) {
+    lastEnd = m.index + m[0].length;
+  }
+  if (lastEnd > 0) s = s.slice(0, lastEnd);
+
+  if (/\\"/.test(s) || /\\u003[cC]/.test(s) || /\\\//.test(s)) {
+    s = s
+      .replace(/\\u003[cC]/g, "<")
+      .replace(/\\u003[eE]/g, ">")
+      .replace(/\\"/g, '"')
+      .replace(/\\n/g, "\n")
+      .replace(/\\r/g, "\r")
+      .replace(/\\t/g, "\t")
+      .replace(/\\\//g, "/")
+      .replace(/\\\\/g, "\\");
+    closeRe.lastIndex = 0;
+    lastEnd = -1;
+    while ((m = closeRe.exec(s)) !== null) {
+      lastEnd = m.index + m[0].length;
+    }
+    if (lastEnd > 0) s = s.slice(0, lastEnd);
+  }
+
+  // Aspas tipográficas
+  s = s.replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'");
+
+  if (/^<\?xml\s/i.test(s)) {
+    const endDecl = s.indexOf("?>");
+    if (endDecl < 0) {
+      const tag = s.indexOf("<", 1);
+      s = tag >= 0 ? s.slice(tag) : s;
+    } else {
+      let declInner = s.slice(5, endDecl).trim();
+      const rest = s.slice(endDecl + 2);
+      declInner = declInner
+        .replace(/&quot;/g, '"')
+        .replace(/&#34;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&#39;/g, "'");
+      declInner = declInner.replace(
+        /\b(version|encoding|standalone)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s?>]+))/gi,
+        (_, name, dq, sq, bare) => `${name}="${dq ?? sq ?? bare}"`,
+      );
+      const rebuilt = `<?xml ${declInner}?>`;
+      if (/version\s*=\s*"/i.test(rebuilt)) {
+        s = rebuilt + rest;
+      } else {
+        s = rest.replace(/^\s+/, "");
+      }
+    }
+  }
+  return s.trim();
+}
+
 function extrairXmlDaResposta(resposta) {
   const txt = coalescerRespostaAcbr(resposta);
   if (!txt) return null;
-  const idx = txt.indexOf("<?xml");
-  if (idx >= 0) return txt.slice(idx).trim();
-  const xmlMatch = txt.match(
-    /<(?:nfeProc|NFe|procEventoNFe)[\s\S]*<\/(?:nfeProc|NFe|procEventoNFe)>/i,
-  );
-  return xmlMatch ? xmlMatch[0] : null;
+
+  // Preferir campo XML já desescapado via JSON.parse
+  try {
+    const j = JSON.parse(String(txt).trim());
+    if (j && typeof j === "object") {
+      const libResp = require("./acbrLibResposta");
+      const parsed = libResp.parseJsonAcbrLib
+        ? libResp.parseJsonAcbrLib(txt)
+        : null;
+      const candidato =
+        (parsed && parsed.xml) ||
+        j?.Envio?.XML ||
+        j?.Envio?.xml ||
+        j?.DistribuicaoDFe?.XML ||
+        j?.xml ||
+        j?.XML ||
+        null;
+      if (candidato && /<(?:nfeProc|NFe)[\s>]/i.test(String(candidato))) {
+        return normalizarXmlNfe(String(candidato));
+      }
+    }
+  } catch (_) {
+    /* não é JSON puro */
+  }
+
+  const idx = txt.search(/<\?xml/i);
+  let chunk = null;
+  if (idx >= 0) {
+    chunk = txt.slice(idx);
+  } else {
+    const xmlMatch = txt.match(
+      /<(?:nfeProc|NFe|procEventoNFe)[\s\S]*?<\/(?:nfeProc|NFe|procEventoNFe)\s*>/i,
+    );
+    chunk = xmlMatch ? xmlMatch[0] : null;
+  }
+  return chunk ? normalizarXmlNfe(chunk) : null;
 }
 
 function extrairCnpjDaChave(chave) {
@@ -761,6 +863,7 @@ module.exports = {
   pareceDanfeA4,
   pdfValidoParaModelo,
   extrairXmlDaResposta,
+  normalizarXmlNfe,
   extrairQrCodeDoXml,
   portalConsultaNfce,
   portalConsultaDocumento,

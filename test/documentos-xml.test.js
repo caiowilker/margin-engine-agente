@@ -95,5 +95,27 @@ test("copiarPdfParaCanonico — normaliza para path flat", () => {
   assert.ok(docs.isPdfValid(canon));
 });
 
+test("normalizarXmlNfe — repara version sem aspas", () => {
+  const broken = `<?xml version=1.0 encoding=UTF-8?>${nfeProc.replace(/^<\?xml[^?]*\?>/, "")}`;
+  const ok = docs.normalizarXmlNfe(broken);
+  assert.ok(ok.includes('version="1.0"'));
+  assert.ok(ok.includes('encoding="UTF-8"'));
+});
+
+test("extrairXmlDaResposta — desescapa slice JSON com \\\"", () => {
+  const escaped = nfeProc.replace(/"/g, '\\"');
+  const raw = `{"Envio":{"XML":"${escaped}"}}`;
+  // caminho JSON.parse deve preferir campo já desescapado
+  const fromJson = docs.extrairXmlDaResposta(raw);
+  assert.ok(fromJson && fromJson.includes("<nfeProc"));
+  assert.ok(!fromJson.includes('\\"'));
+
+  // caminho slice (texto com escapes literais embutidos)
+  const sliced = docs.extrairXmlDaResposta(`prefix ${escaped} "}`);
+  assert.ok(sliced && sliced.includes("<nfeProc"));
+  assert.ok(sliced.includes('version="1.0"') || sliced.startsWith("<nfeProc") || sliced.startsWith("<?xml"));
+  assert.ok(!sliced.includes('\\"'));
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
