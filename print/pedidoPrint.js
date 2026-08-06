@@ -23,6 +23,8 @@ const EVENT_TYPE_LABELS = Object.freeze({
   ORDER_FINISHED: "Pedido finalizado",
   PRE_CONTA: "Pre-conta - cobranca",
   BILL_REQUESTED: "Pre-conta - cobranca",
+  SEGUNDA_VIA: "2a via - comanda",
+  ORDER_REPRINT: "2a via - comanda",
 });
 
 function mapItem(raw) {

@@ -536,7 +536,7 @@ function rawPrintTimeoutMs() {
 function rawKillHoldMs() {
   return Math.max(
     1000,
-    parseInt(process.env.PRINTER_RAW_KILL_HOLD_MS || "12000", 10) || 12000,
+    parseInt(process.env.PRINTER_RAW_KILL_HOLD_MS || "4000", 10) || 4000,
   );
 }
 

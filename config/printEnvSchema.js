@@ -25,6 +25,14 @@ const PRINT_ENV_FIELDS = [
     comment: "Soft timeout jobs gerais (DANFE etc.)",
   },
   {
+    env: "PRINT_JOB_BACKOFF_MS",
+    kind: "int",
+    min: 200,
+    max: 60000,
+    default: 500,
+    comment: "Backoff base entre retries da fila (teto efetivo 5s nos jobs rápidos)",
+  },
+  {
     env: "PRINT_HARD_DRAIN_MS",
     kind: "int",
     min: 500,
@@ -45,7 +53,7 @@ const PRINT_ENV_FIELDS = [
     kind: "int",
     min: 1000,
     max: 30000,
-    default: 12000,
+    default: 4000,
     comment:
       "Após soft kill: quanto segurar o physicalLock antes de liberar (evita 2º cupom no USB ocupado)",
   },
@@ -138,6 +146,15 @@ const PRINT_ENV_FIELDS = [
     default: false,
     comment:
       "Permite FFI PosPrinter no processo principal (perigoso no Windows). Padrão: só worker ou ACBR_POS_WORKER=false",
+  },
+  {
+    env: "ACBR_POS_SESSION_IDLE_MS",
+    kind: "int",
+    min: 5000,
+    max: 1800000,
+    default: 300000,
+    comment:
+      "Mantém sessão PosPrinter quente após o último job (padrão 5 min — evita Ativar frio no salão)",
   },
 ];
 

@@ -37,6 +37,10 @@ Use em cada PC de caixa antes de liberar o turno.
 
 | Cenário | Esperado |
 |--------|----------|
+| Pré-conta (LAN, fila vazia, sessão quente) | **&lt; 1s** após toque (print em paralelo com close-bill) |
+| Cupom fiscal / DANFC-e no caixa | Prioridade 2; espera QR ≤2s; doc local ≤3×200ms |
+| Gaveta (dinheiro) | Sem retry no front; soft ~2.5s; kill-hold ≤4s |
+| Comanda / pedido online no PC (WS) | Drain ≤400ms; prioridade na fila do agente |
 | Poll 10 min sem mudar config | Sem `Configuração salva` repetido |
 | Circuito aberto + cupom | Factory/native direto; sem `POS_Ativar` |
 | POST print Abort | `timeout_impressao`, caixa online |
@@ -49,6 +53,7 @@ Use em cada PC de caixa antes de liberar o turno.
 | Logo térmica | Upload PNG/JPG/BMP → convertido 1-bpp; teste mostra `logoIncluded=true`; cupom com `<bmp>` no ACBr |
 | Diagnóstico | `acbr.loaded`, circuito fechado, `logo_imprimivel` ok; painel mostra modo ACBr vs Native |
 | Página de teste | &lt; ~3s com logo visível; toast com provider + durationMs |
+| Sessão ACBr idle | Padrão **5 min** (`ACBR_POS_SESSION_IDLE_MS`) — sem Ativar frio entre pré-contas do turno |
 
 ## Aceite de campo (por PC) — após update 2026-08
 

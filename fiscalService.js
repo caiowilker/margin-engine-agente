@@ -1264,10 +1264,10 @@ async function reimprimirDanfceCompleto(chave, numeroVenda, opts = {}) {
   }
 
   let doc = null;
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 3; i++) {
     doc = docs.resolverDocumentoFiscalLocal(chave, numeroVenda);
     if (doc) break;
-    if (i < 7) await sleep(400);
+    if (i < 2) await sleep(200);
   }
   if (!doc) throw new Error("Documento fiscal não encontrado localmente");
   const chaveDoc = doc.chave || chave;

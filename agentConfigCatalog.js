@@ -609,8 +609,8 @@ const CATALOGO = {
   printJobBackoffMs: {
     env: "PRINT_JOB_BACKOFF_MS",
     tipo: "number",
-    default: 2000,
-    min: 500,
+    default: 500,
+    min: 200,
     max: 60000,
     grupo: "impressora",
     label: "Backoff entre retries (ms)",

@@ -795,7 +795,7 @@ async function withPosPrinterSession(fn, opts = {}) {
     /* coord/session opcional em testes */
   }
 
-  const SESSION_IDLE_MS = parseInt(process.env.ACBR_POS_SESSION_IDLE_MS || "45000", 10);
+  const SESSION_IDLE_MS = parseInt(process.env.ACBR_POS_SESSION_IDLE_MS || "300000", 10);
   let _activeSession = withPosPrinterSession._session;
   let _refCount = withPosPrinterSession._refCount || 0;
   let _idleTimer = withPosPrinterSession._idleTimer;
@@ -1394,6 +1394,15 @@ function openAcbrPosCircuit(reason) {
   try {
     require("./factory").resetPrintProvider();
   } catch (_) {}
+  // Native path assume logo cache quente — evita 1º cupom lento após circuito.
+  setImmediate(() => {
+    try {
+      const core = require("./escpos/impressoraCore");
+      if (typeof core.warmPrintHotPath === "function") {
+        void core.warmPrintHotPath().catch(() => {});
+      }
+    } catch (_) {}
+  });
   log.warn(
     {
       reason: _acbrPosCircuit.reason,
@@ -1473,6 +1482,41 @@ function __reloadCircuitFromDiskForTests() {
   loadCircuitFromDisk();
 }
 
+/**
+ * Estende idle da sessão quente se já houver sessão ativa (sem Ativar frio).
+ * Chamado no enqueue de jobs rápidos — mantém PosPrinter aquecido no salão.
+ */
+function extendPosPrinterSessionIdle() {
+  const sess = withPosPrinterSession._session;
+  if (!sess) return false;
+  if ((withPosPrinterSession._refCount || 0) > 0) return true;
+  const SESSION_IDLE_MS = parseInt(process.env.ACBR_POS_SESSION_IDLE_MS || "300000", 10);
+  if (withPosPrinterSession._idleTimer) {
+    clearTimeout(withPosPrinterSession._idleTimer);
+  }
+  withPosPrinterSession._idleTimer = setTimeout(() => {
+    withPosPrinterSession._idleTimer = null;
+    if ((withPosPrinterSession._refCount || 0) <= 0 && withPosPrinterSession._session) {
+      const s = withPosPrinterSession._session;
+      withPosPrinterSession._session = null;
+      Promise.resolve()
+        .then(async () => {
+          try {
+            await callPosBestEffort(s.bundle, s.bundle.lib.POS_Desativar.async);
+          } catch (_) {}
+          try {
+            await callPosBestEffort(s.bundle, s.bundle.lib.POS_Finalizar.async);
+          } catch (_) {}
+          try {
+            if (s.cwdBefore) process.chdir(s.cwdBefore);
+          } catch (_) {}
+        })
+        .catch(() => {});
+    }
+  }, Math.max(5000, SESSION_IDLE_MS));
+  return true;
+}
+
 module.exports = {
   canLoadNativeLib,
   canRequireFfiBindings,
@@ -1500,6 +1544,7 @@ module.exports = {
   shouldOpenCircuitFromError,
   getAcbrPrintPhase,
   setAcbrPrintPhase,
+  extendPosPrinterSessionIdle,
   /** @internal testes — simula contrato async do koffi */
   __wrapKoffiFunc: wrapKoffiFunc,
   __reloadCircuitFromDiskForTests,

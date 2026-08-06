@@ -67,11 +67,20 @@ function initDb() {
     if (!cols.some((c) => c.name === "idempotency_key")) {
       db.exec(`ALTER TABLE print_jobs ADD COLUMN idempotency_key TEXT`);
     }
+    if (!cols.some((c) => c.name === "prioridade")) {
+      db.exec(`ALTER TABLE print_jobs ADD COLUMN prioridade INTEGER NOT NULL DEFAULT 5`);
+    }
   } catch (_) {}
   try {
     db.exec(
       `CREATE UNIQUE INDEX IF NOT EXISTS idx_print_jobs_idempotency
        ON print_jobs(idempotency_key) WHERE idempotency_key IS NOT NULL`,
+    );
+  } catch (_) {}
+  try {
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_print_jobs_fila
+       ON print_jobs(status, prioridade, criado_em)`,
     );
   } catch (_) {}
   return db;
@@ -91,15 +100,16 @@ function inserirJob(row) {
     `INSERT INTO print_jobs (
       id, tipo, op, status, payload_json, documento, numero_venda, usuario, caixa, tenant_id,
       tentativas, max_tentativas, proxima_tentativa_em, motivo, job_pai_id, criado_em, atualizado_em,
-      idempotency_key
+      idempotency_key, prioridade
     ) VALUES (
       @id, @tipo, @op, @status, @payload_json, @documento, @numero_venda, @usuario, @caixa, @tenant_id,
       @tentativas, @max_tentativas, @proxima_tentativa_em, @motivo, @job_pai_id, @criado_em, @atualizado_em,
-      @idempotency_key
+      @idempotency_key, @prioridade
     )`,
   ).run({
     ...row,
     idempotency_key: row.idempotency_key ?? null,
+    prioridade: Number.isFinite(Number(row.prioridade)) ? Number(row.prioridade) : 5,
   });
   return row.id;
 }
@@ -144,7 +154,7 @@ function proximoJobPronto() {
         `SELECT * FROM print_jobs
          WHERE status IN ('PENDENTE', 'REPROCESSANDO')
            AND (proxima_tentativa_em IS NULL OR proxima_tentativa_em <= ?)
-         ORDER BY criado_em ASC
+         ORDER BY COALESCE(prioridade, 5) ASC, criado_em ASC
          LIMIT 1`,
       )
       .get(now) || null

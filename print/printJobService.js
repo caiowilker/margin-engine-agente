@@ -36,7 +36,7 @@ function cfg() {
     // Soft curto: PDV comercial — falha limpa < ~6s (soft+drain), nunca minutos.
     timeoutTotalMs: parseInt(process.env.PRINT_JOB_TIMEOUT_TOTAL_MS || "10000", 10),
     timeoutFastMs: parseInt(process.env.PRINT_JOB_TIMEOUT_FAST_MS || "4000", 10),
-    backoffBaseMs: parseInt(process.env.PRINT_JOB_BACKOFF_MS || "1500", 10),
+    backoffBaseMs: parseInt(process.env.PRINT_JOB_BACKOFF_MS || "500", 10),
     pollMs: parseInt(process.env.PRINT_JOB_POLL_MS || "400", 10),
     retentionDias: parseInt(process.env.PRINT_JOB_RETENTION_DIAS || "90", 10),
   };
@@ -45,6 +45,9 @@ function cfg() {
 function isTipoRapido(tipo) {
   return (
     tipo === "cupom_nao_fiscal" ||
+    tipo === "cupom_fiscal" ||
+    tipo === "danfe_termico" ||
+    tipo === "segunda_via" ||
     tipo === "abertura_caixa" ||
     tipo === "fechamento_caixa" ||
     tipo === "movimento_caixa" ||
@@ -54,6 +57,59 @@ function isTipoRapido(tipo) {
     tipo === "teste" ||
     tipo === "gaveta"
   );
+}
+
+/**
+ * Menor = mais urgente.
+ * 0 gaveta · 1 pedido/comanda · 2 cupom fiscal/comercial/DANFE · 5 demais
+ */
+function prioridadeParaJob(tipo, payload) {
+  if (tipo === "gaveta") return 0;
+  if (tipo === "pedido_comanda") return 1;
+  if (
+    tipo === "cupom_nao_fiscal" ||
+    tipo === "cupom_fiscal" ||
+    tipo === "danfe_termico" ||
+    tipo === "segunda_via" ||
+    tipo === "abertura_caixa" ||
+    tipo === "fechamento_caixa" ||
+    tipo === "movimento_caixa" ||
+    tipo === "sangria" ||
+    tipo === "suprimento"
+  ) {
+    return 2;
+  }
+  const ev = String(payload?.eventType || payload?.event_type || "").toUpperCase();
+  if (ev === "PRE_CONTA" || ev === "BILL_REQUESTED") return 1;
+  return 5;
+}
+
+function agendarWarmPosSeRapido(tipo) {
+  if (!isTipoRapido(tipo) || tipo === "teste") return;
+  setImmediate(() => {
+    try {
+      const runtime = require("./acbrPosPrinterRuntime");
+      if (typeof runtime.extendPosPrinterSessionIdle === "function") {
+        runtime.extendPosPrinterSessionIdle();
+      }
+    } catch (_) {
+      /* warm opcional */
+    }
+    try {
+      const core = require("./escpos/impressoraCore");
+      if (typeof core.warmPrintHotPath === "function") {
+        void core.warmPrintHotPath().catch(() => {});
+      }
+    } catch (_) {
+      /* logo warm opcional */
+    }
+  });
+}
+
+function calcBackoff(tentativa) {
+  const base = cfg().backoffBaseMs;
+  // Jobs rápidos: teto curto (não esperar 60s no salão).
+  return Math.min(base * Math.pow(2, Math.max(0, tentativa - 1)), 5000);
 }
 
 function timeoutParaJob(row) {
@@ -84,11 +140,6 @@ function withPrintLock(fn) {
   const run = printLock.then(() => fn());
   printLock = run.catch(() => {});
   return run;
-}
-
-function calcBackoff(tentativa) {
-  const base = cfg().backoffBaseMs;
-  return Math.min(base * Math.pow(2, Math.max(0, tentativa - 1)), 60000);
 }
 
 function rowToJob(row) {
@@ -147,9 +198,10 @@ function enfileirar(op, args, opts = {}) {
 
   const id = store.novoId();
   const c = cfg();
+  const tipo = resolverTipo(op, payload);
   const row = {
     id,
-    tipo: resolverTipo(op, payload),
+    tipo,
     op,
     status: STATUS.PENDENTE,
     payload_json: serializarPayload(args),
@@ -166,6 +218,7 @@ function enfileirar(op, args, opts = {}) {
     criado_em: new Date().toISOString(),
     atualizado_em: new Date().toISOString(),
     idempotency_key: idempotencyKey,
+    prioridade: prioridadeParaJob(tipo, payload),
   };
   try {
     store.inserirJob(row);
@@ -189,7 +242,11 @@ function enfileirar(op, args, opts = {}) {
     store.registrarEvento(id, "IDEMPOTENCY", idempotencyKey);
   }
   printLog.registrar({ jobId: id, op, tipo: row.tipo, status: STATUS.PENDENTE, evento: "enfileirado" });
-  log.info({ jobId: id, op, tipo: row.tipo, idempotencyKey }, "[PrintJob] Enfileirado");
+  log.info(
+    { jobId: id, op, tipo: row.tipo, prioridade: row.prioridade, idempotencyKey },
+    "[PrintJob] Enfileirado",
+  );
+  agendarWarmPosSeRapido(row.tipo);
   agendarWorker();
   return { ...rowToJob(store.buscarJob(id)), deduplicado: false, idempotencyKey };
 }
