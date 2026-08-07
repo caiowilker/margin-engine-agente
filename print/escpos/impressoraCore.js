@@ -1723,12 +1723,11 @@ const QR_GS_K_MAX_BYTES = 2331;
 
 /** Monta a sequência GS ( k completa (modelo 2, byte-safe, sem iconv). */
 function bytesQrGsK(conteudo, opts = {}) {
+  const { resolveQrPrintOpts } = require("../cupomLayoutShared");
   const data = Buffer.from(String(conteudo), "utf8");
-  const moduleSize = Math.min(16, Math.max(1, Number(opts.moduleSize) || qrNfceModuleSize()));
-  const nivelCfg = String(
-    opts.errorLevel || process.env.PRINTER_QR_ERROR_LEVEL || "M",
-  ).toUpperCase();
-  const nivel = QR_GS_K_NIVEIS[nivelCfg] ?? QR_GS_K_NIVEIS.M;
+  const q = resolveQrPrintOpts(opts);
+  const moduleSize = q.moduleSize;
+  const nivel = QR_GS_K_NIVEIS[q.errorLevel] ?? QR_GS_K_NIVEIS.M;
   const storeLen = data.length + 3;
   return Buffer.concat([
     // Fn 165 — seleciona QR modelo 2
@@ -1900,6 +1899,14 @@ async function renderCupomConteudo(printer, payload) {
   const isOffline = payload.origem === "offline";
   const isLocalSync = payload.origem === "local";
 
+  const {
+    FOOTER,
+    bannersStatusCupom,
+    applyEscposCut,
+    seriePadraoCupom,
+    imprimirBarcodesEscpos,
+  } = require("../cupomLayoutShared");
+
   const LABEL_PGTO = {
     dinheiro: "DINHEIRO",
     pix: "PIX",
@@ -1959,8 +1966,8 @@ async function renderCupomConteudo(printer, payload) {
   printer.align("ct").style("b");
   printer.text(isFiscal ? tituloCupomFiscal(payload.chaveNfe) : "CUPOM NAO FISCAL");
   printer.style("normal");
-  if (payload.vendaCancelada) {
-    printer.align("ct").style("b").text("*** VENDA CANCELADA ***").style("normal");
+  for (const banner of bannersStatusCupom(payload)) {
+    printer.align("ct").style("b").text(banner).style("normal");
   }
   printer.align("lt").text(sepEq());
 
@@ -2117,7 +2124,7 @@ async function renderCupomConteudo(printer, payload) {
       .style("b")
       .text(
         linhaNumeroSerieDocumento(payload.chaveNfe, payload.numeroNfe, payload.serieNfe, {
-          seriePadrao: "001",
+          seriePadrao: seriePadraoCupom(),
         }),
       )
       .style("normal")
@@ -2138,6 +2145,7 @@ async function renderCupomConteudo(printer, payload) {
     if (qrConteudo && IMPRIMIR_QR_NFCE && isNfceModelo65(payload.chaveNfe)) {
       printer.text("Consulta via QR Code");
       await imprimirQrNfce(printer, qrConteudo);
+      printer.align("ct").text("Consulte pela chave ou QR Code");
     } else if (
       IMPRIMIR_QR_NFCE &&
       isNfceModelo65(payload.chaveNfe) &&
@@ -2149,37 +2157,35 @@ async function renderCupomConteudo(printer, payload) {
     }
   }
 
-  // ── 7. Offline / sync local ─────────────────────────────────────────────────
-  if (isOffline) {
-    printer.text(sepDash());
-    printer
-      .align("ct")
-      .style("b")
-      .text("** VENDA OFFLINE **")
-      .style("normal")
-      .text("Sera sincronizada com a internet em breve.");
-  } else if (isLocalSync && !isFiscal) {
-    printer.text(sepDash());
-    printer
-      .align("ct")
-      .text("Aguardando confirmacao do servidor.");
+  // Barcodes extras (paridade ACBr renderBarcodesPayload)
+  {
+    const specs = require("../cupomLayoutShared").barcodeSpecsFromPayload(payload);
+    if (specs.length) {
+      printer.text(sepDash());
+      imprimirBarcodesEscpos(printer, payload);
+    }
   }
 
-  // ── 8. Rodapé — tudo centralizado, emocional ─────────────────────────────────
+  // ── 7. Offline / sync local (banner já no topo; reforço se só local) ────────
+  if (isLocalSync && !isFiscal && !isOffline) {
+    printer.text(sepDash());
+    printer.align("ct").text("Aguardando confirmacao do servidor.");
+  }
+
+  // ── 8. Rodapé — paridade ACBr ───────────────────────────────────────────────
   printer.align("lt").text(sepEq());
   printer
     .align("ct")
     .style("b")
-    .text("Obrigado pela preferencia!")
+    .text(FOOTER.obrigado)
     .style("normal")
-    .text("Volte sempre. Voce e especial pra nos!")
+    .text(FOOTER.volte)
     .text("")
-    .text("PDV Margin Engine")
-    .text(new Date().toLocaleString("pt-BR"))
-    .text("")
+    .text(FOOTER.pdv)
     .text("")
     .text("")
-    .cut();
+    .text("");
+  applyEscposCut(printer);
   phases.bodyMs = performance.now() - tBody;
   const totalRenderMs = performance.now() - t0RenderCupom;
   log.info(
@@ -2265,7 +2271,8 @@ async function renderThermalLayoutEscpos(printer, layout, payload) {
     }
   }
 
-  printer.align("ct").feed(3).cut();
+  printer.align("ct");
+  require("../cupomLayoutShared").applyEscposCut(printer);
 }
 
 // ── API publica ───────────────────────────────────────────────────────────────
@@ -2473,8 +2480,8 @@ async function renderCrediario(printer, payload) {
     .align("ct")
     .text(linha())
     .text("Documento nao fiscal")
-    .text("Nao substitui NFC-e / cupom fiscal")
-    .cut();
+    .text("Nao substitui NFC-e / cupom fiscal");
+  require("../cupomLayoutShared").applyEscposCut(printer);
 }
 
 async function renderVasilhame(printer, payload) {
@@ -2552,8 +2559,8 @@ async function renderVasilhame(printer, payload) {
     .text(linha())
     .text("Documento nao fiscal")
     .text("Nao substitui NFC-e / cupom fiscal")
-    .feed(3)
-    .cut();
+    .feed(3);
+  require("../cupomLayoutShared").applyEscposCut(printer);
 }
 
 /** Coalesce pulsos próximos — evita gaveta dupla (cupom+job / recusa+DANFE). */

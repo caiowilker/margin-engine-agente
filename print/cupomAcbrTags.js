@@ -96,7 +96,7 @@ function renderCupomTags(rawPayload) {
     !payload.naoFiscal &&
     !payload.cupomSemFiscal &&
     !!(payload.chaveNfe && String(payload.chaveNfe).trim());
-  const isOffline = payload.origem === "offline" || payload.origem === "local";
+  const { FOOTER, bannersStatusCupom, seriePadraoCupom } = require("./cupomLayoutShared");
   const lines = [];
 
   lines.push("</zera>");
@@ -122,8 +122,9 @@ function renderCupomTags(rawPayload) {
   lines.push("</linha_dupla>");
 
   lines.push(ceDestaque(isFiscal ? tituloCupomFiscal(payload.chaveNfe) : "CUPOM NAO FISCAL"));
-  if (payload.vendaCancelada) lines.push(ceDestaque("*** VENDA CANCELADA ***"));
-  if (isOffline) lines.push(ceDestaque("*** MODO OFFLINE ***"));
+  for (const banner of bannersStatusCupom(payload)) {
+    lines.push(ceDestaque(banner));
+  }
   lines.push(sepEq());
 
   const dt = new Date(payload.emitidoEm || Date.now());
@@ -229,13 +230,22 @@ function renderCupomTags(rawPayload) {
   lines.push(corpo(col2("Volumes:", `${Math.round(totalVols)} item(ns)`)));
 
   if (isFiscal) {
+    try {
+      const { resolverIbptCupom, formatarTextoIbptCupom } = require("../fiscalIbpt");
+      const ibpt = resolverIbptCupom(payload);
+      const textoIbpt = ibpt ? formatarTextoIbptCupom(ibpt, totalFinal) : "";
+      if (textoIbpt) {
+        lines.push(sepDash());
+        lines.push(ceCorpo(textoIbpt));
+      }
+    } catch (_) {}
     lines.push(sepDash());
     lines.push(ceDestaque(tituloBlocoDocumentoFiscal(payload.chaveNfe)));
     if (payload.numeroNfe) {
       lines.push(
         corpo(
           linhaNumeroSerieDocumento(payload.chaveNfe, payload.numeroNfe, payload.serieNfe, {
-            seriePadrao: "1",
+            seriePadrao: seriePadraoCupom(),
           }),
         ),
       );
@@ -270,9 +280,9 @@ function renderCupomTags(rawPayload) {
   }
 
   lines.push("</linha_simples>");
-  lines.push(ceCorpo("Obrigado pela preferencia!"));
-  lines.push(ceCorpo("Volte sempre!"));
-  lines.push(ceCorpo("PDV Margin Engine"));
+  lines.push(ceCorpo(FOOTER.obrigado));
+  lines.push(ceCorpo(FOOTER.volte));
+  lines.push(ceCorpo(FOOTER.pdv));
 
   lines.push(tagCorte());
 

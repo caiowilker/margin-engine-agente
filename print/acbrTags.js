@@ -1,7 +1,13 @@
 /**
  * Builders de tags ACBr PosPrinter — única fonte para QR, barras, logo e formatação.
+ * Defaults QR/corte alinhados a print/cupomLayoutShared.js (paridade com native).
  * @see docs/ACBRLIB-POSPRINTER.md
  */
+const {
+  resolveCutMode,
+  resolveQrPrintOpts,
+} = require("./cupomLayoutShared");
+
 const BARCODE_TIPOS = {
   EAN13: "EAN13",
   EAN8: "EAN8",
@@ -25,11 +31,8 @@ function cfgNum(name, fallback) {
 }
 
 function tagQrCode(content, opts = {}) {
-  const errLevel = opts.errorLevel || process.env.PRINTER_QR_ERROR_LEVEL || "L";
-  const moduleSize = opts.moduleSize || process.env.PRINTER_QR_MODULE || "4";
-  const tipo = opts.tipo || process.env.PRINTER_QR_TIPO || "2";
-  const margem = opts.margem ?? cfgNum("PRINTER_QR_MARGEM", 4);
-  return `<qrcode Tipo='${tipo}' ErrorLevel='${errLevel}' ModuleSize='${moduleSize}' Margem='${margem}'>${String(content)}</qrcode>`;
+  const q = resolveQrPrintOpts(opts);
+  return `<qrcode Tipo='${q.tipo}' ErrorLevel='${q.errorLevel}' ModuleSize='${q.moduleSize}' Margem='${q.margem}'>${String(content)}</qrcode>`;
 }
 
 /**
@@ -123,7 +126,8 @@ function tagSegundaViaBanner() {
 }
 
 function tagCorte(tipo) {
-  const cut = (tipo || process.env.PRINTER_CUT || "partial").toLowerCase();
+  const cut = resolveCutMode(tipo);
+  if (cut === "none" || cut === "0") return "";
   return cut === "total" || cut === "full" ? "</corte_total>" : "</corte_parcial>";
 }
 
