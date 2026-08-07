@@ -112,7 +112,7 @@ const PRINT_ENV_FIELDS = [
     values: ["raw", "auto", "true", "false", "always", "0", "1"],
     default: "raw",
     comment:
-      "raw/auto=comercial em RAW:Windows via ESC/POS nativo (padrão PDV); false=sempre ACBr; true=comercial native; always=tudo native",
+      "raw/auto=comercial em RAW:Windows via ESC/POS nativo (padrão PDV); false=ACBr em TCP/COM (RAW comercial continua native anti-hang); true=comercial native; always=tudo native",
   },
   {
     env: "PRINT_RAW_WARM_TIMEOUT_MS",

@@ -29,6 +29,37 @@ const factory = require("../print/factory");
 
 factory.resetPrintProvider();
 
+test("resolveIdempotencyKey — vasilhame por código (anti-retry) e reimpressão", () => {
+  assert.equal(
+    resolveIdempotencyKey(
+      "imprimirVasilhame",
+      [{ codigoTransacao: "VAS42", naoFiscal: true }],
+      {},
+    ),
+    "vasilhame:VAS42",
+  );
+  assert.equal(
+    resolveIdempotencyKey(
+      "imprimirVasilhame",
+      [{ codigo: "vas7", naoFiscal: true }],
+      {},
+    ),
+    "vasilhame:VAS7",
+  );
+  const sv = resolveIdempotencyKey(
+    "imprimirVasilhame",
+    [
+      {
+        codigoTransacao: "VAS42",
+        clickId: "abc123",
+        motivo: "reimpressao_vasilhame",
+      },
+    ],
+    {},
+  );
+  assert.equal(sv, "vasilhame:sv:VAS42:abc123");
+});
+
 test("resolveIdempotencyKey — cloud jobId e PRE_CONTA", () => {
   assert.equal(
     resolveIdempotencyKey("imprimirPedido", [{ jobId: "uuid-1", printType: "cozinha" }], {}),

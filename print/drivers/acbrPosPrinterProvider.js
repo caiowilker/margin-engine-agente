@@ -7,14 +7,19 @@
  */
 const log = require("../../logger").child({ modulo: "acbr_posprinter" });
 const runtime = require("../acbrPosPrinterRuntime");
-const { renderPaginaTeste } = require("../cupomAcbrTags");
 const { renderPayloadTags } = require("../renderPrint");
 const { normalizarCupomPayload, deveRelaxarQr } = require("../cupomValidate");
 const native = require("./nativeEscPosProvider");
-const caixaTags = require("../caixaAcbrTags");
-const pedidoTags = require("../pedidoAcbrTags");
-const vasilhameTags = require("../vasilhameAcbrTags");
-const crediarioTags = require("../crediarioAcbrTags");
+
+/**
+ * Tags opcionais — lazy require.
+ * Nunca require no load do provider: arquivo ausente no deploy (vasilhameAcbrTags etc.)
+ * derrubava TODA impressão (teste/cupom) com "Cannot find module".
+ */
+function loadAcbrTags(modName) {
+  // eslint-disable-next-line import/no-dynamic-require
+  return require(`../${modName}`);
+}
 
 /**
  * Prefere ESC/POS nativo vs ACBr tags.
@@ -25,7 +30,9 @@ const crediarioTags = require("../crediarioAcbrTags");
  * - Fiscal/DANFE com chave → ACBr.
  * - Circuito aberto → native comercial.
  *
- * Overrides: false|0 = sempre ACBr; true = comercial native; always = tudo native.
+ * Overrides: false|0 = ACBr em TCP/COM; em RAW:Windows comercial permanece native
+ *   (ACBr Ativar em RAW costuma hang — false não pode deixar o PDV sem papel).
+ *   true = comercial native; always = tudo native.
  */
 function isFiscalPayload(payload) {
   if (!payload || typeof payload !== "object") return false;
@@ -51,14 +58,22 @@ function portaEhRawWindows() {
 
 function preferNativeEscPos(payload) {
   try {
-    if (runtime.isAcbrPosCircuitOpen() && !isFiscalPayload(payload)) {
-      return true;
+    if (runtime.isAcbrPosCircuitOpen()) {
+      // Circuito aberto: comercial sempre native; em RAW:Windows fiscal também
+      // (evita Ativar ~4.5s+ a cada NFC-e quando ACBr já está morto).
+      if (!isFiscalPayload(payload)) return true;
+      if (portaEhRawWindows()) return true;
     }
   } catch (_) {
     /* runtime opcional em testes */
   }
   const flag = String(process.env.PRINT_FAST_NATIVE || "raw").toLowerCase();
-  if (flag === "false" || flag === "0") return false;
+  if (flag === "false" || flag === "0") {
+    // Pedido explícito de ACBr — mas RAW:Windows comercial fica no native
+    // (parque POS80: Ativar/hang; .env legado false não pode matar cupom/teste).
+    if (portaEhRawWindows() && !isFiscalPayload(payload)) return true;
+    return false;
+  }
   if (flag === "always") return true;
   if (flag === "raw" || flag === "auto" || flag === "") {
     if (portaEhRawWindows() && !isFiscalPayload(payload)) return true;
@@ -274,76 +289,46 @@ async function imprimirSegundaVia(payload) {
 }
 
 async function imprimirTeste() {
+  // Teste SEMPRE ESC/POS nativo — independente de PRINT_FAST_NATIVE / ACBr.
+  // ACBr Ativar em RAW:Windows costuma hang; página de teste não pode ficar sem papel.
   const t0 = Date.now();
   const logoMod = require("../printerLogo");
   const logoAv = logoMod.avaliarExibicaoLogo({ exibirLogo: true });
-  const mode = getIntegrationMode();
   const metrics = require("../printMetrics");
 
-  if (mode === "parity" || preferNativeEscPos({ naoFiscal: true })) {
-    // Teste: gaveta já (force), em paralelo com a página.
-    const gavetaEarly =
-      (process.env.PRINTER_DRAWER || "true").toLowerCase() !== "false"
-        ? abrirGaveta({ force: true }).catch((err) => {
-            log.warn({ err: err.message }, "[ACBrPosPrinter] Gaveta no teste (native) falhou");
-          })
-        : null;
-    const res = await native.imprimirTeste();
-    if (gavetaEarly) await Promise.resolve(gavetaEarly).catch(() => {});
-    const durationMs = Date.now() - t0;
-    const out = {
-      ...res,
-      ok: true,
-      teste: true,
-      provider: "native",
-      durationMs,
-      logoIncluded: logoAv.ok,
-      logoSkipReason: logoAv.reason,
-      circuitOpen: (() => {
-        try {
-          return runtime.isAcbrPosCircuitOpen();
-        } catch (_) {
-          return false;
-        }
-      })(),
-      hintTcp:
-        "Se USB travar, configure porta TCP:IP:9100 (ex.: TCP:192.168.1.50:9100).",
-    };
-    metrics.recordPrintResult({
-      durationMs,
-      provider: "native",
-      op: "imprimirTeste",
-      logoIncluded: logoAv.ok,
-      logoSkipReason: logoAv.reason,
-      ok: true,
-    });
-    return out;
-  }
-  const tags = renderPaginaTeste();
-  // Gaveta force no início do teste — não espera o fim da página.
   const gavetaEarly =
     (process.env.PRINTER_DRAWER || "true").toLowerCase() !== "false"
       ? abrirGaveta({ force: true }).catch((err) => {
-          log.warn({ err: err.message }, "[ACBrPosPrinter] Gaveta no teste falhou (ignorado)");
+          log.warn({ err: err.message }, "[ACBrPosPrinter] Gaveta no teste (native) falhou");
         })
       : null;
-  await imprimirTags(tags);
+  const res = await native.imprimirTeste();
   if (gavetaEarly) await Promise.resolve(gavetaEarly).catch(() => {});
   const durationMs = Date.now() - t0;
   const out = {
+    ...res,
     ok: true,
     teste: true,
-    provider: "acbr-posprinter",
+    provider: "native",
     durationMs,
-    logoIncluded: logoAv.ok && /<bmp\b/i.test(tags),
-    logoSkipReason: logoAv.ok ? null : logoAv.reason,
+    logoIncluded: logoAv.ok,
+    logoSkipReason: logoAv.reason,
+    circuitOpen: (() => {
+      try {
+        return runtime.isAcbrPosCircuitOpen();
+      } catch (_) {
+        return false;
+      }
+    })(),
+    hintTcp:
+      "Se USB travar, configure porta TCP:IP:9100 (ex.: TCP:192.168.1.50:9100).",
   };
   metrics.recordPrintResult({
     durationMs,
-    provider: "acbr-posprinter",
+    provider: "native",
     op: "imprimirTeste",
-    logoIncluded: out.logoIncluded,
-    logoSkipReason: out.logoSkipReason,
+    logoIncluded: logoAv.ok,
+    logoSkipReason: logoAv.reason,
     ok: true,
   });
   return out;
@@ -444,7 +429,12 @@ module.exports = {
     }
 
     let acbrProbe = null;
-    if (forceSync && runtime.canLoadNativeLib()) {
+    // RAW:Windows comercial nunca precisa de Ativar — probe ACBr só atrasa/abre circuito.
+    const skipAcbrProbe =
+      typeof portaEhRawWindows === "function" &&
+      portaEhRawWindows() &&
+      preferNativeEscPos({ naoFiscal: true });
+    if (forceSync && runtime.canLoadNativeLib() && !skipAcbrProbe) {
       const logoMod = require("../printerLogo");
       const { tagLogoHeader, tagCorte } = require("../acbrTags");
       const av = logoMod.avaliarExibicaoLogo({ exibirLogo: true });
@@ -514,25 +504,49 @@ module.exports = {
   imprimirTags,
   imprimirTeste,
   imprimirAbertura: (p) =>
-    imprimirViaTags(caixaTags.renderAberturaTags, p, native.imprimirAbertura, { sempre: true }),
+    imprimirViaTags(
+      loadAcbrTags("caixaAcbrTags").renderAberturaTags,
+      p,
+      native.imprimirAbertura,
+      { sempre: true },
+    ),
   imprimirFechamento: (p) =>
-    imprimirViaTags(caixaTags.renderFechamentoTags, p, native.imprimirFechamento),
+    imprimirViaTags(
+      loadAcbrTags("caixaAcbrTags").renderFechamentoTags,
+      p,
+      native.imprimirFechamento,
+    ),
   imprimirMovimentoCaixa: (p) =>
-    imprimirViaTags(caixaTags.renderMovimentoCaixaTags, p, native.imprimirMovimentoCaixa, {
-      sempre: true,
-    }),
+    imprimirViaTags(
+      loadAcbrTags("caixaAcbrTags").renderMovimentoCaixaTags,
+      p,
+      native.imprimirMovimentoCaixa,
+      { sempre: true },
+    ),
   imprimirPedido: (p) => {
     const routes = require("../printerStationRoutes");
     const porta = routes.resolvePortaForPrintType(p?.printType ?? p?.print_type);
     // Override de porta sem invalidate — sessão quente; worker re-Ativa se Porta mudar
     return routes.withPortaOverride(porta, () =>
-      imprimirViaTags(pedidoTags.renderPedidoTags, p, native.imprimirPedido),
+      imprimirViaTags(
+        loadAcbrTags("pedidoAcbrTags").renderPedidoTags,
+        p,
+        native.imprimirPedido,
+      ),
     );
   },
   imprimirVasilhame: (p) =>
-    imprimirViaTags(vasilhameTags.renderVasilhameTags, p, native.imprimirVasilhame),
+    imprimirViaTags(
+      loadAcbrTags("vasilhameAcbrTags").renderVasilhameTags,
+      p,
+      native.imprimirVasilhame,
+    ),
   imprimirCrediario: (p) =>
-    imprimirViaTags(crediarioTags.renderCrediarioTags, p, native.imprimirCrediario),
+    imprimirViaTags(
+      loadAcbrTags("crediarioAcbrTags").renderCrediarioTags,
+      p,
+      native.imprimirCrediario,
+    ),
   /** Etiqueta ZPL/PPLA — sempre nativo (nunca tags ACBr). */
   imprimirRaw: (p) => require("../rawLabelPrint").imprimirRaw(p),
   abrirGaveta,

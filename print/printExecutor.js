@@ -64,18 +64,19 @@ async function withProvider(fn, opts = {}) {
   let primaryName = primary.getProviderName();
 
   // Por job: gaveta / circuito / RAW comercial / preferNative → native direto (sem ACBr init).
-  // Fiscal/DANFE com chave permanece no ACBr mesmo com circuito aberto.
+  // Circuito aberto em RAW:Windows: fiscal também native (sem Ativar tax).
   if (!opts.forceAcbr && primaryName === "acbr-posprinter") {
     try {
       const runtime = require("./acbrPosPrinterRuntime");
       const acbrProv = require("./drivers/acbrPosPrinterProvider");
       const fiscal = payload && acbrProv.isFiscalPayload?.(payload);
+      const circuitOpen = runtime.isAcbrPosCircuitOpen?.() === true;
       const wantNative =
         op === "abrirGaveta" ||
         op === "imprimirRaw" ||
-        (!fiscal &&
-          (runtime.isAcbrPosCircuitOpen?.() ||
-            (payload && acbrProv.preferNativeEscPos?.(payload))));
+        op === "imprimirTeste" ||
+        (payload && acbrProv.preferNativeEscPos?.(payload)) ||
+        (!fiscal && circuitOpen);
       if (wantNative) {
         const fbName = factory.resolveFallbackName() || "native";
         if (fbName !== primaryName) {
@@ -90,11 +91,13 @@ async function withProvider(fn, opts = {}) {
                   ? "gaveta"
                   : op === "imprimirRaw"
                     ? "etiqueta_raw"
-                    : runtime.isAcbrPosCircuitOpen?.()
-                      ? "circuit"
-                      : "prefer_native",
+                    : op === "imprimirTeste"
+                      ? "teste"
+                      : circuitOpen
+                        ? "circuit"
+                        : "prefer_native",
             },
-            "[PrintExecutor] Native direto (comercial)",
+            "[PrintExecutor] Native direto (rápido)",
           );
         }
       }

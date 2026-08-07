@@ -111,6 +111,33 @@ test("provider default — PRINT_FAST_NATIVE||raw no código", () => {
   assert.ok(/env:\s*"PRINT_FAST_NATIVE"[\s\S]*default:\s*"raw"/.test(schema));
 });
 
+test("imprimirTeste — sempre native (nunca ACBr tags / PRINT_FAST_NATIVE)", () => {
+  const src = fs.readFileSync(PROVIDER, "utf8");
+  const start = src.indexOf("async function imprimirTeste");
+  assert.ok(start >= 0);
+  const end = src.indexOf("async function abrirGaveta", start);
+  const body = src.slice(start, end);
+  assert.ok(body.includes("native.imprimirTeste"));
+  assert.ok(!/imprimirTags\(/.test(body), "teste não pode ir por ACBr tags");
+  assert.ok(!/preferNativeEscPos/.test(body), "teste ignora PRINT_FAST_NATIVE");
+
+  const exec = fs.readFileSync(
+    path.join(__dirname, "../print/printExecutor.js"),
+    "utf8",
+  );
+  assert.ok(
+    /op === ["']imprimirTeste["']/.test(exec),
+    "executor deve forçar native no teste",
+  );
+});
+
+test("acbr provider — tags lazy (módulo ausente não derruba load)", () => {
+  const src = fs.readFileSync(PROVIDER, "utf8");
+  assert.ok(src.includes("function loadAcbrTags"));
+  assert.ok(!/^\s*const vasilhameTags = require/m.test(src));
+  assert.ok(!/^\s*const crediarioTags = require/m.test(src));
+});
+
 test("preprint ACBr — abre circuito sticky", () => {
   const src = fs.readFileSync(
     path.join(__dirname, "../print/printExecutor.js"),

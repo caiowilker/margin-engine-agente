@@ -15,7 +15,7 @@ Ordem preferida para frota estável:
 4. **`RAW:NomeWindows`** — túnel pelo spooler (útil, mas Ativar em loop pode hangear)
 
 No agente: comercial em **RAW** → ESC/POS nativo Win32 (rápido). Fiscal/DANFE e TCP/COM → ACBr.
-Não force `PRINT_FAST_NATIVE=false` em RAW:POS80 de parque com AV/spooler lento.
+Nunca use `PRINT_FAST_NATIVE=false` em RAW:POS80 — força ACBr no comercial e costuma hang/timeout (teste sem papel). Padrão: `raw`.
 
 ## Pré-requisitos
 

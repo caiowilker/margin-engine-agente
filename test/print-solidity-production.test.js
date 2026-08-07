@@ -184,33 +184,30 @@ async function run() {
     }
   });
 
-  await test("factory NÃO troca provider por circuito (fiscal fica no ACBr)", () => {
+  await test("factory NÃO troca cache global por circuito (routing por job)", () => {
     const runtime = require("../print/acbrPosPrinterRuntime");
     const factory = require("../print/factory");
     const { preferNativeEscPos } = require("../print/drivers/acbrPosPrinterProvider");
     const prevProv = process.env.PRINTER_PROVIDER;
     const prevFast = process.env.PRINT_FAST_NATIVE;
     const prevParity = process.env.PRINTER_ALLOW_PARITY;
+    const prevPorta = process.env.PRINTER_PORTA;
     process.env.PRINTER_PROVIDER = "acbr-posprinter";
     process.env.PRINTER_ALLOW_PARITY = "true"; // operacional sem DLL no CI
     delete process.env.PRINT_FAST_NATIVE;
+    process.env.PRINTER_PORTA = "RAW:POSPrinter POS80";
     runtime.resetAcbrPosCircuit();
     factory.resetPrintProvider();
     runtime.openAcbrPosCircuit("test-factory");
     factory.resetPrintProvider();
     try {
-      // Cache global permanece acbr — routing comercial é por job
+      // Cache global permanece acbr — routing comercial/fiscal RAW é por job
       assert.strictEqual(factory.resolveEffectiveProviderName(), "acbr-posprinter");
-      assert.strictEqual(
-        factory.resolveEffectiveProviderName({
-          payload: { chaveNfe: "35" + "0".repeat(42) },
-        }),
-        "acbr-posprinter",
-      );
       assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), true);
       assert.strictEqual(
         preferNativeEscPos({ chaveNfe: "35" + "0".repeat(42), naoFiscal: false }),
-        false,
+        true,
+        "RAW + circuito: fiscal também native",
       );
     } finally {
       runtime.resetAcbrPosCircuit();
@@ -219,6 +216,8 @@ async function run() {
       else process.env.PRINT_FAST_NATIVE = prevFast;
       if (prevParity === undefined) delete process.env.PRINTER_ALLOW_PARITY;
       else process.env.PRINTER_ALLOW_PARITY = prevParity;
+      if (prevPorta === undefined) delete process.env.PRINTER_PORTA;
+      else process.env.PRINTER_PORTA = prevPorta;
       factory.resetPrintProvider();
     }
   });

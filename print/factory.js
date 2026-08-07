@@ -102,16 +102,28 @@ function resolveEffectiveProviderName(opts = {}) {
   return requested;
 }
 
-function createProvider(name) {
+function createProvider(name, opts = {}) {
   const factory = PROVIDERS[name];
   if (!factory) {
     throw new Error(
       `PRINTER_PROVIDER inválido: "${name}". Valores: ${Object.keys(PROVIDERS).join(", ")}`,
     );
   }
-  const provider = factory();
-  assertPrinterProviderContract(provider, name);
-  return provider;
+  try {
+    const provider = factory();
+    assertPrinterProviderContract(provider, name);
+    return provider;
+  } catch (err) {
+    // Deploy incompleto (ex.: tag module ausente) não pode derrubar o PDV inteiro.
+    if (name === "acbr-posprinter" && !opts._nativeFallback) {
+      log.error(
+        { err: err?.message || String(err), metric: "print.provider_load_fallback" },
+        "[PrintFactory] acbr-posprinter falhou ao carregar — usando native",
+      );
+      return createProvider("native", { _nativeFallback: true });
+    }
+    throw err;
+  }
 }
 
 function getPrintProvider() {
@@ -178,6 +190,11 @@ function warnIfSelectedAtBoot() {
     if (fn === "always") {
       dangerous.push(
         "PRINT_FAST_NATIVE=always (DANFE/fiscal também no native — só diagnóstico)",
+      );
+    }
+    if (fn === "false" || fn === "0") {
+      dangerous.push(
+        "PRINT_FAST_NATIVE=false (ACBr em TCP/COM; em RAW:Windows comercial já fica native — prefira raw)",
       );
     }
   }

@@ -214,7 +214,7 @@ function Mark([string]$name) {
 $asm = ${JSON.stringify(dllPath)}
 if (-not ("RawPrinterHelper" -as [type])) {
   if (-not (Test-Path -LiteralPath $asm)) {
-    throw "RawPrinterHelper.dll ausente — aquecimento em andamento (nao compilar no cupom)"
+    throw "RawPrinterHelper.dll ausente - aquecimento em andamento (nao compilar no cupom)"
   }
   Add-Type -Path $asm
 }
@@ -284,7 +284,13 @@ function ensureRawPrintScript() {
       }
     }
     if (needWrite) {
-      fs.writeFileSync(scriptPath, content, "utf8");
+      // ASCII-only + UTF-8 BOM: Windows PowerShell 5.1 sem BOM quebra em dash Unicode
+      // (ParserError no throw) e mata TODA impressão RAW de venda.
+      const ascii =
+        /^[\x09\x0a\x0d\x20-\x7e]*$/.test(content)
+          ? content
+          : content.replace(/[^\x09\x0a\x0d\x20-\x7e]/g, "-");
+      fs.writeFileSync(scriptPath, "\uFEFF" + ascii, "utf8");
     }
     rawScriptCache = { dir, scriptPath, dllPath };
     return rawScriptCache;
@@ -2546,8 +2552,17 @@ async function renderVasilhame(printer, payload) {
       .style("normal")
       .text("Apresente na devolucao")
       .feed(1);
+    // CODE128 + QR — paridade com tags ACBr (scan rápido na devolução).
+    try {
+      require("../cupomLayoutShared").imprimirBarcodesEscpos(printer, {
+        code128: codigo,
+      });
+    } catch (_) {
+      /* firmware sem barcode */
+    }
     try {
       printer.raw(bytesQrGsK(codigo, { moduleSize: 5 }));
+      printer.feed(1);
     } catch (_) {
       /* QR opcional */
     }
@@ -2558,8 +2573,7 @@ async function renderVasilhame(printer, payload) {
     .align("ct")
     .text(linha())
     .text("Documento nao fiscal")
-    .text("Nao substitui NFC-e / cupom fiscal")
-    .feed(3);
+    .text("Nao substitui NFC-e / cupom fiscal");
   require("../cupomLayoutShared").applyEscposCut(printer);
 }
 
@@ -2765,6 +2779,7 @@ module.exports = {
   warmPrintHotPath,
   rawWorkDir,
   ensureRawPrintScript,
+  buildRawPrintScriptContent,
   resetRawScriptCacheForTests,
   resolverPortaAcbrConfigurada,
   resolverNomeRawConfigurado,

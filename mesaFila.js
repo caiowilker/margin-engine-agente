@@ -141,7 +141,10 @@ function upsertLocal(state) {
        closed_for_billing = excluded.closed_for_billing,
        order_total = excluded.order_total,
        order_items_count = excluded.order_items_count,
-       draft_json = COALESCE(excluded.draft_json, mesa_local.draft_json),
+       draft_json = CASE
+         WHEN excluded.status = 'livre' THEN NULL
+         ELSE COALESCE(excluded.draft_json, mesa_local.draft_json)
+       END,
        server_order_id = COALESCE(excluded.server_order_id, mesa_local.server_order_id),
        updated_at = excluded.updated_at`,
   ).run(
@@ -161,6 +164,24 @@ function upsertLocal(state) {
 
 function marcarLivreNoSnapshot(mesaId) {
   const id = String(mesaId);
+  // Limpa draft local ao liberar — evita pull reocupar com carrinho stale.
+  if (db) {
+    try {
+      db.prepare(
+        `UPDATE mesa_local SET
+           status = 'livre',
+           closed_for_billing = 0,
+           order_total = 0,
+           order_items_count = 0,
+           draft_json = NULL,
+           server_order_id = NULL,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE mesa_id = ?`,
+      ).run(id);
+    } catch {
+      /* ignore */
+    }
+  }
   const snap = obterSnapshot();
   if (!snap.some((m) => m.id === id)) return { ok: true, changed: false };
   salvarSnapshot(

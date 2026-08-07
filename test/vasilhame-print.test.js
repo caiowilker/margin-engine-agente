@@ -21,5 +21,6 @@ assert.match(tags, /Caucao retida/);
 assert.doesNotMatch(tags, /NFC-e chave/i);
 assert.equal(normalizarVasilhamePayload({ codigo: "vas7" }).codigoTransacao, "VAS7");
 assert.equal(normalizarVasilhamePayload({ codigoTransacao: "VAS7" }).naoFiscal, true);
+assert.equal(normalizarVasilhamePayload({ codigoTransacao: "VAS7" }).cupomSemFiscal, true);
 
 console.log("vasilhame-print.test.js ok");

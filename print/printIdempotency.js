@@ -153,6 +153,35 @@ function resolveIdempotencyKey(op, args, opts = {}) {
     return `${op}:${tipo}:fp:${fingerprintCupom(payload)}`.slice(0, 190);
   }
 
+  if (op === "imprimirVasilhame" || op === "imprimirCrediario") {
+    const codigo =
+      payload.codigoTransacao ||
+      payload.codigo ||
+      payload.correlationId ||
+      payload.numeroParcela ||
+      null;
+    const clickId = String(payload.clickId || payload.click_id || "").trim();
+    const motivo = String(payload.motivo || "").toLowerCase();
+    const reimpressao =
+      /reimpress|segunda/.test(motivo) || clickId.length > 0;
+    if (op === "imprimirVasilhame") {
+      const cod = String(codigo || "").trim().toUpperCase();
+      if (!cod) return null;
+      // Auto pós-saída: só código (retry Abort = 1 folha).
+      // Reimpressão intencional: clickId estável por clique.
+      if (reimpressao && clickId) {
+        return `vasilhame:sv:${cod}:${clickId}`.slice(0, 190);
+      }
+      return `vasilhame:${cod}`.slice(0, 190);
+    }
+    // Crediário: fingerprint + click opcional
+    const fp = fingerprintCupom(payload);
+    if (reimpressao && clickId) {
+      return `crediario:sv:${fp}:${clickId}`.slice(0, 190);
+    }
+    return `crediario:${fp}`.slice(0, 190);
+  }
+
   if (op !== "imprimirPedido") return null;
 
   const cloudJobId = payload.jobId || payload.job_id;

@@ -670,10 +670,13 @@ function salvarSemPorta(updates) {
 
   const iniPath = resolveIniPath();
   const before = lerIniValores(iniPath);
+  // NUNCA apagar porta já configurada (RAW:/TCP:). Instalador sem porta
+  // só ajusta provider/encoding — wipe de Porta deixava o PDV sem impressão.
+  const portaPreservada = String(before.porta || "").trim();
   const vals = {
     ...before,
     modelo: updates.modelo != null ? String(updates.modelo) : before.modelo || "0",
-    porta: "",
+    porta: portaPreservada,
     cut: updates.cut || before.cut || "partial",
     pageCode: updates.encoding
       ? encodingToPaginaDeCodigo(updates.encoding)
@@ -681,7 +684,11 @@ function salvarSemPorta(updates) {
   };
 
   if (iniSemMudanca(before, vals) && envPatchSemMudanca(envPatch)) {
-    log.debug("[PrinterLocalConfig] Instalador — sem mudança (porta vazia)");
+    log.debug(
+      portaPreservada
+        ? "[PrinterLocalConfig] Instalador — sem mudança (porta preservada)"
+        : "[PrinterLocalConfig] Instalador — sem mudança (porta vazia)",
+    );
     return Object.assign(ler({ fresh: true }), { unchanged: true });
   }
 
@@ -690,7 +697,14 @@ function salvarSemPorta(updates) {
   patchEnv(envPatch);
   afterConfigChanged();
 
-  log.info("[PrinterLocalConfig] Instalador — aguardando auto-detecção de porta");
+  if (portaPreservada) {
+    log.info(
+      { porta: portaPreservada },
+      "[PrinterLocalConfig] Instalador — porta existente preservada",
+    );
+  } else {
+    log.info("[PrinterLocalConfig] Instalador — aguardando auto-detecção de porta");
+  }
   return Object.assign(ler({ fresh: true }), { unchanged: false });
 }
 

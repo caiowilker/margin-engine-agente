@@ -105,12 +105,12 @@ function isFastNativePath(opts = {}) {
     acbrProv = require("./drivers/acbrPosPrinterProvider");
   } catch (_) {}
 
-  // Circuito aberto: só comerciais (fiscal/DANFE permanece no ACBr).
+  // Circuito aberto: preferNative decide (RAW fiscal → native; sem RAW fiscal → ACBr).
   try {
     if (require("./acbrPosPrinterRuntime").isAcbrPosCircuitOpen()) {
-      if (payload && typeof payload === "object" && acbrProv?.isFiscalPayload?.(payload)) {
-        /* fiscal sob circuito → ACBr */
-      } else {
+      if (payload && typeof payload === "object" && typeof acbrProv?.preferNativeEscPos === "function") {
+        if (acbrProv.preferNativeEscPos(payload)) return true;
+      } else if (!(payload && acbrProv?.isFiscalPayload?.(payload))) {
         return true;
       }
     }

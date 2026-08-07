@@ -174,6 +174,24 @@ test("salvar — drawer=false grava PRINTER_DRAWER (loja sem gaveta)", () => {
   assert.strictEqual(cfg.ler({ fresh: true }).drawer, true);
 });
 
+test("salvarSemPorta — preserva porta RAW já configurada", () => {
+  cfg.salvar({
+    porta: "RAW:POSPrinter POS80",
+    modelo: "1",
+    tipo: "windows",
+    nomeImpressora: "POSPrinter POS80",
+  });
+  const after = cfg.salvarSemPorta({
+    provider: "acbr-posprinter",
+    encoding: "UTF8",
+    cut: "partial",
+    modelo: "1",
+  });
+  assert.strictEqual(after.porta, "RAW:POSPrinter POS80");
+  const raw = fs.readFileSync(iniPath, "utf8");
+  assert.ok(/Porta=RAW:POSPrinter POS80/.test(raw), "INI não pode zerar Porta no instalador");
+});
+
 test("gerarIni — produção: LogNivel=0 + BytesCount + ControlePorta RAW=0", () => {
   const raw = cfg.gerarIniContent({
     modelo: "1",

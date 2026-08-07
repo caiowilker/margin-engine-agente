@@ -1,6 +1,6 @@
 {
   "versao": "1.0.6",
-  "geradoEm": "2026-08-07T20:14:18.132Z",
+  "geradoEm": "2026-08-07T21:28:30.496Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -268,7 +268,7 @@
     },
     {
       "arquivo": "frontend-dist/api-backend.json",
-      "sha256": "8933a1ea3f7d3c15ef8bf26e6d9d944e1089ff826590a18975c3eca9c17a142b"
+      "sha256": "67f072b35a63a828ada32c4baa00f2e657c125b7c9221267a8392767d78539c5"
     },
     {
       "arquivo": "frontend-dist/apple-touch-icon.png",
@@ -5360,7 +5360,7 @@
     },
     {
       "arquivo": "frontend-dist/version.json",
-      "sha256": "93a6b2dc7036c25faa850a16fc367ce126ae4eab8262641a509a30b62daecc6e"
+      "sha256": "c5a41b1691f4efc7f5287a9a3b56f828005550cc134efadfdbf8de509be813ee"
     },
     {
       "arquivo": "frontend-dist/workbox-3147e214.js",
@@ -5492,7 +5492,7 @@
     },
     {
       "arquivo": "print/drivers/acbrPosPrinterProvider.js",
-      "sha256": "f3e849b28ea15e5aeba6bbc70c4f0d303493bbabbbe020821fde52aab738bb10"
+      "sha256": "d1a9f5aad7edcb1f38257663e6a1f465469519c16440ce0c4977f773f09f78c4"
     },
     {
       "arquivo": "print/drivers/mockPrinterProvider.js",
@@ -5508,7 +5508,7 @@
     },
     {
       "arquivo": "print/factory.js",
-      "sha256": "3f2006f951b02f7bd9ee5882925719f49271dc1b87501f75c6be621b193c1237"
+      "sha256": "07e8ddf69c16ac78236af696161314635585d9ba4c3bb5a17578f5a4f1e472a9"
     },
     {
       "arquivo": "print/pedidoAcbrTags.js",
@@ -5532,7 +5532,7 @@
     },
     {
       "arquivo": "print/printerLocalConfig.js",
-      "sha256": "447050b6bb10f43fbe4327991aef23b183d2568b5a9abb1723477a9b07e0dcb3"
+      "sha256": "486c16d44332dc60149d3de137324782d658091b86a3ef53a819fa658dff8f5a"
     },
     {
       "arquivo": "print/printerLogo.js",
@@ -5556,7 +5556,7 @@
     },
     {
       "arquivo": "print/printExecutor.js",
-      "sha256": "224f21b2f02d6114d7e891d14c7e48db714cfa21a1b9d37c61fe00f377cc9086"
+      "sha256": "834404570d799ad697635a386c6f7ccad958fc0df2403e9a926a38db7e377c0e"
     },
     {
       "arquivo": "print/printFiscalCoordination.js",

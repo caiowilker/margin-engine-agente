@@ -431,16 +431,27 @@ test("imprimirLogoCupomEscpos — hot path sem Image.load / sharp (só cache raw
   assert.ok(!/\.ler\(\)/.test(body), "hot path não pode ler() (BMP sync)");
 });
 
-test("RAW script — não compila Add-Type no cupom", () => {
+test("RAW script — ASCII-only (PowerShell 5.1 sem BOM)", () => {
+  const core = require("../print/escpos/impressoraCore");
+  const content = core.buildRawPrintScriptContent
+    ? core.buildRawPrintScriptContent("C:\\\\x\\\\RawPrinterHelper.dll")
+    : null;
+  // Se não exportado, valida o fonte.
   const src = fs.readFileSync(
     path.join(__dirname, "../print/escpos/impressoraCore.js"),
     "utf8",
   );
-  assert.ok(src.includes("nao compilar no cupom"));
-  // buildRawPrintScriptContent não deve mais embutir TypeDefinition no hot path
-  const marker = src.indexOf("nao compilar no cupom");
-  const nearby = src.slice(Math.max(0, marker - 200), marker + 400);
-  assert.ok(!nearby.includes("TypeDefinition"), "PS do cupom não deve Add-Type -TypeDefinition");
+  const marker = src.indexOf("function buildRawPrintScriptContent");
+  const end = src.indexOf("function ensureRawPrintScript", marker);
+  const builder = src.slice(marker, end);
+  assert.ok(
+    !/ausente —/.test(builder),
+    "em-dash Unicode no PS1 quebra PowerShell 5.1 (ParserError) e zera impressão",
+  );
+  assert.ok(/ausente - aquecimento/.test(builder));
+  if (content) {
+    assert.ok(/^[\x09\x0a\x0d\x20-\x7e]*$/.test(content), "script RAW deve ser ASCII");
+  }
 });
 
 test("preferNativeEscPos — naoFiscal rápido; fiscal com chave fica no ACBr", () => {
@@ -477,13 +488,37 @@ test("preferNativeEscPos — sem RAW (default raw) permanece ACBr", () => {
   }
 });
 
-test("preferNativeEscPos — PRINT_FAST_NATIVE=false força ACBr mesmo em RAW", () => {
+test("preferNativeEscPos — PRINT_FAST_NATIVE=false em RAW ainda usa native (anti-hang)", () => {
   const { preferNativeEscPos } = require("../print/drivers/acbrPosPrinterProvider");
   const runtime = require("../print/acbrPosPrinterRuntime");
   const prev = process.env.PRINT_FAST_NATIVE;
   const prevPorta = process.env.PRINTER_PORTA;
   process.env.PRINT_FAST_NATIVE = "false";
   process.env.PRINTER_PORTA = "RAW:POSPrinter POS80";
+  runtime.resetAcbrPosCircuit();
+  try {
+    assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), true);
+    assert.strictEqual(preferNativeEscPos({}), true);
+    assert.strictEqual(
+      preferNativeEscPos({ chaveNfe: "35" + "0".repeat(42), naoFiscal: false }),
+      false,
+    );
+  } finally {
+    if (prev === undefined) delete process.env.PRINT_FAST_NATIVE;
+    else process.env.PRINT_FAST_NATIVE = prev;
+    if (prevPorta === undefined) delete process.env.PRINTER_PORTA;
+    else process.env.PRINTER_PORTA = prevPorta;
+    runtime.resetAcbrPosCircuit();
+  }
+});
+
+test("preferNativeEscPos — PRINT_FAST_NATIVE=false em TCP força ACBr comercial", () => {
+  const { preferNativeEscPos } = require("../print/drivers/acbrPosPrinterProvider");
+  const runtime = require("../print/acbrPosPrinterRuntime");
+  const prev = process.env.PRINT_FAST_NATIVE;
+  const prevPorta = process.env.PRINTER_PORTA;
+  process.env.PRINT_FAST_NATIVE = "false";
+  process.env.PRINTER_PORTA = "TCP:192.168.1.50:9100";
   runtime.resetAcbrPosCircuit();
   try {
     assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), false);
@@ -521,20 +556,28 @@ test("preferNativeEscPos — RAW:Windows comercial usa native (default raw)", ()
   }
 });
 
-test("preferNativeEscPos — circuito RAW aberto usa native em comercial", () => {
+test("preferNativeEscPos — circuito RAW aberto usa native em comercial e fiscal", () => {
   const { preferNativeEscPos } = require("../print/drivers/acbrPosPrinterProvider");
   const runtime = require("../print/acbrPosPrinterRuntime");
   const prev = process.env.PRINT_FAST_NATIVE;
+  const prevPorta = process.env.PRINTER_PORTA;
   delete process.env.PRINT_FAST_NATIVE;
+  process.env.PRINTER_PORTA = "RAW:POSPrinter POS80";
   runtime.resetAcbrPosCircuit();
   try {
     runtime.openAcbrPosCircuit("POS_Ativar (-10)");
     assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), true);
     assert.strictEqual(preferNativeEscPos({}), true);
-    assert.strictEqual(preferNativeEscPos({ chaveNfe: "35" + "0".repeat(42) }), false);
+    assert.strictEqual(
+      preferNativeEscPos({ chaveNfe: "35" + "0".repeat(42) }),
+      true,
+      "RAW + circuito: fiscal native (sem Ativar tax)",
+    );
   } finally {
     if (prev === undefined) delete process.env.PRINT_FAST_NATIVE;
     else process.env.PRINT_FAST_NATIVE = prev;
+    if (prevPorta === undefined) delete process.env.PRINTER_PORTA;
+    else process.env.PRINTER_PORTA = prevPorta;
     runtime.resetAcbrPosCircuit();
   }
 });
@@ -646,13 +689,13 @@ test("printerLocalConfig — PaginaDeCodigo UTF8=5 e CortaPapel coerente", () =>
   assert.ok(/TipoCorte=0/.test(ini));
 });
 
-test("isFastNativePath — circuito aberto NÃO força fiscal", () => {
+test("isFastNativePath — circuito RAW aberto força fiscal native", () => {
   const { isFastNativePath } = require("../print/printFiscalCoordination");
   const runtime = require("../print/acbrPosPrinterRuntime");
   const prev = process.env.PRINT_FAST_NATIVE;
   const prevPorta = process.env.PRINTER_PORTA;
   delete process.env.PRINT_FAST_NATIVE;
-  delete process.env.PRINTER_PORTA;
+  process.env.PRINTER_PORTA = "RAW:POSPrinter POS80";
   runtime.resetAcbrPosCircuit();
   try {
     runtime.openAcbrPosCircuit("test-fiscal");
@@ -661,7 +704,7 @@ test("isFastNativePath — circuito aberto NÃO força fiscal", () => {
       isFastNativePath({
         payload: { chaveNfe: "35" + "0".repeat(42), naoFiscal: false },
       }),
-      false,
+      true,
     );
   } finally {
     if (prev === undefined) delete process.env.PRINT_FAST_NATIVE;
