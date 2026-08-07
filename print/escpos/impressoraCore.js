@@ -120,7 +120,7 @@ function printerPath() {
 }
 
 const TERMICA_RX =
-  /elgin|bematech|daruma|tanca|jetway|thermal|tm-|mp-|i9|i7|pos\s*80|pos80|posprinter|cupom|nfce|receipt|termica|tm-t|tm-m/i;
+  /elgin|bematech|daruma|tanca|jetway|thermal|tm-|mp-|i9|i7|pos\s*80|pos80|posprinter|cupom|nfce|receipt|termica|tm-t|tm-m|zebra|argox|godex|l42|zt\d|zd\d|gk\d|gc\d|gx\d|os\s*214|os214/i;
 /** Jato/laser — ESC/POS RAW trava spooler ~2min e derruba o agente. */
 const NAO_TERMICA_RX =
   /l4260|l3250|l3210|l1250|l3150|l4150|l5290|inkjet|deskjet|officejet|laserjet|ecosys|brother\s*hl|dcp-|mfc-|et-2|et-2[78]|workforce|stylus|pixma|onenote|microsoft\s*print\s*to\s*pdf|fax|xps|onenote|send\s*to\s*onenote|pdf|microsoft\s*xps|anydesk|snagit|adobe\s*pdf/i;
@@ -2781,6 +2781,8 @@ module.exports = {
   imprimirPedido,
   imprimirVasilhame,
   imprimirCrediario,
+  /** Bytes crus (ZPL/PPLA) — sem ESC/POS/ACBr. */
+  enviarBuffer,
   assertPortaTermicaOuFalhar,
   pareceNaoTermica,
   /** @internal regressão COLS / TDZ no render nativo + P2a + gaveta */

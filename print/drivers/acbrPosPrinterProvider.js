@@ -533,5 +533,7 @@ module.exports = {
     imprimirViaTags(vasilhameTags.renderVasilhameTags, p, native.imprimirVasilhame),
   imprimirCrediario: (p) =>
     imprimirViaTags(crediarioTags.renderCrediarioTags, p, native.imprimirCrediario),
+  /** Etiqueta ZPL/PPLA — sempre nativo (nunca tags ACBr). */
+  imprimirRaw: (p) => require("../rawLabelPrint").imprimirRaw(p),
   abrirGaveta,
 };

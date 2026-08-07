@@ -57,6 +57,7 @@ function isTipoRapido(tipo) {
     tipo === "pedido_comanda" ||
     tipo === "vasilhame_emprestimo" ||
     tipo === "crediario_recebimento" ||
+    tipo === "etiqueta_termica" ||
     tipo === "teste" ||
     tipo === "gaveta"
   );
@@ -80,7 +81,8 @@ function prioridadeParaJob(tipo, payload) {
     tipo === "sangria" ||
     tipo === "suprimento" ||
     tipo === "vasilhame_emprestimo" ||
-    tipo === "crediario_recebimento"
+    tipo === "crediario_recebimento" ||
+    tipo === "etiqueta_termica"
   ) {
     return 2;
   }
@@ -136,6 +138,16 @@ function timeoutParaJob(row) {
   if (row.tipo === "gaveta" || row.op === "abrirGaveta") {
     const gavetaMs = parseInt(process.env.PRINT_JOB_TIMEOUT_GAVETA_MS || "2500", 10);
     return Math.min(c.timeoutFastMs, Number.isFinite(gavetaMs) ? Math.max(800, gavetaMs) : 2500);
+  }
+  // PPLA com várias cópias = N WritePrinter — margem por cópia.
+  if (row.tipo === "etiqueta_termica" || row.op === "imprimirRaw") {
+    let copies = 1;
+    try {
+      const args = parsePayload(row.payload_json);
+      copies = Math.max(1, parseInt(args?.[0]?.copies || 1, 10) || 1);
+    } catch (_) {}
+    const base = c.timeoutFastMs;
+    return Math.min(c.timeoutTotalMs, base + Math.min(copies, 20) * 400);
   }
   if (isTipoRapido(row.tipo)) return c.timeoutFastMs;
   return c.timeoutTotalMs;

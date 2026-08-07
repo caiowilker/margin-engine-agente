@@ -33,7 +33,11 @@ function sanitizeOperatorMe(me) {
   if (!userId || !email || !role || !tenantStatus) return null;
   let operationMode =
     m.operationMode != null ? String(m.operationMode) : "FOOD_SERVICE";
-  if (operationMode !== "FOOD_SERVICE" && operationMode !== "HYBRID") {
+  if (
+    operationMode !== "FOOD_SERVICE" &&
+    operationMode !== "HYBRID" &&
+    operationMode !== "COUNTER_STORE"
+  ) {
     operationMode = "FOOD_SERVICE";
   }
   return {

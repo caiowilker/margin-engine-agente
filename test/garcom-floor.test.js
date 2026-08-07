@@ -39,17 +39,25 @@ test("mint gera qrUrl com IP LAN e floor (sem localhost)", () => {
   assert.equal(r.operatorBound, true);
 });
 
-test("sanitizeOperatorMe exige campos mínimos e força FOOD_SERVICE", () => {
+test("sanitizeOperatorMe exige campos mínimos e preserva COUNTER_STORE", () => {
   assert.equal(garcomFloor.sanitizeOperatorMe(null), null);
   assert.equal(garcomFloor.sanitizeOperatorMe({ userId: "x" }), null);
-  const ok = garcomFloor.sanitizeOperatorMe({
+  const retail = garcomFloor.sanitizeOperatorMe({
     userId: "u1",
     email: "a@b.com",
     role: "OPERADOR_PDV",
     tenantStatus: "ACTIVE",
     operationMode: "RETAIL",
   });
-  assert.equal(ok.operationMode, "FOOD_SERVICE");
+  assert.equal(retail.operationMode, "FOOD_SERVICE");
+  const counter = garcomFloor.sanitizeOperatorMe({
+    userId: "u1",
+    email: "a@b.com",
+    role: "OPERADOR_PDV",
+    tenantStatus: "ACTIVE",
+    operationMode: "COUNTER_STORE",
+  });
+  assert.equal(counter.operationMode, "COUNTER_STORE");
 });
 
 test("exchange devolve operatorMe mintado no PC", () => {

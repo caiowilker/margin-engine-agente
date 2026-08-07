@@ -72,6 +72,7 @@ async function withProvider(fn, opts = {}) {
       const fiscal = payload && acbrProv.isFiscalPayload?.(payload);
       const wantNative =
         op === "abrirGaveta" ||
+        op === "imprimirRaw" ||
         (!fiscal &&
           (runtime.isAcbrPosCircuitOpen?.() ||
             (payload && acbrProv.preferNativeEscPos?.(payload))));
@@ -87,9 +88,11 @@ async function withProvider(fn, opts = {}) {
               reason:
                 op === "abrirGaveta"
                   ? "gaveta"
-                  : runtime.isAcbrPosCircuitOpen?.()
-                    ? "circuit"
-                    : "prefer_native",
+                  : op === "imprimirRaw"
+                    ? "etiqueta_raw"
+                    : runtime.isAcbrPosCircuitOpen?.()
+                      ? "circuit"
+                      : "prefer_native",
             },
             "[PrintExecutor] Native direto (comercial)",
           );

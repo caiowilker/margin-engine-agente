@@ -138,6 +138,8 @@ module.exports = {
   imprimirPedido: wrap("imprimirPedido"),
   imprimirVasilhame: wrap("imprimirVasilhame"),
   imprimirCrediario: wrap("imprimirCrediario"),
+  /** ZPL/PPLA raw — impressora de etiquetas (não cupom POS80). */
+  imprimirRaw: wrap("imprimirRaw"),
   abrirGaveta: wrap("abrirGaveta"),
   getProviderName: () => factory.getProviderName(),
   getRequestedProviderName: () => factory.getRequestedProviderName(),

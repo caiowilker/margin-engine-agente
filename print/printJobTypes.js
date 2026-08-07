@@ -17,6 +17,7 @@ const TIPOS = Object.freeze({
   PEDIDO_COMANDA: "pedido_comanda",
   VASILHAME: "vasilhame_emprestimo",
   CREDIARIO: "crediario_recebimento",
+  ETIQUETA_TERMICA: "etiqueta_termica",
   TESTE: "teste",
   GAVETA: "gaveta",
 });
@@ -57,6 +58,7 @@ const OP_TO_TIPO = Object.freeze({
   imprimirPedido: (payload) => TIPOS.PEDIDO_COMANDA,
   imprimirVasilhame: () => TIPOS.VASILHAME,
   imprimirCrediario: () => TIPOS.CREDIARIO,
+  imprimirRaw: () => TIPOS.ETIQUETA_TERMICA,
   abrirGaveta: () => TIPOS.GAVETA,
 });
 

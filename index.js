@@ -3556,6 +3556,49 @@ function iniciarServidor() {
     }
   });
 
+  /**
+   * Etiqueta térmica ZPL/PPLA — bytes raw (nunca ESC/POS/ACBr tags).
+   * Body: { data, formato?: "zpl"|"ppla", encoding?: "utf8"|"latin1"|"base64",
+   *         copies?: 1..99, porta?: "RAW:Nome"|"TCP:ip:9100" }
+   */
+  async function imprimirEtiquetaHandler(req, res) {
+    try {
+      const resultado = await impressora.imprimirRaw(req.body || {});
+      if (resultado?.queued || resultado?.async) {
+        return res.status(202).json({
+          ok: true,
+          fila: true,
+          mensagem:
+            resultado.message ||
+            "Etiqueta na fila — será enviada à impressora de etiquetas.",
+          jobId: resultado.jobId,
+          deduplicado: !!resultado.deduplicado,
+          job: resultado.job ? { id: resultado.job.id } : undefined,
+        });
+      }
+      res.json({
+        ok: true,
+        jobId: resultado?.jobId || null,
+        deduplicado: !!resultado?.deduplicado,
+      });
+    } catch (err) {
+      responderErroImpressao(res, err);
+    }
+  }
+
+  app.post(
+    "/impressora/etiqueta",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    imprimirEtiquetaHandler,
+  );
+  app.post(
+    "/impressora/raw",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    imprimirEtiquetaHandler,
+  );
+
   app.post("/impressora/vasilhame", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       const resultado = await impressora.imprimirVasilhame(req.body);

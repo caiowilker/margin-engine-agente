@@ -15,6 +15,7 @@ let _ultimaVezFiscalOcupadoEm = 0;
 const OPS_FAST_NATIVE = new Set([
   "imprimirTeste",
   "abrirGaveta",
+  "imprimirRaw",
   "imprimirAbertura",
   "imprimirFechamento",
   "imprimirMovimentoCaixa",
