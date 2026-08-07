@@ -15,6 +15,8 @@ const TIPOS = Object.freeze({
   RELATORIO: "relatorio",
   REIMPRESSAO: "reimpressao",
   PEDIDO_COMANDA: "pedido_comanda",
+  VASILHAME: "vasilhame_emprestimo",
+  CREDIARIO: "crediario_recebimento",
   TESTE: "teste",
   GAVETA: "gaveta",
 });
@@ -29,10 +31,19 @@ const STATUS = Object.freeze({
 });
 
 const OP_TO_TIPO = Object.freeze({
-  imprimirCupom: (payload) =>
-    payload?.cupomSemFiscal || payload?.naoFiscal
-      ? TIPOS.CUPOM_NAO_FISCAL
-      : TIPOS.CUPOM_FISCAL,
+  imprimirCupom: (payload) => {
+    if (payload?.cupomSemFiscal || payload?.naoFiscal) return TIPOS.CUPOM_NAO_FISCAL;
+    // DANFE térmico (NF-e 55 / layout dedicado) — métricas e prioridade corretas.
+    if (
+      payload?.somenteDanfeTermico ||
+      payload?.danfeTermico ||
+      payload?.layout === "danfe-termico" ||
+      (payload?.chaveNfe && String(payload.chaveNfe).replace(/\D/g, "").substring(20, 22) === "55")
+    ) {
+      return TIPOS.DANFE_TERMICO;
+    }
+    return TIPOS.CUPOM_FISCAL;
+  },
   imprimirSegundaVia: () => TIPOS.SEGUNDA_VIA,
   imprimirAbertura: () => TIPOS.ABERTURA_CAIXA,
   imprimirFechamento: () => TIPOS.FECHAMENTO_CAIXA,
@@ -44,6 +55,8 @@ const OP_TO_TIPO = Object.freeze({
   },
   imprimirTeste: () => TIPOS.TESTE,
   imprimirPedido: (payload) => TIPOS.PEDIDO_COMANDA,
+  imprimirVasilhame: () => TIPOS.VASILHAME,
+  imprimirCrediario: () => TIPOS.CREDIARIO,
   abrirGaveta: () => TIPOS.GAVETA,
 });
 
@@ -59,6 +72,7 @@ function extrairMeta(payload = {}, opts = {}) {
       opts.documento ||
       payload?.chaveNfe ||
       payload?.chave ||
+      payload?.codigoTransacao ||
       payload?.orderNumber ||
       payload?.order_number ||
       payload?.numeroVenda ||

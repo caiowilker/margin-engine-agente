@@ -28,6 +28,8 @@ module.exports = {
     const porta = routes.resolvePortaForPrintType(p?.printType ?? p?.print_type);
     return routes.withPortaOverride(porta, () => core.imprimirPedido(p));
   },
-  abrirGaveta: () => core.abrirGaveta(),
+  imprimirVasilhame: (p) => core.imprimirVasilhame(p),
+  imprimirCrediario: (p) => core.imprimirCrediario(p),
+  abrirGaveta: (opts) => core.abrirGaveta(opts || {}),
   imprimirTeste: () => core.imprimirTeste(),
 };

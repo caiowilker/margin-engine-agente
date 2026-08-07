@@ -27,6 +27,53 @@ const EVENT_TYPE_LABELS = Object.freeze({
   ORDER_REPRINT: "2a via - comanda",
 });
 
+/** Badge curto no topo da comanda (cozinha/entrega) — legível a 1 metro. */
+const EVENT_BADGES = Object.freeze({
+  ORDER_CREATED: "NOVO",
+  ORDER_UPDATED: "ADICIONAL",
+  ORDER_CANCELLED: "CANCELADO",
+  ORDER_CONFIRMED: "CONFIRMADO",
+  ORDER_PREPARING: "EM PREPARO",
+  ORDER_READY: "PRONTO",
+  ORDER_DELIVERED: "SAIU",
+  ORDER_FINISHED: "FINALIZADO",
+  PRE_CONTA: "COBRANCA",
+  BILL_REQUESTED: "COBRANCA",
+  SEGUNDA_VIA: "2a VIA",
+  ORDER_REPRINT: "2a VIA",
+});
+
+const PAYMENT_FORM_LABELS = Object.freeze({
+  CASH: "Dinheiro",
+  DINHEIRO: "Dinheiro",
+  MONEY: "Dinheiro",
+  CARD: "Cartao",
+  CARTAO: "Cartao",
+  CREDIT: "Cartao",
+  DEBIT: "Cartao",
+  PIX_LOCAL: "PIX na entrega",
+  PIX: "PIX",
+  PIX_MANUAL: "PIX",
+});
+
+function isStationTicket(printType) {
+  const t = String(printType || "").toLowerCase();
+  return t === "cozinha" || t === "bar" || t === "producao";
+}
+
+function shortEventBadge(eventType) {
+  const key = String(eventType || "").toUpperCase();
+  const badge = EVENT_BADGES[key];
+  return badge ? toThermalText(badge) : null;
+}
+
+function labelPaymentForm(raw) {
+  if (raw == null || !String(raw).trim()) return null;
+  const key = String(raw).trim().toUpperCase();
+  const mapped = PAYMENT_FORM_LABELS[key];
+  return toThermalText(mapped || key);
+}
+
 function mapItem(raw) {
   const item = raw || {};
   const notesRaw = item.notes ?? item.observacao ?? item.obs ?? null;
@@ -76,6 +123,19 @@ function normalizarPedidoPayload(raw) {
       addressRaw != null && String(addressRaw).trim() ? String(addressRaw).trim() : null,
     total: o.total != null ? Number(o.total) : null,
     notes: o.notes ?? null,
+    paymentForm: o.paymentForm ?? o.payment_form ?? null,
+    cashChangeFor:
+      o.cashChangeFor != null
+        ? Number(o.cashChangeFor)
+        : o.cash_change_for != null
+          ? Number(o.cash_change_for)
+          : null,
+    changeAmount:
+      o.changeAmount != null
+        ? Number(o.changeAmount)
+        : o.change_amount != null
+          ? Number(o.change_amount)
+          : null,
     priority: String(o.priority ?? "normal"),
     elapsedSeconds: Number(o.elapsedSeconds ?? o.elapsed_seconds ?? 0),
     createdAt: o.createdAt ?? o.created_at ?? null,
@@ -174,9 +234,14 @@ function tituloPedidoTermico(printType, eventType) {
 module.exports = {
   PRINT_TYPE_LABELS,
   EVENT_TYPE_LABELS,
+  EVENT_BADGES,
+  PAYMENT_FORM_LABELS,
   normalizarPedidoPayload,
   labelPrintType,
   labelEventType,
+  labelPaymentForm,
+  shortEventBadge,
+  isStationTicket,
   tituloPedidoTermico,
   deveExibirTotalPedido,
   fmtQty,

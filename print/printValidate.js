@@ -61,6 +61,30 @@ function validarAntesEnfileirar(op, args) {
     return { ok: true, args: [normalizado] };
   }
 
+  if (op === "imprimirVasilhame") {
+    if (!payload || typeof payload !== "object") {
+      throw new Error("Payload de vasilhame inválido.");
+    }
+    const { normalizarVasilhamePayload } = require("./vasilhameAcbrTags");
+    const normalizado = normalizarVasilhamePayload(payload);
+    if (!normalizado.codigoTransacao) {
+      throw new Error("Comprovante de vasilhame sem código de transação.");
+    }
+    return { ok: true, args: [normalizado] };
+  }
+
+  if (op === "imprimirCrediario") {
+    if (!payload || typeof payload !== "object") {
+      throw new Error("Payload de crediário inválido.");
+    }
+    const { normalizarCrediarioPayload } = require("./crediarioAcbrTags");
+    const normalizado = normalizarCrediarioPayload(payload);
+    if (!(Number(normalizado.valorRecebido) > 0)) {
+      throw new Error("Comprovante de crediário sem valor recebido.");
+    }
+    return { ok: true, args: [normalizado] };
+  }
+
   if (typeof op !== "string" || !op) {
     throw new Error("Operação de impressão inválida.");
   }

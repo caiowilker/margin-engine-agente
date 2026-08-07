@@ -13,6 +13,8 @@ const { normalizarCupomPayload, deveRelaxarQr } = require("../cupomValidate");
 const native = require("./nativeEscPosProvider");
 const caixaTags = require("../caixaAcbrTags");
 const pedidoTags = require("../pedidoAcbrTags");
+const vasilhameTags = require("../vasilhameAcbrTags");
+const crediarioTags = require("../crediarioAcbrTags");
 
 /**
  * Prefere ESC/POS nativo vs ACBr tags.
@@ -68,7 +70,16 @@ async function imprimirViaTags(renderFn, payload, fallbackNative, opts = {}) {
   }
   const tags = renderFn(payload || {});
   const t0 = Date.now();
+  // Gaveta antecipada: abre já (troco/fundo), enquanto o comprovante imprime.
+  const gavetaEarly = dispararGavetaAntecipada(payload, opts);
   await imprimirTags(tags);
+  if (gavetaEarly) {
+    try {
+      await gavetaEarly;
+    } catch (_) {
+      /* pós-tags tenta de novo abaixo */
+    }
+  }
   await talvezAbrirGavetaAposAcbr(payload, opts);
   return {
     ok: true,
@@ -76,6 +87,23 @@ async function imprimirViaTags(renderFn, payload, fallbackNative, opts = {}) {
     durationMs: Date.now() - t0,
     lines: tags.split("\n").length,
   };
+}
+
+/** Dispara pulso ESC/POS sem bloquear o início da impressão ACBr. */
+function dispararGavetaAntecipada(payload, opts = {}) {
+  try {
+    const core = require("../escpos/impressoraCore");
+    const deve =
+      typeof core.deveAbrirGavetaNoPayload === "function" &&
+      core.deveAbrirGavetaNoPayload(payload, { sempre: opts.sempre === true });
+    if (!deve) return null;
+    return abrirGaveta({ force: opts.force === true }).catch((err) => {
+      log.warn({ err: err?.message }, "[ACBrPosPrinter] Gaveta antecipada falhou");
+      throw err;
+    });
+  } catch (_) {
+    return null;
+  }
 }
 
 /** Após tags ACBr: pulso ESC/POS nativo (sem segunda sessão PosPrinter). */
@@ -86,7 +114,7 @@ async function talvezAbrirGavetaAposAcbr(payload, opts = {}) {
       typeof core.deveAbrirGavetaNoPayload === "function" &&
       core.deveAbrirGavetaNoPayload(payload, { sempre: opts.sempre === true });
     if (!deve) return;
-    await abrirGaveta();
+    await abrirGaveta({ force: opts.force === true });
   } catch (err) {
     log.warn({ err: err?.message }, "[ACBrPosPrinter] Gaveta pós-tags falhou (ignorado)");
   }
@@ -245,7 +273,15 @@ async function imprimirTeste() {
   const metrics = require("../printMetrics");
 
   if (mode === "parity" || preferNativeEscPos({ naoFiscal: true })) {
+    // Teste: gaveta já (force), em paralelo com a página.
+    const gavetaEarly =
+      (process.env.PRINTER_DRAWER || "true").toLowerCase() !== "false"
+        ? abrirGaveta({ force: true }).catch((err) => {
+            log.warn({ err: err.message }, "[ACBrPosPrinter] Gaveta no teste (native) falhou");
+          })
+        : null;
     const res = await native.imprimirTeste();
+    if (gavetaEarly) await Promise.resolve(gavetaEarly).catch(() => {});
     const durationMs = Date.now() - t0;
     const out = {
       ...res,
@@ -276,14 +312,15 @@ async function imprimirTeste() {
     return out;
   }
   const tags = renderPaginaTeste();
+  // Gaveta force no início do teste — não espera o fim da página.
+  const gavetaEarly =
+    (process.env.PRINTER_DRAWER || "true").toLowerCase() !== "false"
+      ? abrirGaveta({ force: true }).catch((err) => {
+          log.warn({ err: err.message }, "[ACBrPosPrinter] Gaveta no teste falhou (ignorado)");
+        })
+      : null;
   await imprimirTags(tags);
-  if ((process.env.PRINTER_DRAWER || "true").toLowerCase() !== "false") {
-    try {
-      await abrirGaveta();
-    } catch (err) {
-      log.warn({ err: err.message }, "[ACBrPosPrinter] Gaveta no teste falhou (ignorado)");
-    }
-  }
+  if (gavetaEarly) await Promise.resolve(gavetaEarly).catch(() => {});
   const durationMs = Date.now() - t0;
   const out = {
     ok: true,
@@ -304,9 +341,9 @@ async function imprimirTeste() {
   return out;
 }
 
-async function abrirGaveta() {
+async function abrirGaveta(opts = {}) {
   // Gaveta nunca é fiscal — sempre ESC/POS nativo (evita Ativar -10 em RAW).
-  return native.abrirGaveta();
+  return native.abrirGaveta(opts);
 }
 
 module.exports = {
@@ -484,5 +521,9 @@ module.exports = {
       imprimirViaTags(pedidoTags.renderPedidoTags, p, native.imprimirPedido),
     );
   },
+  imprimirVasilhame: (p) =>
+    imprimirViaTags(vasilhameTags.renderVasilhameTags, p, native.imprimirVasilhame),
+  imprimirCrediario: (p) =>
+    imprimirViaTags(crediarioTags.renderCrediarioTags, p, native.imprimirCrediario),
   abrirGaveta,
 };

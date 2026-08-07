@@ -111,8 +111,9 @@ test("acbrPosPrinterProvider.abrirGaveta sempre chama native", () => {
     path.join(__dirname, "../print/drivers/acbrPosPrinterProvider.js"),
     "utf8",
   );
-  assert.ok(/async function abrirGaveta\(\)[\s\S]*return native\.abrirGaveta\(\)/.test(src));
-  const fn = src.match(/async function abrirGaveta\(\)[\s\S]*?\n\}/)?.[0] || "";
+  assert.ok(/async function abrirGaveta\(/.test(src));
+  assert.ok(/return native\.abrirGaveta\(/.test(src));
+  const fn = src.match(/async function abrirGaveta\([\s\S]*?\n\}/)?.[0] || "";
   assert.ok(fn && !/abrirGavetaNative\(\)/.test(fn));
 });
 
@@ -154,6 +155,37 @@ test("gaveta coalesce — janela recente após mark", () => {
     const r = await core.abrirGaveta();
     assert.strictEqual(r.ok, true);
     assert.strictEqual(r.coalesced, true);
+    resetGavetaPulse();
+  });
+
+  await testAsync("abrirGaveta force=true ignora coalesce", async () => {
+    process.env.PRINTER_DRAWER = "true";
+    process.env.PRINTER_DRAWER_COALESCE_MS = "800";
+    resetGavetaPulse();
+    markGavetaPulseSent();
+    assert.strictEqual(gavetaPulseRecente(), true);
+    // force: não coalesced — tenta enviar (pode falhar sem impressora; não pode ser coalesced)
+    const r = await core.abrirGaveta({ force: true }).catch((e) => e);
+    if (r && r.ok === true) {
+      assert.notStrictEqual(r.coalesced, true);
+      assert.strictEqual(r.forced, true);
+    } else {
+      // Sem spooler no CI — o importante é não ter retornado coalesced
+      assert.ok(!(r && r.coalesced === true));
+    }
+    resetGavetaPulse();
+  });
+
+  await testAsync("mark só após sucesso — falha não bloqueia próximo force", async () => {
+    process.env.PRINTER_DRAWER = "true";
+    resetGavetaPulse();
+    assert.strictEqual(gavetaPulseRecente(), false);
+    // Sem mark prévio: recente=false
+    const r = await core.abrirGaveta({ force: true }).catch(() => null);
+    // Se enviou ok, recente=true; se falhou, recente continua false (mark só no success)
+    if (!r || r.ok !== true) {
+      assert.strictEqual(gavetaPulseRecente(), false);
+    }
     resetGavetaPulse();
   });
 

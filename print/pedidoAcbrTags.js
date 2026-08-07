@@ -1,119 +1,40 @@
 /**
- * Comanda Order Engine em tags ACBr — mesma identidade visual do cupom (48 col).
+ * Comanda Order Engine em tags ACBr — layouts por tipo (pedidoLayout.js).
+ * Cupom fiscal continua em cupomAcbrTags.js (não misturar).
  */
-const { toThermalText } = require("../thermalText");
 const { tagCorte, tagLogoHeader } = require("./acbrTags");
-const {
-  labelEventType,
-  tituloPedidoTermico,
-  deveExibirTotalPedido,
-  fmtQty,
-  fmtTotal,
-  normalizarPedidoPayload,
-  wrapThermalLines,
-} = require("./pedidoPrint");
-const { getThermalCols, sepEq, sepDash } = require("./thermalCols");
+const { buildPedidoLayout } = require("./pedidoLayout");
+const { normalizarPedidoPayload } = require("./pedidoPrint");
 
-function tx(v) {
-  return toThermalText(v);
-}
+function lineToTags(line) {
+  if (!line || line.kind === "blank") return "";
+  if (line.kind === "sep") return line.text || "";
 
-function appendDeliveryBlock(lines, payload) {
-  const COLS = getThermalCols();
-  if (payload.customerPhone) {
-    lines.push(`Tel    : ${tx(payload.customerPhone)}`);
-  }
-  if (payload.deliveryAddress) {
-    const addrLines = wrapThermalLines(tx(payload.deliveryAddress), COLS - 2);
-    if (addrLines.length === 1 && addrLines[0].length <= COLS - 9) {
-      lines.push(`Endere.: ${addrLines[0]}`);
-    } else {
-      lines.push("Endereco:");
-      for (const line of addrLines) {
-        lines.push(`  ${line}`);
-      }
-    }
-  }
+  let text = String(line.text ?? "");
+  if (line.bold) text = `<n>${text}</n>`;
+  if (line.size === "lg") text = `<e>${text}</e>`;
+
+  if (line.center) return `<ce>${text}</ce>`;
+  return text;
 }
 
 function renderPedidoTags(rawPayload = {}) {
-  const payload = normalizarPedidoPayload(rawPayload);
-  const lines = ["</zera>", tagLogoHeader(payload)];
-  const titulo = tituloPedidoTermico(payload.printType, payload.eventType);
-  const evento = labelEventType(payload.eventType);
-  const cancelado = payload.eventType === "ORDER_CANCELLED";
-  const showTotal = deveExibirTotalPedido(payload.printType, payload.eventType);
+  const { showLogo, lines } = buildPedidoLayout(rawPayload);
+  const out = ["</zera>"];
 
-  lines.push(
-    sepEq(),
-    `<ce><n>${titulo}</n></ce>`,
-    `<ce>${tx(evento)}</ce>`,
-  );
-  if (cancelado) {
-    lines.push("<ce><n>*** CANCELADO ***</n></ce>");
-  }
-  lines.push(sepEq());
-
-  if (payload.orderNumber) {
-    lines.push(`Pedido : ${tx(payload.orderNumber)}`);
-  }
-  if (payload.tableCode) {
-    lines.push(`Mesa   : ${tx(payload.tableCode)}`);
-  }
-  if (payload.customerName) {
-    lines.push(`Cliente: ${tx(payload.customerName)}`);
-  }
-  appendDeliveryBlock(lines, payload);
-  if (payload.createdAt) {
-    lines.push(`Data/Hr: ${tx(payload.createdAt)}`);
-  }
-  if (payload.elapsedSeconds > 0) {
-    lines.push(`Tempo  : ${payload.elapsedSeconds}s`);
-  }
-  if (payload.priority && payload.priority !== "normal") {
-    lines.push(`Prior. : ${tx(payload.priority).toUpperCase()}`);
+  if (showLogo) {
+    const logo = tagLogoHeader(rawPayload);
+    if (logo) out.push(logo.replace(/\n$/, ""));
   }
 
-  lines.push(sepDash(), "<n>ITENS</n>", sepDash());
-
-  if (!payload.items.length) {
-    lines.push("(sem itens)");
-  } else {
-    for (const item of payload.items) {
-      const qty = fmtQty(item.quantity, item.unit);
-      const nome = tx(item.name || item.code || "Item");
-      lines.push(`<n>${qty} x ${nome}</n>`);
-      if (showTotal && item.lineTotal != null) {
-        const unitFmt = item.unitPrice != null ? fmtTotal(item.unitPrice) : null;
-        const lineFmt = fmtTotal(item.lineTotal);
-        if (unitFmt && lineFmt) {
-          lines.push(`  ${unitFmt}  =  ${lineFmt}`);
-        } else if (lineFmt) {
-          lines.push(`  ${lineFmt}`);
-        }
-      }
-      if (item.notes) {
-        lines.push(`  * ${tx(item.notes)}`);
-      }
-      if (item.code && item.name) {
-        lines.push(`  Cod: ${tx(item.code)}`);
-      }
-    }
+  for (const line of lines) {
+    const rendered = lineToTags(line);
+    if (rendered !== "") out.push(rendered);
+    else if (line.kind === "blank") out.push(" ");
   }
 
-  const totalFmt = showTotal ? fmtTotal(payload.total) : null;
-  if (totalFmt) {
-    lines.push(sepDash(), `<n>Total : ${totalFmt}</n>`);
-  }
-  if (payload.notes) {
-    lines.push(sepDash(), `Obs: ${tx(payload.notes)}`);
-  }
-  if (payload.jobId) {
-    lines.push(sepDash(), `Job: ${tx(payload.jobId).slice(0, 36)}`);
-  }
-
-  lines.push(sepEq(), tagCorte());
-  return lines.filter(Boolean).join("\n") + "\n";
+  out.push(tagCorte());
+  return out.filter((x) => x != null && x !== "").join("\n") + "\n";
 }
 
 module.exports = {

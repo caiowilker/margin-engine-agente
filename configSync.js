@@ -179,6 +179,9 @@ function aplicarConfigRemota(cfg) {
   void sincronizarDanfeLogoRemoto(cfg).catch((err) =>
     log.debug({ err: err.message }, "[ConfigSync] sync logo DANFE falhou"),
   );
+  void sincronizarThermalLogoRemoto(cfg).catch((err) =>
+    log.debug({ err: err.message }, "[ConfigSync] sync logo térmica falhou"),
+  );
 }
 
 async function sincronizarDanfeLogoRemoto(cfg) {
@@ -224,6 +227,52 @@ async function sincronizarDanfeLogoRemoto(cfg) {
     sha256Remoto: shaRemoto,
   });
   log.info({ sha256: shaRemoto }, "[ConfigSync] Logo DANFE sincronizada do backend");
+}
+
+async function sincronizarThermalLogoRemoto(cfg) {
+  if (!cfg || typeof cfg !== "object") return;
+  const backendUrl = cfg.backendUrl || process.env.BACKEND_URL || "";
+  const backendToken = cfg.backendToken || process.env.BACKEND_TOKEN || "";
+  if (!backendUrl || !backendToken) return;
+
+  const shaRemoto = cfg.thermalLogoSha256 || null;
+  const printerLogo = require("./print/printerLogo");
+  const local = printerLogo.ler();
+
+  if (!shaRemoto) {
+    // Remoto limpo: só remove cache vindo do backend; upload local permanece fallback.
+    if (local.sha256Remoto && local.origem === "backend") {
+      printerLogo.remover();
+    }
+    return;
+  }
+
+  if (!printerLogo.precisaSincronizar(shaRemoto)) {
+    return;
+  }
+
+  const fetch = require("node-fetch");
+  const resp = await fetch(`${backendUrl.replace(/\/$/, "")}/pdv/agente/fiscal/logo-termica`, {
+    headers: {
+      Authorization: `Bearer ${backendToken}`,
+      Accept: "image/png, image/jpeg, */*",
+    },
+  });
+  if (resp.status === 404) {
+    if (local.origem === "backend") printerLogo.remover();
+    return;
+  }
+  if (!resp.ok) {
+    throw new Error(`Logo térmica remota HTTP ${resp.status}`);
+  }
+  const buf = Buffer.from(await resp.arrayBuffer());
+  await printerLogo.salvar({
+    buffer: buf,
+    ativo: true,
+    origem: "backend",
+    sha256Remoto: shaRemoto,
+  });
+  log.info({ sha256: shaRemoto }, "[ConfigSync] Logo térmica sincronizada do backend");
 }
 
 async function sincronizarCatalogo(backendUrl, backendToken) {

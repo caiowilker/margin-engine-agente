@@ -33,6 +33,22 @@ test("PRE_CONTA → título PRE-CONTA e exibe total", () => {
   assert.ok(!/[^\x20-\x7E]/.test(labelEventType("PRE_CONTA")));
 });
 
+test("layout PRE-CONTA tem aviso nao-fiscal e TOTAL alinhado", () => {
+  const { buildPedidoLayout } = require("../print/pedidoLayout");
+  const { lines } = buildPedidoLayout({
+    printType: "cliente",
+    eventType: "PRE_CONTA",
+    tableCode: "3",
+    total: 20,
+    items: [{ name: "Suco", quantity: 1, lineTotal: 20 }],
+  });
+  const texts = lines.map((l) => l.text || "").join("\n");
+  assert.ok(texts.includes("PRE-CONTA"));
+  assert.ok(texts.includes("nao e cupom fiscal"));
+  assert.ok(texts.includes("MESA 3"));
+  assert.ok(texts.includes("TOTAL"));
+});
+
 test("cozinha não exibe total", () => {
   assert.strictEqual(deveExibirTotalPedido("cozinha", "ORDER_UPDATED"), false);
 });

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 const assert = require("assert");
-const { normalizarPedidoPayload, labelPrintType } = require("../print/pedidoPrint");
+const { normalizarPedidoPayload, labelPrintType, labelPaymentForm } = require("../print/pedidoPrint");
 const { renderPedidoTags } = require("../print/pedidoAcbrTags");
+const { buildPedidoLayout, fmtQtyKitchen } = require("../print/pedidoLayout");
 const { validarAntesEnfileirar } = require("../print/printValidate");
 
 let passed = 0;
@@ -45,16 +46,84 @@ test("normalizarPedidoPayload aceita snake_case do backend", () => {
   assert.strictEqual(p.items[0].name, "Cafe");
 });
 
-test("renderPedidoTags inclui estação e itens", () => {
+test("renderPedidoTags cozinha: MESA grande, qty 2x, sem total/SKU/logo job", () => {
+  const tags = renderPedidoTags({
+    printType: "cozinha",
+    eventType: "ORDER_CREATED",
+    orderNumber: "ORD-4",
+    tableCode: "12",
+    total: 99.9,
+    jobId: "job-xyz-should-not-print",
+    items: [{ code: "SKU1", name: "Burger", quantity: 2, unit: "UN", notes: "sem cebola" }],
+  });
+  assert.ok(tags.includes("COZINHA"));
+  assert.ok(tags.includes("NOVO"));
+  assert.ok(tags.includes("MESA 12"));
+  assert.ok(tags.includes("2x") && tags.includes("BURGER"));
+  assert.ok(tags.includes("sem cebola"));
+  assert.ok(!tags.includes("TOTAL"));
+  assert.ok(!tags.includes("Total"));
+  assert.ok(!tags.includes("SKU1"));
+  assert.ok(!tags.includes("Cod:"));
+  assert.ok(!tags.includes("job-xyz"));
+});
+
+test("renderPedidoTags bar usa badge ADICIONAL em update", () => {
   const tags = renderPedidoTags({
     printType: "bar",
-    eventType: "ORDER_CREATED",
+    eventType: "ORDER_UPDATED",
     orderNumber: "ORD-1",
     items: [{ name: "Suco", quantity: 1, unit: "un" }],
   });
   assert.ok(tags.includes("BAR"));
-  assert.ok(tags.includes("ORD-1"));
-  assert.ok(tags.includes("Suco"));
+  assert.ok(tags.includes("ADICIONAL"));
+  assert.ok(tags.includes("1x") && tags.includes("SUCO"));
+});
+
+test("renderPedidoTags entrega: tel, endereco, pagto, troco, TOTAL", () => {
+  const tags = renderPedidoTags({
+    printType: "entrega",
+    eventType: "ORDER_READY",
+    orderNumber: "ORD-5",
+    customerName: "Joao",
+    customerPhone: "11988887777",
+    deliveryAddress: "Rua das Flores, 120 — Apto 42 — Centro, Sao Paulo — SP — CEP 01310-100",
+    paymentForm: "CASH",
+    cashChangeFor: 50,
+    changeAmount: 5,
+    total: 55,
+    items: [{ name: "Pizza", quantity: 1, unit: "un" }],
+  });
+  assert.ok(tags.includes("ENTREGA"));
+  assert.ok(tags.includes("Joao"));
+  assert.ok(tags.includes("(11) 98888-7777"));
+  assert.ok(tags.includes("ENDERECO"));
+  assert.ok(tags.includes("Rua das Flores"));
+  assert.ok(tags.includes("Apto 42"));
+  assert.ok(tags.includes("Dinheiro"));
+  assert.ok(tags.includes("Troco para"));
+  assert.ok(tags.includes("TOTAL"));
+  assert.ok(!tags.includes("Levar"));
+});
+
+test("labelPaymentForm normaliza CASH/CARD", () => {
+  assert.strictEqual(labelPaymentForm("CASH"), "Dinheiro");
+  assert.strictEqual(labelPaymentForm("CARD"), "Cartao");
+  assert.strictEqual(labelPaymentForm("PIX_LOCAL"), "PIX na entrega");
+});
+
+test("fmtQtyKitchen omite UN", () => {
+  assert.strictEqual(fmtQtyKitchen(2, "UN"), "2x");
+  assert.strictEqual(fmtQtyKitchen(1.5, "KG"), "1,5 KG");
+});
+
+test("buildPedidoLayout cozinha nao pede logo por padrao", () => {
+  const { showLogo } = buildPedidoLayout({
+    printType: "cozinha",
+    orderNumber: "1",
+    items: [{ name: "A", quantity: 1 }],
+  });
+  assert.strictEqual(showLogo, false);
 });
 
 test("validarAntesEnfileirar rejeita pedido sem identificador", () => {
@@ -83,37 +152,6 @@ test("normalizarPedidoPayload preserva notes do item", () => {
     items: [{ name: "Burger", quantity: 1, notes: "sem cebola" }],
   });
   assert.strictEqual(p.items[0].notes, "sem cebola");
-});
-
-test("renderPedidoTags imprime observação do item e omite total na cozinha", () => {
-  const tags = renderPedidoTags({
-    printType: "cozinha",
-    eventType: "ORDER_CREATED",
-    orderNumber: "ORD-4",
-    total: 99.9,
-    items: [{ name: "Burger", quantity: 1, notes: "sem cebola" }],
-  });
-  assert.ok(tags.includes("sem cebola"));
-  assert.ok(!tags.includes("Total :"));
-});
-
-test("renderPedidoTags imprime telefone e endereço na comanda de entrega", () => {
-  const tags = renderPedidoTags({
-    printType: "entrega",
-    eventType: "ORDER_READY",
-    orderNumber: "ORD-5",
-    customerName: "Joao",
-    customerPhone: "11988887777",
-    deliveryAddress: "Rua das Flores, 120 — Apto 42 — Centro, Sao Paulo — SP — CEP 01310-100",
-    total: 55,
-    items: [{ name: "Pizza", quantity: 1, unit: "un" }],
-  });
-  assert.ok(tags.includes("ENTREGA"));
-  assert.ok(tags.includes("Tel    : (11) 98888-7777"));
-  assert.ok(tags.includes("Endereco:") || tags.includes("Endere.:"));
-  assert.ok(tags.includes("Rua das Flores"));
-  assert.ok(tags.includes("Apto 42"));
-  assert.ok(tags.includes("Total :"));
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -13,8 +13,9 @@ const PRINT_ENV_FIELDS = [
     kind: "int",
     min: 1000,
     max: 15000,
-    default: 4000,
-    comment: "Soft timeout jobs comerciais (cupom/gaveta/pedido)",
+    default: 6500,
+    comment:
+      "Soft timeout jobs comerciais — ≥ ACBR_POS_CALL_TIMEOUT_MS (evita drain antes do worker)",
   },
   {
     env: "PRINT_JOB_TIMEOUT_TOTAL_MS",
@@ -78,8 +79,16 @@ const PRINT_ENV_FIELDS = [
     kind: "int",
     min: 1000,
     max: 15000,
-    default: 5000,
-    comment: "Timeout por chamada POS_* (worker ou in-process)",
+    default: 4500,
+    comment: "Timeout por chamada POS_* (worker) — abaixo do soft job (6500)",
+  },
+  {
+    env: "PRINT_ENVIANDO_STALE_MS",
+    kind: "int",
+    min: 8000,
+    max: 120000,
+    default: 25000,
+    comment: "Reclaim jobs ENVIANDO órfãos (crash/hang) — soft+drain+buffer",
   },
   {
     env: "PRINT_FISCAL_WAIT_MS",

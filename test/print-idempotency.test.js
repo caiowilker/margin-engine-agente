@@ -160,6 +160,36 @@ test("deveDeduplicar — ERRO não bloqueia nova tentativa", () => {
   );
 });
 
+test("enfileirar após ERRO libera chave UNIQUE e cria novo job", async () => {
+  store.resetDbForTests();
+  resetDirectoryManager();
+  getDirectoryManager(ROOT).ensureAll();
+  store.initDb();
+  factory.resetPrintProvider();
+
+  const payload = {
+    naoFiscal: true,
+    cupomSemFiscal: true,
+    numeroVenda: "V-ERRO-RETRY",
+    itens: [{ descricao: "X", qtd: 1, total: 1 }],
+    total: 1,
+  };
+  const j1 = pjs.enfileirar("imprimirCupom", [payload], {});
+  assert.equal(j1.deduplicado, false);
+  store.atualizarJob(j1.id, { status: "ERRO", erro: "falha simulada" });
+
+  const j2 = pjs.enfileirar("imprimirCupom", [payload], {});
+  assert.equal(j2.deduplicado, false);
+  assert.notEqual(j2.id, j1.id);
+  assert.equal(j2.status, "PENDENTE");
+  const old = store.buscarJob(j1.id);
+  assert.equal(old.idempotency_key, null);
+
+  try {
+    fs.rmSync(ROOT, { recursive: true, force: true });
+  } catch (_) {}
+});
+
 test("reimprimir manual ignora chave e gera novo job", async () => {
   store.resetDbForTests();
   resetDirectoryManager();

@@ -35,7 +35,8 @@ function cfg() {
     maxTentativas: parseInt(process.env.PRINT_JOB_MAX_TENTATIVAS || "5", 10),
     // Soft curto: PDV comercial — falha limpa < ~6s (soft+drain), nunca minutos.
     timeoutTotalMs: parseInt(process.env.PRINT_JOB_TIMEOUT_TOTAL_MS || "10000", 10),
-    timeoutFastMs: parseInt(process.env.PRINT_JOB_TIMEOUT_FAST_MS || "4000", 10),
+    // Soft ≥ ACBR_POS_CALL (~4500) + margem — evita hard-drain antes do worker responder.
+    timeoutFastMs: parseInt(process.env.PRINT_JOB_TIMEOUT_FAST_MS || "6500", 10),
     backoffBaseMs: parseInt(process.env.PRINT_JOB_BACKOFF_MS || "500", 10),
     pollMs: parseInt(process.env.PRINT_JOB_POLL_MS || "400", 10),
     retentionDias: parseInt(process.env.PRINT_JOB_RETENTION_DIAS || "90", 10),
@@ -54,6 +55,8 @@ function isTipoRapido(tipo) {
     tipo === "sangria" ||
     tipo === "suprimento" ||
     tipo === "pedido_comanda" ||
+    tipo === "vasilhame_emprestimo" ||
+    tipo === "crediario_recebimento" ||
     tipo === "teste" ||
     tipo === "gaveta"
   );
@@ -61,7 +64,7 @@ function isTipoRapido(tipo) {
 
 /**
  * Menor = mais urgente.
- * 0 gaveta · 1 pedido/comanda · 2 cupom fiscal/comercial/DANFE · 5 demais
+ * 0 gaveta · 1 pedido/comanda · 2 cupom/caixa/DANFE/vasilhame/crediário · 5 demais
  */
 function prioridadeParaJob(tipo, payload) {
   if (tipo === "gaveta") return 0;
@@ -75,7 +78,9 @@ function prioridadeParaJob(tipo, payload) {
     tipo === "fechamento_caixa" ||
     tipo === "movimento_caixa" ||
     tipo === "sangria" ||
-    tipo === "suprimento"
+    tipo === "suprimento" ||
+    tipo === "vasilhame_emprestimo" ||
+    tipo === "crediario_recebimento"
   ) {
     return 2;
   }
@@ -193,6 +198,16 @@ function enfileirar(op, args, opts = {}) {
         "[PrintJob] Deduplicado — sem reimpressão",
       );
       return { ...rowToJob(existing), deduplicado: true, idempotencyKey };
+    }
+    // ERRO/CANCELADO/IMPRESSO expirado: libera a UNIQUE key para novo envio (senão
+    // INSERT falha e devolve o job morto — PDV fica “preso” após falha transitória).
+    if (existing && !deveDeduplicar(existing)) {
+      store.atualizarJob(existing.id, { idempotency_key: null });
+      store.registrarEvento(
+        existing.id,
+        "IDEMPOTENCY_RELEASE",
+        `chave=${idempotencyKey} status=${existing.status}`,
+      );
     }
   }
 
@@ -431,8 +446,9 @@ function iniciarWorker() {
         processarFila().catch(() => {});
         return;
       }
+      // Soft+drain+buffer (~15–30s). 90s deixava ENVIANDO “preso” demais no PDV.
       store.recuperarJobsEnviandoPresos(
-        parseInt(process.env.PRINT_ENVIANDO_STALE_MS || "90000", 10),
+        parseInt(process.env.PRINT_ENVIANDO_STALE_MS || "25000", 10),
       );
     } catch (_) {}
     processarFila().catch(() => {});

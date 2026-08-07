@@ -1703,12 +1703,20 @@ async function imprimirLogoCupomEscpos(printer, payload) {
     const info = printerLogo.ler();
     if (!info.caminhoAbsoluto) return;
     const size = info.printSize || require("../printerLogoSize").resolveLogoPrintSize(info);
-    let caminho = info.caminhoAbsoluto;
+    let caminho = null;
     try {
       const scaled = await printerLogo.prepararArquivoEscpos(info);
       if (scaled) caminho = scaled;
-    } catch (_) {
-      /* usa BMP original se sharp falhar */
+    } catch (err) {
+      log.warn(
+        { err: err?.message },
+        "[ImpressoraCore] Logo ESC/POS omitida — sem PNG de fonte (BMP 1-bpp incompatível com get-pixels)",
+      );
+      return;
+    }
+    if (!caminho || /\.bmp$/i.test(caminho)) {
+      log.warn("[ImpressoraCore] Logo ESC/POS omitida — caminho BMP 1-bpp não suportado");
+      return;
     }
     const cacheKey = `${info.sha256 || caminho}|${size.escposWidthDots}|${size.density || "d24"}`;
     let image = logoEscposImageCache.key === cacheKey ? logoEscposImageCache.image : null;
@@ -1716,10 +1724,16 @@ async function imprimirLogoCupomEscpos(printer, payload) {
     if (!image) {
       const tLoad = performance.now();
       image = await new Promise((resolve, reject) => {
-        escpos.Image.load(caminho, (err, img) => {
-          if (err) reject(err);
-          else resolve(img);
-        });
+        try {
+          escpos.Image.load(caminho, (err, img) => {
+            if (err) reject(err);
+            else if (!img || typeof img.size !== "object") {
+              reject(new Error("escpos.Image.load retornou imagem inválida"));
+            } else resolve(img);
+          });
+        } catch (syncErr) {
+          reject(syncErr);
+        }
       });
       phases.loadMs = performance.now() - tLoad;
       log.warn(
@@ -2072,148 +2086,8 @@ function renderFechamento(printer, payload) {
 }
 
 async function renderFechamentoConteudo(printer, payload) {
-  const COLS = getThermalCols();
-  printer.font("a").align("ct");
-  await imprimirLogoCupomEscpos(printer, payload);
-
-  const { sep: linha, fmt, direita } = helpers();
-
-  printer
-    .style("b")
-    .size(1, 1)
-    .text(
-      tx(
-        (
-          payload.empresa?.nome ||
-          payload.empresa?.nomeFantasia ||
-          payload.empresa?.razaoSocial ||
-          "PDV"
-        ).toUpperCase(),
-      ),
-    )
-    .style("normal")
-    .size(0, 0);
-
-  if (payload.empresa?.cnpj)
-    printer.text("CNPJ: " + toThermalDoc(payload.empresa.cnpj));
-  const linhaEndereco = formatarLinhaEnderecoEmpresa(payload.empresa);
-  if (linhaEndereco) printer.text(linhaEndereco.slice(0, COLS));
-
-  printer
-    .text(linha())
-    .style("b")
-    .text("FECHAMENTO DE CAIXA")
-    .style("normal")
-    .text(linha());
-
-  printer
-    .align("lt")
-    .text("Caixa   : " + (payload.numeroCaixa || "Principal"))
-    .text("Operador: " + tx(payload.operador || "-"))
-    .text("Abertura: " + (payload.aberturaEm || "-"))
-    .text("Fecham. : " + (payload.fechamentoEm || "-"));
-
-  if (payload.minutosAberto) {
-    const h = Math.floor(payload.minutosAberto / 60);
-    const m = payload.minutosAberto % 60;
-    printer.text(
-      "Tempo   : " +
-        (h > 0 ? h + "h " : "") +
-        String(m).padStart(2, "0") +
-        "min",
-    );
-  }
-
-  printer
-    .align("ct")
-    .text(linha())
-    .style("b")
-    .text("RESUMO DO DIA")
-    .style("normal");
-  printer
-    .align("lt")
-    .text("Vendas      : " + (payload.quantidadeVendas ?? 0))
-    .text("Faturamento : " + fmt(payload.totalVendas));
-  if (payload.totalLucro != null && Number(payload.totalLucro) !== 0) {
-    printer.text("Lucro total : " + fmt(payload.totalLucro));
-  }
-  if (payload.margemMedia != null && Number(payload.margemMedia) !== 0) {
-    printer.text(
-      "Margem media: " + Number(payload.margemMedia).toFixed(1) + "%",
-    );
-  }
-
-  printer
-    .align("ct")
-    .text(linha())
-    .style("b")
-    .text("POR FORMA DE PAGAMENTO")
-    .style("normal");
-
-  const formas = payload.resumoPorForma || {};
-  Object.entries(formas)
-    .sort(([, a], [, b]) => b.total - a.total)
-    .forEach(([forma, d]) => {
-      const label =
-        {
-          dinheiro: "Dinheiro",
-          pix: "PIX",
-          credito: "Credito",
-          debito: "Debito",
-          fiado: "Fiado",
-          voucher: "Voucher",
-          outros: "Outros",
-          crediario: "Crediario",
-        }[forma] || forma;
-      const qtd = Number(d.quantidade || 0);
-      printer
-        .align("lt")
-        .text(
-          label.padEnd(10) +
-            fmt(d.total).padStart(10) +
-            (qtd > 0
-              ? (" " + qtd + " venda(s)").padStart(12)
-              : "".padStart(12)),
-        );
-    });
-
-  printer
-    .align("ct")
-    .text(linha())
-    .style("b")
-    .text("CONFERENCIA DE CAIXA")
-    .style("normal")
-    .align("lt");
-  if (payload.valorAbertura == null || Number.isNaN(Number(payload.valorAbertura))) {
-    printer.text("Fundo abertura: --");
-  } else {
-    printer.text("Fundo abertura: " + fmt(payload.valorAbertura));
-  }
-  printer.text("Valor contado : " + fmt(payload.valorContado));
-
-  const diff = Number(payload.diferenca ?? 0);
-  const diffStr =
-    Math.abs(diff) < 0.02
-      ? "OK - caixa confere"
-      : diff > 0
-        ? "Sobra: " + fmt(diff)
-        : "Falta: " + fmt(Math.abs(diff));
-  printer.text("Diferenca     : " + tx(diffStr));
-
-  if (payload.observacao) {
-    printer
-      .align("ct")
-      .text(linha())
-      .align("lt")
-      .text("Obs: " + tx(payload.observacao));
-  }
-
-  printer
-    .align("ct")
-    .text(linha())
-    .text("Caixa encerrado em " + payload.fechamentoEm)
-    .feed(4)
-    .cut();
+  const { buildFechamentoLayout } = require("../caixaLayout");
+  await renderThermalLayoutEscpos(printer, buildFechamentoLayout(payload), payload);
 }
 
 function renderAbertura(printer, payload) {
@@ -2221,173 +2095,55 @@ function renderAbertura(printer, payload) {
 }
 
 async function renderAberturaConteudo(printer, payload) {
-  const { sep: linha, fmt } = helpers();
-
-  printer.font("a").align("ct");
-  await imprimirLogoCupomEscpos(printer, payload);
-
-  printer
-    .style("b")
-    .size(1, 1)
-    .text("ABERTURA DE CAIXA")
-    .style("normal")
-    .size(0, 0);
-
-  if (payload.empresa?.nome) {
-    printer.text(tx(payload.empresa.nome));
-  }
-  if (payload.empresa?.cnpj) {
-    printer.text("CNPJ: " + toThermalDoc(payload.empresa.cnpj));
-  }
-
-  printer
-    .text(linha())
-    .align("lt")
-    .text("Caixa   : " + (payload.numeroCaixa || "Principal"))
-    .text("Operador: " + tx(payload.operador || "-"))
-    .text(
-      "Data/Hr : " + (payload.aberturaEm || new Date().toLocaleString("pt-BR")),
-    )
-    .align("ct")
-    .text(linha())
-    .style("b")
-    .align("lt")
-    .text(
-      "Fundo   : " +
-        (payload.valorAbertura == null || Number.isNaN(Number(payload.valorAbertura))
-          ? "--"
-          : fmt(payload.valorAbertura)),
-    )
-    .style("normal")
-    .align("ct")
-    .text(linha())
-    .feed(3)
-    .cut();
-}
-
-async function renderPedido(printer, payload) {
-  const { sep: linha } = helpers();
-  const {
-    normalizarPedidoPayload,
-    labelEventType,
-    tituloPedidoTermico,
-    deveExibirTotalPedido,
-    fmtQty,
-    fmtTotal,
-    wrapThermalLines,
-  } = require("../pedidoPrint");
-  const p = normalizarPedidoPayload(payload);
-  const cancelado = p.eventType === "ORDER_CANCELLED";
-  const showTotal = deveExibirTotalPedido(p.printType, p.eventType);
-
-  printer.font("a").align("ct");
-  await imprimirLogoCupomEscpos(printer, payload);
-
-  printer
-    .style("b")
-    .size(1, 1)
-    .text(tituloPedidoTermico(p.printType, p.eventType))
-    .style("normal")
-    .size(0, 0)
-    .text(tx(labelEventType(p.eventType)));
-
-  if (cancelado) {
-    printer.style("b").text("*** CANCELADO ***").style("normal");
-  }
-
-  printer.text(linha()).align("lt");
-
-  if (p.orderNumber) printer.text("Pedido : " + tx(p.orderNumber));
-  if (p.tableCode) printer.text("Mesa   : " + tx(p.tableCode));
-  if (p.customerName) printer.text("Cliente: " + tx(p.customerName));
-  if (p.customerPhone) printer.text("Tel    : " + tx(p.customerPhone));
-  if (p.deliveryAddress) {
-    const cols = getThermalCols();
-    const addrLines = wrapThermalLines(tx(p.deliveryAddress), cols - 2);
-    if (addrLines.length === 1 && addrLines[0].length <= cols - 9) {
-      printer.text("Endere.: " + addrLines[0]);
-    } else {
-      printer.text("Endereco:");
-      for (const line of addrLines) {
-        printer.text("  " + line);
-      }
-    }
-  }
-  if (p.createdAt) printer.text("Data/Hr: " + tx(p.createdAt));
-  if (p.elapsedSeconds > 0) printer.text("Tempo  : " + p.elapsedSeconds + "s");
-  if (p.priority && p.priority !== "normal") {
-    printer.text("Prior. : " + tx(p.priority).toUpperCase());
-  }
-
-  printer.align("ct").text(linha()).align("lt").style("b").text("ITENS").style("normal");
-  printer.align("ct").text(linha()).align("lt");
-
-  if (!p.items.length) {
-    printer.text("(sem itens)");
-  } else {
-    for (const item of p.items) {
-      const qty = fmtQty(item.quantity, item.unit);
-      const nome = tx(item.name || item.code || "Item");
-      printer.style("b").text(qty + " x " + nome).style("normal");
-      if (showTotal && item.lineTotal != null) {
-        const unitFmt = item.unitPrice != null ? fmtTotal(item.unitPrice) : null;
-        const lineFmt = fmtTotal(item.lineTotal);
-        if (unitFmt && lineFmt) {
-          printer.text("  " + unitFmt + "  =  " + lineFmt);
-        } else if (lineFmt) {
-          printer.text("  " + lineFmt);
-        }
-      }
-      if (item.notes) {
-        printer.text("  * " + tx(item.notes));
-      }
-      if (item.code && item.name) {
-        printer.text("  Cod: " + tx(item.code));
-      }
-    }
-  }
-
-  const totalFmt = showTotal ? fmtTotal(p.total) : null;
-  if (totalFmt) {
-    printer.align("ct").text(linha()).align("lt").style("b").text("Total : " + totalFmt).style("normal");
-  }
-  if (p.notes) {
-    printer.text("Obs: " + tx(p.notes));
-  }
-
-  printer.align("ct").text(linha()).feed(3).cut();
+  const { buildAberturaLayout } = require("../caixaLayout");
+  await renderThermalLayoutEscpos(printer, buildAberturaLayout(payload), payload);
 }
 
 async function renderMovimentoCaixa(printer, payload) {
-  const { sep: linha, fmt } = helpers();
-  const tipoLabel = payload.tipo === "suprimento" ? "SUPRIMENTO" : "SANGRIA";
+  const { buildMovimentoLayout } = require("../caixaLayout");
+  await renderThermalLayoutEscpos(printer, buildMovimentoLayout(payload), payload);
+}
+
+async function renderPedido(printer, payload) {
+  const { buildPedidoLayout } = require("../pedidoLayout");
+  await renderThermalLayoutEscpos(printer, buildPedidoLayout(payload), payload);
+}
+
+/** Aplica layout térmico compartilhado (caixa / pedidos) no ESC/POS. */
+async function renderThermalLayoutEscpos(printer, layout, payload) {
+  const { sep: linha } = helpers();
+  const { showLogo, lines } = layout;
 
   printer.font("a").align("ct");
-  await imprimirLogoCupomEscpos(printer, payload);
+  if (showLogo) {
+    await imprimirLogoCupomEscpos(printer, payload);
+  }
 
-  printer
-    .style("b")
-    .size(1, 1)
-    .text(tipoLabel + " DE CAIXA")
-    .style("normal")
-    .size(0, 0)
-    .text(linha())
-    .align("lt")
-    .text("Caixa   : " + (payload.numeroCaixa || "Principal"))
-    .text("Operador: " + tx(payload.operador || "-"))
-    .text("Data/Hr : " + (payload.emitidoEm || "-"))
-    .align("ct")
-    .text(linha())
-    .style("b")
-    .align("lt")
-    .text("Valor   : " + fmt(payload.valor))
-    .style("normal")
-    .text("Motivo  : " + tx(payload.motivo || "-"))
-    .text("Saldo   : " + fmt(payload.saldoAtual))
-    .align("ct")
-    .text(linha())
-    .feed(3)
-    .cut();
+  for (const line of lines) {
+    if (!line) continue;
+    if (line.kind === "blank") {
+      printer.feed(1);
+      continue;
+    }
+    if (line.kind === "sep") {
+      printer.align("ct").style("normal").size(0, 0).text(line.text || linha());
+      continue;
+    }
+
+    const text = String(line.text ?? "");
+    if (line.center) printer.align("ct");
+    else printer.align("lt");
+
+    if (line.size === "lg") {
+      printer.style(line.bold ? "b" : "normal").size(1, 1).text(text).size(0, 0).style("normal");
+    } else if (line.bold) {
+      printer.style("b").size(0, 0).text(text).style("normal");
+    } else {
+      printer.style("normal").size(0, 0).text(text);
+    }
+  }
+
+  printer.align("ct").feed(3).cut();
 }
 
 // ── API publica ───────────────────────────────────────────────────────────────
@@ -2465,6 +2221,8 @@ function imprimirCupom(payload) {
 }
 
 function imprimirTeste() {
+  // Teste: gaveta já (force), em paralelo com a página — não espera o fim.
+  void abrirGaveta({ force: true }).catch(() => {});
   return imprimirComGavetaOpcional(
     async (printer) => {
       // Paridade com página de teste ACBr — logo no topo quando BMP imprimível.
@@ -2518,6 +2276,164 @@ function imprimirPedido(payload) {
   });
 }
 
+function imprimirVasilhame(payload) {
+  const { normalizarVasilhamePayload } = require("../vasilhameAcbrTags");
+  const p = normalizarVasilhamePayload(payload);
+  return imprimirRender(async (printer) => {
+    await renderVasilhame(printer, p);
+  });
+}
+
+function imprimirCrediario(payload) {
+  const { normalizarCrediarioPayload } = require("../crediarioAcbrTags");
+  const p = normalizarCrediarioPayload(payload);
+  return imprimirRender(async (printer) => {
+    await renderCrediario(printer, p);
+  });
+}
+
+async function renderCrediario(printer, payload) {
+  const { sep: linha, fmt } = helpers();
+
+  printer.font("a").align("ct");
+  await imprimirLogoCupomEscpos(printer, payload);
+
+  if (payload.empresa?.nome) {
+    printer.style("b").text(tx(payload.empresa.nome)).style("normal");
+  }
+  if (payload.empresa?.cnpj) {
+    printer.text("CNPJ: " + toThermalDoc(payload.empresa.cnpj));
+  }
+
+  printer
+    .text(linha())
+    .style("b")
+    .text(tx(payload.titulo || "RECEBIMENTO CREDIARIO"))
+    .style("normal")
+    .text("Comprovante nao fiscal")
+    .text(linha())
+    .align("lt");
+
+  if (payload.clienteNome) printer.text("Cliente : " + tx(payload.clienteNome));
+  if (payload.clienteDocumento) {
+    printer.text("Doc     : " + toThermalDoc(payload.clienteDocumento));
+  }
+  if (payload.numeroParcela != null && payload.totalParcelas != null) {
+    printer.text("Parcela : " + payload.numeroParcela + "/" + payload.totalParcelas);
+  } else if (payload.parcelasQuitadas != null || payload.parcelasParciais != null) {
+    const q = payload.parcelasQuitadas || 0;
+    const partial = payload.parcelasParciais || 0;
+    printer.text(
+      "Parcelas: " + q + " quitada(s)" + (partial > 0 ? ", " + partial + " parcial(is)" : ""),
+    );
+  }
+  if (payload.vencimento) printer.text("Venc.   : " + tx(payload.vencimento));
+  if (payload.dataRecebimento) printer.text("Data/Hr : " + tx(payload.dataRecebimento));
+  if (payload.operador) printer.text("Operador: " + tx(payload.operador));
+  if (payload.formaPagamento) printer.text("Forma   : " + tx(payload.formaPagamento));
+
+  printer.text(linha());
+  printer.style("b").text("Recebido: " + fmt(Number(payload.valorRecebido || 0))).style("normal");
+  if (Number(payload.jurosCalculado) > 0) {
+    printer.text("Juros   : " + fmt(Number(payload.jurosCalculado)));
+  }
+  if (Number(payload.multaCalculada) > 0) {
+    printer.text("Multa   : " + fmt(Number(payload.multaCalculada)));
+  }
+  printer.text("Saldo ant.: " + fmt(Number(payload.saldoAnterior || 0)));
+  printer.style("b").text("Saldo rem.: " + fmt(Number(payload.saldoRemanescente || 0))).style("normal");
+
+  if (payload.observacao) {
+    printer.text(linha()).text("Obs: " + tx(payload.observacao));
+  }
+
+  printer
+    .align("ct")
+    .text(linha())
+    .text("Documento nao fiscal")
+    .text("Nao substitui NFC-e / cupom fiscal")
+    .cut();
+}
+
+async function renderVasilhame(printer, payload) {
+  const { sep: linha, fmt } = helpers();
+  const codigo = String(payload.codigoTransacao || "").trim();
+
+  printer.font("a").align("ct");
+  await imprimirLogoCupomEscpos(printer, payload);
+
+  if (payload.empresa?.nome) {
+    printer.style("b").text(tx(payload.empresa.nome)).style("normal");
+  }
+  if (payload.empresa?.cnpj) {
+    printer.text("CNPJ: " + toThermalDoc(payload.empresa.cnpj));
+  }
+
+  printer
+    .text(linha())
+    .style("b")
+    .text("EMPRESTIMO DE VASILHAME")
+    .style("normal")
+    .text("Comprovante nao fiscal")
+    .text(linha())
+    .align("lt");
+
+  if (payload.clienteNome) printer.text("Cliente : " + tx(payload.clienteNome));
+  if (payload.tipoNome || payload.tipoCodigo) {
+    printer.text(
+      "Tipo    : " +
+        tx([payload.tipoNome, payload.tipoCodigo ? "(" + payload.tipoCodigo + ")" : ""]
+          .filter(Boolean)
+          .join(" ")),
+    );
+  }
+  if (payload.quantidade != null && !Number.isNaN(Number(payload.quantidade))) {
+    printer.text("Qtde    : " + payload.quantidade);
+  }
+  if (payload.dataMovimento) printer.text("Saida   : " + tx(payload.dataMovimento));
+  if (payload.dataPrevistaDevolucao) {
+    printer.text("Prevista: " + tx(payload.dataPrevistaDevolucao));
+  }
+  if (payload.operador) printer.text("Operador: " + tx(payload.operador));
+
+  printer.text(linha());
+  if (payload.caucaoCents > 0) {
+    printer.style("b").text("Caucao retida: " + fmt(Number(payload.caucaoCents) / 100)).style("normal");
+  } else {
+    printer.text("Caucao: sem cobranca");
+  }
+
+  if (payload.observacao) {
+    printer.text(linha()).text("Obs: " + tx(payload.observacao));
+  }
+
+  if (codigo) {
+    printer
+      .align("ct")
+      .text(linha())
+      .style("b")
+      .text("CODIGO DO EMPRESTIMO")
+      .text(codigo)
+      .style("normal")
+      .text("Apresente na devolucao")
+      .feed(1);
+    try {
+      printer.raw(bytesQrGsK(codigo, { moduleSize: 5 }));
+    } catch (_) {
+      /* QR opcional */
+    }
+    printer.text(codigo);
+  }
+
+  printer
+    .align("ct")
+    .text(linha())
+    .text("Documento nao fiscal")
+    .text("Nao substitui NFC-e / cupom fiscal")
+    .feed(3)
+    .cut();
+}
+
 /** Coalesce pulsos próximos — evita gaveta dupla (cupom+job / recusa+DANFE). */
 let _lastGavetaPulseAt = 0;
 
@@ -2564,6 +2480,7 @@ function drawerPulseBuffer() {
  * - abrirGaveta true/false no payload manda
  * - PRINTER_DRAWER=false desliga tudo
  * - auto: dinheiro / espécie / cash
+ * - opts.sempre: abertura / sangria / suprimento / teste
  */
 function deveAbrirGavetaNoPayload(payload, opts = {}) {
   if (!drawerEnabled()) return false;
@@ -2602,19 +2519,27 @@ async function imprimirComGavetaOpcional(renderFn, payload, opts = {}) {
         "[ImpressoraCore] Geração de buffer ESC/POS lenta",
       );
     }
-    if (deveAbrirGavetaNoPayload(payload, opts) && !gavetaPulseRecente()) {
+    const anexarGaveta =
+      deveAbrirGavetaNoPayload(payload, opts) && !gavetaPulseRecente();
+    if (anexarGaveta) {
       buffer = Buffer.concat([buffer, drawerPulseBuffer()]);
-      markGavetaPulseSent();
     }
-    return enviarBuffer(buffer);
+    const result = await enviarBuffer(buffer);
+    if (anexarGaveta) markGavetaPulseSent();
+    return result;
   });
 }
 
-function abrirGaveta() {
+/**
+ * Abre gaveta via ESC/POS nativo (rápido).
+ * @param {{ force?: boolean }} [opts] force=true ignora coalesce (botão teste / abertura explícita).
+ */
+function abrirGaveta(opts = {}) {
   if (!drawerEnabled()) {
     return Promise.resolve({ ok: true, skipped: true, motivo: "PRINTER_DRAWER=false" });
   }
-  if (gavetaPulseRecente()) {
+  const force = opts === true || opts?.force === true;
+  if (!force && gavetaPulseRecente()) {
     return Promise.resolve({
       ok: true,
       gaveta: true,
@@ -2623,14 +2548,18 @@ function abrirGaveta() {
     });
   }
   const buffer = drawerPulseBuffer();
-  markGavetaPulseSent();
   return comLockImpressao(() =>
-    enviarBuffer(buffer).then(() => ({
-      ok: true,
-      gaveta: true,
-      bytes: buffer.length,
-      provider: "native",
-    })),
+    enviarBuffer(buffer).then((sendResult) => {
+      markGavetaPulseSent();
+      return {
+        ok: true,
+        gaveta: true,
+        forced: force,
+        bytes: buffer.length,
+        provider: "native",
+        ...(sendResult && typeof sendResult === "object" ? sendResult : {}),
+      };
+    }),
   );
 }
 
@@ -2685,6 +2614,8 @@ module.exports = {
   imprimirFechamento,
   imprimirMovimentoCaixa,
   imprimirPedido,
+  imprimirVasilhame,
+  imprimirCrediario,
   assertPortaTermicaOuFalhar,
   pareceNaoTermica,
   /** @internal regressão COLS / TDZ no render nativo + P2a + gaveta */

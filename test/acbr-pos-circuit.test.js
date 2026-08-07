@@ -84,10 +84,11 @@ test("reset remove arquivo do disco", () => {
   assert.strictEqual(fs.existsSync(circuitFile), false);
 });
 
-test("shouldOpenCircuitFromError — pré-impressão abre; mid-print não", () => {
+test("shouldOpenCircuitFromError — pré-impressão abre; mid-print / hard-drain genérico não", () => {
+  // Hard drain sem fase: job pode já ter ido à impressora — não abandona ACBr.
   assert.strictEqual(
     runtime.shouldOpenCircuitFromError({ code: "PRINT_HARD_DRAIN", message: "Timeout" }),
-    true,
+    false,
   );
   assert.strictEqual(
     runtime.shouldOpenCircuitFromError({

@@ -426,7 +426,9 @@ async function ultimoRetorno(libBundle) {
 
 async function readStringOut(libBundle, fn, ...args) {
   const { buf, tam } = allocOutBuffer(8192);
-  const ret = await promisify(fn.bind(libBundle.lib), ...args, buf, tam);
+  const callArgs =
+    libBundle.handle != null ? [libBundle.handle, ...args, buf, tam] : [...args, buf, tam];
+  const ret = await promisify(fn.bind(libBundle.lib), ...callArgs);
   if (ret !== 0) {
     const msg = await ultimoRetorno(libBundle);
     const values = buildRuntimeValues();
@@ -442,11 +444,8 @@ async function readStringOut(libBundle, fn, ...args) {
 
 /**
  * Chama FFI PosPrinter com timeout duro.
- * Sem isso, POS_Ativar/POS_Imprimir em RAW: pode prender o threadpool por minutos
- * (agente "off", cupom só imprime depois).
- *
- * Nota: Promise.race não cancela a FFI nativa — só deixa de esperar.
- * Por isso teardown usa timeout curto e abandona a sessão (ver callPosBestEffort).
+ * Prefixa automaticamente `libBundle.handle` (ABI MT) quando a sessão já tem handle.
+ * POS_Inicializar: passe `_Out_ void**` como 1º arg (handle ainda não existe no bundle).
  */
 async function callPos(libBundle, fn, ...args) {
   if (typeof fn !== "function") {
@@ -454,8 +453,10 @@ async function callPos(libBundle, fn, ...args) {
     e.code = "ACBR_POS_FN_MISSING";
     throw annotateAcbrError(e);
   }
-  const timeoutMs = parseInt(process.env.ACBR_POS_CALL_TIMEOUT_MS || "5000", 10);
-  const invoke = promisify(fn.bind(libBundle.lib), ...args);
+  const callArgs =
+    libBundle.handle != null ? [libBundle.handle, ...args] : args;
+  const timeoutMs = parseInt(process.env.ACBR_POS_CALL_TIMEOUT_MS || "4500", 10);
+  const invoke = promisify(fn.bind(libBundle.lib), ...callArgs);
   let timer;
   let ret;
   try {
@@ -497,11 +498,13 @@ async function callPos(libBundle, fn, ...args) {
  */
 async function callPosBestEffort(libBundle, fn, ...args) {
   if (typeof fn !== "function") return;
+  const callArgs =
+    libBundle.handle != null ? [libBundle.handle, ...args] : args;
   const timeoutMs = parseInt(process.env.ACBR_POS_TEARDOWN_TIMEOUT_MS || "2000", 10);
   let timer;
   try {
     await Promise.race([
-      promisify(fn.bind(libBundle.lib), ...args),
+      promisify(fn.bind(libBundle.lib), ...callArgs),
       new Promise((_, reject) => {
         timer = setTimeout(() => reject(new Error("teardown timeout")), Math.max(500, timeoutMs));
       }),
@@ -632,6 +635,7 @@ function buildRuntimeValues() {
     portaAcbrValida,
     normalizarPortaAcbr,
     inferirModeloAcbr,
+    resolveModeloAcbrSeguro,
   } = require("./printerModelMap");
 
   // SSOT: INI válido manda. Env só se INI vazio/inválido — nunca misturar host de teste.
@@ -698,6 +702,26 @@ function buildRuntimeValues() {
       "";
     const inferred = inferirModeloAcbr(nomeHint, "", { ignoreEnv: true });
     if (inferred && inferred !== "0") model = inferred;
+  }
+
+  // Side DLLs x86 (InterfaceEpsonNF etc.) quebram Modelo Epson (1) com -10.
+  try {
+    const libPath = resolveLibPath();
+    const libDir = libPath ? path.dirname(libPath) : "";
+    const safe = resolveModeloAcbrSeguro(model, libDir);
+    if (safe !== String(model)) {
+      log.warn(
+        {
+          requested: String(model),
+          effective: safe,
+          metric: "print.modelo_downgrade_x86_side_dll",
+        },
+        "[ACBrPosPrinter] Side DLL x86 detectada — usando Modelo=0 (ppTexto) em vez de Epson",
+      );
+      model = safe;
+    }
+  } catch (_) {
+    /* ignore */
   }
 
   const enc = local?.encoding || process.env.PRINTER_ENCODING || "850";
@@ -813,6 +837,9 @@ async function withPosPrinterSession(fn, opts = {}) {
       await callPosBestEffort(sess.bundle, sess.bundle.lib.POS_Finalizar.async);
     } catch (_) {}
     try {
+      sess.bundle.handle = null;
+    } catch (_) {}
+    try {
       if (sess.cwdBefore) process.chdir(sess.cwdBefore);
     } catch (_) {}
     if (withPosPrinterSession._session === sess) {
@@ -876,7 +903,14 @@ async function withPosPrinterSession(fn, opts = {}) {
         : iniPath;
 
     syncIniFromSource(bundle, iniPath);
-    await callPos(bundle, bundle.lib.POS_Inicializar.async, iniForLib, cryptKey);
+    const handleOut = [null];
+    await callPos(bundle, bundle.lib.POS_Inicializar.async, handleOut, iniForLib, cryptKey);
+    bundle.handle = handleOut[0];
+    if (!bundle.handle) {
+      const e = new Error("[ACBrPosPrinter] POS_Inicializar MT sem handle");
+      e.code = "ACBR_POS_NO_HANDLE";
+      throw e;
+    }
     await ativarComConfig(bundle, iniForLib, iniPath);
 
     _activeSession = { bundle, configKey: key, cwdBefore, iniForLib, iniPath };
@@ -1454,6 +1488,7 @@ function shouldOpenCircuitFromError(err) {
     return true;
   }
   // Sessão/init/ativar instável — comerciais vão native até TTL/Detectar.
+  // Mid-print / hard-drain genérico NÃO abre circuito (anti-dupla + ADR ACBr-primary).
   if (
     err?.code === "ACBR_POS_TIMEOUT" ||
     err?.code === "ACBR_POS_WORKER_KILLED" ||
@@ -1465,8 +1500,6 @@ function shouldOpenCircuitFromError(err) {
     const phase = err?.acbrPhase;
     if (phase === "config" || phase === "ativar" || phase === "init") return true;
     if (/pos_ativar|pos_inicializar\b|cmd=init\b|configgravar/i.test(msgLow)) return true;
-    // Hard drain genérico (sem fase) = proteção pós-envio → abre circuito.
-    if (err?.code === "PRINT_HARD_DRAIN") return true;
     return false;
   }
   if (/POS_Ativar|erro de comunica[cç][aã]o com a impressora/i.test(msg)) {

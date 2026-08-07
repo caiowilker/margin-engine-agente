@@ -96,7 +96,7 @@ test("applyDanfeLogoAcbrLib sem logo não chama configGravarValor", () => {
   assert.strictEqual(calls.length, 0);
 });
 
-test("applyDanfeLogoAcbrLib com logo define PathLogo", () => {
+test("applyDanfeLogoAcbrLib com logo define PathLogo e anti-achatamento", () => {
   fiscalLogo.salvar({ buffer: PNG_1X1, ativo: true, origem: "local" });
   const calls = [];
   const inst = {
@@ -107,6 +107,20 @@ test("applyDanfeLogoAcbrLib com logo define PathLogo", () => {
   const pathLogo = calls.find((c) => c[0] === "DANFE" && c[1] === "PathLogo");
   assert.ok(pathLogo, "PathLogo deve ser configurado");
   assert.ok(pathLogo[2]);
+  const esticar = calls.find((c) => c[0] === "DANFE" && c[1] === "ExpandeLogoMarca.Esticar");
+  assert.ok(esticar, "ExpandeLogoMarca.Esticar deve ser configurado");
+  assert.strictEqual(esticar[2], "0", "Esticar=0 evita logo achatada");
+  const dim = calls.find((c) => c[0] === "DANFE" && c[1] === "ExpandeLogoMarca.Dimensionar");
+  assert.ok(dim && dim[2] === "1");
+  const topo = calls.find((c) => c[0] === "DANFENFe" && c[1] === "LogoemCima");
+  assert.ok(topo && topo[2] === "1", "LogoemCima=1 coloca logo no topo");
+});
+
+test("danfeLogoMonitorComandos inclui Esticar=0", () => {
+  const { danfeLogoMonitorComandos } = require("../fiscalPdfFormato");
+  const cmds = danfeLogoMonitorComandos("C:/logo.png");
+  assert.ok(cmds.some((c) => c.includes("ExpandeLogoMarca.Esticar") && c.includes('"0"')));
+  assert.ok(cmds.some((c) => c.includes("LogoemCima") && c.includes('"1"')));
 });
 
 test("applyDanfeLogoAcbrLib ignora NFC-e térmico", () => {

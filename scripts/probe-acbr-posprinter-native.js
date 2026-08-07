@@ -143,13 +143,14 @@ function trimBuf(buf) {
     : String(buf || "");
 }
 
-function assertRet(fnName, ret, ultimoFn) {
+function assertRet(fnName, ret, ultimoFn, handle) {
   if (ret === 0) return;
   let msg = "";
   try {
     const buf = Buffer.alloc(2048);
     const tam = [buf.length];
-    ultimoFn(buf, tam);
+    if (handle != null) ultimoFn(handle, buf, tam);
+    else ultimoFn(buf, tam);
     msg = trimBuf(buf);
   } catch (_) {}
   throw new Error(`${fnName} ret=${ret}${msg ? `: ${msg}` : ""}`);
@@ -185,39 +186,54 @@ async function runFfiCycles(libPath, iniPath, cycles, wantAtivar) {
         initialized: false,
         finalized: false,
         ativado: false,
+        abi: "MT",
       };
+      const handleOut = [null];
+      let handle = null;
       try {
         assertRet(
           "POS_Inicializar",
-          lib.POS_Inicializar(iniPath, process.env.ACBR_POSPRINTER_CRYPT_KEY || ""),
+          lib.POS_Inicializar(
+            handleOut,
+            iniPath,
+            process.env.ACBR_POSPRINTER_CRYPT_KEY || "",
+          ),
           lib.POS_UltimoRetorno,
+          null,
         );
+        handle = handleOut[0];
+        if (!handle) throw new Error("POS_Inicializar MT sem handle");
         cycleResult.initialized = true;
 
         if (lib.POS_Nome) {
           const buf = Buffer.alloc(256);
           const tam = [buf.length];
-          assertRet("POS_Nome", lib.POS_Nome(buf, tam), lib.POS_UltimoRetorno);
+          assertRet("POS_Nome", lib.POS_Nome(handle, buf, tam), lib.POS_UltimoRetorno, handle);
           cycleResult.nome = trimBuf(buf);
         }
         if (lib.POS_Versao) {
           const buf = Buffer.alloc(256);
           const tam = [buf.length];
-          assertRet("POS_Versao", lib.POS_Versao(buf, tam), lib.POS_UltimoRetorno);
+          assertRet(
+            "POS_Versao",
+            lib.POS_Versao(handle, buf, tam),
+            lib.POS_UltimoRetorno,
+            handle,
+          );
           cycleResult.versao = trimBuf(buf);
         }
 
         if (wantAtivar && lib.POS_Ativar) {
-          assertRet("POS_Ativar", lib.POS_Ativar(), lib.POS_UltimoRetorno);
+          assertRet("POS_Ativar", lib.POS_Ativar(handle), lib.POS_UltimoRetorno, handle);
           cycleResult.ativado = true;
           if (lib.POS_Desativar) {
-            lib.POS_Desativar();
+            lib.POS_Desativar(handle);
             cycleResult.ativado = false;
           }
         }
       } finally {
-        if (cycleResult.initialized && lib.POS_Finalizar) {
-          lib.POS_Finalizar();
+        if (cycleResult.initialized && lib.POS_Finalizar && handle) {
+          lib.POS_Finalizar(handle);
           cycleResult.finalized = true;
         }
       }

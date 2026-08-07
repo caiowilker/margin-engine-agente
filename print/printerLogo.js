@@ -21,6 +21,8 @@ function resolveLogoDir() {
 
 let LOGO_DIR = resolveLogoDir();
 let LOGO_BMP = path.join(LOGO_DIR, "logo.bmp");
+/** PNG/JPEG original — ESC/POS (get-pixels) não lê BMP 1-bpp do ACBr. */
+let LOGO_SOURCE = path.join(LOGO_DIR, "logo.source.png");
 let LOGO_META = path.join(LOGO_DIR, "logo.meta.json");
 /** PNG escalado para ESC/POS — regenerado sob demanda. */
 let LOGO_PRINT_CACHE = path.join(LOGO_DIR, "logo.print.png");
@@ -29,6 +31,7 @@ let LOGO_PRINT_KEY = path.join(LOGO_DIR, "logo.print.key");
 function refreshLogoPaths() {
   LOGO_DIR = resolveLogoDir();
   LOGO_BMP = path.join(LOGO_DIR, "logo.bmp");
+  LOGO_SOURCE = path.join(LOGO_DIR, "logo.source.png");
   LOGO_META = path.join(LOGO_DIR, "logo.meta.json");
   LOGO_PRINT_CACHE = path.join(LOGO_DIR, "logo.print.png");
   LOGO_PRINT_KEY = path.join(LOGO_DIR, "logo.print.key");
@@ -99,6 +102,9 @@ function lerMeta() {
       fatorY: process.env.PRINTER_LOGO_FATORY || String(FATOR_PADRAO),
       atualizadoEm: null,
       sha256: null,
+      origem: null,
+      sha256Remoto: null,
+      sincronizadoEm: null,
     };
   }
   try {
@@ -254,7 +260,7 @@ function mirrorLegacyBmp(buf) {
 }
 
 /**
- * @param {{ base64?: string, buffer?: Buffer, modo?: string, kc1?: string, kc2?: string, fatorX?: string, fatorY?: string, ativo?: boolean }} opts
+ * @param {{ base64?: string, buffer?: Buffer, modo?: string, kc1?: string, kc2?: string, fatorX?: string, fatorY?: string, ativo?: boolean, origem?: string, sha256Remoto?: string }} opts
  * @returns {Promise<object>}
  */
 async function salvar(opts = {}) {
@@ -268,6 +274,8 @@ async function salvar(opts = {}) {
   if (opts.fatorY != null) meta.fatorY = String(opts.fatorY);
   if (opts.modo) meta.modo = opts.modo;
   if (opts.ativo != null) meta.ativo = !!opts.ativo;
+  if (opts.origem) meta.origem = String(opts.origem);
+  if (opts.sha256Remoto) meta.sha256Remoto = String(opts.sha256Remoto);
 
   if (opts.base64 || opts.buffer) {
     const raw = opts.buffer || decodeBase64(opts.base64);
@@ -284,6 +292,15 @@ async function salvar(opts = {}) {
     }
     const buf = printable.buffer;
     fs.writeFileSync(LOGO_BMP, buf);
+    // Fonte colorida/cinza para ESC/POS — get-pixels quebra em BMP 1-bpp (uncaughtException).
+    try {
+      const sharp = require("sharp");
+      await sharp(raw).rotate().png().toFile(LOGO_SOURCE);
+    } catch (_) {
+      try {
+        if (fs.existsSync(LOGO_SOURCE)) fs.unlinkSync(LOGO_SOURCE);
+      } catch (_) {}
+    }
     mirrorLegacyBmp(buf);
     meta.sha256 = crypto.createHash("sha256").update(buf).digest("hex");
     logoBufferCache = { sha256: meta.sha256, buffer: buf };
@@ -291,6 +308,12 @@ async function salvar(opts = {}) {
     meta.modo = opts.modo || "arquivo";
     meta.atualizadoEm = new Date().toISOString();
     meta.converted = !!printable.converted;
+    if (opts.origem === "backend") {
+      meta.sincronizadoEm = meta.atualizadoEm;
+    } else if (opts.origem === "local" || !opts.origem) {
+      meta.origem = meta.origem || "local";
+      if (opts.origem === "local") meta.sha256Remoto = null;
+    }
     if (meta.fatorX == null || Number(meta.fatorX) <= 1) {
       meta.fatorX = String(FATOR_PADRAO);
       meta.fatorY = String(FATOR_PADRAO);
@@ -304,6 +327,7 @@ async function salvar(opts = {}) {
         path: LOGO_BMP,
         width: printable.width,
         height: printable.height,
+        origem: meta.origem,
       },
       "[PrinterLogo] Logo BMP 1-bpp salvo",
     );
@@ -321,6 +345,9 @@ function remover() {
     if (fs.existsSync(LOGO_BMP)) fs.unlinkSync(LOGO_BMP);
   } catch (_) {}
   try {
+    if (fs.existsSync(LOGO_SOURCE)) fs.unlinkSync(LOGO_SOURCE);
+  } catch (_) {}
+  try {
     const legacy = path.join(AGENT_ROOT, "data", "printer", "logo.bmp");
     if (fs.existsSync(legacy)) fs.unlinkSync(legacy);
   } catch (_) {}
@@ -336,6 +363,9 @@ function remover() {
     fatorY: String(FATOR_PADRAO),
     atualizadoEm: new Date().toISOString(),
     sha256: null,
+    origem: null,
+    sha256Remoto: null,
+    sincronizadoEm: null,
   });
   return ler();
 }
@@ -450,7 +480,14 @@ async function prepararArquivoEscpos(metaOrInfo) {
   ensureDir();
   const sharp = require("sharp");
   const tSharp = performance.now();
-  await sharp(info.caminhoAbsoluto)
+  // Nunca alimentar sharp/get-pixels com BMP 1-bpp do ACBr — só source PNG ou falha.
+  const sharpInput = fs.existsSync(LOGO_SOURCE) ? LOGO_SOURCE : null;
+  if (!sharpInput) {
+    throw new Error(
+      "Logo ESC/POS sem logo.source.png — reenvie a logo (PNG/JPG) para regenerar o cache.",
+    );
+  }
+  await sharp(sharpInput)
     .resize({
       width: size.escposWidthDots,
       fit: "inside",
@@ -543,6 +580,19 @@ async function warmLogoEscpos() {
   }
 }
 
+/**
+ * Compara SHA da fonte remota (PNG/JPG) com sha256Remoto no meta local.
+ * O sha256 local é do BMP convertido — não serve para diff com o backend.
+ */
+function precisaSincronizar(sha256Remoto) {
+  if (!sha256Remoto) return false;
+  ensureDir();
+  const meta = lerMeta();
+  const existe = fs.existsSync(LOGO_BMP);
+  if (!existe || !meta.ativo) return true;
+  return meta.sha256Remoto !== sha256Remoto;
+}
+
 module.exports = {
   get LOGO_DIR() {
     return LOGO_DIR;
@@ -571,6 +621,7 @@ module.exports = {
   warmLogoEscpos,
   resolveLogoPrintSize,
   invalidatePrintCache,
+  precisaSincronizar,
   __test: {
     resetCaches() {
       logoBufferCache = { sha256: null, buffer: null };

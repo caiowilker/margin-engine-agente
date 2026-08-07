@@ -17,7 +17,9 @@ não fiscais ESC/POS (formatação, corte, QRCode, gaveta, CMC7, etc.) a partir
 de qualquer linguagem que chame DLL/SO.
 
 Windows (.dll) e Linux (.so), 32/64 bits, StdCall e Cdecl.
-No agente Margin usamos **Cdecl 64-bit** (`ACBrPosPrinter64.dll`) via **koffi**.
+No agente Margin usamos **Cdecl 64-bit MT** (`ACBrPosPrinter64.dll`) via **koffi** —
+todas as funções recebem `handle` como 1º argumento (`POS_Inicializar(_Out_ void **handle, …)`).
+A build ST (sem handle) **não** é a do pacote Windows; misturar ST×MT gera `ret=-10` em Config/Ativar.
 
 ---
 

@@ -34,6 +34,22 @@ function checkPosprinterDeps() {
     else present.push(p);
   }
 
+  // Vendor ESC/POS (Epson/HPRT) — se presentes, precisam ser x64 como a lib principal.
+  const vendorWrongArch = [];
+  for (const name of ["InterfaceEpsonNF.dll", "HprtPrinter.dll", "hprtio.dll"]) {
+    const p = path.join(libDir, name);
+    if (!fs.existsSync(p)) continue;
+    try {
+      const { peMachineType } = require("../print/printerModelMap");
+      const mach = peMachineType(p);
+      if (mach != null && mach !== 0x8664) {
+        vendorWrongArch.push(`${name} (PE x86 — incompatível com ACBrPosPrinter64)`);
+      }
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
   let koffiOk = false;
   let koffiPath = "";
   try {
@@ -55,6 +71,7 @@ function checkPosprinterDeps() {
     libDir,
     present: present.map((p) => path.basename(p)),
     missing: missing.map((p) => (path.isAbsolute(p) ? path.basename(p) : p)),
+    vendorWrongArch,
     koffi: { ok: koffiOk, path: koffiPath },
   };
 }
@@ -62,6 +79,12 @@ function checkPosprinterDeps() {
 function main() {
   const report = checkPosprinterDeps();
   console.log(JSON.stringify(report, null, 2));
+  if (report.vendorWrongArch && report.vendorWrongArch.length) {
+    console.error(
+      "\n[PosPrinter] AVISO: DLLs de fabricante em x86 (32-bit). Remova ou substitua por x64 — senão Modelo Epson falha com -10:",
+    );
+    for (const v of report.vendorWrongArch) console.error("  -", v);
+  }
   if (!report.ok) {
     console.error(
       "\n[PosPrinter] Dependências incompletas — reinstale o agente ou copie as DLLs para posprinter/lib/",

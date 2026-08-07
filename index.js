@@ -3556,17 +3556,77 @@ function iniciarServidor() {
     }
   });
 
+  app.post("/impressora/vasilhame", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    try {
+      const resultado = await impressora.imprimirVasilhame(req.body);
+      if (resultado?.queued || resultado?.async) {
+        return res.status(202).json({
+          ok: true,
+          fila: true,
+          mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
+          jobId: resultado.jobId,
+          deduplicado: !!resultado.deduplicado,
+          job: resultado.job ? { id: resultado.job.id } : undefined,
+        });
+      }
+      res.json({
+        ok: true,
+        jobId: resultado.jobId,
+        deduplicado: !!resultado.deduplicado,
+        job: resultado.job ? { id: resultado.job.id } : undefined,
+      });
+    } catch (err) {
+      responderErroImpressao(res, err);
+    }
+  });
+
+  app.post("/impressora/crediario", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    try {
+      const resultado = await impressora.imprimirCrediario(req.body);
+      if (resultado?.queued || resultado?.async) {
+        return res.status(202).json({
+          ok: true,
+          fila: true,
+          mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
+          jobId: resultado.jobId,
+          deduplicado: !!resultado.deduplicado,
+          job: resultado.job ? { id: resultado.job.id } : undefined,
+        });
+      }
+      res.json({
+        ok: true,
+        jobId: resultado.jobId,
+        deduplicado: !!resultado.deduplicado,
+        job: resultado.job ? { id: resultado.job.id } : undefined,
+      });
+    } catch (err) {
+      responderErroImpressao(res, err);
+    }
+  });
+
   app.post("/impressora/gaveta", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
-      const resultado = await impressora.abrirGaveta();
+      const force =
+        req.body?.force === true ||
+        req.body?.force === "true" ||
+        req.query?.force === "1" ||
+        req.query?.force === "true";
+      const resultado = await impressora.abrirGaveta(force ? { force: true } : {});
       if (resultado?.queued || resultado?.async) {
         return res.status(202).json({
           ok: true,
           fila: true,
           jobId: resultado.jobId,
+          forced: force,
         });
       }
-      res.json({ ok: true, jobId: resultado?.jobId || null });
+      res.json({
+        ok: true,
+        jobId: resultado?.jobId || null,
+        coalesced: !!resultado?.coalesced,
+        skipped: !!resultado?.skipped,
+        forced: force,
+      });
     } catch (err) {
       responderErroImpressao(res, err);
     }
@@ -3689,7 +3749,11 @@ function iniciarServidor() {
   app.put("/impressora/logo", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       const printerLogo = require("./print/printerLogo");
-      const saved = await printerLogo.salvar(req.body || {});
+      const body = req.body || {};
+      const saved = await printerLogo.salvar({
+        ...body,
+        origem: body.origem || "local",
+      });
       res.json({ ok: true, logo: saved });
     } catch (e) {
       res.status(400).json({ erro: e.message });

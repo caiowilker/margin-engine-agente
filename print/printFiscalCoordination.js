@@ -19,6 +19,8 @@ const OPS_FAST_NATIVE = new Set([
   "imprimirFechamento",
   "imprimirMovimentoCaixa",
   "imprimirPedido",
+  "imprimirVasilhame",
+  "imprimirCrediario",
 ]);
 
 function fiscalEmUso() {

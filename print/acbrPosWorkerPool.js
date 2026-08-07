@@ -84,7 +84,7 @@ function killCooldownMs() {
 }
 
 function defaultCallTimeoutMs() {
-  const n = parseInt(process.env.ACBR_POS_CALL_TIMEOUT_MS || "5000", 10);
+  const n = parseInt(process.env.ACBR_POS_CALL_TIMEOUT_MS || "4500", 10);
   return Math.max(1000, Number.isFinite(n) ? n : 5000);
 }
 

@@ -44,6 +44,48 @@ function inferirModeloAcbr(nomeImpressora, driverName, opts = {}) {
   return "0";
 }
 
+/** PE Machine: 0x8664=x64, 0x14c=x86. Null se não for PE. */
+function peMachineType(filePath) {
+  try {
+    const fs = require("fs");
+    const buf = fs.readFileSync(filePath);
+    if (buf.length < 0x40 || buf.readUInt16LE(0) !== 0x5a4d) return null;
+    const e_lfanew = buf.readUInt32LE(0x3c);
+    if (buf.length < e_lfanew + 6) return null;
+    return buf.readUInt16LE(e_lfanew + 4);
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * InterfaceEpsonNF.dll / Hprt* no bundle devem ser x64 (mesmo arch do ACBrPosPrinter64).
+ * DLLs x86 fazem LoadLibrary falhar e POS_* retornar -10 / hang.
+ */
+function vendorPosSideDllsAreX64(libDir) {
+  const fs = require("fs");
+  const path = require("path");
+  const dir = libDir || "";
+  const names = ["InterfaceEpsonNF.dll", "HprtPrinter.dll", "hprtio.dll"];
+  for (const name of names) {
+    const p = path.join(dir, name);
+    if (!fs.existsSync(p)) continue;
+    if (peMachineType(p) !== 0x8664) return false;
+  }
+  // Sem DLL de vendor: Epson embutida no ACBr (ok) ou modelo texto.
+  return true;
+}
+
+/**
+ * Modelo ACBr efetivo: se Epson-compatível (1) mas side DLL x86, desce para 0 (ppTexto).
+ */
+function resolveModeloAcbrSeguro(modelo, libDir) {
+  const m = String(modelo == null ? "0" : modelo);
+  if (m !== "1" && m !== "6") return m;
+  if (vendorPosSideDllsAreX64(libDir)) return m;
+  return "0";
+}
+
 /** IPv4 dotted decimal (ex.: 192.168.1.50) — rejeita 192168150. */
 function isValidIpv4Host(host) {
   const h = String(host || "").trim();
@@ -181,4 +223,7 @@ module.exports = {
   resolveControlePorta,
   isValidIpv4Host,
   isValidTcpHost,
+  peMachineType,
+  vendorPosSideDllsAreX64,
+  resolveModeloAcbrSeguro,
 };

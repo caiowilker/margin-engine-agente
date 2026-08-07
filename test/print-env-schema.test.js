@@ -23,7 +23,9 @@ function run() {
   delete process.env.PHYSICAL_USB_TOPOLOGY;
 
   const r1 = applyPrintEnvSchema(process.env);
-  assert.strictEqual(process.env.PRINT_JOB_TIMEOUT_FAST_MS, "4000");
+  assert.strictEqual(process.env.PRINT_JOB_TIMEOUT_FAST_MS, "6500");
+  assert.strictEqual(process.env.ACBR_POS_CALL_TIMEOUT_MS, "4500");
+  assert.strictEqual(process.env.PRINT_ENVIANDO_STALE_MS, "25000");
   assert.strictEqual(process.env.ACBR_POS_WORKER, "true");
   assert.strictEqual(process.env.PHYSICAL_USB_TOPOLOGY, "separate");
   assert.strictEqual(process.env.PRINT_HARD_DRAIN_MS, "2000");
@@ -33,7 +35,7 @@ function run() {
   process.env.PHYSICAL_USB_TOPOLOGY = "weird";
   process.env.ACBR_POS_WORKER = "maybe";
   const r2 = applyPrintEnvSchema(process.env);
-  assert.strictEqual(process.env.PRINT_JOB_TIMEOUT_FAST_MS, "4000");
+  assert.strictEqual(process.env.PRINT_JOB_TIMEOUT_FAST_MS, "6500");
   assert.strictEqual(process.env.PHYSICAL_USB_TOPOLOGY, "separate");
   // bool inválido → default canônico true
   assert.strictEqual(process.env.ACBR_POS_WORKER, "true");

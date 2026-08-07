@@ -1,5 +1,5 @@
 /**
- * Worker thread — ACBr PosPrinter isolado.
+ * Worker thread — ACBr PosPrinter isolado (ABI **MT** com handle).
  * Sessão QUENTE: Inicializar+Ativar 1×; cupons só InicializarPos+Imprimir.
  * Chamadas síncronas koffi (bloqueia só a OS thread deste worker).
  */
@@ -13,6 +13,8 @@ const iniPath = workerData?.iniPath;
 const cryptKey = workerData?.cryptKey || "";
 
 let lib = null;
+/** @type {any} Handle MT da sessão PosPrinter */
+let handle = null;
 let generation = Number(workerData?.generation) || 0;
 let ready = false;
 let lastValuesKey = "";
@@ -44,11 +46,11 @@ function ok(id, data) {
 }
 
 function ultimoRetornoSync() {
-  if (!lib?.POS_UltimoRetorno) return "";
+  if (!lib?.POS_UltimoRetorno || !handle) return "";
   try {
     const buf = Buffer.alloc(1024);
     const size = [buf.length];
-    lib.POS_UltimoRetorno(buf, size);
+    lib.POS_UltimoRetorno(handle, buf, size);
     return buf.toString("utf8", 0, Math.max(0, size[0] || 0)).replace(/\0/g, "").trim();
   } catch (_) {
     return "";
@@ -69,7 +71,6 @@ function loadDll() {
   if (!dllPath || !fs.existsSync(dllPath)) {
     throw Object.assign(new Error(`DLL ausente: ${dllPath}`), { code: "ACBR_POS_DLL_MISSING" });
   }
-  // Preferir dir da DLL (deps ACBr) — igual ao runtime no main
   const libDir = path.dirname(dllPath);
   try {
     if (fs.existsSync(libDir)) process.chdir(libDir);
@@ -95,14 +96,14 @@ function loadDll() {
 }
 
 function gravarValues(values) {
-  if (!values || typeof values !== "object") return;
+  if (!values || typeof values !== "object" || !handle) return;
   for (const [sec, keys] of Object.entries(values)) {
     if (!keys || typeof keys !== "object") continue;
     for (const [key, val] of Object.entries(keys)) {
       try {
         assertRet(
           "POS_ConfigGravarValor",
-          lib.POS_ConfigGravarValor(sec, key, String(val)),
+          lib.POS_ConfigGravarValor(handle, sec, key, String(val)),
         );
       } catch (err) {
         if (sec === "PosPrinter" && (key === "Porta" || key === "Modelo")) throw err;
@@ -113,22 +114,23 @@ function gravarValues(values) {
     try {
       fs.mkdirSync(path.dirname(iniPath), { recursive: true });
     } catch (_) {}
-    assertRet("POS_ConfigGravar", lib.POS_ConfigGravar(iniPath));
+    assertRet("POS_ConfigGravar", lib.POS_ConfigGravar(handle, iniPath));
   }
 }
 
 function ensureSession(values) {
   loadDll();
   const key = JSON.stringify(values || {});
-  if (ready && key === lastValuesKey) return;
+  if (ready && handle && key === lastValuesKey) return;
 
-  if (ready) {
+  if (ready || handle) {
     try {
-      lib.POS_Desativar();
+      if (handle) lib.POS_Desativar(handle);
     } catch (_) {}
     try {
-      lib.POS_Finalizar();
+      if (handle) lib.POS_Finalizar(handle);
     } catch (_) {}
+    handle = null;
     ready = false;
   }
 
@@ -156,12 +158,33 @@ function ensureSession(values) {
     } catch (_) {}
   }
 
-  assertRet("POS_Inicializar", lib.POS_Inicializar(ini, cryptKey));
-  gravarValues(values);
+  const handleOut = [null];
+  assertRet("POS_Inicializar", lib.POS_Inicializar(handleOut, ini, cryptKey));
+  handle = handleOut[0];
+  if (!handle) {
+    throw Object.assign(new Error("[ACBrPosPrinter] POS_Inicializar sem handle MT"), {
+      code: "ACBR_POS_NO_HANDLE",
+    });
+  }
+
   try {
-    lib.POS_Desativar();
-  } catch (_) {}
-  assertRet("POS_Ativar", lib.POS_Ativar());
+    gravarValues(values);
+    try {
+      lib.POS_Desativar(handle);
+    } catch (_) {}
+    assertRet("POS_Ativar", lib.POS_Ativar(handle));
+  } catch (err) {
+    try {
+      lib.POS_Desativar(handle);
+    } catch (_) {}
+    try {
+      lib.POS_Finalizar(handle);
+    } catch (_) {}
+    handle = null;
+    ready = false;
+    lastValuesKey = "";
+    throw err;
+  }
   ready = true;
   lastValuesKey = key;
 }
@@ -169,11 +192,12 @@ function ensureSession(values) {
 function shutdown() {
   if (!lib) return;
   try {
-    lib.POS_Desativar();
+    if (handle) lib.POS_Desativar(handle);
   } catch (_) {}
   try {
-    lib.POS_Finalizar();
+    if (handle) lib.POS_Finalizar(handle);
   } catch (_) {}
+  handle = null;
   ready = false;
   lastValuesKey = "";
 }
@@ -181,36 +205,34 @@ function shutdown() {
 parentPort.on("message", (msg) => {
   const id = msg?.id;
   if (msg?.generation != null && Number(msg.generation) !== generation) {
-    return; // late message de geração anterior
+    return;
   }
   try {
     switch (msg?.cmd) {
       case "init":
         ensureSession(msg.values);
-        ok(id, { ready: true });
+        ok(id, { ready: true, abi: "MT" });
         break;
       case "imprimirTags":
         ensureSession(msg.values);
-        // NÃO re-Ativar — sessão quente
-        assertRet("POS_InicializarPos", lib.POS_InicializarPos());
-        // Demo oficial: POS_Imprimir(texto, 1, 1, 1, 1) — Boolean como int.
+        assertRet("POS_InicializarPos", lib.POS_InicializarPos(handle));
         assertRet(
           "POS_Imprimir",
-          lib.POS_Imprimir(String(msg.tags || ""), 1, 1, 1, 1),
+          lib.POS_Imprimir(handle, String(msg.tags || ""), 1, 1, 1, 1),
         );
-        ok(id, { native: true, worker: true });
+        ok(id, { native: true, worker: true, abi: "MT" });
         break;
       case "abrirGaveta":
         ensureSession(msg.values);
-        assertRet("POS_AbrirGaveta", lib.POS_AbrirGaveta());
-        ok(id, { native: true, worker: true });
+        assertRet("POS_AbrirGaveta", lib.POS_AbrirGaveta(handle));
+        ok(id, { native: true, worker: true, abi: "MT" });
         break;
       case "shutdown":
         shutdown();
         ok(id, { shutdown: true });
         break;
       case "ping":
-        ok(id, { ready, generation });
+        ok(id, { ready, generation, hasHandle: !!handle, abi: "MT" });
         break;
       default:
         fail(id, "ACBR_POS_WORKER_UNKNOWN_CMD", `cmd=${msg?.cmd}`);
@@ -229,4 +251,4 @@ parentPort.on("message", (msg) => {
   }
 });
 
-reply({ id: null, generation, ok: true, data: { boot: true } });
+reply({ id: null, generation, ok: true, data: { boot: true, abi: "MT" } });

@@ -1893,6 +1893,8 @@ async function gerarPdfFiscal(chave, xmlPath, modeloDocumento = "65", opts = {})
     normalizarFormatoPdfNfce,
     paramsImprimirDanfePdfMonitor,
     nfceLayoutMonitorComandos,
+    deveAplicarLogoDanfe,
+    danfeLogoMonitorComandos,
   } = require("./fiscalPdfFormato");
   const formatoPdf = normalizarFormatoPdfNfce(opts.formatoPdf, modelo);
   const destino = destinoPdfFiscal(chave, modelo, formatoPdf);
@@ -1919,13 +1921,14 @@ async function gerarPdfFiscal(chave, xmlPath, modeloDocumento = "65", opts = {})
       : nfceLayoutMonitorComandos(formatoPdf);
   const pdfParams = paramsImprimirDanfePdfMonitor(modelo, formatoPdf);
   const marca = qAcbr(pdfParams.marcaDagua);
-  const { deveAplicarLogoDanfe } = require("./fiscalPdfFormato");
   const fiscalLogo = require("./fiscal/fiscalLogo");
   const logoInfo = fiscalLogo.ler();
   const logoCmds = [];
   if (deveAplicarLogoDanfe(modelo, formatoPdf) && logoInfo.ativo && logoInfo.caminhoAbsoluto) {
     const nfceFlag = modelo === "65" ? '"1"' : '""';
     logoCmds.push(`NFe.SetLogomarca(${qAcbr(logoInfo.caminhoAbsoluto)},${nfceFlag})`);
+    logoCmds.push(...danfeLogoMonitorComandos(logoInfo.caminhoAbsoluto));
+    logoCmds.push("NFE.ConfigGravar()");
   }
   const comandos = [
     ...layoutDanfe,

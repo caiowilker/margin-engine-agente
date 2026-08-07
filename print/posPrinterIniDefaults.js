@@ -32,10 +32,10 @@ function resolveBytesInterval() {
 
 function resolveDeviceTimeout() {
   // SSOT: Device TimeOut (s) ≤ soft call timeout − 1s (evita FFI órfã > Promise.race)
-  const callMs = parseInt(process.env.ACBR_POS_CALL_TIMEOUT_MS || "5000", 10);
+  const callMs = parseInt(process.env.ACBR_POS_CALL_TIMEOUT_MS || "4500", 10);
   const aligned = Math.max(
     1,
-    Math.min(30, Math.floor((Number.isFinite(callMs) ? callMs : 5000) / 1000) - 1),
+    Math.min(30, Math.floor((Number.isFinite(callMs) ? callMs : 4500) / 1000) - 1),
   );
   const n = parseInt(
     process.env.PRINTER_DEVICE_TIMEOUT_S ||
