@@ -22,7 +22,7 @@ rmDir(testDir);
 fs.mkdirSync(path.join(xmlRoot, cnpj, "NFe", "202606", "NFe"), { recursive: true });
 
 const nfeOnly = `<?xml version="1.0"?><NFe xmlns="http://www.portalfiscal.inf.br/nfe"><infNFe Id="NFe${chave}"/></NFe>`;
-const nfeProc = `<?xml version="1.0"?><nfeProc><NFe/><protNFe><infProt><cStat>100</cStat><xMotivo>Autorizado</xMotivo><nProt>23123456789012</nProt><chNFe>${chave}</chNFe></infProt></protNFe></nfeProc>`;
+const nfeProc = `<?xml version="1.0"?><nfeProc><NFe/><protNFe><infProt><cStat>100</cStat><xMotivo>Autorizado</xMotivo><nProt>23123456789012</nProt><dhRecbto>2026-08-04T14:32:10-03:00</dhRecbto><chNFe>${chave}</chNFe></infProt></protNFe></nfeProc>`;
 
 fs.writeFileSync(path.join(xmlRoot, cnpj, "NFe", "202606", "NFe", `${chave}-nfe.xml`), nfeOnly);
 fs.writeFileSync(
@@ -69,6 +69,14 @@ test("localizarXmlPorChave — prefere procNFe com cStat 100", () => {
   const r = docs.localizarXmlPorChave(chave);
   assert.strictEqual(r.prot.cStat, "100");
   assert.strictEqual(r.prot.nProt, "23123456789012");
+  assert.strictEqual(r.prot.dhRecbto, "2026-08-04T14:32:10-03:00");
+});
+
+test("extrairProtNFe — inclui dhRecbto", () => {
+  const p = docs.extrairProtNFe(nfeProc);
+  assert.strictEqual(p.dhRecbto, "2026-08-04T14:32:10-03:00");
+  assert.strictEqual(p.cStat, "100");
+  assert.strictEqual(docs.extrairProtNFe(nfeOnly).dhRecbto ?? null, null);
 });
 
 test("resolverXmlParaImpressao — ignora hint sem protocolo se proc existir", () => {

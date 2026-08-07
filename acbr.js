@@ -1489,6 +1489,7 @@ function enrichParsePosEmissao(p, resposta) {
     cStat,
     todosCStat,
     xMotivo: prot.xMotivo || p.xMotivo,
+    dhRecbto: prot.dhRecbto || p.dhRecbto || get("dhRecbto") || null,
   };
 }
 

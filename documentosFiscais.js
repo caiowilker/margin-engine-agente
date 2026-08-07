@@ -567,6 +567,7 @@ function extrairProtNFe(xml) {
     xMotivo: bloc.match(/<xMotivo>([^<]*)<\/xMotivo>/i)?.[1]?.trim() || null,
     nProt: bloc.match(/<nProt>(\d+)<\/nProt>/i)?.[1] || null,
     chNFe: bloc.match(/<chNFe>(\d{44})<\/chNFe>/i)?.[1] || null,
+    dhRecbto: bloc.match(/<dhRecbto>([^<]*)<\/dhRecbto>/i)?.[1]?.trim() || null,
   };
 }
 
