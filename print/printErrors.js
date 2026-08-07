@@ -18,6 +18,12 @@ function classifyPrintError(err) {
     out.fallbackSuggested = false;
     return out;
   }
+  // DLL Win32 ainda aquecendo (AV) — reprocessar fila; NÃO cair no ACBr.
+  if (err?.code === "RAW_HELPER_MISSING") {
+    out.retryable = true;
+    out.fallbackSuggested = false;
+    return out;
+  }
   // Hard drain / hang após envio: NÃO sugerir fallback (FFI pode ainda imprimir).
   // Pré-impressão (ConfigGravar/Ativar/init) pode vir embrulhada em timeout — fallback OK.
   // idle ≠ pré-impressão (worker timeout em imprimirTags deixa phase omissa/idle).

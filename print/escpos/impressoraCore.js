@@ -149,8 +149,13 @@ let cacheDescobertaEm = 0;
 let cacheImpressoraEscolhida = null;
 let ultimaImpressoraUsada = null;
 let printLock = Promise.resolve();
-/** Cache em memória do escpos.Image + bytes raster — evita get-pixels a cada cupom. */
-let logoEscposImageCache = { key: null, image: null, paintedAt: 0 };
+/** Cache em memória — raster ESC/POS pronto (rawBytes). Hot path NUNCA Image.load/toBitmap. */
+let logoEscposImageCache = { key: null, image: null, rawBytes: null, paintedAt: 0 };
+
+/** Single-flight warm — evita sharp/Add-Type competindo com o cupom. */
+let _warmHotPathInflight = null;
+let _warmGeneration = 0;
+let _logoWarmScheduled = false;
 
 /** Cache processo — hot path NÃO faz readFileSync/writeFileSync do .ps1 a cada cupom. */
 let rawScriptCache = null;
@@ -208,36 +213,10 @@ function Mark([string]$name) {
 }
 $asm = ${JSON.stringify(dllPath)}
 if (-not ("RawPrinterHelper" -as [type])) {
-  if (Test-Path -LiteralPath $asm) {
-    Add-Type -Path $asm
-  } else {
-    $src = @'
-using System;
-using System.Runtime.InteropServices;
-public class RawPrinterHelper {
-  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]
-  public class DOCINFOA {
-    [MarshalAs(UnmanagedType.LPStr)] public string pDocName;
-    [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
-    [MarshalAs(UnmanagedType.LPStr)] public string pDatatype;
+  if (-not (Test-Path -LiteralPath $asm)) {
+    throw "RawPrinterHelper.dll ausente — aquecimento em andamento (nao compilar no cupom)"
   }
-  [DllImport("winspool.drv", EntryPoint="OpenPrinterA", SetLastError=true, CharSet=CharSet.Ansi)]
-  public static extern bool OpenPrinter(string szPrinter, out IntPtr hPrinter, IntPtr pd);
-  [DllImport("winspool.drv", SetLastError=true)] public static extern bool ClosePrinter(IntPtr hPrinter);
-  [DllImport("winspool.drv", EntryPoint="StartDocPrinterA", SetLastError=true, CharSet=CharSet.Ansi)]
-  public static extern bool StartDocPrinter(IntPtr hPrinter, int level, [In] DOCINFOA di);
-  [DllImport("winspool.drv", SetLastError=true)] public static extern bool EndDocPrinter(IntPtr hPrinter);
-  [DllImport("winspool.drv", SetLastError=true)] public static extern bool StartPagePrinter(IntPtr hPrinter);
-  [DllImport("winspool.drv", SetLastError=true)] public static extern bool EndPagePrinter(IntPtr hPrinter);
-  [DllImport("winspool.drv", SetLastError=true)]
-  public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);
-}
-'@
-    $dir = Split-Path -Parent $asm
-    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-    Add-Type -TypeDefinition $src -OutputAssembly $asm
-    Add-Type -Path $asm
-  }
+  Add-Type -Path $asm
 }
 Mark 'AddType'
 $h = [IntPtr]::Zero
@@ -282,6 +261,7 @@ Remove-Item $cfg.file -Force -ErrorAction SilentlyContinue
 /**
  * Garante script PowerShell no workdir ProgramData.
  * Após a 1ª vez no processo, retorna cache em memória (zero I/O sync no cupom).
+ * Regrava se o conteúdo mudou (ex.: proibir Add-Type no cupom).
  */
 function ensureRawPrintScript() {
   if (!IS_WIN) return null;
@@ -290,8 +270,21 @@ function ensureRawPrintScript() {
     const dir = rawWorkDir();
     const scriptPath = rawPrintScriptPath();
     const dllPath = rawHelperDllPath();
-    if (!fs.existsSync(scriptPath)) {
-      fs.writeFileSync(scriptPath, buildRawPrintScriptContent(dllPath), "utf8");
+    const content = buildRawPrintScriptContent(dllPath);
+    let needWrite = !fs.existsSync(scriptPath);
+    if (!needWrite) {
+      try {
+        const existing = fs.readFileSync(scriptPath, "utf8");
+        // Marcador de versão — evita Add-Type inline no hot path (AV 15–20s).
+        if (!existing.includes("nao compilar no cupom") || existing !== content) {
+          needWrite = true;
+        }
+      } catch (_) {
+        needWrite = true;
+      }
+    }
+    if (needWrite) {
+      fs.writeFileSync(scriptPath, content, "utf8");
     }
     rawScriptCache = { dir, scriptPath, dllPath };
     return rawScriptCache;
@@ -319,11 +312,27 @@ if (IS_WIN) {
 function warmRawWin32Helper() {
   if (!IS_WIN) return Promise.resolve(false);
   return new Promise((resolve) => {
+    let settled = false;
+    const finish = (v) => {
+      if (settled) return;
+      settled = true;
+      resolve(v);
+    };
+    // AV/TEMP neste parque: Add-Type pode levar 15–20s. Não bloquear boot/fila.
+    const hardCapMs = parseInt(process.env.PRINT_RAW_WARM_TIMEOUT_MS || "5000", 10);
+    const capTimer = setTimeout(() => {
+      log.warn(
+        { hardCapMs, metric: "print.raw_helper_warm_timeout" },
+        "[ImpressoraCore] warm RawPrinterHelper excedeu orçamento — segue sem bloquear",
+      );
+      finish(false);
+    }, Math.max(1000, hardCapMs));
     try {
       ensureRawPrintScript();
       const dllPath = rawHelperDllPath();
       if (fs.existsSync(dllPath)) {
-        resolve(true);
+        clearTimeout(capTimer);
+        finish(true);
         return;
       }
       fs.mkdirSync(path.dirname(dllPath), { recursive: true });
@@ -356,23 +365,28 @@ public class RawPrinterHelper {
 }
 '@ -OutputAssembly $asm`,
         ],
-        { windowsHide: true, timeout: 30000 },
+        { windowsHide: true, timeout: Math.max(1000, hardCapMs) },
         (err) => {
+          clearTimeout(capTimer);
           if (err) {
             log.debug({ err: err.message }, "[ImpressoraCore] warm RawPrinterHelper falhou");
-            resolve(false);
+            finish(false);
           } else {
             log.info(
               { dll: dllPath, metric: "print.raw_helper_warm" },
               "[ImpressoraCore] RawPrinterHelper.dll pré-compilada",
             );
-            resolve(true);
+            finish(true);
           }
         },
       );
-      child.on("error", () => resolve(false));
+      child.on("error", () => {
+        clearTimeout(capTimer);
+        finish(false);
+      });
     } catch (_) {
-      resolve(false);
+      clearTimeout(capTimer);
+      finish(false);
     }
   });
 }
@@ -467,24 +481,42 @@ function comLockImpressao(fn) {
 // ── Device em memoria (gera buffer ESC/POS) ───────────────────────────────────
 class MemoryDevice {
   constructor() {
+    this._chunks = [];
     this.buffer = Buffer.alloc(0);
     this._open = false;
   }
 
   open(cb) {
     this._open = true;
+    this._chunks = [];
     this.buffer = Buffer.alloc(0);
     cb(null);
   }
 
   write(data, cb) {
     const chunk = Buffer.isBuffer(data) ? data : Buffer.from(data);
-    this.buffer = Buffer.concat([this.buffer, chunk]);
+    this._chunks.push(chunk);
     if (cb) cb(null);
+  }
+
+  /** Consolida chunks uma vez — evita Buffer.concat O(n²) por write no cupom. */
+  getBuffer() {
+    if (this._chunks.length === 0) {
+      this.buffer = Buffer.alloc(0);
+      return this.buffer;
+    }
+    if (this._chunks.length === 1) {
+      this.buffer = this._chunks[0];
+      return this.buffer;
+    }
+    this.buffer = Buffer.concat(this._chunks);
+    this._chunks = [this.buffer];
+    return this.buffer;
   }
 
   close(cb) {
     this._open = false;
+    this.getBuffer();
     if (cb) cb(null);
   }
 }
@@ -496,7 +528,8 @@ function gerarBuffer(renderFn) {
       if (err) return reject(err);
       const printer = new escpos.Printer(device, { encoding: "CP860" });
       const finalizar = () => {
-        const done = () => device.close(() => resolve(device.buffer));
+        const done = () =>
+          device.close(() => resolve(device.getBuffer()));
         if (typeof printer.close === "function") {
           printer.close(done);
         } else {
@@ -699,18 +732,98 @@ function invalidateDiscoveryCache() {
 }
 
 /** Pré-aquece DLL Win32 + logo ESC/POS — cupom seguinte perto de instantâneo. */
-async function warmPrintHotPath() {
-  const out = { rawHelper: false, logo: false };
-  try {
-    out.rawHelper = await warmRawWin32Helper();
-  } catch (_) {}
-  try {
-    out.logo = await require("../printerLogo").warmLogoEscpos();
-  } catch (_) {}
-  if (out.rawHelper || out.logo) {
-    log.info({ ...out, metric: "print.hot_path_warm" }, "[ImpressoraCore] Hot-path aquecido");
+function isPrintHotPathReady() {
+  if (IS_WIN) {
+    try {
+      if (!fs.existsSync(rawHelperDllPath())) return false;
+    } catch (_) {
+      return false;
+    }
   }
-  return out;
+  return true;
+}
+
+function isWarmHotPathInFlight() {
+  return !!_warmHotPathInflight;
+}
+
+function impressaoEmAndamentoLocal() {
+  try {
+    const pjs = require("../printJobService");
+    if (typeof pjs.impressaoEmAndamento === "function" && pjs.impressaoEmAndamento()) {
+      return true;
+    }
+  } catch (_) {}
+  try {
+    const physical = require("../../runtime/physicalResourceLock");
+    const map = require("../../runtime/physicalResourceMap");
+    if (physical.isHeld(map.resolvePosprinterKey())) return true;
+  } catch (_) {}
+  return false;
+}
+
+function scheduleLogoWarmOnce() {
+  if (_logoWarmScheduled || _warmHotPathInflight) return;
+  if (impressaoEmAndamentoLocal()) return;
+  _logoWarmScheduled = true;
+  setImmediate(() => {
+    _logoWarmScheduled = false;
+    if (impressaoEmAndamentoLocal()) return;
+    warmPrintHotPath().catch(() => {});
+  });
+}
+
+async function warmPrintHotPath(opts = {}) {
+  if (_warmHotPathInflight) return _warmHotPathInflight;
+  if (!opts.force && impressaoEmAndamentoLocal()) {
+    return { rawHelper: false, logo: false, skipped: "printing" };
+  }
+  if (!opts.force && isPrintHotPathReady() && logoEscposImageCache.rawBytes) {
+    return { rawHelper: true, logo: true, skipped: "already_warm" };
+  }
+
+  const gen = ++_warmGeneration;
+  const out = { rawHelper: false, logo: false };
+  const budgetMs = parseInt(
+    process.env.PRINT_HOTPATH_WARM_BUDGET_MS ||
+      process.env.PRINT_RAW_WARM_TIMEOUT_MS ||
+      "5000",
+    10,
+  );
+
+  const work = Promise.all([
+    warmRawWin32Helper()
+      .then((v) => {
+        if (gen === _warmGeneration) out.rawHelper = !!v;
+      })
+      .catch(() => {}),
+    Promise.resolve()
+      .then(() => {
+        // Não iniciar sharp se o cupom já pegou a impressora.
+        if (impressaoEmAndamentoLocal()) return false;
+        return require("../printerLogo").warmLogoEscpos();
+      })
+      .then((v) => {
+        if (gen === _warmGeneration) out.logo = !!v;
+      })
+      .catch(() => {}),
+  ]);
+
+  _warmHotPathInflight = Promise.race([
+    work,
+    new Promise((r) => setTimeout(r, Math.max(1000, budgetMs))),
+  ])
+    .then(() => {
+      if (out.rawHelper || out.logo) {
+        log.info({ ...out, metric: "print.hot_path_warm" }, "[ImpressoraCore] Hot-path aquecido");
+      }
+      return out;
+    })
+    .finally(() => {
+      _warmHotPathInflight = null;
+    });
+
+  return _warmHotPathInflight;
 }
 
 function escolherImpressoraWindows(lista) {
@@ -806,6 +919,32 @@ async function enviarRawWindowsUnlocked(nomeImpressora, buffer) {
   const paths = ensureRawPrintScript();
   const workDir = paths?.dir || rawWorkDir();
   const scriptPath = paths?.scriptPath || rawPrintScriptPath();
+  const dllPath = paths?.dllPath || rawHelperDllPath();
+
+  // Nunca Add-Type no PowerShell do cupom — se DLL faltar, tenta warm curto e falha rápido.
+  if (IS_WIN && dllPath && !fs.existsSync(dllPath)) {
+    log.warn(
+      { dllPath, metric: "print.raw_dll_missing_before_send" },
+      "[ImpressoraCore] RawPrinterHelper.dll ausente — warm curto antes do envio",
+    );
+    await Promise.race([
+      warmRawWin32Helper(),
+      new Promise((r) => setTimeout(r, 3000)),
+    ]);
+    if (!fs.existsSync(dllPath)) {
+      const err = new Error(
+        "RawPrinterHelper.dll ausente — aquecimento incompleto (AV/TEMP). Tente novamente em alguns segundos.",
+      );
+      err.code = "RAW_HELPER_MISSING";
+      err.retryable = true;
+      // Continua warm em background para o próximo job da fila.
+      setImmediate(() => {
+        warmRawWin32Helper().catch(() => {});
+      });
+      throw err;
+    }
+  }
+
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const tmpBin = path.join(workDir, `pdv-print-${id}.bin`);
   const tmpCfg = path.join(workDir, `pdv-print-${id}.json`);
@@ -846,12 +985,9 @@ async function enviarRawWindowsUnlocked(nomeImpressora, buffer) {
     const cleanupFiles = () => {
       if (filesCleaned) return;
       filesCleaned = true;
-      try {
-        fs.unlinkSync(tmpCfg);
-      } catch (_) {}
-      try {
-        fs.unlinkSync(tmpBin);
-      } catch (_) {}
+      // Async — unlinkSync sob AV congelava o event loop após cada cupom.
+      void fs.promises.unlink(tmpCfg).catch(() => {});
+      void fs.promises.unlink(tmpBin).catch(() => {});
     };
 
     const clearKillTimers = () => {
@@ -1696,66 +1832,31 @@ function renderCupom(printer, payload) {
 
 async function imprimirLogoCupomEscpos(printer, payload) {
   const t0 = performance.now();
-  const phases = { loadMs: 0, paintMs: 0, cacheHit: false };
+  const phases = { paintMs: 0, cacheHit: false, skipped: null };
   try {
     const printerLogo = require("../printerLogo");
-    if (!printerLogo.deveExibirLogoCupom(payload)) return;
-    const info = printerLogo.ler();
-    if (!info.caminhoAbsoluto) return;
-    const size = info.printSize || require("../printerLogoSize").resolveLogoPrintSize(info);
-    let caminho = null;
-    try {
-      const scaled = await printerLogo.prepararArquivoEscpos(info);
-      if (scaled) caminho = scaled;
-    } catch (err) {
-      log.warn(
-        { err: err?.message },
-        "[ImpressoraCore] Logo ESC/POS omitida — sem PNG de fonte (BMP 1-bpp incompatível com get-pixels)",
-      );
+    // Hot path: só toggle em memória — NUNCA ler()/BMP/sharp/Image.load/toBitmap.
+    if (!printerLogo.exibirLogoCupomHabilitado(payload)) {
+      phases.skipped = "toggle_or_missing";
       return;
     }
-    if (!caminho || /\.bmp$/i.test(caminho)) {
-      log.warn("[ImpressoraCore] Logo ESC/POS omitida — caminho BMP 1-bpp não suportado");
-      return;
-    }
-    const cacheKey = `${info.sha256 || caminho}|${size.escposWidthDots}|${size.density || "d24"}`;
-    let image = logoEscposImageCache.key === cacheKey ? logoEscposImageCache.image : null;
-    phases.cacheHit = !!image;
-    if (!image) {
-      const tLoad = performance.now();
-      image = await new Promise((resolve, reject) => {
-        try {
-          escpos.Image.load(caminho, (err, img) => {
-            if (err) reject(err);
-            else if (!img || typeof img.size !== "object") {
-              reject(new Error("escpos.Image.load retornou imagem inválida"));
-            } else resolve(img);
-          });
-        } catch (syncErr) {
-          reject(syncErr);
-        }
-      });
-      phases.loadMs = performance.now() - tLoad;
+    if (!logoEscposImageCache.rawBytes) {
+      phases.skipped = "cache_miss";
       log.warn(
         {
-          loadMs: phases.loadMs,
-          bytes: info?.bytes,
-          metric: "print.escpos_image_load_duration",
-          note: "Cache miss — get-pixels; alvo <50ms após warm",
+          metric: "print.logo_hotpath_cache_miss",
+          note: "Logo omitida neste cupom — aquecimento em background (sem bloquear salão)",
         },
-        "[ImpressoraCore] escpos.Image.load() TIMING — CRITICAL MEASUREMENT",
+        "[ImpressoraCore] Logo cache frio — cupom segue sem imagem",
       );
-      logoEscposImageCache = { key: cacheKey, image, paintedAt: 0 };
+      scheduleLogoWarmOnce();
+      return;
     }
 
-    // await da Promise do image() patchado (sem setTimeout/200ms).
-    // NÃO usar callback de 3º arg — na lib original ele era ignorado e a
-    // Promise externa nunca resolvia (hang do event loop / fila de impressão).
+    phases.cacheHit = true;
     const tPaint = performance.now();
-    printer.align("ct");
-    await printer.image(image, size.density || "d24");
+    printer.raw(logoEscposImageCache.rawBytes);
     phases.paintMs = performance.now() - tPaint;
-    printer.feed(1);
     logoEscposImageCache.paintedAt = Date.now();
 
     const totalMs = performance.now() - t0;
@@ -1763,14 +1864,15 @@ async function imprimirLogoCupomEscpos(printer, payload) {
       {
         totalMs,
         ...phases,
+        bytes: logoEscposImageCache.rawBytes.length,
         metric: "print.imprimirlogo_total",
       },
       "[ImpressoraCore] imprimirLogoCupomEscpos() total timing",
     );
-    if (totalMs > 300) {
+    if (totalMs > 50) {
       log.warn(
         { totalMs, ...phases, metric: "print.imprimirlogo_slow" },
-        "[ImpressoraCore] Logo ESC/POS acima do orçamento (300ms)",
+        "[ImpressoraCore] Logo ESC/POS acima do orçamento (50ms)",
       );
     }
   } catch (err) {
@@ -1787,6 +1889,7 @@ async function imprimirLogoCupomEscpos(printer, payload) {
 
 async function renderCupomConteudo(printer, payload) {
   const t0RenderCupom = performance.now();
+  const phases = { logoMs: 0, bodyMs: 0 };
   const COLS = getThermalCols();
   const empresa = payload.empresa || {};
   const itens = payload.itens || [];
@@ -1809,7 +1912,10 @@ async function renderCupomConteudo(printer, payload) {
   // ── 1. Cabeçalho — tudo centralizado ────────────────────────────────────────
   printer.font("a").align("ct");
 
+  const tLogo = performance.now();
   await imprimirLogoCupomEscpos(printer, payload);
+  phases.logoMs = performance.now() - tLogo;
+  const tBody = performance.now();
 
   if (require("../segundaVia").deveExibirBannerSegundaVia(payload)) {
     printer.style("b").text("*** SEGUNDA VIA ***").style("normal");
@@ -2074,11 +2180,27 @@ async function renderCupomConteudo(printer, payload) {
     .text("")
     .text("")
     .cut();
+  phases.bodyMs = performance.now() - tBody;
   const totalRenderMs = performance.now() - t0RenderCupom;
   log.info(
-    { totalRenderMs, metric: "print.rendercupomconteudo_total" },
+    {
+      totalRenderMs,
+      ...phases,
+      metric: "print.rendercupomconteudo_total",
+    },
     "[ImpressoraCore] renderCupomConteudo() TOTAL TIMING — includes logo + items + payments",
   );
+  if (totalRenderMs > 500) {
+    log.warn(
+      {
+        totalRenderMs,
+        ...phases,
+        metric: "print.rendercupomconteudo_slow",
+        note: "Alvo PDV <300ms; investigar logoMs/bodyMs",
+      },
+      "[ImpressoraCore] Render de cupom acima do orçamento",
+    );
+  }
 }
 
 function renderFechamento(printer, payload) {
@@ -2509,7 +2631,7 @@ async function imprimirComGavetaOpcional(renderFn, payload, opts = {}) {
         bufferMs,
         bytes: buffer.length,
         metric: "print.buffer_generation_timing",
-        note: "CRITICAL: This is where logo Image.load() happens",
+        note: "gerarBuffer (MemoryDevice) — logo só via cache quente",
       },
       "[ImpressoraCore] Buffer ESC/POS generation timing",
     );
@@ -2571,13 +2693,26 @@ module.exports = {
   detectarImpressora,
   invalidateDiscoveryCache,
   invalidateLogoEscposImageCache() {
-    logoEscposImageCache = { key: null, image: null, paintedAt: 0 };
+    logoEscposImageCache = { key: null, image: null, rawBytes: null, paintedAt: 0 };
   },
+  isLogoEscposReady() {
+    return !!(logoEscposImageCache.rawBytes && logoEscposImageCache.rawBytes.length);
+  },
+  isPrintHotPathReady,
+  isWarmHotPathInFlight,
   async warmLogoEscposImage(caminho, info) {
     if (!caminho) return false;
+    if (impressaoEmAndamentoLocal()) return false;
     const size = info?.printSize || require("../printerLogoSize").resolveLogoPrintSize(info || {});
-    const cacheKey = `${info?.sha256 || caminho}|${size.escposWidthDots}|${size.density || "d24"}`;
-    if (logoEscposImageCache.key === cacheKey && logoEscposImageCache.image) return true;
+    const density = size.density || "d24";
+    const cacheKey = `${info?.sha256 || caminho}|${size.escposWidthDots}|${density}`;
+    if (
+      logoEscposImageCache.key === cacheKey &&
+      logoEscposImageCache.rawBytes &&
+      logoEscposImageCache.rawBytes.length
+    ) {
+      return true;
+    }
     const t0 = performance.now();
     const image = await new Promise((resolve, reject) => {
       escpos.Image.load(caminho, (err, img) => {
@@ -2585,14 +2720,37 @@ module.exports = {
         else resolve(img);
       });
     });
-    logoEscposImageCache = { key: cacheKey, image, paintedAt: 0 };
+    if (impressaoEmAndamentoLocal()) return false;
+
+    // Pré-raster completo (align + bitmap + feed) — hot path só printer.raw(bytes).
+    const device = new MemoryDevice();
+    const rawBytes = await new Promise((resolve, reject) => {
+      device.open((err) => {
+        if (err) return reject(err);
+        const printer = new escpos.Printer(device, { encoding: "CP860" });
+        try {
+          printer.align("ct");
+          Promise.resolve(printer.image(image, density))
+            .then(() => {
+              printer.feed(1);
+              device.close(() => resolve(device.getBuffer()));
+            })
+            .catch(reject);
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+
+    logoEscposImageCache = { key: cacheKey, image, rawBytes, paintedAt: 0 };
     log.info(
       {
         loadMs: performance.now() - t0,
+        bytes: rawBytes.length,
         cacheKey: cacheKey.slice(0, 24),
         metric: "print.logo_warm_image",
       },
-      "[ImpressoraCore] Logo Image aquecida no cache",
+      "[ImpressoraCore] Logo raster ESC/POS aquecido no cache",
     );
     return true;
   },

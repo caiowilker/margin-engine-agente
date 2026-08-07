@@ -93,6 +93,19 @@ function agendarWarmPosSeRapido(tipo) {
   if (!isTipoRapido(tipo) || tipo === "teste") return;
   setImmediate(() => {
     try {
+      const core = require("./escpos/impressoraCore");
+      // Já quente ou impressão em voo — não disparar sharp/Add-Type contra o cupom.
+      if (typeof core.isPrintHotPathReady === "function" && core.isPrintHotPathReady()) {
+        if (typeof core.isLogoEscposReady === "function" && core.isLogoEscposReady()) {
+          return;
+        }
+      }
+      if (typeof core.isWarmHotPathInFlight === "function" && core.isWarmHotPathInFlight()) {
+        return;
+      }
+      if (impressaoEmAndamento()) return;
+    } catch (_) {}
+    try {
       const runtime = require("./acbrPosPrinterRuntime");
       if (typeof runtime.extendPosPrinterSessionIdle === "function") {
         runtime.extendPosPrinterSessionIdle();

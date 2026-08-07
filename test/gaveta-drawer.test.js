@@ -88,15 +88,16 @@ test("deveAbrirGavetaNoPayload — PRINTER_DRAWER=false desliga", () => {
   process.env.PRINTER_DRAWER = "true";
 });
 
-test("abrirGaveta / isFastNativePath — gaveta native; cupom ACBr em RAW", () => {
+test("abrirGaveta / isFastNativePath — gaveta e comercial RAW no native", () => {
   const prev = process.env.PRINTER_PORTA;
   const prevFast = process.env.PRINT_FAST_NATIVE;
   delete process.env.PRINT_FAST_NATIVE;
   process.env.PRINTER_PORTA = "RAW:POSPrinter POS80";
   runtime.resetAcbrPosCircuit();
   try {
-    assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), false);
+    assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), true);
     assert.strictEqual(isFastNativePath({ op: "abrirGaveta" }), true);
+    assert.strictEqual(isFastNativePath({ payload: { naoFiscal: true } }), true);
   } finally {
     if (prev === undefined) delete process.env.PRINTER_PORTA;
     else process.env.PRINTER_PORTA = prev;

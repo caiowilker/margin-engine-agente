@@ -63,8 +63,7 @@ async function withProvider(fn, opts = {}) {
   let primary = factory.getPrintProvider();
   let primaryName = primary.getProviderName();
 
-  // Por job: gaveta / circuito / preferNative → native direto (sem ACBr).
-  // RAW:Windows NÃO força bypass — caminho oficial é ACBr PosPrinter (worker).
+  // Por job: gaveta / circuito / RAW comercial / preferNative → native direto (sem ACBr init).
   // Fiscal/DANFE com chave permanece no ACBr mesmo com circuito aberto.
   if (!opts.forceAcbr && primaryName === "acbr-posprinter") {
     try {
@@ -163,6 +162,12 @@ async function withProvider(fn, opts = {}) {
         },
         "[PrintExecutor] Timeout pré-impressão ACBr — fallback native (sem risco de dupla)",
       );
+      // Sticky: não tentar Ativar de novo a cada cupom neste PC.
+      try {
+        require("./acbrPosPrinterRuntime").openAcbrPosCircuit?.(
+          err.message || "preprint_timeout",
+        );
+      } catch (_) {}
       err.printTimedOut = false;
       err.fallbackNative = true;
       err.code = err.acbrRet != null ? "ACBR_POS_ERROR" : err.code;
@@ -236,7 +241,10 @@ async function executarProviderOp(provider, op, args, timeoutMs) {
     const durationMs = Date.now() - t0;
     try {
       const logoMod = require("./printerLogo");
-      const av = logoMod.avaliarExibicaoLogo?.(payload) || { ok: null, reason: null };
+      const av = logoMod.avaliarExibicaoLogo?.(payload, { hotPath: true }) || {
+        ok: null,
+        reason: null,
+      };
       require("./printMetrics").recordPrintResult({
         durationMs,
         provider: provider.getProviderName(),
@@ -358,7 +366,10 @@ async function executarProviderOp(provider, op, args, timeoutMs) {
     }
     try {
       const logoMod = require("./printerLogo");
-      const av = logoMod.avaliarExibicaoLogo?.(payload) || { ok: null, reason: null };
+      const av = logoMod.avaliarExibicaoLogo?.(payload, { hotPath: true }) || {
+        ok: null,
+        reason: null,
+      };
       require("./printMetrics").recordPrintResult({
         durationMs,
         provider: provider.getProviderName(),

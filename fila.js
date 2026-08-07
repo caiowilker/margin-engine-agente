@@ -754,13 +754,27 @@ function listar() {
 function consultarVenda(numeroVendaCliente) {
   try {
     if (!db || !numeroVendaCliente) return null;
-    return db
-      .prepare(
-        `SELECT id, numero_venda, numero_venda_backend, status, tentativas, ultimo_erro, criado_em, sincronizado_em
-         FROM fila_vendas
-         WHERE numero_venda = ?`,
-      )
-      .get(String(numeroVendaCliente));
+    const key = String(numeroVendaCliente);
+    const row =
+      db
+        .prepare(
+          `SELECT id, numero_venda, numero_venda_backend, status, tentativas, ultimo_erro, criado_em, sincronizado_em, payload
+           FROM fila_vendas
+           WHERE numero_venda = ? OR numero_venda_backend = ?`,
+        )
+        .get(key, key) || null;
+    if (!row) return null;
+    // Expõe payload parseado para 2ª via local (antes do sync / detalhe nuvem).
+    let payload = null;
+    if (row.payload) {
+      try {
+        payload = typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload;
+      } catch {
+        payload = null;
+      }
+    }
+    const { payload: _raw, ...meta } = row;
+    return { ...meta, payload };
   } catch (err) {
     console.warn("[Fila] Erro ao consultar venda na fila:", err.message);
     return null;

@@ -108,9 +108,19 @@ const PRINT_ENV_FIELDS = [
   },
   {
     env: "PRINT_FAST_NATIVE",
-    kind: "bool",
-    default: false,
-    comment: "true = cupom comercial via ESC/POS nativo (legado)",
+    kind: "enum",
+    values: ["raw", "auto", "true", "false", "always", "0", "1"],
+    default: "raw",
+    comment:
+      "raw/auto=comercial em RAW:Windows via ESC/POS nativo (padrão PDV); false=sempre ACBr; true=comercial native; always=tudo native",
+  },
+  {
+    env: "PRINT_RAW_WARM_TIMEOUT_MS",
+    kind: "int",
+    min: 1000,
+    max: 30000,
+    default: 5000,
+    comment: "Orçamento para pré-compilar RawPrinterHelper.dll no warm (AV/TEMP pode demorar)",
   },
   {
     env: "ACBR_POS_WORKER",

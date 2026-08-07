@@ -44,7 +44,7 @@ let lastLogoSkipReason = null;
 let logoBufferCache = { sha256: null, buffer: null };
 
 let loInfoCache = { data: null, expiresAt: 0 };
-const LO_INFO_CACHE_TTL_MS = 5000;
+const LO_INFO_CACHE_TTL_MS = 60000;
 
 let loPrintCacheKeyMemory = { sha256: null, key: null };
 
@@ -520,13 +520,52 @@ function exibirLogoCupomHabilitado(payload) {
 }
 
 /**
+ * @param {object} [payload]
+ * @param {{ hotPath?: boolean }} [opts] hotPath=true → sem ler BMP (só meta/toggle)
  * @returns {{ ok: boolean, reason: string|null }}
  */
-function avaliarExibicaoLogo(payload) {
+function avaliarExibicaoLogo(payload, opts = {}) {
   if (!exibirLogoCupomHabilitado(payload)) {
     lastLogoSkipReason = "toggle_off";
     return { ok: false, reason: "toggle_off" };
   }
+
+  // Hot path / métricas pós-cupom: nunca readFileSync do BMP.
+  if (opts.hotPath === true) {
+    try {
+      const core = require("./escpos/impressoraCore");
+      if (typeof core.isLogoEscposReady === "function" && core.isLogoEscposReady()) {
+        lastLogoSkipReason = null;
+        return { ok: true, reason: null };
+      }
+    } catch (_) {}
+    const cached = getCachedLoInfo();
+    if (cached) {
+      if (!(cached.ativo && cached.caminhoAbsoluto)) {
+        lastLogoSkipReason = "sem_arquivo";
+        return { ok: false, reason: "sem_arquivo" };
+      }
+      if (cached.imprimivel === false) {
+        lastLogoSkipReason = "bmp_invalido";
+        return { ok: false, reason: "bmp_invalido" };
+      }
+      lastLogoSkipReason = null;
+      return { ok: true, reason: null };
+    }
+    try {
+      const meta = lerMeta();
+      if (!meta.ativo) {
+        lastLogoSkipReason = "sem_arquivo";
+        return { ok: false, reason: "sem_arquivo" };
+      }
+      lastLogoSkipReason = null;
+      return { ok: true, reason: null };
+    } catch (_) {
+      lastLogoSkipReason = "erro";
+      return { ok: false, reason: "erro" };
+    }
+  }
+
   const info = ler();
   if (!(info.ativo && info.caminhoAbsoluto)) {
     lastLogoSkipReason = "sem_arquivo";
@@ -563,6 +602,17 @@ function getLastLogoSkipReason() {
 
 async function warmLogoEscpos() {
   try {
+    // Nunca competir com cupom em voo (sharp/Image.load no main = PDV travado).
+    try {
+      const core = require("./escpos/impressoraCore");
+      if (typeof core.isWarmHotPathInFlight === "function" && core.isWarmHotPathInFlight()) {
+        /* single-flight no core — segue */
+      }
+      const pjs = require("./printJobService");
+      if (typeof pjs.impressaoEmAndamento === "function" && pjs.impressaoEmAndamento()) {
+        return false;
+      }
+    } catch (_) {}
     const info = ler();
     if (!(info.ativo && info.caminhoAbsoluto)) return false;
     const pathOut = await prepararArquivoEscpos(info);

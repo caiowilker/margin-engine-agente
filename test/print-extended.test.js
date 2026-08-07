@@ -350,15 +350,22 @@ test("printFiscalCoord — fiscalEmUso sem lock ativo", () => {
   delete process.env.PRINTER_PORTA;
   runtime.resetAcbrPosCircuit();
   try {
-    // Padrão: ACBr PosPrinter (mesmo em RAW:) — native só circuito / PRINT_FAST_NATIVE / gaveta
+    // Default raw: sem porta RAW → ACBr; gaveta sempre native
     assert.strictEqual(isFastNativePath({ payload: { naoFiscal: true } }), false);
     assert.strictEqual(isFastNativePath({ op: "imprimirPedido" }), false);
     assert.strictEqual(isFastNativePath({ op: "abrirGaveta" }), true);
 
+    // RAW:Windows comercial → native (evita Ativar hang)
     process.env.PRINTER_PORTA = "RAW:POSPrinter POS80";
-    assert.strictEqual(isFastNativePath({ payload: { naoFiscal: true } }), false);
-    assert.strictEqual(isFastNativePath({ op: "imprimirPedido" }), false);
+    assert.strictEqual(isFastNativePath({ payload: { naoFiscal: true } }), true);
+    assert.strictEqual(isFastNativePath({ op: "imprimirPedido" }), true);
     assert.strictEqual(isFastNativePath({ op: "abrirGaveta" }), true);
+    assert.strictEqual(
+      isFastNativePath({
+        payload: { chaveNfe: "3526" + "0".repeat(40), naoFiscal: false },
+      }),
+      false,
+    );
 
     delete process.env.PRINTER_PORTA;
     process.env.PRINT_FAST_NATIVE = "true";
@@ -377,6 +384,40 @@ test("printFiscalCoord — fiscalEmUso sem lock ativo", () => {
     else process.env.PRINTER_PORTA = prevPorta;
     runtime.resetAcbrPosCircuit();
   }
+});
+
+test("imprimirLogoCupomEscpos — hot path sem Image.load / sharp (só cache rawBytes)", () => {
+  const src = fs.readFileSync(
+    path.join(__dirname, "../print/escpos/impressoraCore.js"),
+    "utf8",
+  );
+  const fnStart = src.indexOf("async function imprimirLogoCupomEscpos");
+  const fnEnd = src.indexOf("async function renderCupomConteudo", fnStart);
+  assert.ok(fnStart > 0 && fnEnd > fnStart);
+  const body = src
+    .slice(fnStart, fnEnd)
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+  assert.ok(body.includes("logo_hotpath_cache_miss"));
+  assert.ok(body.includes("rawBytes"));
+  assert.ok(body.includes("exibirLogoCupomHabilitado"));
+  assert.ok(!/escpos\.Image\.load/.test(body), "hot path não pode Image.load");
+  assert.ok(!/prepararArquivoEscpos/.test(body), "hot path não pode sharp/prepararArquivo");
+  assert.ok(!/printer\.image\(/.test(body), "hot path não pode toBitmap via image()");
+  assert.ok(!/get-pixels/.test(body));
+  assert.ok(!/\.ler\(\)/.test(body), "hot path não pode ler() (BMP sync)");
+});
+
+test("RAW script — não compila Add-Type no cupom", () => {
+  const src = fs.readFileSync(
+    path.join(__dirname, "../print/escpos/impressoraCore.js"),
+    "utf8",
+  );
+  assert.ok(src.includes("nao compilar no cupom"));
+  // buildRawPrintScriptContent não deve mais embutir TypeDefinition no hot path
+  const marker = src.indexOf("nao compilar no cupom");
+  const nearby = src.slice(Math.max(0, marker - 200), marker + 400);
+  assert.ok(!nearby.includes("TypeDefinition"), "PS do cupom não deve Add-Type -TypeDefinition");
 });
 
 test("preferNativeEscPos — naoFiscal rápido; fiscal com chave fica no ACBr", () => {
@@ -398,7 +439,7 @@ test("preferNativeEscPos — naoFiscal rápido; fiscal com chave fica no ACBr", 
   }
 });
 
-test("preferNativeEscPos — padrão ACBr (PRINT_FAST_NATIVE=false)", () => {
+test("preferNativeEscPos — sem RAW (default raw) permanece ACBr", () => {
   const { preferNativeEscPos } = require("../print/drivers/acbrPosPrinterProvider");
   const runtime = require("../print/acbrPosPrinterRuntime");
   const prev = process.env.PRINT_FAST_NATIVE;
@@ -418,7 +459,27 @@ test("preferNativeEscPos — padrão ACBr (PRINT_FAST_NATIVE=false)", () => {
   }
 });
 
-test("preferNativeEscPos — RAW:Windows também usa ACBr (sem PRINT_FAST_NATIVE)", () => {
+test("preferNativeEscPos — PRINT_FAST_NATIVE=false força ACBr mesmo em RAW", () => {
+  const { preferNativeEscPos } = require("../print/drivers/acbrPosPrinterProvider");
+  const runtime = require("../print/acbrPosPrinterRuntime");
+  const prev = process.env.PRINT_FAST_NATIVE;
+  const prevPorta = process.env.PRINTER_PORTA;
+  process.env.PRINT_FAST_NATIVE = "false";
+  process.env.PRINTER_PORTA = "RAW:POSPrinter POS80";
+  runtime.resetAcbrPosCircuit();
+  try {
+    assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), false);
+    assert.strictEqual(preferNativeEscPos({}), false);
+  } finally {
+    if (prev === undefined) delete process.env.PRINT_FAST_NATIVE;
+    else process.env.PRINT_FAST_NATIVE = prev;
+    if (prevPorta === undefined) delete process.env.PRINTER_PORTA;
+    else process.env.PRINTER_PORTA = prevPorta;
+    runtime.resetAcbrPosCircuit();
+  }
+});
+
+test("preferNativeEscPos — RAW:Windows comercial usa native (default raw)", () => {
   const { preferNativeEscPos } = require("../print/drivers/acbrPosPrinterProvider");
   const runtime = require("../print/acbrPosPrinterRuntime");
   const prev = process.env.PRINT_FAST_NATIVE;
@@ -427,8 +488,8 @@ test("preferNativeEscPos — RAW:Windows também usa ACBr (sem PRINT_FAST_NATIVE
   process.env.PRINTER_PORTA = "RAW:POSPrinter POS80";
   runtime.resetAcbrPosCircuit();
   try {
-    assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), false);
-    assert.strictEqual(preferNativeEscPos({}), false);
+    assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), true);
+    assert.strictEqual(preferNativeEscPos({}), true);
     assert.strictEqual(
       preferNativeEscPos({ chaveNfe: "35" + "0".repeat(42), naoFiscal: false }),
       false,

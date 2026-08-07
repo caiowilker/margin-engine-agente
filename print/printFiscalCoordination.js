@@ -126,9 +126,28 @@ function isFastNativePath(opts = {}) {
   // Gaveta: sempre ESC/POS nativo (pulso), sem sessão PosPrinter.
   if (opts.op === "abrirGaveta") return true;
 
-  const flag = String(process.env.PRINT_FAST_NATIVE || "false").toLowerCase();
-  if (flag === "false" || flag === "0" || flag === "") return false;
+  const flag = String(process.env.PRINT_FAST_NATIVE || "raw").toLowerCase();
+  if (flag === "false" || flag === "0") return false;
   if (flag === "always") return true;
+
+  const rawPort =
+    typeof acbrProv?.portaEhRawWindows === "function"
+      ? !!acbrProv.portaEhRawWindows()
+      : false;
+
+  // Default raw/auto: comerciais em RAW:Windows → native (sem Ativar ACBr).
+  if (flag === "raw" || flag === "auto" || flag === "") {
+    if (!rawPort) return false;
+    if (opts.op && OPS_FAST_NATIVE.has(opts.op)) return true;
+    if (payload && typeof payload === "object") {
+      if (acbrProv?.isFiscalPayload?.(payload)) return false;
+      return true;
+    }
+    // Sem payload: ops comerciais conhecidas já cobertas; cupom fiscal via payload.
+    return !!(opts.op && OPS_FAST_NATIVE.has(opts.op));
+  }
+
+  // PRINT_FAST_NATIVE=true|1 → comerciais no native (qualquer porta)
   if (opts.op && OPS_FAST_NATIVE.has(opts.op)) return true;
   if (payload && typeof payload === "object") {
     if (payload.naoFiscal || payload.cupomSemFiscal) return true;

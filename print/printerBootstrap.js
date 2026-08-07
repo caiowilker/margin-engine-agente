@@ -268,8 +268,8 @@ async function garantirPortaImpressao(opts = {}) {
 
 function noBoot(delayMs = 2500) {
   return new Promise((resolve) => {
-    // CRITICAL: Warm print hot-path IMMEDIATELY — don't wait for setTimeout
-    // This ensures escpos.Image.load() is cached before first cupom
+    // Warm hot-path no boot (orçamento curto) — DLL + raster logo em background.
+    // NÃO bloqueia detecção; NÃO usa Image.load no caminho do cupom.
     setImmediate(async () => {
       const core = require("./escpos/impressoraCore");
       const tWarm = performance.now();

@@ -1,9 +1,9 @@
 /**
  * AcbrPosPrinterProvider — ACBrLib PosPrinter (padrão 1.0).
  *
- * Caminho oficial: tags ACBr via DLL/worker (também em RAW:Windows).
- * ESC/POS nativo só retaguarda: circuito, PRINT_FAST_NATIVE, fallback pré-impressão,
- * gaveta, ou lib ausente.
+ * Comercial em porta RAW:Windows: ESC/POS nativo por default (PRINT_FAST_NATIVE=raw).
+ * Fiscal/DANFE e TCP/COM: ACBr PosPrinter. Circuito / gaveta / fallback pré-impressão
+ * também forçam native.
  */
 const log = require("../../logger").child({ modulo: "acbr_posprinter" });
 const runtime = require("../acbrPosPrinterRuntime");
@@ -18,10 +18,14 @@ const crediarioTags = require("../crediarioAcbrTags");
 
 /**
  * Prefere ESC/POS nativo vs ACBr tags.
- * Padrão: ACBr PosPrinter (PRINT_FAST_NATIVE=false), inclusive em RAW:Windows
- * (worker + sessão quente + ControlePorta=0). Native só como retaguarda:
- * - circuito aberto (Ativar/ConfigGravar -10 / hang)
- * - PRINT_FAST_NATIVE=true|always
+ *
+ * Default PRINT_FAST_NATIVE=raw:
+ * - Porta RAW:Windows → native no comercial (ACBr Ativar em RAW costuma hang;
+ *   Win32 WritePrinter tipicamente ~200ms neste parque).
+ * - Fiscal/DANFE com chave → ACBr.
+ * - Circuito aberto → native comercial.
+ *
+ * Overrides: false|0 = sempre ACBr; true = comercial native; always = tudo native.
  */
 function isFiscalPayload(payload) {
   if (!payload || typeof payload !== "object") return false;
@@ -32,7 +36,7 @@ function isFiscalPayload(payload) {
   return false;
 }
 
-/** Porta RAW:NomeWindows — usada por diagnóstico / gaveta; NÃO força bypass do ACBr. */
+/** Porta RAW:NomeWindows — usada por diagnóstico / gaveta / fast-path native. */
 function portaEhRawWindows() {
   try {
     const local = require("../printerLocalConfig").ler()?.porta;
@@ -53,9 +57,13 @@ function preferNativeEscPos(payload) {
   } catch (_) {
     /* runtime opcional em testes */
   }
-  const flag = String(process.env.PRINT_FAST_NATIVE || "false").toLowerCase();
-  if (flag === "false" || flag === "0" || flag === "") return false;
+  const flag = String(process.env.PRINT_FAST_NATIVE || "raw").toLowerCase();
+  if (flag === "false" || flag === "0") return false;
   if (flag === "always") return true;
+  if (flag === "raw" || flag === "auto" || flag === "") {
+    if (portaEhRawWindows() && !isFiscalPayload(payload)) return true;
+    return false;
+  }
   // PRINT_FAST_NATIVE=true → comerciais no native; fiscal/DANFE no ACBr
   if (!payload || typeof payload !== "object") return true;
   if (payload.naoFiscal === true || payload.cupomSemFiscal === true) return true;
@@ -180,7 +188,7 @@ function getDriverInfo() {
     libPath: runtime.resolveLibPath(),
     iniPath: runtime.resolveIniPath(),
     ready: mode === "native" || mode === "parity",
-    fastNative: String(process.env.PRINT_FAST_NATIVE || "false"),
+    fastNative: String(process.env.PRINT_FAST_NATIVE || "raw"),
     posWorker,
     posWorkerActive,
     usbTopology: String(process.env.PHYSICAL_USB_TOPOLOGY || "separate"),

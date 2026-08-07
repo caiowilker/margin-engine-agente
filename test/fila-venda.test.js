@@ -108,6 +108,17 @@ const payload = {
     const row = fila.consultarVenda("PDV-TEST-LOCAL-2");
     assert.ok(row);
     assert.strictEqual(row.numero_venda_backend, "PDV-BACKEND-42");
+    assert.ok(row.payload, "payload deve vir parseado para 2ª via");
+    assert.strictEqual(row.payload.numeroVendaCliente, "PDV-TEST-LOCAL-2");
+    assert.ok(Array.isArray(row.payload.itens));
+    assert.strictEqual(row.payload.itens.length, 1);
+  });
+
+  await test("consultarVenda — encontra por numero_venda_backend", async () => {
+    const row = fila.consultarVenda("PDV-BACKEND-42");
+    assert.ok(row, "deve achar pelo id oficial pós-sync");
+    assert.strictEqual(row.numero_venda, "PDV-TEST-LOCAL-2");
+    assert.ok(row.payload?.itens?.length >= 1);
   });
 
   await test("registrarLocalFirst — idempotente (INSERT OR IGNORE)", async () => {

@@ -14,7 +14,8 @@ Homologação física no Windows. CI/Linux cobre contratos, benchmark e layout o
 
 - [ ] `PRINTER_PROVIDER=acbr-posprinter`
 - [ ] `PRINTER_FALLBACK=native`
-- [ ] `PRINT_FAST_NATIVE` **ausente ou false** (padrão = ACBr; native só retaguarda)
+- [ ] `PRINT_FAST_NATIVE` **ausente ou `raw`** (padrão = comercial RAW via ESC/POS nativo; fiscal no ACBr)
+- [ ] `PRINT_FAST_NATIVE=false` só se quiser forçar ACBr também no comercial RAW (lento/hang neste parque)
 - [ ] Remover `PRINTER_ALLOW_PARITY` em produção
 - [ ] `npm run check:posprinter-deps` → OK (`ACBrPosPrinter64.dll` + side DLLs + koffi)
 - [ ] INI: `ControlePorta=0` (RAW), `BytesCount=512`, `BytesInterval=10`, `LogNivel=0`
