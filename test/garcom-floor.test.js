@@ -132,5 +132,6 @@ test("mint reutiliza token válido e atualiza JWT", () => {
   assert.equal(b.floorToken, a.floorToken);
   const ex = garcomFloor.exchange(b.floorToken);
   assert.equal(ex.accessToken, "new");
-  assert.equal(ex.refreshToken, "new-r");
+  // O refresh é sessão privada do PC: QR nunca pode recebê-lo.
+  assert.equal(ex.refreshToken, undefined);
 });

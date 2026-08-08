@@ -40,7 +40,7 @@ test("mint gera qrUrl com Central e storeFloor (não mesas/floor)", () => {
   assert.equal(r.operatorBound, true);
 });
 
-test("exchange devolve tokens; token inválido 401", () => {
+test("exchange devolve access sem refresh compartilhado; token inválido 401", () => {
   const minted = storeFloor.mint({
     accessToken: "acc",
     refreshToken: "ref",
@@ -51,6 +51,7 @@ test("exchange devolve tokens; token inválido 401", () => {
   const ok = storeFloor.exchange(minted.floorToken, { agentToken: "ag" });
   assert.equal(ok.ok, true);
   assert.equal(ok.accessToken, "acc");
+  assert.equal(ok.refreshToken, undefined);
   assert.equal(ok.floorKind, "store");
 
   const bad = storeFloor.exchange("token-errado");

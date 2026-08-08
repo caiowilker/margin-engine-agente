@@ -106,6 +106,7 @@ function criarApiProxy({ lerConfigSync }) {
     "x-correlation-id",
     "x-tenant-id",
     "x-store-floor-session",
+    "x-margin-floor-session",
     "x-agent-token",
   ];
 

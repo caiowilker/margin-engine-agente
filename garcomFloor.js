@@ -58,7 +58,7 @@ function sanitizeOperatorMe(me) {
   };
 }
 
-/** @type {{ floorToken: string, accessToken: string | null, refreshToken: string | null, operatorMe: object | null, expiresAt: number, mintedAt: number } | null} */
+/** @type {{ floorToken: string, accessToken: string | null, refreshToken: string | null, refreshIsolated: boolean, operatorMe: object | null, expiresAt: number, mintedAt: number } | null} */
 let _cache = null;
 
 function resolveFilePath() {
@@ -73,6 +73,7 @@ function emptyState() {
     floorToken: null,
     accessToken: null,
     refreshToken: null,
+    refreshIsolated: false,
     operatorMe: null,
     expiresAt: 0,
     mintedAt: 0,
@@ -92,6 +93,7 @@ function load() {
       floorToken: raw.floorToken ? String(raw.floorToken) : null,
       accessToken: raw.accessToken ? String(raw.accessToken) : null,
       refreshToken: raw.refreshToken ? String(raw.refreshToken) : null,
+      refreshIsolated: raw.refreshIsolated === true,
       operatorMe:
         raw.operatorMe && typeof raw.operatorMe === "object" ? raw.operatorMe : null,
       expiresAt: Number(raw.expiresAt) || 0,
@@ -149,6 +151,7 @@ function mint(opts = {}) {
     opts.refreshToken != null && String(opts.refreshToken).trim()
       ? String(opts.refreshToken).trim()
       : null;
+  const refreshIsolated = opts.refreshIsolated === true && !!refreshToken;
   const operatorMe = sanitizeOperatorMe(opts.operatorMe);
   const forceNew = !!opts.forceNew;
   const port = Number(opts.port) || Number(process.env.AGENT_PORT || process.env.PORT || 9100);
@@ -165,7 +168,8 @@ function mint(opts = {}) {
       state = {
         ...state,
         accessToken,
-        refreshToken: refreshToken || state.refreshToken,
+        refreshToken: refreshIsolated ? refreshToken : null,
+        refreshIsolated,
         operatorMe: operatorMe || state.operatorMe,
       };
       save(state);
@@ -175,7 +179,7 @@ function mint(opts = {}) {
       expiresAt: state.expiresAt,
       qrUrl: buildQrUrl({ lanIp, port, floorToken: state.floorToken }),
       lanIp: lanIp && isPrivateIPv4(lanIp) ? lanIp : null,
-      operatorBound: !!(state.accessToken && state.refreshToken),
+      operatorBound: !!state.accessToken,
       hasOperatorMe: !!(state.operatorMe && state.operatorMe.userId),
       reused: true,
     };
@@ -186,7 +190,8 @@ function mint(opts = {}) {
   state = {
     floorToken,
     accessToken: accessToken || state.accessToken || null,
-    refreshToken: refreshToken || state.refreshToken || null,
+    refreshToken: refreshIsolated ? refreshToken : null,
+    refreshIsolated,
     operatorMe: operatorMe || state.operatorMe || null,
     expiresAt: now + TTL_MS,
     mintedAt: now,
@@ -198,7 +203,7 @@ function mint(opts = {}) {
     expiresAt: state.expiresAt,
     qrUrl: buildQrUrl({ lanIp, port, floorToken }),
     lanIp: lanIp && isPrivateIPv4(lanIp) ? lanIp : null,
-    operatorBound: !!(state.accessToken && state.refreshToken),
+    operatorBound: !!state.accessToken,
     hasOperatorMe: !!(state.operatorMe && state.operatorMe.userId),
     reused: false,
   };
@@ -217,7 +222,7 @@ function exchange(floorToken, opts = {}) {
   if (state.expiresAt <= Date.now()) {
     return { ok: false, status: 401, erro: "Token do salão expirado. Regenere o QR no caixa." };
   }
-  if (!state.accessToken || !state.refreshToken) {
+  if (!state.accessToken) {
     return {
       ok: false,
       status: 409,
@@ -227,7 +232,9 @@ function exchange(floorToken, opts = {}) {
   return {
     ok: true,
     accessToken: state.accessToken,
-    refreshToken: state.refreshToken,
+    ...(state.refreshIsolated && state.refreshToken
+      ? { refreshToken: state.refreshToken }
+      : {}),
     agentToken: opts.agentToken || null,
     operatorMe: state.operatorMe || null,
     expiresAt: state.expiresAt,
@@ -246,7 +253,7 @@ function status(opts = {}) {
   return {
     active: !!(state.floorToken && state.expiresAt > Date.now()),
     expiresAt: state.expiresAt || null,
-    operatorBound: !!(state.accessToken && state.refreshToken),
+      operatorBound: !!state.accessToken,
     lanIp: lanIp && isPrivateIPv4(lanIp) ? lanIp : null,
     qrUrl:
       state.floorToken && state.expiresAt > Date.now()

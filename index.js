@@ -296,9 +296,11 @@ function sincronizarContextoLog(cfg) {
 async function lerConfig() {
   const pub = lerConfigPublica();
   const creds = await credenciais.ler();
+  const { normalizeBackendUrl } = require("./apiProxy");
 
-  const backendUrl =
-    pub.backendUrl || creds?.backendUrl || process.env.BACKEND_URL || "";
+  const backendUrl = normalizeBackendUrl(
+    pub.backendUrl || creds?.backendUrl || process.env.BACKEND_URL || "",
+  );
   const backendToken = creds?.backendToken || process.env.BACKEND_TOKEN || "";
 
   const cfg = {
@@ -329,8 +331,9 @@ function lerConfigSync() {
   // Fallback: apenas dados públicos + env (sem token do cofre — não ideal,
   // mas nunca acontece em produção pois lerConfig() é chamado no boot).
   const pub = lerConfigPublica();
+  const { normalizeBackendUrl } = require("./apiProxy");
   return {
-    backendUrl: pub.backendUrl || process.env.BACKEND_URL || "",
+    backendUrl: normalizeBackendUrl(pub.backendUrl || process.env.BACKEND_URL || ""),
     backendToken: process.env.BACKEND_TOKEN || "",
     tenantId: pub.tenantId || process.env.TENANT_ID || "",
     pdvNome: pub.pdvNome || process.env.PDV_NOME || "PDV Principal",
@@ -345,22 +348,27 @@ function lerConfigSync() {
  * Salva config: dados não-sensíveis em config.json, token no cofre.
  */
 async function salvarConfig(cfg) {
+  const { normalizeBackendUrl } = require("./apiProxy");
+  const normalizedCfg = {
+    ...cfg,
+    backendUrl: normalizeBackendUrl(cfg.backendUrl || ""),
+  };
   // 1. Persiste dados públicos (sem token)
-  salvarConfigPublica(cfg);
+  salvarConfigPublica(normalizedCfg);
 
   // 2. Persiste token + dados sensíveis no cofre
   await credenciais.salvar({
-    backendUrl: cfg.backendUrl,
-    backendToken: cfg.backendToken,
-    tenantId: cfg.tenantId,
-    pdvNome: cfg.pdvNome,
-    dispositivoId: cfg.dispositivoId,
-    ativado: cfg.ativado,
+    backendUrl: normalizedCfg.backendUrl,
+    backendToken: normalizedCfg.backendToken,
+    tenantId: normalizedCfg.tenantId,
+    pdvNome: normalizedCfg.pdvNome,
+    dispositivoId: normalizedCfg.dispositivoId,
+    ativado: normalizedCfg.ativado,
   });
 
   // 3. Atualiza env vars (para módulos que leem process.env diretamente)
-  process.env.BACKEND_URL = cfg.backendUrl;
-  process.env.BACKEND_TOKEN = cfg.backendToken;
+  process.env.BACKEND_URL = normalizedCfg.backendUrl;
+  process.env.BACKEND_TOKEN = normalizedCfg.backendToken;
 
   // 4. Invalida cache para forçar releitura na próxima lerConfig()
   _configCache = null;
@@ -2139,9 +2147,9 @@ function iniciarServidor() {
       }
       const accessToken = req.body?.accessToken;
       const refreshToken = req.body?.refreshToken;
-      if (!accessToken || !refreshToken) {
+      if (!accessToken) {
         return res.status(400).json({
-          erro: "accessToken e refreshToken do operador são obrigatórios para gerar o QR.",
+          erro: "accessToken do operador é obrigatório para gerar o QR.",
         });
       }
       const operatorMe =
@@ -2151,6 +2159,7 @@ function iniciarServidor() {
       const result = garcomFloor.mint({
         accessToken,
         refreshToken,
+        refreshIsolated: req.body?.refreshIsolated === true,
         operatorMe,
         forceNew: !!req.body?.forceNew,
         lanIp,
@@ -2182,7 +2191,7 @@ function iniciarServidor() {
       }
       res.json({
         accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
+        refreshToken: result.refreshToken || undefined,
         agentToken: result.agentToken,
         operatorMe: result.operatorMe || null,
         expiresAt: result.expiresAt,
@@ -2218,9 +2227,9 @@ function iniciarServidor() {
       }
       const accessToken = req.body?.accessToken;
       const refreshToken = req.body?.refreshToken;
-      if (!accessToken || !refreshToken) {
+      if (!accessToken) {
         return res.status(400).json({
-          erro: "accessToken e refreshToken do operador são obrigatórios para gerar o QR.",
+          erro: "accessToken do operador é obrigatório para gerar o QR.",
         });
       }
       const operatorMe =
@@ -2230,6 +2239,7 @@ function iniciarServidor() {
       const result = storeFloor.mint({
         accessToken,
         refreshToken,
+        refreshIsolated: req.body?.refreshIsolated === true,
         operatorMe,
         forceNew: !!req.body?.forceNew,
         lanIp,
@@ -2262,7 +2272,7 @@ function iniciarServidor() {
       }
       res.json({
         accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
+        refreshToken: result.refreshToken || undefined,
         agentToken: result.agentToken,
         operatorMe: result.operatorMe || null,
         expiresAt: result.expiresAt,
