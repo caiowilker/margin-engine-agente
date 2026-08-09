@@ -192,9 +192,11 @@ function readIniValues(iniPath) {
   const vault = fiscalSecrets.lerSync();
   const senhaIni = get("Senha") || getSec("Certificado", "Senha") || "";
   const cscIni = getSec("NFCe", "CSC") || getSec("NFe", "CSC") || get("CSC") || "";
+  // INI explícito (não __VAULT__) tem prioridade sobre cofre/env — evita vazamento
+  // entre testes e respeita o arquivo passado a prepareNativeRuntime.
   const senhaBruta =
-    vault.certificadoSenha ||
     (senhaIni && senhaIni !== "__VAULT__" ? senhaIni : "") ||
+    vault.certificadoSenha ||
     process.env.ACBR_CERT_SENHA ||
     process.env.CERT_A1_PASS ||
     "";
@@ -202,8 +204,8 @@ function readIniValues(iniPath) {
     senha: certProof.normalizeCertPassword(senhaBruta),
     idCsc: getSec("NFCe", "IdCSC") || getSec("NFe", "IdCSC") || get("IdCSC") || "000001",
     csc:
-      vault.nfceCsc ||
       (cscIni && cscIni !== "__VAULT__" ? cscIni : "") ||
+      vault.nfceCsc ||
       process.env.NFE_CSC_TOKEN ||
       "",
     uf: getSec("DFe", "UF") || get("UF") || "MG",

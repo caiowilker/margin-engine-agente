@@ -6,6 +6,21 @@ const { test } = require("node:test");
 const fs = require("fs");
 const path = require("path");
 const { stringToB64Crypt, b64CryptToString } = require("../fiscal/acbrLibCrypt");
+const fiscalSecrets = require("../fiscalSecrets");
+
+async function isolarSenhaCertificado() {
+  delete process.env.CERT_A1_PASS;
+  delete process.env.ACBR_CERT_SENHA;
+  try {
+    await fiscalSecrets.limpar();
+  } catch (_) {
+    /* vault pode não existir */
+  }
+  const vaultPath = fiscalSecrets.fallbackVaultPath();
+  if (vaultPath && fs.existsSync(vaultPath)) {
+    fs.unlinkSync(vaultPath);
+  }
+}
 
 test("applyNativeCertConfig grava Certificado.* + DFe.* via API (mTLS SEFAZ)", () => {
   const calls = [];
@@ -31,7 +46,7 @@ test("applyNativeCertConfig grava Certificado.* + DFe.* via API (mTLS SEFAZ)", (
   );
 });
 
-test("runtime.ini grava DFe.Senha como Base64+StrCrypt", () => {
+test("runtime.ini grava DFe.Senha como Base64+StrCrypt", async () => {
   const root = path.join(__dirname, "data-acbr-senha-ini");
   if (fs.existsSync(root)) fs.rmSync(root, { recursive: true, force: true });
   fs.mkdirSync(path.join(root, "lib"), { recursive: true });
@@ -48,11 +63,18 @@ test("runtime.ini grava DFe.Senha como Base64+StrCrypt", () => {
     "utf8",
   );
 
+  const prevCertPass = process.env.CERT_A1_PASS;
+  const prevAcbrSenha = process.env.ACBR_CERT_SENHA;
   process.env.ACBR_WIN_STAGING = path.join(root, "stage");
   const prevPlat = Object.getOwnPropertyDescriptor(process, "platform");
   Object.defineProperty(process, "platform", { value: "win32" });
 
   try {
+    await isolarSenhaCertificado();
+    // Garante que o INI do teste manda — sem vazamento de vault/env de outros testes.
+    assert.equal(process.env.CERT_A1_PASS, undefined);
+    assert.equal(fiscalSecrets.lerSync().certificadoSenha || "", "");
+
     const runtime = require("../fiscal/drivers/acbrLibRuntime");
     const prepared = runtime.prepareNativeRuntime({
       libPath: lib,
@@ -73,6 +95,10 @@ test("runtime.ini grava DFe.Senha como Base64+StrCrypt", () => {
   } finally {
     if (prevPlat) Object.defineProperty(process, "platform", prevPlat);
     delete process.env.ACBR_WIN_STAGING;
+    if (prevCertPass === undefined) delete process.env.CERT_A1_PASS;
+    else process.env.CERT_A1_PASS = prevCertPass;
+    if (prevAcbrSenha === undefined) delete process.env.ACBR_CERT_SENHA;
+    else process.env.ACBR_CERT_SENHA = prevAcbrSenha;
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
