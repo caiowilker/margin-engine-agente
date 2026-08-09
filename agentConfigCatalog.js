@@ -438,8 +438,8 @@ const CATALOGO = {
   backendTimeoutMs: {
     env: "BACKEND_TIMEOUT_MS",
     tipo: "number",
-    default: 5000,
-    min: 1000,
+    default: 12000,
+    min: 3000,
     max: 60000,
     grupo: "operacao",
     label: "Timeout backend offline (ms)",
