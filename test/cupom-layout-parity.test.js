@@ -106,3 +106,12 @@ test("barcodeSpecsFromPayload — EAN/CODE128", () => {
   assert.strictEqual(specs.length, 3);
   assert.strictEqual(specs[0].tipo, "EAN13");
 });
+
+test("encodeCode128ForEscPos — prefixo {B Epson", () => {
+  const { encodeCode128ForEscPos, sanitizeCode39 } = require("../print/cupomLayoutShared");
+  assert.strictEqual(encodeCode128ForEscPos("VAS01"), "{BVAS01");
+  assert.strictEqual(encodeCode128ForEscPos("{BVAS01"), "{BVAS01");
+  assert.strictEqual(encodeCode128ForEscPos("{AVAS01"), "{AVAS01");
+  assert.strictEqual(encodeCode128ForEscPos(""), "");
+  assert.strictEqual(sanitizeCode39("vas-01*x"), "VAS-01X");
+});

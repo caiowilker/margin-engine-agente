@@ -3,8 +3,15 @@
  * Isolado de cupom fiscal / pedido / caixa (mesmo padrão de pedidoAcbrTags.js).
  */
 const { toThermalText, toThermalDoc } = require("../thermalText");
-const { tagLogoHeader, tagCorte, tagBarcode, tagQrCodeSeguro } = require("./acbrTags");
+const {
+  tagLogoHeader,
+  tagCorte,
+  tagBarcode,
+  tagQrCodeSeguro,
+  tagSegundaViaBanner,
+} = require("./acbrTags");
 const { sepEq, sepDash, getThermalCols } = require("./thermalCols");
+const { deveExibirBannerSegundaVia } = require("./segundaVia");
 
 function tx(v) {
   return toThermalText(v);
@@ -24,6 +31,12 @@ function fmtR$(cents) {
 function normalizarVasilhamePayload(raw = {}) {
   const p = raw && typeof raw === "object" ? raw : {};
   const codigo = String(p.codigoTransacao || p.codigo || "").trim().toUpperCase();
+  const clickId = String(p.clickId || p.click_id || "").trim();
+  const motivo = String(p.motivo || "").trim();
+  const reimpressao =
+    p.reimpressao === true ||
+    clickId.length > 0 ||
+    /reimpress|segunda/.test(motivo.toLowerCase());
   return {
     ...p,
     naoFiscal: true,
@@ -39,6 +52,11 @@ function normalizarVasilhamePayload(raw = {}) {
     operador: p.operador || "",
     observacao: p.observacao || "",
     empresa: p.empresa || null,
+    reimpressao,
+    clickId,
+    motivo: reimpressao
+      ? motivo || "reimpressao_vasilhame"
+      : motivo,
   };
 }
 
@@ -46,6 +64,10 @@ function renderVasilhameTags(rawPayload = {}) {
   const payload = normalizarVasilhamePayload(rawPayload);
   const COLS = getThermalCols();
   const lines = ["</zera>", tagLogoHeader(payload)];
+
+  if (deveExibirBannerSegundaVia(payload)) {
+    lines.push(tagSegundaViaBanner());
+  }
 
   if (payload.empresa?.nome) {
     lines.push(`<ce><n>${tx(payload.empresa.nome)}</n></ce>`);
@@ -95,17 +117,30 @@ function renderVasilhameTags(rawPayload = {}) {
   }
 
   if (payload.codigoTransacao) {
+    // Bloco destacado para colar/identificar o vasilhame: texto legível + CODE128.
     lines.push(
       sepEq(),
-      "<ce><n>CODIGO DO EMPRESTIMO</n></ce>",
-      `<ce><n>${tx(payload.codigoTransacao)}</n></ce>`,
+      "<ce><n>ETIQUETA — COLE NO VASILHAME</n></ce>",
+      `<ce><e><n>${tx(payload.codigoTransacao)}</n></e></ce>`,
       "<ce>Apresente na devolucao</ce>",
     );
-    const bc = tagBarcode("CODE128", payload.codigoTransacao, { altura: 48, largura: 2 });
+    const bc = tagBarcode("CODE128", payload.codigoTransacao, {
+      altura: 64,
+      largura: 2,
+      exibeCodigo: true,
+    });
     if (bc) {
       lines.push("<ce>" + bc + "</ce>");
+    } else {
+      const bc39 = tagBarcode("CODE39", payload.codigoTransacao, {
+        altura: 64,
+        largura: 2,
+        exibeCodigo: true,
+      });
+      if (bc39) lines.push("<ce>" + bc39 + "</ce>");
     }
-    const qr = tagQrCodeSeguro(payload.codigoTransacao, { moduleSize: 5 });
+    lines.push(`<ce><n>${tx(payload.codigoTransacao)}</n></ce>`);
+    const qr = tagQrCodeSeguro(payload.codigoTransacao, { moduleSize: 4 });
     if (qr) {
       lines.push("<ce>" + qr + "</ce>");
     }

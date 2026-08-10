@@ -116,29 +116,87 @@ function barcodeSpecsFromPayload(payload) {
   return out.filter((b) => b.code);
 }
 
-/** Imprime barcodes ESC/POS (tipos suportados pela lib escpos). */
-function imprimirBarcodesEscpos(printer, payload) {
+/**
+ * Epson GS k 73 (CODE128): o payload precisa do seletor de charset `{A`/`{B`/`{C`.
+ * Sem isso muitas térmicas 80mm (Elgin/Bematech/POS80) não imprimem as barras —
+ * só o HRI ou nada. ACBr PosPrinter NÃO usa este prefixo (codifica sozinho).
+ */
+function encodeCode128ForEscPos(code) {
+  const raw = String(code || "");
+  if (!raw) return "";
+  if (/^\{[ABC]/.test(raw)) return raw;
+  return "{B" + raw;
+}
+
+/** CODE39: subset seguro (A–Z, 0–9 e alguns símbolos). */
+function sanitizeCode39(code) {
+  return String(code || "")
+    .toUpperCase()
+    .replace(/[^0-9A-Z\-.\s/$+%]/g, "");
+}
+
+/**
+ * Imprime barcodes ESC/POS (tipos suportados pela lib escpos).
+ * @param {object} [opts]
+ * @param {number} [opts.altura]
+ * @param {number} [opts.largura]
+ * @param {boolean} [opts.exibe] HRI abaixo das barras
+ * @returns {number} quantidade impressa com sucesso
+ */
+function imprimirBarcodesEscpos(printer, payload, opts = {}) {
   const specs = barcodeSpecsFromPayload(payload);
   if (!specs.length) return 0;
-  const altura = parseInt(process.env.PRINTER_BARCODE_ALTURA || "50", 10) || 50;
-  const largura = parseInt(process.env.PRINTER_BARCODE_LARGURA || "2", 10) || 2;
-  const exibe = process.env.PRINTER_BARCODE_EXIBE !== "false";
+  const altura =
+    opts.altura != null
+      ? Number(opts.altura)
+      : parseInt(process.env.PRINTER_BARCODE_ALTURA || "50", 10) || 50;
+  const largura =
+    opts.largura != null
+      ? Number(opts.largura)
+      : parseInt(process.env.PRINTER_BARCODE_LARGURA || "2", 10) || 2;
+  const exibe =
+    opts.exibe != null ? !!opts.exibe : process.env.PRINTER_BARCODE_EXIBE !== "false";
+  const barOpts = {
+    width: Math.max(1, Math.min(5, largura || 2)),
+    height: Math.max(20, Math.min(255, altura || 50)),
+    position: exibe ? "BLW" : "OFF",
+  };
   let n = 0;
   printer.align("ct");
   for (const { tipo, code } of specs) {
     // PDF417 não é barcode() clássico na lib — pula no native
     if (tipo === "PDF417") continue;
-    try {
-      printer.barcode(code, tipo, {
-        width: largura,
-        height: altura,
-        position: exibe ? "BLW" : "OFF",
-      });
-      printer.feed(1);
-      n += 1;
-    } catch (_) {
-      /* firmware sem tipo */
+    let ok = false;
+    if (tipo === "CODE128") {
+      try {
+        printer.barcode(encodeCode128ForEscPos(code), "CODE128", barOpts);
+        printer.feed(1);
+        ok = true;
+      } catch (_) {
+        /* tenta CODE39 abaixo */
+      }
+      if (!ok) {
+        const c39 = sanitizeCode39(code);
+        if (c39) {
+          try {
+            printer.barcode(c39, "CODE39", barOpts);
+            printer.feed(1);
+            ok = true;
+          } catch (_) {
+            /* firmware sem barcode */
+          }
+        }
+      }
+    } else {
+      try {
+        printer.barcode(code, tipo, barOpts);
+        printer.feed(1);
+        ok = true;
+      } catch (_) {
+        /* firmware sem tipo */
+      }
     }
+    if (ok) n += 1;
   }
   printer.align("lt");
   return n;
@@ -154,5 +212,7 @@ module.exports = {
   seriePadraoCupom,
   bannersStatusCupom,
   barcodeSpecsFromPayload,
+  encodeCode128ForEscPos,
+  sanitizeCode39,
   imprimirBarcodesEscpos,
 };

@@ -2497,6 +2497,11 @@ async function renderVasilhame(printer, payload) {
   printer.font("a").align("ct");
   await imprimirLogoCupomEscpos(printer, payload);
 
+  if (require("../segundaVia").deveExibirBannerSegundaVia(payload)) {
+    printer.style("b").text("*** SEGUNDA VIA ***").style("normal");
+    printer.text(linha());
+  }
+
   if (payload.empresa?.nome) {
     printer.style("b").text(tx(payload.empresa.nome)).style("normal");
   }
@@ -2543,30 +2548,45 @@ async function renderVasilhame(printer, payload) {
   }
 
   if (codigo) {
+    // Etiqueta destacada: código grande legível + CODE128 (com {B no ESC/POS)
+    // para colar/identificar o vasilhame na devolução.
     printer
       .align("ct")
       .text(linha())
       .style("b")
-      .text("CODIGO DO EMPRESTIMO")
+      .text("ETIQUETA — COLE NO VASILHAME")
+      .style("normal")
+      .feed(1)
+      .style("b")
+      .size(1, 1)
       .text(codigo)
+      .size(0, 0)
       .style("normal")
       .text("Apresente na devolucao")
       .feed(1);
-    // CODE128 + QR — paridade com tags ACBr (scan rápido na devolução).
-    try {
-      require("../cupomLayoutShared").imprimirBarcodesEscpos(printer, {
-        code128: codigo,
-      });
-    } catch (_) {
-      /* firmware sem barcode */
+
+    const printed = require("../cupomLayoutShared").imprimirBarcodesEscpos(
+      printer,
+      { code128: codigo },
+      { altura: 72, largura: 2, exibe: true },
+    );
+    // Texto humano sob as barras (mesmo se HRI do firmware vier apagado).
+    printer
+      .align("ct")
+      .style("b")
+      .size(1, 1)
+      .text(codigo)
+      .size(0, 0)
+      .style("normal");
+    if (!printed) {
+      printer.text("(barras indisponiveis nesta impressora)");
     }
     try {
-      printer.raw(bytesQrGsK(codigo, { moduleSize: 5 }));
+      printer.raw(bytesQrGsK(codigo, { moduleSize: 4 }));
       printer.feed(1);
     } catch (_) {
       /* QR opcional */
     }
-    printer.text(codigo);
   }
 
   printer
