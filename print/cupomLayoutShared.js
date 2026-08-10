@@ -141,6 +141,8 @@ function sanitizeCode39(code) {
  * @param {number} [opts.altura]
  * @param {number} [opts.largura]
  * @param {boolean} [opts.exibe] HRI abaixo das barras
+ * @param {(code:string, tipo:string, barOpts:object)=>void} [opts.barcodeFn] injetável (testes)
+ * @param {boolean} [opts.forceCode128Fail] força falha CODE128 → CODE39
  * @returns {number} quantidade impressa com sucesso
  */
 function imprimirBarcodesEscpos(printer, payload, opts = {}) {
@@ -161,6 +163,10 @@ function imprimirBarcodesEscpos(printer, payload, opts = {}) {
     height: Math.max(20, Math.min(255, altura || 50)),
     position: exibe ? "BLW" : "OFF",
   };
+  const barcodeFn =
+    typeof opts.barcodeFn === "function"
+      ? opts.barcodeFn
+      : (code, tipo, o) => printer.barcode(code, tipo, o);
   let n = 0;
   printer.align("ct");
   for (const { tipo, code } of specs) {
@@ -169,7 +175,8 @@ function imprimirBarcodesEscpos(printer, payload, opts = {}) {
     let ok = false;
     if (tipo === "CODE128") {
       try {
-        printer.barcode(encodeCode128ForEscPos(code), "CODE128", barOpts);
+        if (opts.forceCode128Fail) throw new Error("forced CODE128 fail");
+        barcodeFn(encodeCode128ForEscPos(code), "CODE128", barOpts);
         printer.feed(1);
         ok = true;
       } catch (_) {
@@ -179,7 +186,7 @@ function imprimirBarcodesEscpos(printer, payload, opts = {}) {
         const c39 = sanitizeCode39(code);
         if (c39) {
           try {
-            printer.barcode(c39, "CODE39", barOpts);
+            barcodeFn(c39, "CODE39", barOpts);
             printer.feed(1);
             ok = true;
           } catch (_) {
@@ -189,7 +196,7 @@ function imprimirBarcodesEscpos(printer, payload, opts = {}) {
       }
     } else {
       try {
-        printer.barcode(code, tipo, barOpts);
+        barcodeFn(code, tipo, barOpts);
         printer.feed(1);
         ok = true;
       } catch (_) {

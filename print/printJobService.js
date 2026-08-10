@@ -281,6 +281,35 @@ function enfileirar(op, args, opts = {}) {
   if (idempotencyKey) {
     store.registrarEvento(id, "IDEMPOTENCY", idempotencyKey);
   }
+  const clickIdAudit = String(payload?.clickId || payload?.click_id || "").trim();
+  const reimpressaoAudit =
+    payload?.reimpressao === true ||
+    clickIdAudit.length > 0 ||
+    /reimpress|segunda/.test(String(payload?.motivo || meta.motivo || "").toLowerCase());
+  if (reimpressaoAudit) {
+    store.registrarEvento(
+      id,
+      "REIMPRESSAO_AUDIT",
+      JSON.stringify({
+        clickId: clickIdAudit || null,
+        motivo: meta.motivo || payload?.motivo || "reimpressao",
+        usuario: meta.usuario || null,
+        documento: meta.documento || null,
+        numeroVenda: meta.numeroVenda || null,
+        at: new Date().toISOString(),
+      }),
+    );
+    log.info(
+      {
+        jobId: id,
+        clickId: clickIdAudit || null,
+        motivo: meta.motivo || payload?.motivo || null,
+        usuario: meta.usuario || null,
+        documento: meta.documento || null,
+      },
+      "[PrintJob] Auditoria 2ª via",
+    );
+  }
   printLog.registrar({ jobId: id, op, tipo: row.tipo, status: STATUS.PENDENTE, evento: "enfileirado" });
   log.info(
     { jobId: id, op, tipo: row.tipo, prioridade: row.prioridade, idempotencyKey },

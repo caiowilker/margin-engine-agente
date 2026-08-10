@@ -8,6 +8,22 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 - **Impressão RAW rápida (Win serviço):** tmp/script/DLL em `ProgramData\MarginEngine\impressao\raw`; escrita async; script memoizado (sem I/O sync por cupom); waits `PRINT_CORE_LOCK_WAIT_MS` / `PRINT_PHYSICAL_LOCK_WAIT_MS`; métricas `print.raw_phase` / `print.event_loop_lag` / `physical_lock.wait_timeout`.
 
+## [1.0.7] - 2026-08-10
+
+### Corrigido — blindagem impressão (6 frentes)
+
+1. **Claim/fila (com order-engine):** TTL claim 30s no backend; agente serializa RAW (`physicalResourceLock` + `withPrintLock`) — Bar+Entrega no mesmo PC sem corromper buffer.
+2. **Anti-dupla / anti-409:** alinhado ao front (leader tab); jobs do incidente prod documentados em `docs/PRINT-HARDENING-SCENARIOS-20260810.md`.
+3. **Multi-categoria:** mutex local um job por vez na mesma impressora física.
+4. **Observabilidade:** evento `REIMPRESSAO_AUDIT` + log estruturado em 2ª via.
+5. **Vasilhame:** CODE128 Epson `{B`; fallback CODE39 com falha forçada testada; QR module 58mm; banner `*** SEGUNDA VIA ***` expandido; texto código em tamanho grande.
+6. **Testes A–F:** `test/print-hardening-scenarios.test.js`.
+
+### Alterado
+
+- Versão instalador/manifest **1.0.7**.
+- `VERSION` alinhado a `package.json` (1.0.7).
+
 ## [1.0.6] - 2026-08-01
 
 ### Corrigido

@@ -122,7 +122,35 @@ function tagLogoHeader(opts = {}) {
 }
 
 function tagSegundaViaBanner() {
-  return "<ce><n>*** SEGUNDA VIA ***</n></ce>\n</linha_simples>\n";
+  // Negrito + linhas de respiro — inconfundível em 58/80mm.
+  return (
+    "</linha_simples>\n" +
+    "<ce><e><n>*** SEGUNDA VIA ***</n></e></ce>\n" +
+    "</linha_simples>\n"
+  );
+}
+
+/**
+ * CODE128 com fallback CODE39 (tag-time).
+ * `forceCode128Fail` simula firmware/sem suporte — usado em testes.
+ */
+function barcodeTagsWithCode39Fallback(code, opts = {}, flags = {}) {
+  const content = String(code || "").trim();
+  if (!content) return [];
+  const forceFail = flags.forceCode128Fail === true;
+  const tags = [];
+  if (!forceFail) {
+    const bc128 = tagBarcode("CODE128", content, opts);
+    if (bc128) tags.push(bc128);
+  }
+  if (tags.length === 0 || forceFail) {
+    const c39 = content.toUpperCase().replace(/[^0-9A-Z\-.\s/$+%]/g, "");
+    if (c39) {
+      const bc39 = tagBarcode("CODE39", c39, opts);
+      if (bc39) tags.push(bc39);
+    }
+  }
+  return tags;
 }
 
 function tagCorte(tipo) {
@@ -160,6 +188,7 @@ module.exports = {
   tagQrCode,
   tagQrCodeSeguro,
   tagBarcode,
+  barcodeTagsWithCode39Fallback,
   tagBarcodeFromSpec,
   tagBarcodesList,
   tagBmp,

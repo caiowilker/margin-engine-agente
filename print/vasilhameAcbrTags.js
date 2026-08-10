@@ -6,11 +6,11 @@ const { toThermalText, toThermalDoc } = require("../thermalText");
 const {
   tagLogoHeader,
   tagCorte,
-  tagBarcode,
+  barcodeTagsWithCode39Fallback,
   tagQrCodeSeguro,
   tagSegundaViaBanner,
 } = require("./acbrTags");
-const { sepEq, sepDash, getThermalCols } = require("./thermalCols");
+const { sepEq, sepDash, getThermalCols, suggestQrModuleSize } = require("./thermalCols");
 const { deveExibirBannerSegundaVia } = require("./segundaVia");
 
 function tx(v) {
@@ -124,23 +124,20 @@ function renderVasilhameTags(rawPayload = {}) {
       `<ce><e><n>${tx(payload.codigoTransacao)}</n></e></ce>`,
       "<ce>Apresente na devolucao</ce>",
     );
-    const bc = tagBarcode("CODE128", payload.codigoTransacao, {
-      altura: 64,
-      largura: 2,
-      exibeCodigo: true,
-    });
-    if (bc) {
+    const barOpts = { altura: 64, largura: 2, exibeCodigo: true };
+    const barcodes = barcodeTagsWithCode39Fallback(
+      payload.codigoTransacao,
+      barOpts,
+      { forceCode128Fail: payload.__forceCode128Fail === true },
+    );
+    for (const bc of barcodes) {
       lines.push("<ce>" + bc + "</ce>");
-    } else {
-      const bc39 = tagBarcode("CODE39", payload.codigoTransacao, {
-        altura: 64,
-        largura: 2,
-        exibeCodigo: true,
-      });
-      if (bc39) lines.push("<ce>" + bc39 + "</ce>");
     }
     lines.push(`<ce><n>${tx(payload.codigoTransacao)}</n></ce>`);
-    const qr = tagQrCodeSeguro(payload.codigoTransacao, { moduleSize: 4 });
+    // ModuleSize por largura (58mm → 4, 80mm → 6) — QR legível no papel estreito.
+    const qr = tagQrCodeSeguro(payload.codigoTransacao, {
+      moduleSize: suggestQrModuleSize(),
+    });
     if (qr) {
       lines.push("<ce>" + qr + "</ce>");
     }

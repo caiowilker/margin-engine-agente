@@ -1931,8 +1931,10 @@ async function renderCupomConteudo(printer, payload) {
   const tBody = performance.now();
 
   if (require("../segundaVia").deveExibirBannerSegundaVia(payload)) {
-    printer.style("b").text("*** SEGUNDA VIA ***").style("normal");
+    printer.style("b").size(1, 1).text("*** SEGUNDA VIA ***").style("normal").size(0, 0);
+    printer.feed(1);
     printer.text(sepDash());
+    printer.feed(1);
   }
 
   // Nome da loja em negrito + tamanho ampliado (paridade fechamento de caixa)
@@ -2498,8 +2500,10 @@ async function renderVasilhame(printer, payload) {
   await imprimirLogoCupomEscpos(printer, payload);
 
   if (require("../segundaVia").deveExibirBannerSegundaVia(payload)) {
-    printer.style("b").text("*** SEGUNDA VIA ***").style("normal");
+    printer.style("b").size(1, 1).text("*** SEGUNDA VIA ***").style("normal").size(0, 0);
+    printer.feed(1);
     printer.text(linha());
+    printer.feed(1);
   }
 
   if (payload.empresa?.nome) {
@@ -2568,7 +2572,12 @@ async function renderVasilhame(printer, payload) {
     const printed = require("../cupomLayoutShared").imprimirBarcodesEscpos(
       printer,
       { code128: codigo },
-      { altura: 72, largura: 2, exibe: true },
+      {
+        altura: 72,
+        largura: 2,
+        exibe: true,
+        forceCode128Fail: payload.__forceCode128Fail === true,
+      },
     );
     // Texto humano sob as barras (mesmo se HRI do firmware vier apagado).
     printer
@@ -2582,7 +2591,8 @@ async function renderVasilhame(printer, payload) {
       printer.text("(barras indisponiveis nesta impressora)");
     }
     try {
-      printer.raw(bytesQrGsK(codigo, { moduleSize: 4 }));
+      const { suggestQrModuleSize } = require("../thermalCols");
+      printer.raw(bytesQrGsK(codigo, { moduleSize: suggestQrModuleSize() }));
       printer.feed(1);
     } catch (_) {
       /* QR opcional */
