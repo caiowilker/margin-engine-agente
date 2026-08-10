@@ -117,33 +117,23 @@ function barcodeSpecsFromPayload(payload) {
 }
 
 /**
- * Epson GS k 73 (CODE128): o payload precisa do seletor de charset `{A`/`{B`/`{C`.
- * Sem isso muitas térmicas 80mm (Elgin/Bematech/POS80) não imprimem as barras —
- * só o HRI ou nada. ACBr PosPrinter NÃO usa este prefixo (codifica sozinho).
+ * Epson GS k 73 (CODE128): payload com seletor `{A`/`{B`/`{C`.
+ * ACBr PosPrinter NÃO usa este prefixo (codifica sozinho).
  */
 function encodeCode128ForEscPos(code) {
-  const raw = String(code || "");
-  if (!raw) return "";
-  if (/^\{[ABC]/.test(raw)) return raw;
-  return "{B" + raw;
+  return require("./barcodeDialect").encodeCode128Payload(code, "B");
 }
 
 /** CODE39: subset seguro (A–Z, 0–9 e alguns símbolos). */
 function sanitizeCode39(code) {
-  return String(code || "")
-    .toUpperCase()
-    .replace(/[^0-9A-Z\-.\s/$+%]/g, "");
+  return require("./barcodeDialect").sanitizeCode39(code);
 }
 
 /**
- * Imprime barcodes ESC/POS (tipos suportados pela lib escpos).
- * @param {object} [opts]
- * @param {number} [opts.altura]
- * @param {number} [opts.largura]
- * @param {boolean} [opts.exibe] HRI abaixo das barras
- * @param {(code:string, tipo:string, barOpts:object)=>void} [opts.barcodeFn] injetável (testes)
- * @param {boolean} [opts.forceCode128Fail] força falha CODE128 → CODE39
- * @returns {number} quantidade impressa com sucesso
+ * Imprime barcodes ESC/POS com dialeto por fabricante.
+ * NÃO usa escpos.barcode() para CODE128 — bug do length byte (Elgin "?").
+ *
+ * @returns {number} quantidade de simbologias enviadas
  */
 function imprimirBarcodesEscpos(printer, payload, opts = {}) {
   const specs = barcodeSpecsFromPayload(payload);
@@ -158,55 +148,107 @@ function imprimirBarcodesEscpos(printer, payload, opts = {}) {
       : parseInt(process.env.PRINTER_BARCODE_LARGURA || "2", 10) || 2;
   const exibe =
     opts.exibe != null ? !!opts.exibe : process.env.PRINTER_BARCODE_EXIBE !== "false";
-  const barOpts = {
-    width: Math.max(1, Math.min(5, largura || 2)),
-    height: Math.max(20, Math.min(255, altura || 50)),
-    position: exibe ? "BLW" : "OFF",
-  };
-  const barcodeFn =
-    typeof opts.barcodeFn === "function"
-      ? opts.barcodeFn
-      : (code, tipo, o) => printer.barcode(code, tipo, o);
-  let n = 0;
-  printer.align("ct");
-  for (const { tipo, code } of specs) {
-    // PDF417 não é barcode() clássico na lib — pula no native
-    if (tipo === "PDF417") continue;
-    let ok = false;
-    if (tipo === "CODE128") {
-      try {
-        if (opts.forceCode128Fail) throw new Error("forced CODE128 fail");
-        barcodeFn(encodeCode128ForEscPos(code), "CODE128", barOpts);
-        printer.feed(1);
-        ok = true;
-      } catch (_) {
-        /* tenta CODE39 abaixo */
-      }
-      if (!ok) {
-        const c39 = sanitizeCode39(code);
-        if (c39) {
-          try {
-            barcodeFn(c39, "CODE39", barOpts);
-            printer.feed(1);
-            ok = true;
-          } catch (_) {
-            /* firmware sem barcode */
+
+  // Caminho legado (testes que injetam barcodeFn)
+  if (typeof opts.barcodeFn === "function") {
+    const barOpts = {
+      width: Math.max(1, Math.min(5, largura || 2)),
+      height: Math.max(20, Math.min(255, altura || 50)),
+      position: exibe ? "BLW" : "OFF",
+    };
+    let n = 0;
+    printer.align("ct");
+    for (const { tipo, code } of specs) {
+      if (tipo === "PDF417") continue;
+      let ok = false;
+      if (tipo === "CODE128") {
+        try {
+          if (opts.forceCode128Fail) throw new Error("forced CODE128 fail");
+          opts.barcodeFn(encodeCode128ForEscPos(code), "CODE128", barOpts);
+          printer.feed(1);
+          ok = true;
+        } catch (_) {
+          /* CODE39 */
+        }
+        if (!ok) {
+          const c39 = sanitizeCode39(code);
+          if (c39) {
+            try {
+              opts.barcodeFn(c39, "CODE39", barOpts);
+              printer.feed(1);
+              ok = true;
+            } catch (_) {
+              /* ignore */
+            }
           }
         }
+      } else {
+        try {
+          opts.barcodeFn(code, tipo, barOpts);
+          printer.feed(1);
+          ok = true;
+        } catch (_) {
+          /* ignore */
+        }
+      }
+      if (ok) n += 1;
+    }
+    printer.align("lt");
+    return n;
+  }
+
+  const dialectMod = require("./barcodeDialect");
+  let total = 0;
+  const lastMeta = [];
+  for (const { tipo, code } of specs) {
+    if (tipo === "PDF417") continue;
+    if (tipo === "CODE128" || !tipo) {
+      const result = dialectMod.printBarcodesWithDialect(printer, code, {
+        altura,
+        largura,
+        exibe,
+        dialect: opts.dialect,
+        forceCode128Fail: opts.forceCode128Fail === true,
+        forceCode39: opts.forceCode39 === true,
+        modeloAcbr: opts.modeloAcbr,
+        nomeImpressora: opts.nomeImpressora,
+      });
+      total += result.printed;
+      lastMeta.push(result);
+      try {
+        const log = require("../logger").child({ modulo: "barcode_dialect" });
+        log.info(
+          {
+            dialect: result.dialect,
+            plan: result.plan,
+            fullHex: result.fullHex,
+            code: String(code).slice(0, 32),
+          },
+          "[Barcode] ESC/POS enviado (hex dump)",
+        );
+      } catch (_) {
+        /* logger opcional */
       }
     } else {
       try {
-        barcodeFn(code, tipo, barOpts);
+        printer.align("ct");
+        printer.barcode(code, tipo, {
+          width: Math.max(1, Math.min(5, largura || 2)),
+          height: Math.max(20, Math.min(255, altura || 50)),
+          position: exibe ? "BLW" : "OFF",
+        });
         printer.feed(1);
-        ok = true;
+        printer.align("lt");
+        total += 1;
       } catch (_) {
         /* firmware sem tipo */
       }
     }
-    if (ok) n += 1;
   }
-  printer.align("lt");
-  return n;
+  if (opts.__collectMeta && lastMeta.length) {
+    opts.__collectMeta.push(...lastMeta);
+  }
+  return total;
 }
 
 module.exports = {

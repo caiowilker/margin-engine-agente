@@ -34,4 +34,5 @@ module.exports = {
   imprimirRaw: (p) => require("../rawLabelPrint").imprimirRaw(p),
   abrirGaveta: (opts) => core.abrirGaveta(opts || {}),
   imprimirTeste: () => core.imprimirTeste(),
+  imprimirTesteBarcode: (opts) => core.imprimirTesteBarcode(opts),
 };

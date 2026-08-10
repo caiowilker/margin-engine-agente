@@ -116,6 +116,16 @@ async function imprimirTeste() {
   return submit("imprimirTeste", [], { motivo: "teste_operador", async: true });
 }
 
+/** Teste de barcode síncrono (hex dump na resposta) — diagnóstico Elgin/Epson. */
+async function imprimirTesteBarcode(opts = {}) {
+  const provider = factory.getPrintProvider();
+  if (typeof provider.imprimirTesteBarcode === "function") {
+    return provider.imprimirTesteBarcode(opts);
+  }
+  const core = require("./print/escpos/impressoraCore");
+  return core.imprimirTesteBarcode(opts);
+}
+
 async function imprimirSegundaVia(opts = {}) {
   return submit("imprimirSegundaVia", [opts], {
     motivo: opts.motivo || "segunda_via",
@@ -130,6 +140,7 @@ module.exports = {
   listar,
   detectar,
   imprimirTeste,
+  imprimirTesteBarcode,
   imprimirSegundaVia,
   imprimirCupom: wrap("imprimirCupom"),
   imprimirAbertura: wrap("imprimirAbertura"),

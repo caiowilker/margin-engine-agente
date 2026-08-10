@@ -257,6 +257,12 @@ function ler(opts = {}) {
     cut: process.env.PRINTER_CUT || ini.cut || "partial",
     drawer: (process.env.PRINTER_DRAWER || "true").toLowerCase() !== "false",
     modelo: ini.modelo,
+    barcodeDialect:
+      process.env.PRINTER_BARCODE_DIALECT ||
+      require("./barcodeDialect").resolveBarcodeDialect({
+        modeloAcbr: ini.modelo,
+        nomeImpressora: process.env.PRINTER_NAME,
+      }).id,
     porta: ini.porta,
     colunas: ini.colunas,
     paperMm,
@@ -339,6 +345,19 @@ function projetarSalvar(updates, valsBase) {
   if (updates.modelo != null && String(updates.modelo).trim() !== "") {
     vals.modelo = String(updates.modelo).trim();
     envPatch.PRINTER_MODEL = vals.modelo;
+  }
+  if (updates.barcodeDialect != null && String(updates.barcodeDialect).trim() !== "") {
+    const { normalizeDialectId } = require("./barcodeDialect");
+    const d = normalizeDialectId(updates.barcodeDialect) || "epson";
+    envPatch.PRINTER_BARCODE_DIALECT = d;
+  } else if (
+    !process.env.PRINTER_BARCODE_DIALECT &&
+    /elgin|\bi9\b|\bi7\b/i.test(
+      String(updates.nomeImpressora || envPatch.PRINTER_NAME || process.env.PRINTER_NAME || ""),
+    )
+  ) {
+    // Elgin i9: dialeto certo por padrão (evita "?" do byte n quebrado + dual CODE39)
+    envPatch.PRINTER_BARCODE_DIALECT = "elgin";
   }
   if (updates.colunas != null) {
     vals.colunas = String(updates.colunas);

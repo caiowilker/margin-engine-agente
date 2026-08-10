@@ -8,6 +8,21 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 - **Impressão RAW rápida (Win serviço):** tmp/script/DLL em `ProgramData\MarginEngine\impressao\raw`; escrita async; script memoizado (sem I/O sync por cupom); waits `PRINT_CORE_LOCK_WAIT_MS` / `PRINT_PHYSICAL_LOCK_WAIT_MS`; métricas `print.raw_phase` / `print.event_loop_lag` / `physical_lock.wait_timeout`.
 
+## [1.0.8] - 2026-08-10
+
+### Corrigido — Elgin i9 barcode "?" (CODE128)
+
+- **Causa raiz:** `escpos.utils.codeLength` omitia o byte `n` do `GS k m=73` para códigos curtos (`{BVAS01`). A Elgin lia `{` (0x7B) como comprimento → imprimia `"?"`.
+- **Fix:** `print/barcodeDialect.js` monta Function B corretamente (`1D 6B 49 07 7B 42…`) via `printer.raw`, sem a lib quebrada.
+- **Dialetos:** Genérica/Epson, Elgin (dual CODE128+CODE39, largura≤2), Bematech, Daruma, só CODE39.
+- **UI:** seletor de dialeto + “Testar código de barras” + confirmação visual Sim/Não (avança dialeto e reimprime).
+- **API:** `POST /impressora/teste-barcode` (hex dump) e `POST /impressora/barcode-visual`.
+- Testes: `test/barcode-dialect.test.js` (hex Elgin vs bug escpos).
+
+### Alterado
+
+- Versão **1.0.8**.
+
 ## [1.0.7] - 2026-08-10
 
 ### Corrigido — blindagem impressão (6 frentes)

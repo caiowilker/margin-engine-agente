@@ -503,6 +503,7 @@ module.exports = {
   imprimirSegundaVia,
   imprimirTags,
   imprimirTeste,
+  imprimirTesteBarcode: (opts) => native.imprimirTesteBarcode(opts),
   imprimirAbertura: (p) =>
     imprimirViaTags(
       loadAcbrTags("caixaAcbrTags").renderAberturaTags,

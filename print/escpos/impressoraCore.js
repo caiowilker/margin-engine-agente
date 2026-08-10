@@ -2375,12 +2375,79 @@ function imprimirTeste() {
         printer,
         "00020126580014br.gov.bcb.pix0136123e4567-e12b-12d1-a456-426655440000",
       );
+      // Barcodes — dialeto configurado (Elgin i9: Function B com byte n correto)
+      const dialectMod = require("../barcodeDialect");
+      const dialect = dialectMod.resolveBarcodeDialect({});
+      printer.align("ct").style("b").text("CODIGO DE BARRAS").style("normal");
+      printer.text(`Dialeto: ${dialect.id}`);
+      printer.text("VAS01 (vasilhame)");
+      const meta = [];
+      require("../cupomLayoutShared").imprimirBarcodesEscpos(
+        printer,
+        { code128: "VAS01" },
+        { altura: 64, largura: 2, exibe: true, __collectMeta: meta },
+      );
+      if (meta[0]?.fullHex) {
+        printer.align("lt").size(0, 0);
+        printer.text("HEX (diagnostico):");
+        // Quebra hex longo em linhas térmicas
+        const hex = meta[0].fullHex;
+        for (let i = 0; i < hex.length; i += 42) {
+          printer.text(hex.slice(i, i + 42));
+        }
+      }
       printer.align("ct").text("Fim do teste — corte abaixo");
       printer.feed(2);
     },
     { abrirGaveta: true },
     { sempre: true },
   );
+}
+
+/**
+ * Página só de barcode + metadados (confirmação visual do operador).
+ * Retorna hex dump do que foi enviado — comparar com manual Elgin/Epson.
+ */
+function imprimirTesteBarcode(opts = {}) {
+  const dialectMod = require("../barcodeDialect");
+  const code = String(opts.code || "VAS01").trim().toUpperCase() || "VAS01";
+  const dialectId = opts.dialect || null;
+  const meta = [];
+  return imprimirRender(async (printer) => {
+    const dialect = dialectMod.resolveBarcodeDialect({ dialect: dialectId });
+    printer.font("a").align("ct").style("b").size(1, 1).text("TESTE BARCODE").size(0, 0).style("normal");
+    printer.text(`Dialeto: ${dialect.label}`);
+    printer.text(sepDash());
+    printer.style("b").size(1, 1).text(code).size(0, 0).style("normal");
+    printer.text("O codigo abaixo saiu como BARRAS?");
+    printer.feed(1);
+    require("../cupomLayoutShared").imprimirBarcodesEscpos(
+      printer,
+      { code128: code },
+      {
+        altura: 72,
+        largura: 2,
+        exibe: true,
+        dialect: dialect.id,
+        __collectMeta: meta,
+      },
+    );
+    printer.feed(1);
+    printer.align("ct").text("Confirme no PDV: Sim / Nao");
+    printer.feed(2);
+  }).then((result) => ({
+    ...result,
+    barcode: {
+      code,
+      dialect: dialectMod.resolveBarcodeDialect({ dialect: dialectId }).id,
+      plan: meta[0]?.plan || [],
+      fullHex: meta[0]?.fullHex || null,
+      expectedElginCode128:
+        dialectMod.bytesToHexDump(
+          dialectMod.buildCode128FunctionB(code) || Buffer.alloc(0),
+        ) || null,
+    },
+  }));
 }
 
 function imprimirFechamento(payload) {
@@ -2816,6 +2883,7 @@ module.exports = {
   bytesQrGsK,
   imprimirCupom,
   imprimirTeste,
+  imprimirTesteBarcode,
   abrirGaveta,
   deveAbrirGavetaNoPayload,
   drawerPulseBuffer,

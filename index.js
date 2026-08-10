@@ -3771,6 +3771,93 @@ function iniciarServidor() {
     }
   });
 
+  /**
+   * Teste de código de barras com dump hex (Elgin i9 / Epson / Bematech / Daruma).
+   * Resposta inclui o pacote ESC/POS enviado — comparar com o manual do fabricante.
+   */
+  app.post("/impressora/teste-barcode", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    try {
+      const resultado = await impressora.imprimirTesteBarcode(req.body || {});
+      res.json({
+        ok: true,
+        ...resultado,
+        pergunta:
+          "O código de barras saiu como BARRAS (não como '?' ou texto)? Confirme com Sim/Não em /impressora/barcode-visual.",
+      });
+    } catch (err) {
+      responderErroImpressao(res, err);
+    }
+  });
+
+  /**
+   * Confirmação visual do operador após teste-barcode.
+   * body: { barrasOk: true|false } — se false, avança dialeto e persiste.
+   */
+  app.post("/impressora/barcode-visual", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    try {
+      const printerLocalConfig = require("./print/printerLocalConfig");
+      const dialectMod = require("./print/barcodeDialect");
+      const body = req.body || {};
+      const barrasOk = body.barrasOk === true || body.ok === true;
+      const current = printerLocalConfig.ler({ fresh: true });
+      const currentDialect =
+        current.barcodeDialect ||
+        dialectMod.resolveBarcodeDialect({
+          modeloAcbr: current.modelo,
+          nomeImpressora: process.env.PRINTER_NAME,
+        }).id;
+
+      if (barrasOk) {
+        const saved = printerLocalConfig.salvar({
+          barcodeDialect: currentDialect,
+        });
+        process.env.PRINTER_BARCODE_VISUAL_OK = "true";
+        try {
+          const envUtil = require("./envFile");
+          if (typeof envUtil.patch === "function") {
+            envUtil.patch({ PRINTER_BARCODE_VISUAL_OK: "true" });
+          }
+        } catch (_) {
+          /* optional */
+        }
+        return res.json({
+          ok: true,
+          barrasOk: true,
+          barcodeDialect: currentDialect,
+          validated: true,
+          config: saved,
+          mensagem: "Dialeto de barcode validado visualmente.",
+        });
+      }
+
+      const next = dialectMod.nextDialectAfterVisualFail(currentDialect);
+      const saved = printerLocalConfig.salvar({ barcodeDialect: next });
+      process.env.PRINTER_BARCODE_VISUAL_OK = "false";
+      impressora.resetPrintProvider?.();
+      // Re-imprime automaticamente com o novo dialeto
+      let reteste = null;
+      try {
+        reteste = await impressora.imprimirTesteBarcode({
+          dialect: next,
+          code: body.code || "VAS01",
+        });
+      } catch (e) {
+        reteste = { erro: e.message };
+      }
+      res.json({
+        ok: true,
+        barrasOk: false,
+        previousDialect: currentDialect,
+        barcodeDialect: next,
+        switched: true,
+        reteste,
+        mensagem: `Barras não OK — dialeto alterado ${currentDialect} → ${next}. Confira o novo teste.`,
+      });
+    } catch (err) {
+      res.status(400).json({ erro: err.message || "Falha na confirmação visual" });
+    }
+  });
+
   app.post("/impressora/segunda-via", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       const body = req.body || {};
