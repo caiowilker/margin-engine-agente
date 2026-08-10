@@ -785,11 +785,22 @@ async function warmPrintHotPath(opts = {}) {
     return { rawHelper: false, logo: false, skipped: "printing" };
   }
   if (!opts.force && isPrintHotPathReady() && logoEscposImageCache.rawBytes) {
+    // Ainda aquece host persistente / koffi se ainda não estiver pronto
+    if (process.platform === "win32") {
+      setImmediate(() => {
+        try {
+          require("../rawWinspoolNative").isAvailable();
+        } catch (_) {}
+        require("../rawWin32Persistent")
+          .warm(rawHelperDllPath())
+          .catch(() => {});
+      });
+    }
     return { rawHelper: true, logo: true, skipped: "already_warm" };
   }
 
   const gen = ++_warmGeneration;
-  const out = { rawHelper: false, logo: false };
+  const out = { rawHelper: false, logo: false, koffi: false, persistent: false };
   const budgetMs = parseInt(
     process.env.PRINT_HOTPATH_WARM_BUDGET_MS ||
       process.env.PRINT_RAW_WARM_TIMEOUT_MS ||
@@ -801,6 +812,29 @@ async function warmPrintHotPath(opts = {}) {
     warmRawWin32Helper()
       .then((v) => {
         if (gen === _warmGeneration) out.rawHelper = !!v;
+      })
+      .catch(() => {}),
+    Promise.resolve()
+      .then(() => {
+        if (process.platform !== "win32") return false;
+        try {
+          return require("../rawWinspoolNative").isAvailable();
+        } catch (_) {
+          return false;
+        }
+      })
+      .then((v) => {
+        if (gen === _warmGeneration) out.koffi = !!v;
+      })
+      .catch(() => {}),
+    Promise.resolve()
+      .then(async () => {
+        if (process.platform !== "win32") return false;
+        // Host persistente: AddType 1x antes do 1º cupom
+        return require("../rawWin32Persistent").warm(rawHelperDllPath());
+      })
+      .then((v) => {
+        if (gen === _warmGeneration) out.persistent = !!v;
       })
       .catch(() => {}),
     Promise.resolve()
@@ -820,7 +854,7 @@ async function warmPrintHotPath(opts = {}) {
     new Promise((r) => setTimeout(r, Math.max(1000, budgetMs))),
   ])
     .then(() => {
-      if (out.rawHelper || out.logo) {
+      if (out.rawHelper || out.logo || out.koffi || out.persistent) {
         log.info({ ...out, metric: "print.hot_path_warm" }, "[ImpressoraCore] Hot-path aquecido");
       }
       return out;
@@ -919,8 +953,148 @@ function enviarRawWindows(nomeImpressora, buffer) {
   );
 }
 
+/** Backend RAW: koffi (preferido) | persistent | spawn (legado). */
+function resolveRawBackend() {
+  const v = String(process.env.PRINT_RAW_BACKEND || "auto").toLowerCase();
+  if (v === "koffi" || v === "native") return "koffi";
+  if (v === "persistent" || v === "host" || v === "ps-host") return "persistent";
+  if (v === "spawn" || v === "powershell" || v === "legacy") return "spawn";
+  return "auto";
+}
+
+/**
+ * Fast path: WinSpool in-process (koffi) ou PowerShell persistente.
+ * Elimina spawn + AddType por cupom (causa dos 0.8–3.7s em produção).
+ * @returns {Promise<object|null>} null = caller deve usar spawn legado
+ */
+async function enviarRawWindowsFast(nomeImpressora, buffer) {
+  const mode = resolveRawBackend();
+  if (mode === "spawn") return null;
+
+  const phaseT0 = Date.now();
+  const tryKoffi = mode === "koffi" || mode === "auto";
+  const tryPersistent = mode === "persistent" || mode === "auto";
+
+  if (tryKoffi) {
+    try {
+      const native = require("../rawWinspoolNative");
+      if (native.isAvailable()) {
+        const tSend = Date.now();
+        const result = native.writeRaw(nomeImpressora, buffer);
+        const sendMs = Date.now() - tSend;
+        logRawWin32Timing(result.timings, {
+          printer: nomeImpressora,
+          killed: false,
+          err: null,
+          stderr: null,
+        });
+        log.info(
+          {
+            metric: "print.raw_phase",
+            backend: "koffi",
+            printer: nomeImpressora,
+            writeTmpMs: 0,
+            preSpawnMs: Date.now() - phaseT0,
+            sendMs,
+            bytes: buffer.length,
+            totalMs: result.timings?.totalMs,
+          },
+          "[ImpressoraCore] RAW koffi WinSpool (sem PowerShell)",
+        );
+        if (sendMs > 200) {
+          log.warn(
+            {
+              metric: "print.raw_stage_slow",
+              stage: "koffi_send",
+              sendMs,
+              thresholdMs: 200,
+              printer: nomeImpressora,
+            },
+            "[ImpressoraCore] RAW etapa >200ms",
+          );
+        }
+        return { ok: true, backend: "koffi", timings: result.timings, sendMs };
+      }
+    } catch (err) {
+      if (mode === "koffi") throw err;
+      log.warn(
+        {
+          err: err.message,
+          code: err.code,
+          metric: "print.raw_koffi_fallback",
+        },
+        "[ImpressoraCore] koffi falhou — tentando host persistente",
+      );
+    }
+  }
+
+  if (tryPersistent) {
+    try {
+      const paths = ensureRawPrintScript();
+      const dllPath = paths?.dllPath || rawHelperDllPath();
+      const host = require("../rawWin32Persistent");
+      const tSend = Date.now();
+      const result = await host.writeRaw(nomeImpressora, buffer, {
+        dllPath,
+        timeoutMs: rawPrintTimeoutMs(),
+      });
+      const sendMs = Date.now() - tSend;
+      if (result.timings) {
+        logRawWin32Timing(result.timings, {
+          printer: nomeImpressora,
+          killed: false,
+          err: null,
+          stderr: null,
+        });
+      }
+      log.info(
+        {
+          metric: "print.raw_phase",
+          backend: "persistent",
+          printer: nomeImpressora,
+          writeTmpMs: 0,
+          preSpawnMs: Date.now() - phaseT0,
+          sendMs,
+          bytes: buffer.length,
+          addTypeMs: result.timings?.AddType ?? 0,
+          totalMs: result.timings?.totalMs,
+        },
+        "[ImpressoraCore] RAW PowerShell persistente (AddType 1x)",
+      );
+      if ((result.timings?.AddType || 0) > 50) {
+        log.warn(
+          {
+            metric: "print.raw_addtype_unexpected",
+            addTypeMs: result.timings.AddType,
+            note: "Host deveria ter AddType=0 apos warm",
+          },
+          "[ImpressoraCore] AddType lento no host persistente",
+        );
+      }
+      return { ok: true, backend: "persistent", timings: result.timings, sendMs };
+    } catch (err) {
+      if (mode === "persistent") throw err;
+      log.warn(
+        {
+          err: err.message,
+          code: err.code,
+          metric: "print.raw_persistent_fallback",
+        },
+        "[ImpressoraCore] host persistente falhou — spawn legado",
+      );
+    }
+  }
+
+  return null;
+}
+
 async function enviarRawWindowsUnlocked(nomeImpressora, buffer) {
   assertPortaTermicaOuFalhar(nomeImpressora);
+
+  const fast = await enviarRawWindowsFast(nomeImpressora, buffer);
+  if (fast) return true;
+
+  // ── Legado: spawn PowerShell por job (lento — só fallback) ──
   const phaseT0 = Date.now();
   const paths = ensureRawPrintScript();
   const workDir = paths?.dir || rawWorkDir();
@@ -1064,16 +1238,18 @@ async function enviarRawWindowsUnlocked(nomeImpressora, buffer) {
       });
     };
 
-    log.info(
+    log.warn(
       {
         metric: "print.raw_phase",
+        backend: "spawn",
         printer: nomeImpressora,
         workDir,
         writeTmpMs,
         preSpawnMs: Date.now() - phaseT0,
         bytes: buffer.length,
+        note: "LEGADO — spawn PowerShell por job (lento); preferir koffi/persistent",
       },
-      "[ImpressoraCore] RAW spawn PowerShell",
+      "[ImpressoraCore] RAW spawn PowerShell (fallback legado)",
     );
 
     const child = execFile(
@@ -2804,6 +2980,9 @@ function abrirGaveta(opts = {}) {
 }
 
 module.exports = {
+  rawHelperDllPath,
+  rawWorkDir,
+  ensureRawPrintScript,
   testar,
   getInfo,
   listar,

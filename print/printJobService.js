@@ -370,6 +370,42 @@ async function processarJobRow(row) {
     stats.jobsProcessados += 1;
     stats.ultimaImpressaoEm = new Date().toISOString();
     stats.ultimoErro = null;
+    const enqueueAt = row.criado_em ? Date.parse(row.criado_em) : NaN;
+    const enqueueToDoneMs = Number.isFinite(enqueueAt)
+      ? Math.max(0, Date.now() - enqueueAt)
+      : null;
+    const resultMeta =
+      exec.result && typeof exec.result === "object" ? exec.result : {};
+    log.info(
+      {
+        jobId: row.id,
+        op: row.op,
+        tipo: row.tipo,
+        metric: "print.job_e2e",
+        enqueueToDoneMs,
+        execMs: exec.durationMs,
+        provider: exec.provider,
+        backend: resultMeta.backend || resultMeta.rawBackend || null,
+        rawTotalMs: resultMeta.timings?.totalMs ?? resultMeta.sendMs ?? null,
+        bytes: exec.bytesEnviados,
+        slow:
+          (enqueueToDoneMs != null && enqueueToDoneMs > 1000) ||
+          (exec.durationMs != null && exec.durationMs > 500),
+      },
+      "[PrintJob] E2E enqueue→impresso",
+    );
+    if (enqueueToDoneMs != null && enqueueToDoneMs > 1000) {
+      log.warn(
+        {
+          metric: "print.job_e2e_slow",
+          jobId: row.id,
+          enqueueToDoneMs,
+          thresholdMs: 1000,
+          op: row.op,
+        },
+        "[PrintJob] E2E >1s — regressão de latência",
+      );
+    }
     log.info(
       { jobId: row.id, op: row.op, ms: exec.durationMs, metric: "print.duration_ms", provider: exec.provider },
       "[PrintJob] Impresso",

@@ -8,6 +8,21 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 - **Impressão RAW rápida (Win serviço):** tmp/script/DLL em `ProgramData\MarginEngine\impressao\raw`; escrita async; script memoizado (sem I/O sync por cupom); waits `PRINT_CORE_LOCK_WAIT_MS` / `PRINT_PHYSICAL_LOCK_WAIT_MS`; métricas `print.raw_phase` / `print.event_loop_lag` / `physical_lock.wait_timeout`.
 
+## [1.0.9] - 2026-08-10
+
+### Fixed — latência RAW 0.8–3.7s (spawn PowerShell + AddType)
+
+- **Causa:** cada job fazia `execFile(powershell)` + `Add-Type` (300–831ms) mesmo com DLL pré-compilada.
+- **Fix:** `PRINT_RAW_BACKEND=auto` → **koffi WinSpool** in-process → host PowerShell **persistente** (AddType 1x) → spawn legado só como fallback.
+- Warm real: `warmPrintHotPath` aquece koffi + host persistente.
+- Métricas: `print.job_e2e` (enqueue→impresso), `backend` em `print.raw_phase`, warn se etapa >200ms / E2E >1s.
+- Bench: `scripts/print-raw-latency-bench.js` (~350ms economizados vs AddType simulado).
+- ADR: `.ai/decisions/ADR-raw-winspool-koffi-fast-20260810.md`.
+
+### Alterado
+
+- Versão **1.0.9**.
+
 ## [1.0.8] - 2026-08-10
 
 ### Corrigido — Elgin i9 barcode "?" (CODE128)

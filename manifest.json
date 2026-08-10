@@ -1,6 +1,6 @@
 {
-  "versao": "1.0.8",
-  "geradoEm": "2026-08-10T22:53:25.061Z",
+  "versao": "1.0.9",
+  "geradoEm": "2026-08-10T22:59:56.302Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -268,7 +268,7 @@
     },
     {
       "arquivo": "frontend-dist/api-backend.json",
-      "sha256": "dcf86552b19551d28866e59f0a1f8f752a13b4e8e3ba36aa7075c44fc5244d7c"
+      "sha256": "09ebb66d53899fc1b67850693082275d473cf767111a31f54cad050e12bf9b7b"
     },
     {
       "arquivo": "frontend-dist/apple-touch-icon.png",
@@ -5776,7 +5776,7 @@
     },
     {
       "arquivo": "frontend-dist/version.json",
-      "sha256": "a7772160293f0f2ea05943fd9ba1129635b5fe13aae024240ac662defc66ee75"
+      "sha256": "61b4613d684571580b10700bd3bf34bd87d6a24c1bbda1bf5bc230539e2a12e4"
     },
     {
       "arquivo": "frontend-dist/workbox-3147e214.js",
@@ -5844,7 +5844,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "d1bc84c1d417e220acc062c2a0acb54ad3deccd38cb305bfc26ba29d28edfe6d"
+      "sha256": "a5d8dc8f2cd249587ef17eef19dbe621dc9e6e31d5ed28af5e63ae7f397d6322"
     },
     {
       "arquivo": "print/acbrPosExports.js",
@@ -5924,7 +5924,7 @@
     },
     {
       "arquivo": "print/escpos/impressoraCore.js",
-      "sha256": "15def21cfad0e8c8cf3665198c57a008e341da2c56397c34f6d3b754c5519f94"
+      "sha256": "e91546a9cc6e3b5085c2459a4c285612cd7079b09f461965a7a22baf878f1ad2"
     },
     {
       "arquivo": "print/factory.js",
@@ -5992,7 +5992,7 @@
     },
     {
       "arquivo": "print/printJobService.js",
-      "sha256": "1d0cbdef7ea6e894ff4f891c38694a4d4d236b77b070ad2856d8c7c083504404"
+      "sha256": "63314b5bf13c44ebeda15c450064ff16d686be6ba714819ffb71f4ee440b9a58"
     },
     {
       "arquivo": "print/printJobStore.js",
@@ -6021,6 +6021,14 @@
     {
       "arquivo": "print/rawLabelPrint.js",
       "sha256": "1ae82166b6c56d80c0652d75b432c8e9dc26537058f79e1db7535d2ead5f0621"
+    },
+    {
+      "arquivo": "print/rawWin32Persistent.js",
+      "sha256": "042c3b54e7a543d55467f2d33405ce55aa96b381f7c5d5c00560376179afcb39"
+    },
+    {
+      "arquivo": "print/rawWinspoolNative.js",
+      "sha256": "cb9d938d0c1c7b8e3d8c36cb00af41f04e3eff9cedaabf94f319a7b547955b10"
     },
     {
       "arquivo": "print/renderPrint.js",
@@ -6160,7 +6168,7 @@
     },
     {
       "arquivo": "VERSION",
-      "sha256": "326dd5d8641f399990de42def50ac29eb4c9222601c0a0a3fc3c947dd3bec65d"
+      "sha256": "2df2bd7011e87351e2e3e296ddb7f2520270a76160f95b2d64b337167294f28c"
     },
     {
       "arquivo": "watchdog.js",

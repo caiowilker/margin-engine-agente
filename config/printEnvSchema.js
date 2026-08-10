@@ -123,6 +123,14 @@ const PRINT_ENV_FIELDS = [
     comment: "Orçamento para pré-compilar RawPrinterHelper.dll no warm (AV/TEMP pode demorar)",
   },
   {
+    env: "PRINT_RAW_BACKEND",
+    kind: "enum",
+    values: ["auto", "koffi", "native", "persistent", "host", "ps-host", "spawn", "powershell", "legacy"],
+    default: "auto",
+    comment:
+      "auto=koffi WinSpool in-process → host PS persistente → spawn legado; elimina AddType/spawn por cupom",
+  },
+  {
     env: "ACBR_POS_WORKER",
     kind: "bool",
     default: true,
