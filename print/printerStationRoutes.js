@@ -63,6 +63,32 @@ function ler() {
   }
 }
 
+/**
+ * Preenche categorias de estação vazias com a primeira porta já configurada.
+ * Idempotente — salva só se houver buraco. Evita FAILED em loja com 1 impressora.
+ */
+function healPartialRoutes() {
+  const current = ler();
+  if (!hasAnyStationRoute()) return { healed: false, routes: current };
+  const fallback = firstFilledStationPorta();
+  if (!fallback) return { healed: false, routes: current };
+  const next = { byPrintType: { ...current.byPrintType } };
+  let changed = false;
+  for (const type of STATION_TYPES_REQUIRING_ROUTE) {
+    if (!next.byPrintType[type]) {
+      next.byPrintType[type] = fallback;
+      changed = true;
+    }
+  }
+  if (!changed) return { healed: false, routes: current };
+  const saved = salvar(next);
+  log.info(
+    { fallback, routes: saved.byPrintType },
+    "[PrinterStations] Rotas parciais auto-preenchidas (heal)",
+  );
+  return { healed: true, routes: saved };
+}
+
 function salvar(updates) {
   const current = ler();
   const incoming =
@@ -125,10 +151,25 @@ function resolvePortaForPrintType(printType) {
 }
 
 /**
- * Tipos de comanda de estação: com rotas parciais, exigem porta explícita.
- * Sem nenhuma rota → null (impressora padrão). Cliente/cupom pode cair no padrão.
+ * Tipos de comanda de estação.
+ * Com rotas parciais: se a categoria estiver vazia, usa a porta de outra
+ * estação já configurada (mesmo PC / uma impressora) — nunca queima o job.
+ * Strict (PRINTER_STATION_STRICT=1): volta a lançar PRINTER_STATION_ROUTE_MISSING.
  */
 const STATION_TYPES_REQUIRING_ROUTE = ["cozinha", "bar", "producao", "entrega"];
+
+function firstFilledStationPorta() {
+  const routes = ler();
+  for (const type of STATION_TYPES_REQUIRING_ROUTE) {
+    const porta = routes.byPrintType[type];
+    if (porta && portaAcbrValida(porta)) return porta;
+  }
+  for (const type of PRINT_TYPES) {
+    const porta = routes.byPrintType[type];
+    if (porta && portaAcbrValida(porta)) return porta;
+  }
+  return null;
+}
 
 function requirePortaForPrintType(printType) {
   const type = String(printType || "").trim().toLowerCase();
@@ -136,13 +177,33 @@ function requirePortaForPrintType(printType) {
   if (porta) return porta;
   if (!type || !hasAnyStationRoute()) return null;
   if (!STATION_TYPES_REQUIRING_ROUTE.includes(type)) return null;
-  const err = new Error(
-    `Categoria ${type} sem impressora em Rotas — configure em ` +
-      `Configurações → Impressora → Rotas (com outras rotas preenchidas, ` +
-      `não dá para usar só a impressora padrão nesta categoria).`,
+
+  const strict =
+    String(process.env.PRINTER_STATION_STRICT || "").trim() === "1" ||
+    String(process.env.PRINTER_STATION_STRICT || "").toLowerCase() === "true";
+  if (strict) {
+    const err = new Error(
+      `Categoria ${type} sem impressora em Rotas — configure em ` +
+        `Configurações → Impressora → Rotas (modo estrito ativo).`,
+    );
+    err.code = "PRINTER_STATION_ROUTE_MISSING";
+    throw err;
+  }
+
+  const fallback = firstFilledStationPorta();
+  if (fallback) {
+    log.warn(
+      { printType: type, fallback },
+      "[PrinterStations] Rota ausente — usando porta de outra estação (não bloqueia impressão)",
+    );
+    return fallback;
+  }
+  // Nenhuma porta válida nas rotas → impressora padrão do agente.
+  log.warn(
+    { printType: type },
+    "[PrinterStations] Rota ausente — usando impressora padrão",
   );
-  err.code = "PRINTER_STATION_ROUTE_MISSING";
-  throw err;
+  return null;
 }
 
 function hasAnyStationRoute() {
@@ -200,4 +261,6 @@ module.exports = {
   withPortaOverride,
   resolveFilePath,
   emptyRoutes,
+  firstFilledStationPorta,
+  healPartialRoutes,
 };

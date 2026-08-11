@@ -49,14 +49,26 @@ test("salva e resolve porta por printType", () => {
   assert.ok(routes.hasAnyStationRoute());
 });
 
-test("requirePorta — rotas parciais bloqueiam entrega vazia", () => {
-  assert.throws(
-    () => routes.requirePortaForPrintType("entrega"),
-    (err) => err && err.code === "PRINTER_STATION_ROUTE_MISSING",
-  );
+test("requirePorta — rotas parciais usam fallback (não queima job)", () => {
+  // cozinha foi preenchida no teste anterior → fallback deve ser ela (não throw).
+  assert.strictEqual(routes.requirePortaForPrintType("entrega"), "RAW:EPSON Cozinha");
   assert.strictEqual(routes.requirePortaForPrintType("bar"), "TCP:192.168.1.50:9100");
   // cliente não é comanda de estação obrigatória
   assert.strictEqual(routes.requirePortaForPrintType("cliente"), null);
+});
+
+test("requirePorta — strict ainda bloqueia entrega vazia", () => {
+  const prev = process.env.PRINTER_STATION_STRICT;
+  process.env.PRINTER_STATION_STRICT = "1";
+  try {
+    assert.throws(
+      () => routes.requirePortaForPrintType("entrega"),
+      (err) => err && err.code === "PRINTER_STATION_ROUTE_MISSING",
+    );
+  } finally {
+    if (prev == null) delete process.env.PRINTER_STATION_STRICT;
+    else process.env.PRINTER_STATION_STRICT = prev;
+  }
 });
 
 test("requirePorta — entrega ok após configurar", () => {
@@ -73,6 +85,25 @@ test("salvar rotas — idempotente", () => {
     },
   });
   assert.strictEqual(again.unchanged, true);
+});
+
+test("healPartialRoutes preenche entrega/cozinha vazias com porta do bar", () => {
+  // estado atual do arquivo tmp: bar + entrega configurados no teste anterior —
+  // zera entrega/cozinha/producao e cura.
+  routes.salvar({
+    byPrintType: {
+      cozinha: "",
+      bar: "TCP:192.168.1.50:9100",
+      producao: "",
+      cliente: "",
+      entrega: "",
+    },
+  });
+  const healed = routes.healPartialRoutes();
+  assert.strictEqual(healed.healed, true);
+  assert.strictEqual(healed.routes.byPrintType.entrega, "TCP:192.168.1.50:9100");
+  assert.strictEqual(healed.routes.byPrintType.cozinha, "TCP:192.168.1.50:9100");
+  assert.strictEqual(routes.healPartialRoutes().healed, false);
 });
 
 test("withPortaOverride restaura estado", async () => {

@@ -2038,7 +2038,8 @@ function iniciarServidor() {
   app.get("/config/impressora/station-routes", privateNetworkHeaders, (req, res) => {
     try {
       const routes = require("./print/printerStationRoutes");
-      res.json(routes.ler());
+      const healed = routes.healPartialRoutes();
+      res.json(healed.routes || routes.ler());
     } catch (e) {
       res.status(500).json({ erro: e.message || "Erro ao ler rotas de estação" });
     }
@@ -2048,11 +2049,17 @@ function iniciarServidor() {
     try {
       const routes = require("./print/printerStationRoutes");
       const saved = routes.salvar(req.body || {});
-      if (!saved.unchanged) {
+      const healed = routes.healPartialRoutes();
+      if (!saved.unchanged || healed.healed) {
         impressora.resetPrintProvider?.();
         impressora.invalidateProbeCache?.();
       }
-      res.json({ ok: true, unchanged: !!saved.unchanged, routes: saved });
+      res.json({
+        ok: true,
+        unchanged: !!saved.unchanged && !healed.healed,
+        healed: !!healed.healed,
+        routes: healed.routes || saved,
+      });
     } catch (e) {
       const status = e?.code === "PRINTER_PORTA_INVALIDA" ? 422 : 400;
       res.status(status).json({
@@ -4395,6 +4402,9 @@ function iniciarServidor() {
       setImmediate(() => {
         try {
           require("./print/factory").warnIfSelectedAtBoot();
+        } catch (_) {}
+        try {
+          require("./print/printerStationRoutes").healPartialRoutes();
         } catch (_) {}
       });
       require("./print/printerBootstrap")
