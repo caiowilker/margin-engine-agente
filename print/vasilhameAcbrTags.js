@@ -6,11 +6,10 @@ const { toThermalText, toThermalDoc } = require("../thermalText");
 const {
   tagLogoHeader,
   tagCorte,
-  barcodeTagsWithCode39Fallback,
-  tagQrCodeSeguro,
+  tagBarcode,
   tagSegundaViaBanner,
 } = require("./acbrTags");
-const { sepEq, sepDash, getThermalCols, suggestQrModuleSize } = require("./thermalCols");
+const { sepEq, sepDash, getThermalCols } = require("./thermalCols");
 const { deveExibirBannerSegundaVia } = require("./segundaVia");
 
 function tx(v) {
@@ -117,30 +116,20 @@ function renderVasilhameTags(rawPayload = {}) {
   }
 
   if (payload.codigoTransacao) {
-    // Bloco destacado para colar/identificar o vasilhame: texto legível + CODE128.
+    // Uma só simbologia CODE128 + texto legível (sem dual CODE39 / QR).
     lines.push(
       sepEq(),
-      "<ce><n>ETIQUETA — COLE NO VASILHAME</n></ce>",
+      "<ce><n>ETIQUETA - COLE NO VASILHAME</n></ce>",
       `<ce><e><n>${tx(payload.codigoTransacao)}</n></e></ce>`,
       "<ce>Apresente na devolucao</ce>",
     );
-    const barOpts = { altura: 64, largura: 2, exibeCodigo: true };
-    const barcodes = barcodeTagsWithCode39Fallback(
-      payload.codigoTransacao,
-      barOpts,
-      { forceCode128Fail: payload.__forceCode128Fail === true },
-    );
-    for (const bc of barcodes) {
-      lines.push("<ce>" + bc + "</ce>");
-    }
-    lines.push(`<ce><n>${tx(payload.codigoTransacao)}</n></ce>`);
-    // ModuleSize por largura (58mm → 4, 80mm → 6) — QR legível no papel estreito.
-    const qr = tagQrCodeSeguro(payload.codigoTransacao, {
-      moduleSize: suggestQrModuleSize(),
+    const bc = tagBarcode("CODE128", payload.codigoTransacao, {
+      altura: 64,
+      largura: 2,
+      exibeCodigo: true,
     });
-    if (qr) {
-      lines.push("<ce>" + qr + "</ce>");
-    }
+    if (bc) lines.push("<ce>" + bc + "</ce>");
+    lines.push(`<ce><n>${tx(payload.codigoTransacao)}</n></ce>`);
   }
 
   lines.push(

@@ -4326,9 +4326,16 @@ function iniciarServidor() {
     } catch (_) {}
     encerrarGracefully("uncaughtException", 1).catch(() => process.exit(1));
   });
+  // Rejection JS NÃO derruba o processo — exit deixava o PDV “agente off”
+  // por alguns segundos até o serviço Windows subir de novo, e a comanda
+  // morria no meio do claim. Segfault nativo / recycle ACBr ainda reiniciam.
   process.on("unhandledRejection", (err) => {
-    console.error("[Agente] unhandledRejection:", err);
-    encerrarGracefully("unhandledRejection", 1).catch(() => process.exit(1));
+    console.error("[Agente] unhandledRejection (processo segue UP):", err);
+    try {
+      auditLog.registrar("UNHANDLED_REJECTION", {
+        message: err && typeof err === "object" && "message" in err ? err.message : String(err),
+      });
+    } catch (_) {}
   });
   process.on("SIGINT", () => {
     encerrarGracefully("SIGINT", 0).catch(() => process.exit(1));

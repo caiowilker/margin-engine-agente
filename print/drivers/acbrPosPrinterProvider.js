@@ -526,7 +526,7 @@ module.exports = {
     ),
   imprimirPedido: (p) => {
     const routes = require("../printerStationRoutes");
-    const porta = routes.resolvePortaForPrintType(p?.printType ?? p?.print_type);
+    const porta = routes.requirePortaForPrintType(p?.printType ?? p?.print_type);
     // Override de porta sem invalidate — sessão quente; worker re-Ativa se Porta mudar
     return routes.withPortaOverride(porta, () =>
       imprimirViaTags(

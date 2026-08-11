@@ -15,11 +15,14 @@ const tags = renderVasilhameTags({
 assert.match(tags, /EMPRESTIMO DE VASILHAME/);
 assert.match(tags, /Comprovante nao fiscal/);
 assert.match(tags, /VAS42/);
-assert.match(tags, /ETIQUETA/);
+assert.match(tags, /ETIQUETA - COLE NO VASILHAME/);
+assert.doesNotMatch(tags, /—/);
 assert.match(tags, /COLE NO VASILHAME/);
 assert.match(tags, /barcode/i);
 assert.match(tags, /CODE128/);
-assert.match(tags, /qrcode/i);
+assert.doesNotMatch(tags, /CODE39/);
+assert.doesNotMatch(tags, /qrcode/i);
+assert.equal((tags.match(/<barcode\b/gi) || []).length, 1);
 assert.match(tags, /Caucao retida/);
 assert.doesNotMatch(tags, /NFC-e chave/i);
 assert.equal(normalizarVasilhamePayload({ codigo: "vas7" }).codigoTransacao, "VAS7");

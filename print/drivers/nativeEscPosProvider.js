@@ -25,7 +25,7 @@ module.exports = {
   imprimirMovimentoCaixa: (p) => core.imprimirMovimentoCaixa(p),
   imprimirPedido: (p) => {
     const routes = require("../printerStationRoutes");
-    const porta = routes.resolvePortaForPrintType(p?.printType ?? p?.print_type);
+    const porta = routes.requirePortaForPrintType(p?.printType ?? p?.print_type);
     return routes.withPortaOverride(porta, () => core.imprimirPedido(p));
   },
   imprimirVasilhame: (p) => core.imprimirVasilhame(p),

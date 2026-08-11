@@ -218,14 +218,19 @@ function buildBarcodeSequence(code, opts = {}) {
   };
 
   const forceFail = opts.forceCode128Fail === true;
+  const singleOnly = opts.singleOnly === true;
   const want128 = !dialect.preferCode39 && !forceFail;
-  const want39 = dialect.preferCode39 || dialect.dualCode39 || forceFail || opts.forceCode39 === true;
+  let want39 = dialect.preferCode39 || dialect.dualCode39 || forceFail || opts.forceCode39 === true;
+  // Cupom/etiqueta com uma só simbologia (ex.: vasilhame) — sem dual CODE128+CODE39.
+  if (singleOnly) {
+    want39 = dialect.preferCode39 || forceFail || opts.forceCode39 === true;
+  }
 
   if (want128) {
     const b128 = buildCode128FunctionB(code, { charset: dialect.code128Charset });
     push("CODE128", b128, `${dialect.id} Function B + {${dialect.code128Charset}`);
   }
-  if (want39) {
+  if (want39 && (!singleOnly || !want128)) {
     // Elgin/Daruma: Function A (NUL) é o mais testado no campo BR
     const useFnB = dialect.id === "epson" && !dialect.dualCode39;
     const b39 = useFnB ? buildCode39FunctionB(code) : buildCode39FunctionA(code);

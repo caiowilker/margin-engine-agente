@@ -8,6 +8,28 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 - **Impressão RAW rápida (Win serviço):** tmp/script/DLL em `ProgramData\MarginEngine\impressao\raw`; escrita async; script memoizado (sem I/O sync por cupom); waits `PRINT_CORE_LOCK_WAIT_MS` / `PRINT_PHYSICAL_LOCK_WAIT_MS`; métricas `print.raw_phase` / `print.event_loop_lag` / `physical_lock.wait_timeout`.
 
+## [1.0.10] - 2026-08-10
+
+### Fixed — agente “off” no meio da comanda
+
+- `unhandledRejection` **não encerra** mais o processo (só loga) — evita PDV ver agente offline por alguns segundos até o serviço Windows subir.
+- Estação: retry curto se agente offline/timeout; **não** manda ack `ok:false` (não queima tentativas → 410); libera claim e refila.
+
+### Fixed — texto "?" no cabeçalho do vasilhame
+
+- Travessão Unicode (`—`) não cabe no codepage ESC/POS → trocado por hífen ASCII: `ETIQUETA - COLE NO VASILHAME`.
+
+### Fixed — vasilhame com um só código de barras
+
+- Removidos dual CODE39 e QR do comprovante; fica só **CODE128** + texto legível.
+### Fixed — rota parcial Bar sem Entrega
+
+- Com alguma rota preenchida, `requirePortaForPrintType("entrega")` falha explícito se Entrega estiver vazia (não cai mais na impressora padrão em silêncio).
+
+### Alterado
+
+- Versão **1.0.10** (alinhada ao backend/front do hotfix 410 Gone / soft-redispatch).
+
 ## [1.0.9] - 2026-08-10
 
 ### Fixed — latência RAW 0.8–3.7s (spawn PowerShell + AddType)

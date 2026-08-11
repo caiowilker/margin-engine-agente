@@ -2801,7 +2801,7 @@ async function renderVasilhame(printer, payload) {
       .align("ct")
       .text(linha())
       .style("b")
-      .text("ETIQUETA — COLE NO VASILHAME")
+      .text("ETIQUETA - COLE NO VASILHAME")
       .style("normal")
       .feed(1)
       .style("b")
@@ -2819,6 +2819,7 @@ async function renderVasilhame(printer, payload) {
         altura: 72,
         largura: 2,
         exibe: true,
+        singleOnly: true,
         forceCode128Fail: payload.__forceCode128Fail === true,
       },
     );
@@ -2832,13 +2833,6 @@ async function renderVasilhame(printer, payload) {
       .style("normal");
     if (!printed) {
       printer.text("(barras indisponiveis nesta impressora)");
-    }
-    try {
-      const { suggestQrModuleSize } = require("../thermalCols");
-      printer.raw(bytesQrGsK(codigo, { moduleSize: suggestQrModuleSize() }));
-      printer.feed(1);
-    } catch (_) {
-      /* QR opcional */
     }
   }
 

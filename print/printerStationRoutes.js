@@ -124,6 +124,27 @@ function resolvePortaForPrintType(printType) {
   return porta && portaAcbrValida(porta) ? porta : null;
 }
 
+/**
+ * Tipos de comanda de estação: com rotas parciais, exigem porta explícita.
+ * Sem nenhuma rota → null (impressora padrão). Cliente/cupom pode cair no padrão.
+ */
+const STATION_TYPES_REQUIRING_ROUTE = ["cozinha", "bar", "producao", "entrega"];
+
+function requirePortaForPrintType(printType) {
+  const type = String(printType || "").trim().toLowerCase();
+  const porta = resolvePortaForPrintType(type);
+  if (porta) return porta;
+  if (!type || !hasAnyStationRoute()) return null;
+  if (!STATION_TYPES_REQUIRING_ROUTE.includes(type)) return null;
+  const err = new Error(
+    `Categoria ${type} sem impressora em Rotas — configure em ` +
+      `Configurações → Impressora → Rotas (com outras rotas preenchidas, ` +
+      `não dá para usar só a impressora padrão nesta categoria).`,
+  );
+  err.code = "PRINTER_STATION_ROUTE_MISSING";
+  throw err;
+}
+
 function hasAnyStationRoute() {
   const routes = ler();
   return PRINT_TYPES.some((t) => Boolean(routes.byPrintType[t]));
@@ -169,9 +190,11 @@ async function withPortaOverride(porta, fn, opts = {}) {
 
 module.exports = {
   PRINT_TYPES,
+  STATION_TYPES_REQUIRING_ROUTE,
   ler,
   salvar,
   resolvePortaForPrintType,
+  requirePortaForPrintType,
   hasAnyStationRoute,
   getPortaOverride,
   withPortaOverride,

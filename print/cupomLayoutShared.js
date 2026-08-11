@@ -210,6 +210,7 @@ function imprimirBarcodesEscpos(printer, payload, opts = {}) {
         dialect: opts.dialect,
         forceCode128Fail: opts.forceCode128Fail === true,
         forceCode39: opts.forceCode39 === true,
+        singleOnly: opts.singleOnly === true,
         modeloAcbr: opts.modeloAcbr,
         nomeImpressora: opts.nomeImpressora,
       });

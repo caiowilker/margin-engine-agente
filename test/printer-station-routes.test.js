@@ -30,6 +30,11 @@ test("vazio por padrão", () => {
   assert.strictEqual(routes.resolvePortaForPrintType("bar"), null);
 });
 
+test("requirePorta — sem rotas usa padrão (null)", () => {
+  assert.strictEqual(routes.requirePortaForPrintType("entrega"), null);
+  assert.strictEqual(routes.requirePortaForPrintType("bar"), null);
+});
+
 test("salva e resolve porta por printType", () => {
   const saved = routes.salvar({
     byPrintType: {
@@ -44,11 +49,27 @@ test("salva e resolve porta por printType", () => {
   assert.ok(routes.hasAnyStationRoute());
 });
 
+test("requirePorta — rotas parciais bloqueiam entrega vazia", () => {
+  assert.throws(
+    () => routes.requirePortaForPrintType("entrega"),
+    (err) => err && err.code === "PRINTER_STATION_ROUTE_MISSING",
+  );
+  assert.strictEqual(routes.requirePortaForPrintType("bar"), "TCP:192.168.1.50:9100");
+  // cliente não é comanda de estação obrigatória
+  assert.strictEqual(routes.requirePortaForPrintType("cliente"), null);
+});
+
+test("requirePorta — entrega ok após configurar", () => {
+  routes.salvar({ byPrintType: { entrega: "RAW:EPSON Entrega" } });
+  assert.strictEqual(routes.requirePortaForPrintType("entrega"), "RAW:EPSON Entrega");
+});
+
 test("salvar rotas — idempotente", () => {
   const again = routes.salvar({
     byPrintType: {
       cozinha: "RAW:EPSON Cozinha",
       bar: "TCP:192.168.1.50:9100",
+      entrega: "RAW:EPSON Entrega",
     },
   });
   assert.strictEqual(again.unchanged, true);
