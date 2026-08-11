@@ -149,6 +149,47 @@ function isBmp1bppPrintable(buf) {
 }
 
 /**
+ * Decodifica BMP 1-bpp (o mesmo formato que encodeBmp1bppFromRaw gera)
+ * para raw greyscale — sharp/get-pixels não lê esse BMP.
+ */
+function decodeBmp1bppToRawGrey(buf) {
+  if (!isBmp1bppPrintable(buf)) return null;
+  const w = buf.readInt32LE(18);
+  const hSigned = buf.readInt32LE(22);
+  const h = Math.abs(hSigned);
+  const bottomUp = hSigned > 0;
+  const dataOffset = buf.readUInt32LE(10);
+  const rowBytes = ((w + 31) >> 5) * 4;
+  if (dataOffset + rowBytes * h > buf.length) return null;
+  const raw = Buffer.alloc(w * h);
+  for (let y = 0; y < h; y++) {
+    const srcY = bottomUp ? h - 1 - y : y;
+    const rowStart = dataOffset + srcY * rowBytes;
+    for (let x = 0; x < w; x++) {
+      const bit = (buf[rowStart + (x >> 3)] >> (7 - (x & 7))) & 1;
+      raw[y * w + x] = bit ? 255 : 0;
+    }
+  }
+  return { raw, width: w, height: h };
+}
+
+/** Garante logo.source.png para ESC/POS quando o upload foi só BMP 1-bpp. */
+async function ensureLogoSourcePng(bmpBuf) {
+  refreshLogoPaths();
+  ensureDir();
+  if (fs.existsSync(LOGO_SOURCE)) return LOGO_SOURCE;
+  const decoded = decodeBmp1bppToRawGrey(bmpBuf);
+  if (!decoded) return null;
+  const sharp = require("sharp");
+  await sharp(decoded.raw, {
+    raw: { width: decoded.width, height: decoded.height, channels: 1 },
+  })
+    .png()
+    .toFile(LOGO_SOURCE);
+  return LOGO_SOURCE;
+}
+
+/**
  * Codifica BMP monocromático 1-bpp (bottom-up).
  * raw: 1 byte por pixel (0=preto, >0=branco) ou greyscale 0–255.
  */
@@ -292,14 +333,29 @@ async function salvar(opts = {}) {
     }
     const buf = printable.buffer;
     fs.writeFileSync(LOGO_BMP, buf);
-    // Fonte colorida/cinza para ESC/POS — get-pixels quebra em BMP 1-bpp (uncaughtException).
+    // Fonte colorida/cinza para ESC/POS — get-pixels quebra em BMP 1-bpp.
     try {
-      const sharp = require("sharp");
-      await sharp(raw).rotate().png().toFile(LOGO_SOURCE);
+      if (fs.existsSync(LOGO_SOURCE)) fs.unlinkSync(LOGO_SOURCE);
+    } catch (_) {}
+    try {
+      if (isBmp1bppPrintable(raw)) {
+        await ensureLogoSourcePng(buf);
+      } else {
+        const sharp = require("sharp");
+        await sharp(raw).rotate().png().toFile(LOGO_SOURCE);
+      }
     } catch (_) {
       try {
         if (fs.existsSync(LOGO_SOURCE)) fs.unlinkSync(LOGO_SOURCE);
       } catch (_) {}
+      try {
+        await ensureLogoSourcePng(buf);
+      } catch (srcErr) {
+        log.warn(
+          { err: srcErr?.message },
+          "[PrinterLogo] Nao gerou logo.source.png — ESC/POS fica sem logo ate reenvio",
+        );
+      }
     }
     mirrorLegacyBmp(buf);
     meta.sha256 = crypto.createHash("sha256").update(buf).digest("hex");
@@ -480,7 +536,15 @@ async function prepararArquivoEscpos(metaOrInfo) {
   ensureDir();
   const sharp = require("sharp");
   const tSharp = performance.now();
-  // Nunca alimentar sharp/get-pixels com BMP 1-bpp do ACBr — só source PNG ou falha.
+  // Nunca alimentar sharp/get-pixels com BMP 1-bpp do ACBr — só source PNG.
+  if (!fs.existsSync(LOGO_SOURCE)) {
+    try {
+      const bmp = fs.existsSync(LOGO_BMP) ? fs.readFileSync(LOGO_BMP) : null;
+      if (bmp) await ensureLogoSourcePng(bmp);
+    } catch (err) {
+      log.warn({ err: err?.message }, "[PrinterLogo] Falha ao sintetizar logo.source.png");
+    }
+  }
   const sharpInput = fs.existsSync(LOGO_SOURCE) ? LOGO_SOURCE : null;
   if (!sharpInput) {
     throw new Error(
@@ -661,6 +725,7 @@ module.exports = {
   isBmpPrintable,
   isBmp1bppPrintable,
   encodeBmp1bppFromRaw,
+  decodeBmp1bppToRawGrey,
   makeTestBmp1bpp,
   convertToPrintableBmp1bpp,
   exibirLogoCupomHabilitado,

@@ -53,12 +53,7 @@ function tx(v) {
 }
 
 function formatarLinhaEndereco(empresa) {
-  const e = empresa || {};
-  const log = (e.logradouro || "").trim();
-  if (log) {
-    return tx([log, e.numero, e.bairro].filter(Boolean).join(", "));
-  }
-  return e.endereco ? tx(String(e.endereco)) : "";
+  return require("./empresaCabecalhoTermico").formatarLinhaEnderecoEmpresa(empresa);
 }
 
 function renderBarcodesPayload(payload) {

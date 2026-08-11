@@ -517,13 +517,15 @@ test("preferNativeEscPos — PRINT_FAST_NATIVE=false em TCP força ACBr comercia
   const runtime = require("../print/acbrPosPrinterRuntime");
   const prev = process.env.PRINT_FAST_NATIVE;
   const prevPorta = process.env.PRINTER_PORTA;
+  const origOpen = runtime.isAcbrPosCircuitOpen;
   process.env.PRINT_FAST_NATIVE = "false";
   process.env.PRINTER_PORTA = "TCP:192.168.1.50:9100";
-  runtime.resetAcbrPosCircuit();
+  runtime.isAcbrPosCircuitOpen = () => false;
   try {
     assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), false);
     assert.strictEqual(preferNativeEscPos({}), false);
   } finally {
+    runtime.isAcbrPosCircuitOpen = origOpen;
     if (prev === undefined) delete process.env.PRINT_FAST_NATIVE;
     else process.env.PRINT_FAST_NATIVE = prev;
     if (prevPorta === undefined) delete process.env.PRINTER_PORTA;

@@ -2,15 +2,17 @@
  * Comprovante não fiscal de empréstimo de vasilhame (caução) — tags ACBr.
  * Isolado de cupom fiscal / pedido / caixa (mesmo padrão de pedidoAcbrTags.js).
  */
-const { toThermalText, toThermalDoc } = require("../thermalText");
+const { toThermalText } = require("../thermalText");
 const {
   tagLogoHeader,
   tagCorte,
   tagBarcode,
   tagSegundaViaBanner,
+  barcodeTagsWithCode39Fallback,
 } = require("./acbrTags");
 const { sepEq, sepDash, getThermalCols } = require("./thermalCols");
 const { deveExibirBannerSegundaVia } = require("./segundaVia");
+const { linhasCabecalhoEmpresaTags } = require("./empresaCabecalhoTermico");
 
 function tx(v) {
   return toThermalText(v);
@@ -68,12 +70,7 @@ function renderVasilhameTags(rawPayload = {}) {
     lines.push(tagSegundaViaBanner());
   }
 
-  if (payload.empresa?.nome) {
-    lines.push(`<ce><n>${tx(payload.empresa.nome)}</n></ce>`);
-  }
-  if (payload.empresa?.cnpj) {
-    lines.push(`CNPJ: ${toThermalDoc(payload.empresa.cnpj)}`);
-  }
+  lines.push(...linhasCabecalhoEmpresaTags(payload.empresa, COLS));
 
   lines.push(
     sepEq(),
@@ -98,7 +95,7 @@ function renderVasilhameTags(rawPayload = {}) {
     lines.push(`Saida   : ${tx(payload.dataMovimento)}`);
   }
   if (payload.dataPrevistaDevolucao) {
-    lines.push(`Prevista: ${tx(payload.dataPrevistaDevolucao)}`);
+    lines.push(`Devolucao: ${tx(payload.dataPrevistaDevolucao)}`);
   }
   if (payload.operador) {
     lines.push(`Operador: ${tx(payload.operador)}`);
@@ -123,11 +120,13 @@ function renderVasilhameTags(rawPayload = {}) {
       `<ce><e><n>${tx(payload.codigoTransacao)}</n></e></ce>`,
       "<ce>Apresente na devolucao</ce>",
     );
-    const bc = tagBarcode("CODE128", payload.codigoTransacao, {
-      altura: 64,
-      largura: 2,
-      exibeCodigo: true,
-    });
+    const bcOpts = { altura: 64, largura: 2, exibeCodigo: true };
+    const bcs = barcodeTagsWithCode39Fallback(
+      payload.codigoTransacao,
+      bcOpts,
+      { forceCode128Fail: payload.__forceCode128Fail === true },
+    );
+    const bc = bcs[0] || tagBarcode("CODE128", payload.codigoTransacao, bcOpts);
     if (bc) lines.push("<ce>" + bc + "</ce>");
     lines.push(`<ce><n>${tx(payload.codigoTransacao)}</n></ce>`);
   }

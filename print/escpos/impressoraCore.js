@@ -768,15 +768,30 @@ function impressaoEmAndamentoLocal() {
   return false;
 }
 
+function unrefTimer(t) {
+  if (t && typeof t.unref === "function") t.unref();
+  return t;
+}
+
 function scheduleLogoWarmOnce() {
   if (_logoWarmScheduled || _warmHotPathInflight) return;
-  if (impressaoEmAndamentoLocal()) return;
+  if (logoEscposImageCache.rawBytes) return;
   _logoWarmScheduled = true;
-  setImmediate(() => {
+  const tryWarm = (attempt) => {
+    if (impressaoEmAndamentoLocal()) {
+      if (attempt >= 40) {
+        _logoWarmScheduled = false;
+        unrefTimer(setTimeout(() => scheduleLogoWarmOnce(), 1000));
+        return;
+      }
+      unrefTimer(setTimeout(() => tryWarm(attempt + 1), 250));
+      return;
+    }
     _logoWarmScheduled = false;
-    if (impressaoEmAndamentoLocal()) return;
+    if (_warmHotPathInflight || logoEscposImageCache.rawBytes) return;
     warmPrintHotPath().catch(() => {});
-  });
+  };
+  unrefTimer(setImmediate(() => tryWarm(0)));
 }
 
 async function warmPrintHotPath(opts = {}) {
@@ -1803,10 +1818,14 @@ async function enviarBuffer(buffer) {
 }
 
 async function imprimirRender(renderFn) {
-  return comLockImpressao(async () => {
-    const buffer = await gerarBuffer(renderFn);
-    return enviarBuffer(buffer);
-  });
+  try {
+    return await comLockImpressao(async () => {
+      const buffer = await gerarBuffer(renderFn);
+      return enviarBuffer(buffer);
+    });
+  } finally {
+    if (!logoEscposImageCache.rawBytes) scheduleLogoWarmOnce();
+  }
 }
 
 const { toThermalText, toThermalDoc } = require("../../thermalText");
@@ -1817,17 +1836,7 @@ function tx(value) {
 
 /** Monta linha de endereço sem duplicar bairro/número (endereco legado já vem completo). */
 function formatarLinhaEnderecoEmpresa(empresa) {
-  const e = empresa || {};
-  const logradouro = (e.logradouro || "").trim();
-  if (logradouro) {
-    return [logradouro, e.numero, e.bairro]
-      .filter((p) => p != null && String(p).trim())
-      .map(tx)
-      .join(", ");
-  }
-  const enderecoLegado = (e.endereco || "").trim();
-  if (enderecoLegado) return tx(enderecoLegado);
-  return "";
+  return require("../empresaCabecalhoTermico").formatarLinhaEnderecoEmpresa(empresa);
 }
 
 // ── Helpers de layout ─────────────────────────────────────────────────────────
@@ -2749,12 +2758,11 @@ async function renderVasilhame(printer, payload) {
     printer.feed(1);
   }
 
-  if (payload.empresa?.nome) {
-    printer.style("b").text(tx(payload.empresa.nome)).style("normal");
-  }
-  if (payload.empresa?.cnpj) {
-    printer.text("CNPJ: " + toThermalDoc(payload.empresa.cnpj));
-  }
+  require("../empresaCabecalhoTermico").aplicarCabecalhoEmpresaEscpos(
+    printer,
+    payload.empresa,
+    getThermalCols(),
+  );
 
   printer
     .text(linha())
@@ -2779,7 +2787,7 @@ async function renderVasilhame(printer, payload) {
   }
   if (payload.dataMovimento) printer.text("Saida   : " + tx(payload.dataMovimento));
   if (payload.dataPrevistaDevolucao) {
-    printer.text("Prevista: " + tx(payload.dataPrevistaDevolucao));
+    printer.text("Devolucao: " + tx(payload.dataPrevistaDevolucao));
   }
   if (payload.operador) printer.text("Operador: " + tx(payload.operador));
 
