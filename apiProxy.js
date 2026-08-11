@@ -17,6 +17,43 @@ const API_PROXY_PREFIX = "/api-proxy";
  * Sem isso o api-proxy devolve HTML do app e o PDV marca "Servidor indisponível".
  * @param {string} url
  */
+/**
+ * IP privado (RFC1918) — típico de WSL/LAN de desenvolvimento.
+ * Em instalação com frontend de produção, esse host costuma estar morto
+ * e o api-proxy devolve 502 (claim da print station falha; vasilhame local não).
+ */
+function isPrivateLanHostname(hostname) {
+  const host = String(hostname || "").toLowerCase();
+  if (!host) return false;
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  return false;
+}
+
+/** Lê api-backend.json sem normalize (evita recursão com IP LAN). */
+function frontendDeclaresProductionApi() {
+  const jsonPath = path.join(__dirname, "frontend-dist", "api-backend.json");
+  try {
+    if (!fs.existsSync(jsonPath)) return false;
+    const raw = String(JSON.parse(fs.readFileSync(jsonPath, "utf8")).apiUrl || "")
+      .trim()
+      .toLowerCase();
+    return (
+      raw.includes("api.marginengine.com.br") ||
+      raw.includes("app.marginengine.com.br")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function wantsProductionBackend() {
+  if (process.env.ALLOW_PRIVATE_BACKEND === "1") return false;
+  if (process.env.NODE_ENV === "production") return true;
+  return frontendDeclaresProductionApi();
+}
+
 function normalizeBackendUrl(url) {
   const u = String(url || "").trim().replace(/\/$/, "");
   if (!u) return u;
@@ -28,6 +65,11 @@ function normalizeBackendUrl(url) {
       host === "www.marginengine.com.br" ||
       host === "marginengine.com.br"
     ) {
+      return PRODUCTION_API_URL;
+    }
+    // PDV empacotado aponta para api.*; config antiga com IP WSL/LAN morto
+    // quebra /api-proxy (502) e a print station — remapeia para produção.
+    if (isPrivateLanHostname(host) && wantsProductionBackend()) {
       return PRODUCTION_API_URL;
     }
   } catch {
@@ -308,6 +350,7 @@ module.exports = {
   resolverBackendUrlPadrao,
   lerBackendPadraoDoFrontend,
   normalizeBackendUrl,
+  isPrivateLanHostname,
   lerBodyBruto,
   PRODUCTION_API_URL,
 };

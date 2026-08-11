@@ -383,6 +383,41 @@ async function boot() {
   config = await lerConfig();
   sincronizarContextoLog(config);
 
+  // Self-heal: IP LAN/WSL morto quebra /api-proxy (502) e print station.
+  try {
+    const { normalizeBackendUrl, PRODUCTION_API_URL, isPrivateLanHostname } = require("./apiProxy");
+    const rawUrl = String(config.backendUrl || process.env.BACKEND_URL || "");
+    const fixed = normalizeBackendUrl(rawUrl);
+    if (fixed && fixed !== rawUrl) {
+      console.warn(
+        `[Boot] backendUrl inválido/LAN remapeado: ${rawUrl || "(vazio)"} → ${fixed}`,
+      );
+      config.backendUrl = fixed;
+      process.env.BACKEND_URL = fixed;
+      try {
+        await salvarConfig({ ...config, backendUrl: fixed });
+      } catch (e) {
+        console.warn("[Boot] Não foi possível persistir backendUrl corrigido:", e.message);
+      }
+    } else if (fixed) {
+      try {
+        const host = new URL(fixed).hostname;
+        if (isPrivateLanHostname(host) && process.env.ALLOW_PRIVATE_BACKEND !== "1") {
+          console.warn(
+            `[Boot] backendUrl ainda é IP privado (${fixed}). Claim/print via api-proxy pode falhar.`,
+          );
+        }
+      } catch {
+        /* ignore */
+      }
+    } else if (!fixed && process.env.NODE_ENV === "production") {
+      config.backendUrl = PRODUCTION_API_URL;
+      process.env.BACKEND_URL = PRODUCTION_API_URL;
+    }
+  } catch (e) {
+    console.warn("[Boot] heal backendUrl:", e.message);
+  }
+
   if (config.backendUrl) process.env.BACKEND_URL = config.backendUrl;
   if (config.backendToken) process.env.BACKEND_TOKEN = config.backendToken;
   if (config.backendUrl && config.backendToken) {

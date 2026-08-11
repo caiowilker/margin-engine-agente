@@ -25,6 +25,48 @@ test("normalizeBackendUrl remapeia app.* para api.*", () => {
   );
 });
 
+test("normalizeBackendUrl remapeia IP LAN morto para api.* em produção", () => {
+  const { normalizeBackendUrl, PRODUCTION_API_URL } = require("../apiProxy");
+  const prevNode = process.env.NODE_ENV;
+  const prevAllow = process.env.ALLOW_PRIVATE_BACKEND;
+  process.env.NODE_ENV = "production";
+  delete process.env.ALLOW_PRIVATE_BACKEND;
+  try {
+    assert.equal(
+      normalizeBackendUrl("http://172.26.126.223:8080"),
+      PRODUCTION_API_URL,
+    );
+    assert.equal(
+      normalizeBackendUrl("http://192.168.1.10:8080"),
+      PRODUCTION_API_URL,
+    );
+  } finally {
+    if (prevNode === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = prevNode;
+    if (prevAllow === undefined) delete process.env.ALLOW_PRIVATE_BACKEND;
+    else process.env.ALLOW_PRIVATE_BACKEND = prevAllow;
+  }
+});
+
+test("normalizeBackendUrl preserva IP LAN com ALLOW_PRIVATE_BACKEND=1", () => {
+  const { normalizeBackendUrl } = require("../apiProxy");
+  const prevNode = process.env.NODE_ENV;
+  const prevAllow = process.env.ALLOW_PRIVATE_BACKEND;
+  process.env.NODE_ENV = "production";
+  process.env.ALLOW_PRIVATE_BACKEND = "1";
+  try {
+    assert.equal(
+      normalizeBackendUrl("http://172.26.126.223:8080"),
+      "http://172.26.126.223:8080",
+    );
+  } finally {
+    if (prevNode === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = prevNode;
+    if (prevAllow === undefined) delete process.env.ALLOW_PRIVATE_BACKEND;
+    else process.env.ALLOW_PRIVATE_BACKEND = prevAllow;
+  }
+});
+
 test("resolverBackendUrlPadrao respeita DEFAULT_BACKEND_URL e normaliza app→api", () => {
   const prev = process.env.DEFAULT_BACKEND_URL;
   process.env.DEFAULT_BACKEND_URL = "https://app.marginengine.com.br";
