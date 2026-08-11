@@ -364,6 +364,18 @@ function buildFechamentoLayout(payload = {}) {
         text: col2("Dinheiro em caixa", fmtR$OrDash(payload.dinheiroEmCaixa), cols),
       });
     }
+    if (payload.caucaoRetida != null && Number(payload.caucaoRetida) > 0.009) {
+      lines.push({
+        kind: "text",
+        text: col2("Caucao retida", fmtR$OrDash(payload.caucaoRetida), cols),
+        bold: true,
+      });
+      lines.push({
+        kind: "text",
+        text: "(separar — nao e venda)",
+        center: true,
+      });
+    }
     if (payload.valorContado != null) {
       lines.push({
         kind: "text",
