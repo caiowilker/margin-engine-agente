@@ -20,7 +20,7 @@ const API_PROXY_PREFIX = "/api-proxy";
 /**
  * IP privado (RFC1918) — típico de WSL/LAN de desenvolvimento.
  * Em instalação com frontend de produção, esse host costuma estar morto
- * e o api-proxy devolve 502 (claim da print station falha; vasilhame local não).
+ * e o api-proxy devolve 502 (fila de impressão e ack falham; vasilhame local não).
  */
 function isPrivateLanHostname(hostname) {
   const host = String(hostname || "").toLowerCase();
