@@ -470,6 +470,145 @@ async function run() {
     }
   });
 
+  await test("DistDFe vazio + backend 500 persiste só o cursor NSU", async () => {
+    const manifesto = require("../manifestoDestinatario");
+    manifesto.limparCooldown656();
+    manifesto.limparCacheEmpresa();
+    const fiscalPath = require.resolve("../fiscalDriver");
+    const originalFiscal = require.cache[fiscalPath];
+    require.cache[fiscalPath] = {
+      id: fiscalPath,
+      filename: fiscalPath,
+      loaded: true,
+      exports: {
+        getDriverInfo: () => ({ provider: "mock" }),
+        distribuicaoDFePorUltNsu: async () => ({
+          cStat: "137",
+          ultNsuFinal: "000000000000042",
+          maxNsu: "000000000000042",
+          xmls: [],
+          resumos: [],
+          xMotivo: "Nenhum documento localizado",
+        }),
+      },
+    };
+    const originalFetch = global.fetch;
+    const posts = [];
+    global.fetch = async (url, init) => {
+      const u = String(url);
+      if (u.includes("/pdv/empresa")) {
+        return { ok: true, json: async () => ({ cnpj: "11222333000181", uf: "SP" }) };
+      }
+      if (u.includes("/manifesto/config")) {
+        return { ok: true, json: async () => ({ ultNsu: "0" }) };
+      }
+      if (u.includes("/manifesto/sync")) {
+        const body = JSON.parse(init.body);
+        posts.push(body);
+        if (posts.length <= 2) {
+          return { ok: false, text: async () => "duplicate key uq_manifesto_doc_tenant_chave" };
+        }
+        return { ok: true, json: async () => ({ status: "SUCESSO", notasImportadas: 0 }) };
+      }
+      throw new Error(`fetch inesperado: ${u}`);
+    };
+    try {
+      manifesto.configurar({
+        lerConfig: async () => ({
+          backendUrl: "http://localhost:8080",
+          backendToken: "token-teste",
+        }),
+      });
+      const r = await manifesto.executarSincronizacao(true);
+      assert.strictEqual(r.ok, false);
+      assert.ok(posts.length >= 3, `esperava retry + cursor, posts=${posts.length}`);
+      const cursor = posts[posts.length - 1];
+      assert.strictEqual(cursor.ultNsuFinal, "000000000000042");
+      assert.deepStrictEqual(cursor.notas, []);
+      assert.match(String(cursor.mensagem || ""), /Cursor DistDFe persistido/);
+      assert.deepStrictEqual(posts[0].notas, []);
+    } finally {
+      global.fetch = originalFetch;
+      if (originalFiscal) require.cache[fiscalPath] = originalFiscal;
+      else delete require.cache[fiscalPath];
+      manifesto.limparCacheEmpresa();
+      manifesto.limparCooldown656();
+    }
+  });
+
+  await test("DistDFe com notas + backend 500 NÃO avança cursor", async () => {
+    const manifesto = require("../manifestoDestinatario");
+    manifesto.limparCooldown656();
+    manifesto.limparCacheEmpresa();
+    const fiscalPath = require.resolve("../fiscalDriver");
+    const originalFiscal = require.cache[fiscalPath];
+    const chaveDoc = "35260611222333000181550010000000301025012345";
+    require.cache[fiscalPath] = {
+      id: fiscalPath,
+      filename: fiscalPath,
+      loaded: true,
+      exports: {
+        getDriverInfo: () => ({ provider: "mock" }),
+        distribuicaoDFePorUltNsu: async () => ({
+          cStat: "138",
+          ultNsuFinal: "000000000000042",
+          maxNsu: "000000000000042",
+          xmls: [],
+          resumos: [
+            {
+              chaveAcesso: chaveDoc,
+              cnpjEmitente: "12345678000190",
+              nomeEmitente: "FORN",
+              valorTotal: 10,
+              nsu: "42",
+            },
+          ],
+          xMotivo: "Documento localizado",
+        }),
+        manifestarCienciaOperacao: async () => ({ ok: true, cStat: "135" }),
+        consultarChave: async () => ({ cStat: "100" }),
+        distribuicaoDFePorChave: async () => ({ xml: null }),
+        isCStatManifestacaoOk: () => true,
+      },
+    };
+    const originalFetch = global.fetch;
+    const posts = [];
+    global.fetch = async (url, init) => {
+      const u = String(url);
+      if (u.includes("/pdv/empresa")) {
+        return { ok: true, json: async () => ({ cnpj: "11222333000181", uf: "SP" }) };
+      }
+      if (u.includes("/manifesto/config")) {
+        return { ok: true, json: async () => ({ ultNsu: "0" }) };
+      }
+      if (u.includes("/manifesto/sync")) {
+        const body = JSON.parse(init.body);
+        posts.push(body);
+        return { ok: false, text: async () => "HTTP 500" };
+      }
+      throw new Error(`fetch inesperado: ${u}`);
+    };
+    try {
+      manifesto.configurar({
+        lerConfig: async () => ({
+          backendUrl: "http://localhost:8080",
+          backendToken: "token-teste",
+        }),
+      });
+      const r = await manifesto.executarSincronizacao(true);
+      assert.strictEqual(r.ok, false);
+      assert.strictEqual(posts.length, 2, `só tentativa + retry, sem cursor vazio; posts=${posts.length}`);
+      assert.ok(posts.every((p) => p.notas && p.notas.length === 1));
+      assert.strictEqual(r.ultNsuFinal, "0");
+    } finally {
+      global.fetch = originalFetch;
+      if (originalFiscal) require.cache[fiscalPath] = originalFiscal;
+      else delete require.cache[fiscalPath];
+      manifesto.limparCacheEmpresa();
+      manifesto.limparCooldown656();
+    }
+  });
+
   await test("executarSincronizacao sem CNPJ retorna motivo claro", async () => {
     const manifesto = require("../manifestoDestinatario");
     manifesto.limparCacheEmpresa();

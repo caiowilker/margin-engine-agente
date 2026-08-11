@@ -133,6 +133,25 @@ async function enviarSyncBackend(cfg, payload) {
   return resp.json();
 }
 
+/**
+ * DistDFe já avançou o cursor na SEFAZ. Se o POST /sync falhar depois disso,
+ * o backend fica no NSU antigo e a próxima execução reconsulta o mesmo lote
+ * (causa raiz típica de uq_manifesto_doc_tenant_chave). Persiste só o cursor.
+ */
+async function persistirCursorNsu(cfg, { ultNsuInicial, ultNsuFinal, maxNsu, mensagem }) {
+  if (!ultNsuFinal) return null;
+  return enviarSyncBackend(cfg, {
+    ultNsuInicial: ultNsuInicial || "0",
+    ultNsuFinal,
+    maxNsu: maxNsu || null,
+    notas: [],
+    mensagem: mensagem || `Cursor DistDFe persistido (ultNSU=${ultNsuFinal})`,
+    erroCertificado: false,
+    timeout: false,
+    falha: false,
+  });
+}
+
 async function enviarEventoBackend(cfg, payload) {
   const url = `${String(cfg.backendUrl || "").replace(/\/$/, "")}/pdv/agente/manifesto/evento`;
   const token = cfg.backendToken;
@@ -542,7 +561,9 @@ async function executarSincronizacaoCore(_forcar = false) {
     const timeout = /timeout|timed out|ETIMEDOUT/i.test(msg);
     const resultadoErro = await enviarSyncBackend(cfg, {
       ultNsuInicial,
-      ultNsuFinal: nsuTravado ? ultNsuInicial : ultNsuAtual,
+      // ultNsuAtual já volta para o NSU da página anterior quando nsuTravado.
+      // Mandar ultNsuInicial aqui apagava o avanço das páginas que deram certo.
+      ultNsuFinal: ultNsuAtual,
       maxNsu,
       notas,
       mensagem: msg,
@@ -586,16 +607,57 @@ async function executarSincronizacaoCore(_forcar = false) {
     });
   } catch (err) {
     log.error({ err: err.message, notas: notas.length }, "DistDFe ok mas falha ao gravar sync no backend");
-    return {
-      ok: false,
-      erro: err.message,
-      notasEncontradas: notas.length,
-      notasImportadas: 0,
-      notasResumo: 0,
-      ambiente,
-      cStat: ultimoCStat,
-      cnpjDestinatario: cnpj,
-    };
+    let retry = null;
+    try {
+      retry = await enviarSyncBackend(cfg, {
+        ultNsuInicial,
+        ultNsuFinal: ultNsuAtual,
+        maxNsu,
+        notas,
+        mensagem:
+          notas.length > 0
+            ? `${notas.length} documento(s) processado(s) (retry)`
+            : ultimoXMotivo || `Retry sync DistDFe (cStat ${ultimoCStat || "—"})`,
+        erroCertificado: false,
+        timeout: false,
+        falha: false,
+      });
+    } catch (errRetry) {
+      // Só avança o cursor se não há notas a gravar. Com notas, avançar aqui
+      // descarta o lote na SEFAZ para sempre. Reconsultar é seguro (upsert).
+      if (notas.length === 0) {
+        log.warn(
+          { err: errRetry.message, ultNsuFinal: ultNsuAtual },
+          "Retry de sync vazio falhou — persistindo cursor NSU (nada a perder)",
+        );
+        await persistirCursorNsu(cfg, {
+          ultNsuInicial,
+          ultNsuFinal: ultNsuAtual,
+          maxNsu,
+          mensagem: `Cursor DistDFe persistido após falha no sync vazio: ${errRetry.message}`,
+        }).catch((e) => {
+          log.warn({ err: e.message, ultNsuFinal: ultNsuAtual }, "Falha ao persistir cursor NSU após erro de sync");
+          return null;
+        });
+      } else {
+        log.warn(
+          { err: errRetry.message, notas: notas.length, ultNsuFinal: ultNsuAtual },
+          "Retry de sync falhou com notas — cursor NÃO avança; próxima execução reconsulta (idempotente)",
+        );
+      }
+      return {
+        ok: false,
+        erro: errRetry.message,
+        notasEncontradas: notas.length,
+        notasImportadas: 0,
+        notasResumo: 0,
+        ambiente,
+        cStat: ultimoCStat,
+        cnpjDestinatario: cnpj,
+        ultNsuFinal: notas.length === 0 ? ultNsuAtual : ultNsuInicial,
+      };
+    }
+    resultado = retry;
   }
 
   log.info(
@@ -693,6 +755,7 @@ function limparCooldown656() {
 module.exports = {
   configurar,
   executarSincronizacao,
+  persistirCursorNsu,
   executarEventoManifestacao,
   iniciarAgendamento,
   parseResumoNfe,
