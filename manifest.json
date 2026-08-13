@@ -1,10 +1,10 @@
 {
   "versao": "1.0.11",
-  "geradoEm": "2026-08-13T15:37:32.550Z",
+  "geradoEm": "2026-08-13T18:03:18.523Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
-      "sha256": "12f8720b871730d369007e704903db5c375d6697be157bb8b6bb2bbee65b360e"
+      "sha256": "62b0460b897b2c0ee7135d928b4c0245f4a5427109e5f746df436b1154d6c2fa"
     },
     {
       "arquivo": "acbrLibResposta.js",
@@ -112,7 +112,7 @@
     },
     {
       "arquivo": "fiscal/drivers/acbrLibRuntime.js",
-      "sha256": "5dbddd59fb145d023f6bd71624b4df79fb35a5df745eaa3ee015d79b18c6b398"
+      "sha256": "e143bdd8ee11f20bfbe39fcb0d0f1d4d368142b516027b29a97433c92763ebac"
     },
     {
       "arquivo": "fiscal/drivers/acbrLibSession.js",
@@ -212,7 +212,7 @@
     },
     {
       "arquivo": "fiscalPdfFormato.js",
-      "sha256": "5f65d6beeebfef8e481df81ec63e261be33a39aa336e9841d6356c68158fd1fd"
+      "sha256": "640d9da547c0fb0588217a4febf4a1beb073b6a2866bc5018d7159106eff5d84"
     },
     {
       "arquivo": "fiscalPreflight.js",
@@ -6132,7 +6132,7 @@
     },
     {
       "arquivo": "runtime/acbrIniGenerator.js",
-      "sha256": "e15745aceaad1411e659a5e61461d90c0e1547dac5b64dc9fa00010abae4c7fa"
+      "sha256": "b331349ef372e36546e2c4d6d469b552759d8da7b1ebc0958449d0f7011ae14b"
     },
     {
       "arquivo": "runtime/acbrKoffiTopology.js",
