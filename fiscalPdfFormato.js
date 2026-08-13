@@ -138,6 +138,7 @@ function applyNfcePdfFormatoAcbrLib(inst, formatoPdf) {
       ["DANFE", "ImprimeCodigoEan", "1"],
       ["DANFENFe", "ExibeEAN", "1"],
     ]);
+    applyDanfeEmitenteFonteAcbrLib(inst);
   }
 }
 
@@ -163,6 +164,7 @@ function nfceLayoutMonitorComandos(formatoPdf) {
     cmds.push('NFE.ConfigGravarValor("DANFE","Impressora","")');
     cmds.push('NFE.ConfigGravarValor("DANFE","ImprimeCodigoEan","1")');
     cmds.push('NFE.ConfigGravarValor("DANFENFe","ExibeEAN","1")');
+    cmds.push(...danfeEmitenteFonteMonitorComandos());
   }
   cmds.push("NFE.ConfigGravar()");
   return cmds;
@@ -196,6 +198,40 @@ function deveAplicarLogoDanfe(modeloDocumento = "65", formatoPdf = "termico") {
   const modelo = String(modeloDocumento || "65");
   if (modelo === "55") return true;
   return normalizarFormatoPdfNfce(formatoPdf, modelo) === "a4";
+}
+
+/**
+ * Fonte da identificação do emitente no DANFE A4 (ACBrLib [DANFENFe]).
+ * MOC / Ato COTEPE: razão social ≥ 12 pt em negrito; demais dados ≥ 8 pt.
+ * Default da DLL (8 pt) deixa o nome ilegível na caixa IDENTIFICAÇÃO DO EMITENTE.
+ */
+const DANFE_FONTE_RAZAO_SOCIAL = "12";
+const DANFE_FONTE_EMITENTE_DEMAIS = "8";
+
+/**
+ * @returns {Array<[string, string, string]>}
+ */
+function danfeEmitenteFonteAcbrSets() {
+  return [
+    ["DANFENFe", "Fonte.TamanhoFonteRazaoSocial", DANFE_FONTE_RAZAO_SOCIAL],
+    ["DANFENFe", "Fonte.TamanhoFonteEndereco", DANFE_FONTE_EMITENTE_DEMAIS],
+    ["DANFENFe", "Fonte.TamanhoFonteDemaisCampos", DANFE_FONTE_EMITENTE_DEMAIS],
+    ["DANFENFe", "Fonte.Negrito", "1"],
+  ];
+}
+
+/**
+ * @param {{ configGravarValor: (sec: string, key: string, val: string) => void }} inst
+ */
+function applyDanfeEmitenteFonteAcbrLib(inst) {
+  configGravarSafe(inst, danfeEmitenteFonteAcbrSets());
+}
+
+/** @returns {string[]} */
+function danfeEmitenteFonteMonitorComandos() {
+  return danfeEmitenteFonteAcbrSets().map(
+    ([sec, key, val]) => `NFE.ConfigGravarValor("${sec}","${key}","${val}")`,
+  );
 }
 
 /**
@@ -260,6 +296,8 @@ module.exports = {
   MARCA_DAGUA_MARGIN,
   TIPO_RELATORIO_BOBINA_NFCE,
   TIPO_DANFE_ACBR,
+  DANFE_FONTE_RAZAO_SOCIAL,
+  DANFE_FONTE_EMITENTE_DEMAIS,
   normalizarFormatoPdfNfce,
   suffixPdfModelo,
   destinoPdfCanonico,
@@ -271,5 +309,8 @@ module.exports = {
   applyDanfeLogoAcbrLib,
   logoDanfeAcbrSets,
   danfeLogoMonitorComandos,
+  danfeEmitenteFonteAcbrSets,
+  applyDanfeEmitenteFonteAcbrLib,
+  danfeEmitenteFonteMonitorComandos,
   paramsImprimirDanfePdfMonitor,
 };

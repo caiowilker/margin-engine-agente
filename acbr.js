@@ -1908,6 +1908,7 @@ async function gerarPdfFiscal(chave, xmlPath, modeloDocumento = "65", opts = {})
     nfceLayoutMonitorComandos,
     deveAplicarLogoDanfe,
     danfeLogoMonitorComandos,
+    danfeEmitenteFonteMonitorComandos,
   } = require("./fiscalPdfFormato");
   const formatoPdf = normalizarFormatoPdfNfce(opts.formatoPdf, modelo);
   const destino = destinoPdfFiscal(chave, modelo, formatoPdf);
@@ -1929,6 +1930,7 @@ async function gerarPdfFiscal(chave, xmlPath, modeloDocumento = "65", opts = {})
           `NFE.ConfigGravarValor("DANFENFe","LarguraCodProd","${larguraCod}")`,
           'NFE.ConfigGravarValor("DANFE","Site","Margin Engine")',
           'NFE.ConfigGravarValor("DANFE","MarcaDagua","Margin Engine")',
+          ...danfeEmitenteFonteMonitorComandos(),
           "NFE.ConfigGravar()",
         ]
       : nfceLayoutMonitorComandos(formatoPdf);

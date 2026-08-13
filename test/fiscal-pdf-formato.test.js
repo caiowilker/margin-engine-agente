@@ -108,6 +108,34 @@ async function main() {
         assert.ok(!map["DANFENFe.TamanhoLogoWidth"]);
       },
     ],
+    [
+      "danfeEmitenteFonteAcbrSets — MOC 12pt razão social",
+      () => {
+        const {
+          danfeEmitenteFonteAcbrSets,
+          DANFE_FONTE_RAZAO_SOCIAL,
+          DANFE_FONTE_EMITENTE_DEMAIS,
+          applyDanfeEmitenteFonteAcbrLib,
+          danfeEmitenteFonteMonitorComandos,
+        } = require("../fiscalPdfFormato");
+        const map = Object.fromEntries(
+          danfeEmitenteFonteAcbrSets().map(([s, k, v]) => [`${s}.${k}`, v]),
+        );
+        assert.strictEqual(map["DANFENFe.Fonte.TamanhoFonteRazaoSocial"], "12");
+        assert.strictEqual(map["DANFENFe.Fonte.TamanhoFonteEndereco"], "8");
+        assert.strictEqual(map["DANFENFe.Fonte.TamanhoFonteDemaisCampos"], "8");
+        assert.strictEqual(map["DANFENFe.Fonte.Negrito"], "1");
+        assert.strictEqual(DANFE_FONTE_RAZAO_SOCIAL, "12");
+        assert.strictEqual(DANFE_FONTE_EMITENTE_DEMAIS, "8");
+        const calls = [];
+        applyDanfeEmitenteFonteAcbrLib({
+          configGravarValor: (s, k, v) => calls.push([s, k, v]),
+        });
+        assert.ok(calls.some((c) => c[1] === "Fonte.TamanhoFonteRazaoSocial" && c[2] === "12"));
+        const cmds = danfeEmitenteFonteMonitorComandos();
+        assert.ok(cmds.some((c) => c.includes("Fonte.TamanhoFonteRazaoSocial") && c.includes("12")));
+      },
+    ],
   ];
 
   for (const [name, fn] of cases) {

@@ -708,6 +708,10 @@ ExpandeLogoMarca=0
 ExibeEAN=0
 LarguraCodProd=72
 LogoemCima=0
+Fonte.TamanhoFonteRazaoSocial=12
+Fonte.TamanhoFonteEndereco=8
+Fonte.TamanhoFonteDemaisCampos=8
+Fonte.Negrito=1
 
 [NFCe]
 IdCSC=${iniVals.idCsc}
@@ -849,12 +853,14 @@ function schemasPathForNativeLib(runtime) {
 function applyDanfeLayoutConfig(inst, modeloDf = "55") {
   if (String(modeloDf) !== "55") return;
   const largura = String(process.env.DANFE_LARGURA_COD_PROD || "72").trim() || "72";
+  const { danfeEmitenteFonteAcbrSets } = require("../../fiscalPdfFormato");
   const sets = [
     ["DANFE", "ImprimeCodigoEan", "0"],
     ["DANFE", "ExpandeLogoMarca", "0"],
     ["DANFENFe", "ExibeEAN", "0"],
     ["DANFENFe", "LarguraCodProd", largura],
     ["DANFENFe", "LogoemCima", "0"],
+    ...danfeEmitenteFonteAcbrSets(),
   ];
   for (const [sec, key, val] of sets) {
     try {

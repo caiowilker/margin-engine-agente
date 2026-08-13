@@ -267,6 +267,10 @@ ExpandeLogoMarca=0
 ExibeEAN=0
 LarguraCodProd=72
 LogoemCima=0
+Fonte.TamanhoFonteRazaoSocial=12
+Fonte.TamanhoFonteEndereco=8
+Fonte.TamanhoFonteDemaisCampos=8
+Fonte.Negrito=1
 `;
 
 const iniTargets = [cfg.libIni || acbrLibIniDefault, acbrLibIniData];
