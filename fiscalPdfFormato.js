@@ -199,13 +199,26 @@ function deveAplicarLogoDanfe(modeloDocumento = "65", formatoPdf = "termico") {
 }
 
 /**
- * Configura PathLogo no ACBrLib antes de gerar PDF DANFE/DANFC-e A4.
+ * Leiaute oficial DANFE A4 (MOC): logo na caixa do emitente, à esquerda da
+ * razão social, sem expandir nem empilhar. ExpandeLogoMarca=1 + Largura/Altura=0
+ * usa o tamanho em pixels da imagem e estoura o cabeçalho; LogoemCima=1 empurra
+ * os dados obrigatórios para baixo.
  *
- * Proporção (anti-achatamento):
- * - ExpandeLogoMarca=1 → usa a área expandida do cabeçalho (logo em destaque)
- * - ExpandeLogoMarca.Esticar=0 → NÃO estica (era a causa do logo achatado)
- * - ExpandeLogoMarca.Dimensionar=1 → escala mantendo aspect ratio dentro da caixa
- * - DANFENFe.LogoemCima=1 → logo no topo do cabeçalho (NF-e A4)
+ * @param {string} logoPath
+ * @returns {Array<[string, string, string]>}
+ */
+function logoDanfeAcbrSets(logoPath) {
+  return [
+    ["DANFE", "PathLogo", logoPath],
+    ["DANFE", "ExpandeLogoMarca", "0"],
+    ["DANFE", "ExpandeLogoMarca.Esticar", "0"],
+    ["DANFE", "ExpandeLogoMarca.Dimensionar", "1"],
+    ["DANFENFe", "LogoemCima", "0"],
+  ];
+}
+
+/**
+ * Configura PathLogo no ACBrLib antes de gerar PDF DANFE/DANFC-e A4.
  *
  * @param {{ configGravarValor: (sec: string, key: string, val: string) => void }} inst
  * @param {object} [runtime]
@@ -222,26 +235,7 @@ function applyDanfeLogoAcbrLib(inst, runtime, opts = {}) {
     if (!info.ativo || !info.caminhoAbsoluto) return false;
     const logoPath = fiscalLogo.caminhoParaAcbr(runtime);
     if (!logoPath) return false;
-    const sets = [
-      ["DANFE", "PathLogo", logoPath],
-      ["DANFE", "ExpandeLogoMarca", "1"],
-      // Crítico: Esticar=1 preenche a caixa forçando proporção → logo achatada.
-      ["DANFE", "ExpandeLogoMarca.Esticar", "0"],
-      ["DANFE", "ExpandeLogoMarca.Dimensionar", "1"],
-      // 0 = auto (ACBr calcula pela imagem); valores fixos errados também achatam.
-      ["DANFE", "ExpandeLogoMarca.Largura", "0"],
-      ["DANFE", "ExpandeLogoMarca.Altura", "0"],
-      ["DANFENFe", "TamanhoLogoWidth", "0"],
-      ["DANFENFe", "TamanhoLogoHeight", "0"],
-      ["DANFENFe", "LogoemCima", "1"],
-    ];
-    for (const [sec, key, val] of sets) {
-      try {
-        inst.configGravarValor(sec, key, val);
-      } catch (_) {
-        /* opcional por versão */
-      }
-    }
+    configGravarSafe(inst, logoDanfeAcbrSets(logoPath));
     return true;
   } catch (_) {
     return false;
@@ -249,7 +243,7 @@ function applyDanfeLogoAcbrLib(inst, runtime, opts = {}) {
 }
 
 /**
- * Comandos Monitor equivalentes a {@link applyDanfeLogoAcbrLib} (proporção + topo).
+ * Comandos Monitor equivalentes a {@link applyDanfeLogoAcbrLib}.
  * @param {string} logoPathAbs caminho absoluto da logo no host do Monitor
  * @returns {string[]}
  */
@@ -257,17 +251,9 @@ function danfeLogoMonitorComandos(logoPathAbs) {
   const p = String(logoPathAbs || "").trim();
   if (!p) return [];
   const q = p.replace(/\\/g, "\\\\").replace(/"/g, "");
-  return [
-    `NFE.ConfigGravarValor("DANFE","PathLogo","${q}")`,
-    `NFE.ConfigGravarValor("DANFE","ExpandeLogoMarca","1")`,
-    `NFE.ConfigGravarValor("DANFE","ExpandeLogoMarca.Esticar","0")`,
-    `NFE.ConfigGravarValor("DANFE","ExpandeLogoMarca.Dimensionar","1")`,
-    `NFE.ConfigGravarValor("DANFE","ExpandeLogoMarca.Largura","0")`,
-    `NFE.ConfigGravarValor("DANFE","ExpandeLogoMarca.Altura","0")`,
-    `NFE.ConfigGravarValor("DANFENFe","TamanhoLogoWidth","0")`,
-    `NFE.ConfigGravarValor("DANFENFe","TamanhoLogoHeight","0")`,
-    `NFE.ConfigGravarValor("DANFENFe","LogoemCima","1")`,
-  ];
+  return logoDanfeAcbrSets(q).map(
+    ([sec, key, val]) => `NFE.ConfigGravarValor("${sec}","${key}","${val}")`,
+  );
 }
 
 module.exports = {
@@ -283,6 +269,7 @@ module.exports = {
   applyNfcePdfFormatoAcbrLib,
   deveAplicarLogoDanfe,
   applyDanfeLogoAcbrLib,
+  logoDanfeAcbrSets,
   danfeLogoMonitorComandos,
   paramsImprimirDanfePdfMonitor,
 };

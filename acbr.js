@@ -832,6 +832,8 @@ function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
     bloco += `modBC=3\n`;
   }
   // Simples: ICMS próprio zerado (DAS). Crédito SN só em CSOSN 101/201.
+  // XSD PL_009: CSOSN 102/103/300/400 → tag ICMSSN102 (não existe ICMSSN400).
+  // CSOSN 500 → tag ICMSSN500 (ST já retido). NT 2016.002 N33 = ICMS efetivo.
   bloco += `vBC=0.00\n`;
   bloco += `pICMS=${fmtMoney(usaSimples ? 0 : item.aliquotaIcms || 0)}\n`;
   bloco += `vICMS=0.00\n`;
@@ -841,6 +843,17 @@ function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
     const vCred = Math.round((liquido * pCred) / 100 * 100) / 100;
     bloco += `pCredSN=${fmtMoney(pCred)}\n`;
     bloco += `vCredICMSSN=${fmtMoney(vCred)}\n`;
+  }
+  if (usaSimples && csosn === "500") {
+    const pEfet = Math.max(0, Number(item.pICMSEfet || item.aliquotaIcms) || 0);
+    if (pEfet > 0) {
+      const liquido = Math.max(0, brutoLinha - desc);
+      const vEfet = Math.round((liquido * pEfet) / 100 * 100) / 100;
+      bloco += `vBCEfet=${fmtMoney(liquido)}\n`;
+      bloco += `pRedBCEfet=0.00\n`;
+      bloco += `pICMSEfet=${fmtMoney(pEfet)}\n`;
+      bloco += `vICMSEfet=${fmtMoney(vEfet)}\n`;
+    }
   }
   bloco += `\n`;
 

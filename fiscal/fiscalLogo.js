@@ -157,16 +157,16 @@ function ler() {
   };
 }
 
+/**
+ * Path absoluto no staging da DLL. PathLogo do ACBr carrega a imagem do
+ * filesystem — caminho relativo ao cwd falha ou desenha a logo quebrada.
+ */
 function caminhoParaAcbr(runtime) {
   const info = ler();
   if (!info.ativo || !info.caminhoAbsoluto) return null;
   try {
     const acbrLibRuntime = require("../fiscal/drivers/acbrLibRuntime");
-    const staged = acbrLibRuntime.ensureNativeDocumentPath(info.caminhoAbsoluto, runtime);
-    if (runtime?.root) {
-      return acbrLibRuntime.resolveNativeLibRelativePath(staged, runtime);
-    }
-    return staged;
+    return acbrLibRuntime.ensureNativeDocumentPath(info.caminhoAbsoluto, runtime);
   } catch (_) {
     return info.caminhoAbsoluto;
   }

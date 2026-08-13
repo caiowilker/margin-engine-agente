@@ -94,6 +94,20 @@ async function main() {
         assert.strictEqual(deveAplicarLogoDanfe("65", "termico"), false);
       },
     ],
+    [
+      "logoDanfeAcbrSets — caixa oficial do emitente",
+      () => {
+        const { logoDanfeAcbrSets } = require("../fiscalPdfFormato");
+        const sets = logoDanfeAcbrSets("/tmp/logo.png");
+        const map = Object.fromEntries(sets.map(([s, k, v]) => [`${s}.${k}`, v]));
+        assert.strictEqual(map["DANFE.PathLogo"], "/tmp/logo.png");
+        assert.strictEqual(map["DANFE.ExpandeLogoMarca"], "0");
+        assert.strictEqual(map["DANFE.ExpandeLogoMarca.Esticar"], "0");
+        assert.strictEqual(map["DANFENFe.LogoemCima"], "0");
+        assert.ok(!map["DANFE.ExpandeLogoMarca.Largura"]);
+        assert.ok(!map["DANFENFe.TamanhoLogoWidth"]);
+      },
+    ],
   ];
 
   for (const [name, fn] of cases) {

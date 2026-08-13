@@ -96,7 +96,7 @@ test("applyDanfeLogoAcbrLib sem logo não chama configGravarValor", () => {
   assert.strictEqual(calls.length, 0);
 });
 
-test("applyDanfeLogoAcbrLib com logo define PathLogo e anti-achatamento", () => {
+test("applyDanfeLogoAcbrLib com logo usa caixa oficial do emitente (sem expandir)", () => {
   fiscalLogo.salvar({ buffer: PNG_1X1, ativo: true, origem: "local" });
   const calls = [];
   const inst = {
@@ -107,20 +107,34 @@ test("applyDanfeLogoAcbrLib com logo define PathLogo e anti-achatamento", () => 
   const pathLogo = calls.find((c) => c[0] === "DANFE" && c[1] === "PathLogo");
   assert.ok(pathLogo, "PathLogo deve ser configurado");
   assert.ok(pathLogo[2]);
+  assert.ok(path.isAbsolute(pathLogo[2]) || pathLogo[2].includes("logo"), "PathLogo deve apontar para o arquivo");
+  const expandir = calls.find((c) => c[0] === "DANFE" && c[1] === "ExpandeLogoMarca");
+  assert.ok(expandir, "ExpandeLogoMarca deve ser configurado");
+  assert.strictEqual(expandir[2], "0", "ExpandeLogoMarca=0: caixa oficial do emitente");
   const esticar = calls.find((c) => c[0] === "DANFE" && c[1] === "ExpandeLogoMarca.Esticar");
-  assert.ok(esticar, "ExpandeLogoMarca.Esticar deve ser configurado");
-  assert.strictEqual(esticar[2], "0", "Esticar=0 evita logo achatada");
+  assert.ok(esticar && esticar[2] === "0", "Esticar=0 preserva proporção");
   const dim = calls.find((c) => c[0] === "DANFE" && c[1] === "ExpandeLogoMarca.Dimensionar");
   assert.ok(dim && dim[2] === "1");
   const topo = calls.find((c) => c[0] === "DANFENFe" && c[1] === "LogoemCima");
-  assert.ok(topo && topo[2] === "1", "LogoemCima=1 coloca logo no topo");
+  assert.ok(topo && topo[2] === "0", "LogoemCima=0: logo à esquerda, não empilhada");
+  assert.ok(
+    !calls.some((c) => String(c[1]).includes("Largura") && c[2] === "0"),
+    "não gravar Largura=0 (ACBr usa pixels da imagem e estoura o cabeçalho)",
+  );
+  assert.ok(
+    !calls.some((c) => String(c[1]).includes("TamanhoLogo") && c[2] === "0"),
+    "não gravar TamanhoLogo=0 (colapsa o picture no FastReport)",
+  );
 });
 
-test("danfeLogoMonitorComandos inclui Esticar=0", () => {
+test("danfeLogoMonitorComandos usa leiaute oficial", () => {
   const { danfeLogoMonitorComandos } = require("../fiscalPdfFormato");
   const cmds = danfeLogoMonitorComandos("C:/logo.png");
+  assert.ok(cmds.some((c) => c.includes("ExpandeLogoMarca") && c.includes('"0"')));
   assert.ok(cmds.some((c) => c.includes("ExpandeLogoMarca.Esticar") && c.includes('"0"')));
-  assert.ok(cmds.some((c) => c.includes("LogoemCima") && c.includes('"1"')));
+  assert.ok(cmds.some((c) => c.includes("LogoemCima") && c.includes('"0"')));
+  assert.ok(!cmds.some((c) => c.includes("ExpandeLogoMarca\",\"1\"")));
+  assert.ok(!cmds.some((c) => c.includes("Largura") && c.includes('"0"')));
 });
 
 test("applyDanfeLogoAcbrLib ignora NFC-e térmico", () => {

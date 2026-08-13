@@ -78,10 +78,12 @@ CSC=${cscIni}
 PathPDF=${pdfDir}
 TipoDANFE=1
 ImprimeCodigoEan=0
+ExpandeLogoMarca=0
 
 [DANFENFe]
 ExibeEAN=0
 LarguraCodProd=72
+LogoemCima=0
 `;
 }
 

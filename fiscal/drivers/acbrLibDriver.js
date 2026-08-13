@@ -1037,7 +1037,10 @@ function persistNativeEmissaoOutputs(inst, runtime, chave, modelo) {
   } else {
     applyNfcePdfFormatoAcbrLib(inst, "termico");
   }
-  applyDanfeLogoAcbrLib(inst, runtime, { modelo, formatoPdf: "termico" });
+  applyDanfeLogoAcbrLib(inst, runtime, {
+    modelo,
+    formatoPdf: String(modelo) === "55" ? "a4" : "termico",
+  });
   try {
     inst.imprimirPDF();
   } catch (pdfErr) {

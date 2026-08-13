@@ -702,10 +702,12 @@ SSLType=5
 PathPDF=${path.join("pdf")}
 TipoDANFE=1
 ImprimeCodigoEan=0
+ExpandeLogoMarca=0
 
 [DANFENFe]
 ExibeEAN=0
 LarguraCodProd=72
+LogoemCima=0
 
 [NFCe]
 IdCSC=${iniVals.idCsc}
@@ -849,8 +851,10 @@ function applyDanfeLayoutConfig(inst, modeloDf = "55") {
   const largura = String(process.env.DANFE_LARGURA_COD_PROD || "72").trim() || "72";
   const sets = [
     ["DANFE", "ImprimeCodigoEan", "0"],
+    ["DANFE", "ExpandeLogoMarca", "0"],
     ["DANFENFe", "ExibeEAN", "0"],
     ["DANFENFe", "LarguraCodProd", largura],
+    ["DANFENFe", "LogoemCima", "0"],
   ];
   for (const [sec, key, val] of sets) {
     try {

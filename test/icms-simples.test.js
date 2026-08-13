@@ -103,5 +103,63 @@ test("CSOSN 101 — pCredSN e vCredICMSSN; próprio zerado", () => {
   assert.match(icms, /vCredICMSSN=2\.50/);
 });
 
+test("CSOSN 500 com alíquota — N33 efetivo; sem crédito SN", () => {
+  const ini = montarIniNfce(
+    {
+      total: 100,
+      desconto: 0,
+      empresa: empresaSimples(),
+      itens: [
+        {
+          codigo: "1",
+          nome: "Refri ST",
+          quantidade: 1,
+          precoUnitario: 100,
+          total: 100,
+          ncm: "22021000",
+          cfop: "5405",
+          csosn: "500",
+          aliquotaIcms: 18,
+        },
+      ],
+      pagamentos: [{ forma: "dinheiro", valor: 100 }],
+    },
+    { serie: 1, numero: 3 },
+  );
+  const icms = secaoIcms(ini);
+  assert.match(icms, /CSOSN=500/);
+  assert.match(icms, /vBCEfet=100\.00/);
+  assert.match(icms, /pICMSEfet=18\.00/);
+  assert.doesNotMatch(icms, /pCredSN/);
+});
+
+test("CSOSN 500 sem alíquota — não inventa efetivo", () => {
+  const ini = montarIniNfce(
+    {
+      total: 5,
+      desconto: 0,
+      empresa: empresaSimples(),
+      itens: [
+        {
+          codigo: "1",
+          nome: "Refri ST",
+          quantidade: 1,
+          precoUnitario: 5,
+          total: 5,
+          ncm: "22021000",
+          cfop: "5405",
+          csosn: "500",
+          aliquotaIcms: 0,
+        },
+      ],
+      pagamentos: [{ forma: "dinheiro", valor: 5 }],
+    },
+    { serie: 1, numero: 4 },
+  );
+  const icms = secaoIcms(ini);
+  assert.match(icms, /CSOSN=500/);
+  assert.doesNotMatch(icms, /vBCEfet/);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
