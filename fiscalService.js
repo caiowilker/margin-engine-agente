@@ -77,6 +77,7 @@ function montarCallbackPayload(params) {
     pdfPendente,
     pdfErro,
     recuperado,
+    statusFiscal,
   } = params;
   return {
     correlationId,
@@ -88,7 +89,7 @@ function montarCallbackPayload(params) {
     cStat: cStat || null,
     xMotivo: xMotivo || null,
     dhRecbto: dhRecbto || null,
-    statusFiscal: derivarStatusFiscal(cStat),
+    statusFiscal: statusFiscal || derivarStatusFiscal(cStat),
     xmlContent: xmlContent || null,
     xmlPath: xmlPath || null,
     pdfPath: pdfPath || null,
@@ -283,7 +284,74 @@ async function notificarPendenciaFiscalFailSafe(numeroVenda, correlationId, err)
   }
 }
 
+async function persistirContingenciaOffline(cfg, numeroVenda, correlationId, resultado) {
+  fiscalStorage.exigirEspacoParaEscrita();
+  const modelo = resultado.modeloDocumento || inferirModeloDocumento(null, resultado.chave);
+  let xmlPath = resultado.xmlPath || null;
+  if (resultado.xml) {
+    xmlPath = docs.salvarXmlAutorizado(resultado.chave, resultado.xml) || xmlPath;
+  }
+  const xmlContent = resultado.xml || lerConteudoXmlAutorizado(xmlPath);
+  let pdfPath = resultado.pdfPath || null;
+  if (!pdfPath && resultado.chave) {
+    const encontrado = docs.localizarPdfPorChave(resultado.chave, modelo);
+    if (encontrado) {
+      pdfPath = docs.copiarPdfParaCanonico(resultado.chave, encontrado, modelo);
+    }
+  }
+  const pdfContentBase64 =
+    pdfPath && docs.isPdfValid(pdfPath) ? docs.lerArquivoBase64(pdfPath) : null;
+
+  filaFiscal.salvarDocumento({
+    chave: resultado.chave,
+    numeroVenda,
+    correlationId,
+    serieNfe: resultado.serie || resultado.serieNfe,
+    numeroNfe: resultado.numero || resultado.numeroNfe,
+    cStat: resultado.cStat,
+    protocolo: resultado.protocolo,
+    xmlPath,
+    pdfPath,
+    tipo: "CONTINGENCIA_OFFLINE",
+    modeloDocumento: modelo,
+  });
+
+  const callbackPayload = montarCallbackPayload({
+    correlationId,
+    chave: resultado.chave,
+    numeroNfe: resultado.numero || resultado.numeroNfe,
+    serieNfe: resultado.serie || resultado.serieNfe,
+    qrcode: resultado.qrcode || resultado.qrcodeNfe,
+    protocolo: resultado.protocolo,
+    cStat: resultado.cStat,
+    xMotivo: resultado.xMotivo,
+    dhRecbto: resultado.dhRecbto,
+    xmlContent,
+    xmlPath,
+    pdfPath,
+    pdfContentBase64,
+    modeloDocumento: modelo,
+    pdfPendente: !pdfPath,
+    recuperado: !!resultado.recuperado,
+    statusFiscal: "CONTINGENCIA_OFFLINE",
+  });
+  agendarCallbackBackend(cfg, numeroVenda, correlationId, callbackPayload);
+
+  return {
+    ...resultado,
+    xmlPath,
+    pdfPath,
+    pdfContentBase64,
+    numeroVenda,
+    contingenciaOffline: true,
+    statusFiscal: "CONTINGENCIA_OFFLINE",
+  };
+}
+
 async function persistirAposAutorizacao(cfg, numeroVenda, correlationId, resultado) {
+  if (resultado?.contingenciaOffline === true && resultado.chave) {
+    return persistirContingenciaOffline(cfg, numeroVenda, correlationId, resultado);
+  }
   if (!isCStatAutorizado(resultado.cStat)) {
     const err = new Error(
       `NF-e aguardando confirmação SEFAZ (cStat ${resultado.cStat || "?"}): ${resultado.xMotivo || "lote em processamento"}`,
@@ -378,6 +446,9 @@ async function persistirAposAutorizacao(cfg, numeroVenda, correlationId, resulta
 }
 
 async function persistirDocumentosFiscais(cfg, numeroVenda, correlationId, resultado) {
+  if (resultado?.contingenciaOffline === true && resultado.chave) {
+    return persistirContingenciaOffline(cfg, numeroVenda, correlationId, resultado);
+  }
   if (!isCStatAutorizado(resultado.cStat)) {
     const err = new Error(
       `NF-e aguardando confirmação SEFAZ (cStat ${resultado.cStat || "?"}): ${resultado.xMotivo || "lote em processamento"}`,

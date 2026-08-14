@@ -525,9 +525,14 @@ async function boot() {
       filaOfflineMetricas = fila.metricas?.() || null;
     } catch (_) {}
     const st = filaFiscal.status();
+    let nfceOfflineMetricas = null;
+    try {
+      nfceOfflineMetricas = require("./fiscal/contingenciaOfflineQueue").metricasIdade();
+    } catch (_) {}
     return {
       filaFiscalMetricas: st.metricas || null,
       filaOfflineMetricas,
+      nfceOfflineMetricas,
     };
   });
 
@@ -670,6 +675,11 @@ function inicializarDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_epec_status ON epec_pendentes(status);
   `);
+  try {
+    require("./fiscal/contingenciaOfflineQueue").bind(db);
+  } catch (err) {
+    console.warn("[ContingenciaOffline] fila não inicializada:", err.message);
+  }
 }
 
 // ── Segurança: CORS controlado ────────────────────────────────────────────────
@@ -3415,6 +3425,28 @@ function iniciarServidor() {
       motivo: estadoContingencia.motivo || null,
       epecPendentes,
       epecFalhasPermanentes,
+      offlinePendentes: (() => {
+        try {
+          return require("./fiscal/contingenciaOfflineQueue").contarPendentes();
+        } catch (_) {
+          return 0;
+        }
+      })(),
+      offlineRejeicoes: (() => {
+        try {
+          return require("./fiscal/contingenciaOfflineQueue").contarRejeicoes();
+        } catch (_) {
+          return 0;
+        }
+      })(),
+      offlineIdade: (() => {
+        try {
+          return require("./fiscal/contingenciaOfflineQueue").metricasIdade();
+        } catch (_) {
+          return null;
+        }
+      })(),
+      offlineAuto: require("./fiscal/contingenciaOffline").isEnabled(),
       sefazDegraded: wd.degraded === true,
       filaPausada: typeof filaFiscal.status === "function"
         ? filaFiscal.status().pausada === true
@@ -3485,6 +3517,24 @@ function iniciarServidor() {
         contingenciaEncerrada: auto.encerrou === true,
         encerrarMotivo: auto.motivo,
       });
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
+  });
+
+  app.post("/contingencia/offline/sincronizar", exigirAgentToken, async (req, res) => {
+    try {
+      const sync = await tentarSincronizarNfceOffline();
+      res.json({ ok: true, ...sync });
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
+  });
+
+  app.get("/contingencia/offline/pendentes", exigirAgentToken, (req, res) => {
+    try {
+      const rows = require("./fiscal/contingenciaOfflineQueue").listPendentes(100);
+      res.json(rows);
     } catch (err) {
       res.status(500).json({ erro: err.message });
     }
@@ -4355,6 +4405,21 @@ function iniciarServidor() {
     },
     5 * 60 * 1000,
   );
+  const OFFLINE_SYNC_MS = parseInt(
+    process.env.CONTINGENCIA_OFFLINE_SYNC_MS || String(5 * 60 * 1000),
+    10,
+  );
+  trackInterval(
+    () => {
+      tentarSincronizarNfceOffline().catch((err) =>
+        console.warn("[ContingenciaOffline] Erro no sync automatico:", err.message),
+      );
+    },
+    Math.max(60_000, Number.isFinite(OFFLINE_SYNC_MS) ? OFFLINE_SYNC_MS : 5 * 60 * 1000),
+  );
+  setTimeout(() => {
+    tentarSincronizarNfceOffline().catch(() => {});
+  }, 15_000);
 
   if (AUTO_UPDATE) {
     trackInterval(() => verificarAtualizacao().catch(() => {}), 60 * 60 * 1000);
@@ -4755,6 +4820,13 @@ async function puxarEpecsDoBackend(cfg) {
     importados += 1;
   }
   return importados;
+}
+
+async function tentarSincronizarNfceOffline() {
+  if (typeof fiscalDriver.sincronizarNfceOffline !== "function") {
+    return { skipped: true, motivo: "driver_sem_sync" };
+  }
+  return fiscalDriver.sincronizarNfceOffline();
 }
 
 async function tentarSincronizarEpecs() {

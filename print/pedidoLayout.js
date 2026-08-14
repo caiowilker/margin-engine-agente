@@ -224,6 +224,8 @@ function layoutEntrega(p, cancelado, showTotal) {
   appendItensComPreco(lines, p.items, showTotal, false);
   pushSep(lines, "dash");
 
+  appendCobrancas(lines, p, cols);
+
   const totalFmt = showTotal ? fmtTotal(p.total) : null;
   if (totalFmt) {
     lines.push({ kind: "text", text: col2("TOTAL", totalFmt, cols), bold: true, size: "md" });
@@ -292,6 +294,8 @@ function layoutCliente(p, cancelado, showTotal, preConta) {
   appendItensComPreco(lines, p.items, showTotal, true);
   pushSep(lines, "dash");
 
+  appendCobrancas(lines, p, cols);
+
   const totalFmt = showTotal ? fmtTotal(p.total) : null;
   if (totalFmt) {
     lines.push({ kind: "text", text: col2("TOTAL", totalFmt, cols), bold: true, size: "md" });
@@ -310,6 +314,21 @@ function layoutCliente(p, cancelado, showTotal, preConta) {
   }
   pushSep(lines);
   return lines;
+}
+
+function appendCobrancas(lines, p, cols) {
+  if (p.deliveryFee != null) {
+    const fmt = fmtTotal(p.deliveryFee);
+    if (fmt) {
+      lines.push({ kind: "text", text: col2("Taxa de entrega", fmt, cols) });
+    }
+  }
+  if (p.bottleDeposit != null) {
+    const fmt = fmtTotal(p.bottleDeposit);
+    if (fmt) {
+      lines.push({ kind: "text", text: col2("Caucao vasilhame", fmt, cols) });
+    }
+  }
 }
 
 function appendItensComPreco(lines, items, showPrices, showUnitPrice) {

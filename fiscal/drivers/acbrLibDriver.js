@@ -28,6 +28,8 @@ const fiscalEmissionLock = require("../fiscalEmissionLock");
 const fiscalDhEmiIni = require("../fiscalDhEmiIni");
 const { wrapAcbrExports } = require("../wrapAcbrExports");
 const { isMainThread } = require("worker_threads");
+const contingenciaOffline = require("../contingenciaOffline");
+const contingenciaOfflineQueue = require("../contingenciaOfflineQueue");
 
 const AGENT_ROOT = path.resolve(__dirname, "../..");
 
@@ -318,7 +320,10 @@ async function emitirDocumentoLib(payload, modeloDf) {
       ? payload.serieNfe || fiscalNumeracao.SERIE_NFE_55
       : payload.serieNfe || fiscalNumeracao.SERIE_PADRAO;
 
-  const numeracao = resolverNumeracaoLib(payload, serie, modeloDf);
+  const numeracao = {
+    ...resolverNumeracaoLib(payload, serie, modeloDf),
+    numeroVenda: payload.numeroVenda || null,
+  };
   const prefix = modeloDf === "55" ? "nfe-lib" : "nfce-lib";
   const ini = await montarIniLib(payload, numeracao, modeloDf, empresa);
   const iniPath = path.join(
@@ -418,6 +423,29 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
             inst.limparLista();
           } catch (_) {
             /* ignore */
+          }
+
+          if (
+            contingenciaOffline.isEnabled() &&
+            contingenciaOffline.isModeloNfce(modelo)
+          ) {
+            const probe = await contingenciaOffline.probeStatusServicoComRetry(
+              inst,
+              acbrLibResposta,
+              log,
+            );
+            if (probe.ok) {
+              contingenciaOfflineQueue.fecharJanelaDhCont();
+            } else {
+              return emitirNfceContingenciaOffline(
+                inst,
+                runtime,
+                nativeIniPath,
+                modelo,
+                numeracao,
+                probe,
+              );
+            }
           }
 
           inst.carregarINI(nativeIniPath);
@@ -536,6 +564,240 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
       throw err;
     }
   }, "acbr-lib-native");
+}
+
+/**
+ * NFC-e off-line (tpEmis=9): Assinar → GravarXML (disco) → fila → DANFE.
+ * Impressão nunca precede a persistência do XML. Restaura teNormal no finally.
+ */
+function emitirNfceContingenciaOffline(inst, runtime, nativeIniPath, modelo, numeracao, probe) {
+  const prevForma = contingenciaOffline.lerFormaEmissao(inst);
+  contingenciaOffline.gravarFormaEmissao(inst, contingenciaOffline.FORMA_OFFLINE, log);
+  try {
+    try {
+      inst.limparLista();
+    } catch (_) {}
+
+    const dhCont = contingenciaOfflineQueue.obterOuAbrirJanelaDhCont(new Date());
+    const iniOffline = contingenciaOffline.escreverIniOffline(nativeIniPath, { dhCont });
+    inst.carregarINI(iniOffline);
+    log.info(
+      { iniPath: iniOffline, dhCont },
+      "[ContingenciaOffline] NFE_CarregarINI (tpEmis=9)",
+    );
+    acbrLibRuntime.reloadNativeCertAfterCarregarIni(inst, runtime);
+
+    inst.assinar();
+    log.info("[ContingenciaOffline] NFE_Assinar OK");
+    try {
+      inst.validar();
+    } catch (valErr) {
+      log.warn({ err: valErr.message }, "[ContingenciaOffline] NFE_Validar avisou — XML será gravado");
+    }
+
+    let xmlPeek = "";
+    try {
+      xmlPeek = String(inst.obterXml(0) || "");
+    } catch (_) {}
+    const metaPeek = contingenciaOffline.metaDoXml(xmlPeek);
+    const chave = String(metaPeek.chave || "").replace(/\D/g, "");
+    if (chave.length !== 44) {
+      throw new Error("[ContingenciaOffline] chave de 44 dígitos ausente após assinar");
+    }
+
+    const destXml = PATHS.xml || runtime.notas;
+    const gravado = contingenciaOffline.gravarXmlAssinado(inst, destXml, chave);
+    const xml = gravado.xml;
+    const meta = contingenciaOffline.metaDoXml(xml);
+
+    contingenciaOfflineQueue.enqueue({
+      chave,
+      numero: meta.numero || numeracao?.numero,
+      serie: meta.serie || numeracao?.serie,
+      xmlPath: gravado.xmlPath,
+      numeroVenda: numeracao?.numeroVenda || null,
+      dhCont,
+      terminalId: contingenciaOffline.terminalId(),
+    });
+
+    let pdfPath = null;
+    try {
+      const artifacts = persistNativeEmissaoOutputs(inst, runtime, chave, modelo, {
+        xmlJaSalvo: gravado.xmlPath,
+      });
+      pdfPath = artifacts.pdfPath || null;
+    } catch (printErr) {
+      log.warn(
+        { err: printErr.message, chave, xmlPath: gravado.xmlPath },
+        "[ContingenciaOffline] DANFE falhou após XML gravado — XML preservado na fila",
+      );
+    }
+
+    fiscalTrace.trace("ContingenciaOffline", "NFC-e gravada sem envio SEFAZ", {
+      chave,
+      xmlPath: gravado.xmlPath,
+      dhCont,
+      probe: probe?.cStat || probe?.erro || "indisponivel",
+      tentativasProbe: probe?.tentativas,
+    });
+    log.info(
+      { chave, xmlPath: gravado.xmlPath, pdfPath, dhCont, native: true },
+      "[ContingenciaOffline] XML persistido antes do DANFE — pendente de sincronização",
+    );
+
+    const qr = require("../../documentosFiscais").extrairQrCodeDoXml(xml);
+    return {
+      chave,
+      numero: meta.numero || numeracao?.numero,
+      serie: meta.serie || numeracao?.serie || "001",
+      qrcode: qr,
+      protocolo: null,
+      cStat: null,
+      xMotivo: "NFC-e emitida em contingência off-line (tpEmis=9) — transmissão pendente",
+      xml,
+      fiscal: true,
+      modeloDocumento: String(modelo),
+      chaveNfe: chave,
+      numeroNfe: meta.numero || numeracao?.numero,
+      serieNfe: meta.serie || numeracao?.serie || "001",
+      qrcodeNfe: qr,
+      native: true,
+      xmlPath: gravado.xmlPath,
+      pdfPath,
+      contingenciaOffline: true,
+      statusFiscal: "CONTINGENCIA_OFFLINE",
+      dhCont,
+    };
+  } finally {
+    contingenciaOffline.gravarFormaEmissao(inst, prevForma || contingenciaOffline.FORMA_NORMAL, log);
+    try {
+      inst.limparLista();
+    } catch (_) {}
+  }
+}
+
+let syncOfflineInflight = null;
+
+async function sincronizarNfceOfflineLib() {
+  if (!contingenciaOffline.isEnabled()) {
+    return { ok: true, skipped: true, motivo: "desabilitado" };
+  }
+  if (getIntegrationMode() !== "native") {
+    return { ok: true, skipped: true, motivo: "nao_nativo" };
+  }
+  if (syncOfflineInflight) return syncOfflineInflight;
+
+  syncOfflineInflight = (async () => {
+    const { rows: pendentes } = contingenciaOfflineQueue.claimPendentes(10, 180_000);
+    const resultados = [];
+    for (const row of pendentes) {
+      const xmlPath = row.xml_path;
+      if (!xmlPath || !fs.existsSync(xmlPath)) {
+        contingenciaOfflineQueue.marcarRejeicao(row.chave, "XML ausente no disco", "xml");
+        resultados.push({ chave: row.chave, ok: false, tipo: "REJEICAO", erro: "xml_ausente" });
+        continue;
+      }
+      try {
+        const resultado = await withNativeLib("offlineRetransmit", (inst, runtime) => {
+          const prevForma = contingenciaOffline.lerFormaEmissao(inst);
+          contingenciaOffline.gravarFormaEmissao(inst, contingenciaOffline.FORMA_NORMAL, log);
+          try {
+            inst.limparLista();
+            inst.carregarXML(xmlPath);
+            const resposta = inst.enviar(1, false, true, false);
+            const p0 = acbrLibResposta.parseRespostaLib(resposta);
+            acbr.assertAutorizada(p0, resposta, "65");
+            const artifacts = persistNativeEmissaoOutputs(inst, runtime, p0.chave || row.chave, "65");
+            return {
+              chave: p0.chave || row.chave,
+              cStat: p0.cStat,
+              protocolo: p0.protocolo,
+              xmlPath: artifacts.xmlPath,
+              pdfPath: artifacts.pdfPath,
+            };
+          } finally {
+            contingenciaOffline.gravarFormaEmissao(
+              inst,
+              prevForma || contingenciaOffline.FORMA_NORMAL,
+              log,
+            );
+            try {
+              inst.limparLista();
+            } catch (_) {}
+          }
+        });
+        contingenciaOfflineQueue.marcarTransmitido(resultado.chave, resultado.protocolo);
+        resultados.push({ chave: resultado.chave, ok: true, cStat: resultado.cStat });
+        log.info(
+          { chave: resultado.chave, protocolo: resultado.protocolo },
+          "[ContingenciaOffline] Transmitida à SEFAZ",
+        );
+      } catch (err) {
+        const cls = contingenciaOffline.classificarResultadoSync(err);
+        if (cls.consultar) {
+          try {
+            const cons = await consultarChaveLib(row.chave);
+            const cs = String(cons?.cStat || "");
+            if (cs === "100" || cs === "150" || cons?.situacao === "AUTORIZADA") {
+              contingenciaOfflineQueue.marcarTransmitido(row.chave, cons.protocolo);
+              resultados.push({ chave: row.chave, ok: true, cStat: cs, via: "consulta_duplicidade" });
+              continue;
+            }
+          } catch (_) {}
+        }
+        if (cls.reter) {
+          contingenciaOfflineQueue.marcarFalhaRede(row.chave, err.message);
+          resultados.push({
+            chave: row.chave,
+            ok: false,
+            tipo: "REDE",
+            erro: err.message,
+            cStat: cls.cStat,
+          });
+          log.warn(
+            { chave: row.chave, err: err.message, cStat: cls.cStat },
+            "[ContingenciaOffline] Falha de rede/SEFAZ instável — permanece na fila",
+          );
+        } else {
+          contingenciaOfflineQueue.marcarRejeicao(row.chave, err.message, cls.cStat);
+          try {
+            require("../../fiscalAlertas").alertarFalhaPermanente({
+              numeroVenda: row.numero_venda,
+              chave: row.chave,
+              cStat: cls.cStat,
+              erro: err.message,
+              origem: "contingencia_offline_sync",
+            });
+          } catch (_) {}
+          resultados.push({
+            chave: row.chave,
+            ok: false,
+            tipo: "REJEICAO",
+            erro: err.message,
+            cStat: cls.cStat,
+          });
+          log.error(
+            { chave: row.chave, err: err.message, cStat: cls.cStat },
+            "[ContingenciaOffline] Rejeição SEFAZ — intervenção manual (sai da fila de retry)",
+          );
+        }
+      }
+    }
+    const idade = contingenciaOfflineQueue.metricasIdade();
+    return {
+      ok: true,
+      processados: resultados.length,
+      transmitidos: resultados.filter((r) => r.ok).length,
+      rejeicoes: resultados.filter((r) => r.tipo === "REJEICAO").length,
+      pendentes: contingenciaOfflineQueue.contarPendentes(),
+      alertaIdade: idade.alertaIdade,
+      resultados,
+    };
+  })().finally(() => {
+    syncOfflineInflight = null;
+  });
+
+  return syncOfflineInflight;
 }
 
 /** Fallback Monitor TCP — apenas com ACBR_LIB_ALLOW_PARITY=true (não é rollout). */
@@ -990,7 +1252,7 @@ function destinoPdfCanonico(chave, modeloDocumento, formatoPdf = "termico") {
 }
 
 /** Persiste XML/PDF do staging nativo para PATHS do agente e gera DANFC-e via NFE_ImprimirPDF. */
-function persistNativeEmissaoOutputs(inst, runtime, chave, modelo) {
+function persistNativeEmissaoOutputs(inst, runtime, chave, modelo, opts = {}) {
   const docs = require("../../documentosFiscais");
   const { ensureDirs } = require("../../marginPaths");
   ensureDirs();
@@ -998,6 +1260,10 @@ function persistNativeEmissaoOutputs(inst, runtime, chave, modelo) {
   const k = String(chave || "").replace(/\D/g, "");
   let xmlPathCanon = null;
   let pdfPathCanon = null;
+
+  if (opts.xmlJaSalvo && fs.existsSync(opts.xmlJaSalvo)) {
+    xmlPathCanon = opts.xmlJaSalvo;
+  }
 
   let xmlContent = null;
   const stagedXml = acbrLibRuntime.findStagedArtifact(runtime, k, ".xml");
@@ -1010,10 +1276,10 @@ function persistNativeEmissaoOutputs(inst, runtime, chave, modelo) {
       /* ignore */
     }
   }
-  if (xmlContent && String(xmlContent).trim()) {
+  if (!xmlPathCanon && xmlContent && String(xmlContent).trim()) {
     xmlPathCanon = docs.salvarXmlAutorizado(k, xmlContent);
     fiscalTrace.trace("Persist", "XML autorizado salvo", { chave: k, path: xmlPathCanon });
-  } else {
+  } else if (!xmlPathCanon) {
     fiscalTrace.warn("Persist", "XML vazio após emissão — SEFAZ pode não ter autorizado", {
       chave: k,
       stagedXml,
@@ -1563,6 +1829,11 @@ const exportedDriver = wrapAcbrExports({
   emitirNfse: executarNativo("emitirNfse", emitirNfseLib, resolveEmissaoTimeoutMs()),
   isNfseHabilitado: () => acbr.isNfseHabilitado(),
   emitirViaNativeLib: executarNativo("emitirViaNativeLib", emitirViaNativeLib, resolveEmissaoTimeoutMs()),
+  sincronizarNfceOffline: executarNativo(
+    "sincronizarNfceOffline",
+    sincronizarNfceOfflineLib,
+    resolveEmissaoTimeoutMs(),
+  ),
   statusServico: executarNativo("statusServico", statusServicoLib, 30_000),
   testar: executarNativo("testar", testarLib, 30_000),
   testarLibDetalhe: executarNativo("testarLibDetalhe", testarLibDetalhe, 30_000),

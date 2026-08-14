@@ -271,6 +271,29 @@ function verificarTaxaCStat999() {
   }
 }
 
+function verificarContingenciaOfflineIdade(snapshot) {
+  if (!snapshot || snapshot.alertaIdade !== true) {
+    estadoFilaSustentada.set("nfce_offline", { alertado: false });
+    return;
+  }
+  const horas = Number(snapshot.maisAntigaHoras || 0);
+  const limite = Number(snapshot.alertaIdadeHoras || 2);
+  const qtd = (snapshot.estouradas && snapshot.estouradas.length) || 0;
+  const anterior = estadoFilaSustentada.get("nfce_offline") || { alertado: false };
+  if (anterior.alertado) return;
+  const mensagem = `NFC-e off-line pendente há ${horas.toFixed(1)}h (limite ${limite}h, ${qtd} nota(s)) — risco fiscal se o sync não estiver rodando`;
+  const dados = {
+    nome: "nfce_offline",
+    maisAntigaHoras: horas,
+    limiteHoras: limite,
+    pendentes: snapshot.pendentes,
+    estouradas: qtd,
+  };
+  logCritico("CONTINGENCIA_OFFLINE_IDADE", mensagem, dados);
+  void enviarWebhook("CONTINGENCIA_OFFLINE_IDADE", mensagem, dados);
+  estadoFilaSustentada.set("nfce_offline", { alertado: true, desde: Date.now() });
+}
+
 function executarMonitoramento(deps = {}) {
   try {
     if (deps.filaFiscalMetricas) {
@@ -278,6 +301,9 @@ function executarMonitoramento(deps = {}) {
     }
     if (deps.filaOfflineMetricas) {
       verificarFilaPendenteSustentada("vendas_offline", deps.filaOfflineMetricas);
+    }
+    if (deps.nfceOfflineMetricas) {
+      verificarContingenciaOfflineIdade(deps.nfceOfflineMetricas);
     }
     verificarTaxaCStat999();
   } catch (err) {
@@ -368,6 +394,7 @@ module.exports = {
   verificarDiscoCritico,
   verificarFila,
   verificarFilaPendenteSustentada,
+  verificarContingenciaOfflineIdade,
   verificarTaxaCStat999,
   executarMonitoramento,
   iniciarMonitorPeriodico,

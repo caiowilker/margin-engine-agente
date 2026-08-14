@@ -106,6 +106,22 @@ test("renderPedidoTags entrega: tel, endereco, pagto, troco, TOTAL", () => {
   assert.ok(!tags.includes("Levar"));
 });
 
+test("comanda entrega imprime taxa de entrega antes do TOTAL", () => {
+  const tags = renderPedidoTags({
+    printType: "entrega",
+    eventType: "ORDER_CREATED",
+    orderNumber: "ORD-8",
+    customerName: "Ana",
+    deliveryAddress: "Rua B, 20",
+    deliveryFee: 7.5,
+    total: 47.5,
+    items: [{ name: "Coca 2L", quantity: 1, unit: "un" }],
+  });
+  assert.ok(tags.includes("Taxa de entrega"));
+  assert.ok(tags.includes("7,50"));
+  assert.ok(tags.includes("TOTAL"));
+});
+
 test("labelPaymentForm normaliza CASH/CARD", () => {
   assert.strictEqual(labelPaymentForm("CASH"), "Dinheiro");
   assert.strictEqual(labelPaymentForm("CARD"), "Cartao");

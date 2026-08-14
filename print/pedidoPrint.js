@@ -122,6 +122,8 @@ function normalizarPedidoPayload(raw) {
     deliveryAddress:
       addressRaw != null && String(addressRaw).trim() ? String(addressRaw).trim() : null,
     total: o.total != null ? Number(o.total) : null,
+    deliveryFee: moneyOrNull(o.deliveryFee ?? o.delivery_fee ?? o.taxaEntrega ?? o.taxa_entrega),
+    bottleDeposit: moneyOrNull(o.bottleDeposit ?? o.bottle_deposit ?? o.caucao ?? o.caucaoReais),
     notes: o.notes ?? null,
     paymentForm: o.paymentForm ?? o.payment_form ?? null,
     cashChangeFor:
@@ -152,6 +154,12 @@ function normalizarPedidoPayload(raw) {
 }
 
 /** Quebra texto longo para impressora térmica (cols da bobina ativa). */
+function moneyOrNull(v) {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0.004 ? n : null;
+}
+
 function wrapThermalLines(text, maxCols) {
   const cols = maxCols ?? require("./thermalCols").getThermalCols();
   const raw = String(text || "").trim();
