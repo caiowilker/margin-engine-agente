@@ -90,6 +90,15 @@ test("xmlEstaAutorizado — detecta infProt", () => {
   assert.strictEqual(docs.xmlEstaAutorizado(nfeOnly), false);
 });
 
+test("xmlProntoParaCupom — aceita NFC-e off-line (tpEmis=9) sem infProt", () => {
+  const offline = `<?xml version="1.0"?><NFe><infNFe><ide><tpEmis>9</tpEmis></ide></infNFe></NFe>`;
+  assert.strictEqual(docs.xmlEstaAutorizado(offline), false);
+  assert.strictEqual(docs.xmlEmitidoEmContingencia(offline), true);
+  assert.strictEqual(docs.xmlProntoParaCupom(offline), true);
+  assert.strictEqual(docs.xmlProntoParaCupom(nfeProc), true);
+  assert.strictEqual(docs.xmlProntoParaCupom(nfeOnly), false);
+});
+
 test("localizarPdfPorChave — encontra PDF aninhado ACBr", () => {
   const p = docs.localizarPdfPorChave(chave, "55");
   assert.ok(p, "deveria encontrar PDF");

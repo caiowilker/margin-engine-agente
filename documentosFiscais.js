@@ -578,6 +578,18 @@ function xmlEstaAutorizado(xml) {
   return prot.cStat === "100" || prot.cStat === "150";
 }
 
+/** NFC-e/NF-e em contingência (tpEmis 4 EPEC / 6 SVC-AN / 7 SVC-RS / 9 off-line). */
+function xmlEmitidoEmContingencia(xml) {
+  if (!xml || typeof xml !== "string") return false;
+  const m = xml.match(/<tpEmis>\s*([0-9]+)\s*<\/tpEmis>/i);
+  return m != null && ["4", "6", "7", "9"].includes(m[1]);
+}
+
+/** Cupom/QR: autorizado na SEFAZ ou emitido em contingência (ainda sem infProt). */
+function xmlProntoParaCupom(xml) {
+  return xmlEstaAutorizado(xml) || xmlEmitidoEmContingencia(xml);
+}
+
 /**
  * Resolve o melhor caminho de XML para impressão/PDF (prefere procNFe / nfeProc).
  * Ignora xmlPathHint sem protocolo quando existir variante autorizada no disco.
@@ -882,6 +894,8 @@ module.exports = {
   copiarPdfParaCanonico,
   extrairCnpjDaChave,
   xmlEstaAutorizado,
+  xmlEmitidoEmContingencia,
+  xmlProntoParaCupom,
   resolverXmlParaImpressao,
   resolverDocumentoFiscalLocal,
   iniciarBackupRetryScheduler,

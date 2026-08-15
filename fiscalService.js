@@ -348,8 +348,17 @@ async function persistirContingenciaOffline(cfg, numeroVenda, correlationId, res
   };
 }
 
+function pareceContingenciaOffline(resultado) {
+  if (!resultado) return false;
+  if (resultado.contingenciaOffline === true) return true;
+  const st = String(resultado.statusFiscal || "").toUpperCase();
+  if (st.includes("CONTINGENCIA")) return true;
+  const xml = String(resultado.xml || "");
+  return docs.xmlEmitidoEmContingencia(xml);
+}
+
 async function persistirAposAutorizacao(cfg, numeroVenda, correlationId, resultado) {
-  if (resultado?.contingenciaOffline === true && resultado.chave) {
+  if (pareceContingenciaOffline(resultado) && resultado.chave) {
     return persistirContingenciaOffline(cfg, numeroVenda, correlationId, resultado);
   }
   if (!isCStatAutorizado(resultado.cStat)) {
@@ -446,7 +455,7 @@ async function persistirAposAutorizacao(cfg, numeroVenda, correlationId, resulta
 }
 
 async function persistirDocumentosFiscais(cfg, numeroVenda, correlationId, resultado) {
-  if (resultado?.contingenciaOffline === true && resultado.chave) {
+  if (pareceContingenciaOffline(resultado) && resultado.chave) {
     return persistirContingenciaOffline(cfg, numeroVenda, correlationId, resultado);
   }
   if (!isCStatAutorizado(resultado.cStat)) {
@@ -1528,13 +1537,13 @@ async function obterXmlDocumento(chave, numeroVenda) {
     if (!xmlPath) {
       throw new Error("XML não disponível — documento fiscal não encontrado");
     }
-    throw err;
+    // Contingência: XML assinado local existe sem infProt — não bloquear cupom/QR.
   }
   const xmlContent = lerConteudoXmlAutorizado(xmlPath);
   if (!xmlContent) {
     throw new Error("XML fiscal vazio ou ilegível");
   }
-  if (!docs.xmlEstaAutorizado(xmlContent)) {
+  if (!docs.xmlProntoParaCupom(xmlContent)) {
     throw new Error("XML fiscal ainda não autorizado");
   }
   return {

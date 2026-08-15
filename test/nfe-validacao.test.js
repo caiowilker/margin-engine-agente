@@ -95,7 +95,14 @@ test("NFC-e — CNPJ consumidor 14 dígitos — ok", () => {
   validarPayloadNfce({
     total: 10,
     cnpjCliente: "12345678000195",
-    itens: [{ nome: "Pão", quantidade: 1, precoUnitario: 10, total: 10 }],
+    itens: [{
+      nome: "Pão",
+      quantidade: 1,
+      precoUnitario: 10,
+      total: 10,
+      ncm: "19059090",
+      cfop: "5102",
+    }],
   });
 });
 
