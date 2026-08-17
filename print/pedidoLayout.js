@@ -19,6 +19,7 @@ const {
   labelPaymentForm,
   shortEventBadge,
   isStationTicket,
+  formatCreatedAtForPrint,
 } = require("./pedidoPrint");
 const { getThermalCols, sepEq, sepDash, col2 } = require("./thermalCols");
 
@@ -123,7 +124,7 @@ function layoutEstacao(p, cancelado) {
   }
 
   if (p.createdAt) {
-    lines.push({ kind: "text", text: tx(p.createdAt), center: true, size: "sm" });
+    lines.push({ kind: "text", text: formatCreatedAtForPrint(p.createdAt) || tx(p.createdAt), center: true, size: "sm" });
   }
   pushSep(lines);
   return lines;
@@ -187,6 +188,9 @@ function layoutEntrega(p, cancelado, showTotal) {
   if (p.customerPhone) {
     lines.push({ kind: "text", text: `Tel  ${tx(p.customerPhone)}`, bold: true });
   }
+  if (p.courierName) {
+    lines.push({ kind: "text", text: `Motoboy  ${tx(p.courierName)}`, bold: true });
+  }
 
   if (p.deliveryAddress) {
     lines.push({ kind: "blank" });
@@ -240,7 +244,7 @@ function layoutEntrega(p, cancelado, showTotal) {
 
   if (p.createdAt) {
     lines.push({ kind: "blank" });
-    lines.push({ kind: "text", text: tx(p.createdAt), center: true, size: "sm" });
+    lines.push({ kind: "text", text: formatCreatedAtForPrint(p.createdAt) || tx(p.createdAt), center: true, size: "sm" });
   }
   pushSep(lines);
   return lines;
@@ -310,7 +314,7 @@ function layoutCliente(p, cancelado, showTotal, preConta) {
 
   if (p.createdAt) {
     lines.push({ kind: "blank" });
-    lines.push({ kind: "text", text: tx(p.createdAt), center: true, size: "sm" });
+    lines.push({ kind: "text", text: formatCreatedAtForPrint(p.createdAt) || tx(p.createdAt), center: true, size: "sm" });
   }
   pushSep(lines);
   return lines;

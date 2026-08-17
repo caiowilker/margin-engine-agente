@@ -14,6 +14,7 @@ const BANNER = {
   offline: "*** MODO OFFLINE ***",
   cancelada: "*** VENDA CANCELADA ***",
   segundaVia: "*** SEGUNDA VIA ***",
+  contingencia: "*** EMITIDA EM CONTINGENCIA ***",
 };
 
 /** Corte canônico — default partial (ACBr </corte_parcial>). */
@@ -83,6 +84,14 @@ function bannersStatusCupom(payload) {
   const out = [];
   if (payload?.vendaCancelada) out.push(BANNER.cancelada);
   const origem = payload?.origem;
+  const sf = String(payload?.statusFiscal || "").toUpperCase();
+  if (
+    origem === "contingencia" ||
+    payload?.contingenciaOffline === true ||
+    sf.includes("CONTINGENCIA")
+  ) {
+    out.push(BANNER.contingencia);
+  }
   if (origem === "offline" || origem === "local") out.push(BANNER.offline);
   return out;
 }

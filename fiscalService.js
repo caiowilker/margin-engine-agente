@@ -162,6 +162,20 @@ async function garantirXmlAutorizado(chave, xmlPathHint) {
   );
 }
 
+/**
+ * Cupom/QR: XML local autorizado OU assinado em contingência.
+ * Não consulta SEFAZ se o XML da DANFC-e já está no disco.
+ */
+async function garantirXmlParaCupom(chave, xmlPathHint) {
+  const k = String(chave || "").replace(/\D/g, "");
+  if (k.length !== 44) {
+    throw new Error("Chave inválida para cupom fiscal");
+  }
+  const pronto = docs.resolverXmlParaCupom(k, xmlPathHint);
+  if (pronto) return pronto;
+  return garantirXmlAutorizado(k, xmlPathHint);
+}
+
 async function gerarPdfParaModelo(chave, xmlPath, modeloDocumento) {
   const modelo = String(modeloDocumento || "65");
   const xmlAutorizado = await garantirXmlAutorizado(chave, xmlPath);
@@ -1385,6 +1399,23 @@ async function reimprimirDanfceCompleto(chave, numeroVenda, opts = {}) {
   if (typeof opts.exibirLogo === "boolean") {
     payload = { ...payload, exibirLogo: opts.exibirLogo };
   }
+  const xmlBody =
+    payload.xmlContent ||
+    (doc.xml_path ? lerConteudoXmlAutorizado(doc.xml_path) : null);
+  const contingencia =
+    opts.permitirSemQr === true ||
+    opts.origem === "contingencia" ||
+    String(doc.tipo || "").toUpperCase().includes("CONTINGENCIA") ||
+    docs.xmlEmitidoEmContingencia(xmlBody || "");
+  if (contingencia) {
+    payload = {
+      ...payload,
+      permitirSemQr: true,
+      origem: "contingencia",
+      statusFiscal: payload.statusFiscal || "CONTINGENCIA_OFFLINE",
+      contingenciaOffline: true,
+    };
+  }
   if (modelo === "55") {
     payload = { ...payload, danfeTermico: true, layout: "danfe-termico" };
   }
@@ -1532,7 +1563,7 @@ async function obterXmlDocumento(chave, numeroVenda) {
   }
   let xmlPath = doc?.xml_path || null;
   try {
-    xmlPath = await garantirXmlAutorizado(chaveDoc, xmlPath);
+    xmlPath = await garantirXmlParaCupom(chaveDoc, xmlPath);
   } catch (err) {
     if (!xmlPath) {
       throw new Error("XML não disponível — documento fiscal não encontrado");
@@ -1980,6 +2011,7 @@ module.exports = {
   reimprimirDanfceCompleto,
   obterPdfDocumento,
   obterXmlDocumento,
+  garantirXmlParaCupom,
   inferirModeloDocumento,
   gerarPdfParaModelo,
   cancelarCompleto,

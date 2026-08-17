@@ -3037,7 +3037,17 @@ function iniciarServidor() {
       const resultado = await fiscalService.reimprimirDanfceCompleto(
         chave,
         numeroVenda,
-        { qrcodeNfe, qrcode, exibirLogo, segundaVia, reimpressao, motivo },
+        {
+          qrcodeNfe,
+          qrcode,
+          exibirLogo,
+          segundaVia,
+          reimpressao,
+          motivo,
+          permitirSemQr: body.permitirSemQr,
+          origem: body.origem,
+          statusFiscal: body.statusFiscal,
+        },
       );
       res.json(resultado);
     } catch (err) {

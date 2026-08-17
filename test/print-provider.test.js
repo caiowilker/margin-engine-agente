@@ -238,6 +238,19 @@ async function run() {
     assert.ok(p);
   });
 
+  test("cupomValidate — contingência permite sem QR", () => {
+    const p = normalizarCupomPayload({
+      chaveNfe: "35260611222333000181650010000000301025012345",
+      origem: "contingencia",
+    });
+    assert.ok(p);
+    const p2 = validarCupomPayload({
+      chaveNfe: "35260611222333000181650010000000301025012345",
+      permitirSemQr: true,
+    });
+    assert.equal(p2, null);
+  });
+
   test("classifyPrintError — payload permanente não sugere fallback", () => {
     const c = classifyPrintError(new Error("NFC-e autorizada sem URL de QR Code"));
     assert.strictEqual(c.permanente, true);

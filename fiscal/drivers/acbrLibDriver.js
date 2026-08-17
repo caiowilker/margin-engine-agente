@@ -621,11 +621,17 @@ function emitirNfceContingenciaOffline(inst, runtime, nativeIniPath, modelo, num
     });
 
     let pdfPath = null;
+    let xml = gravado.xml;
     try {
       const artifacts = persistNativeEmissaoOutputs(inst, runtime, chave, modelo, {
         xmlJaSalvo: gravado.xmlPath,
       });
       pdfPath = artifacts.pdfPath || null;
+      // ACBr preenche infNFeSupl/qrCode ao gerar DANFE — reler disco para o cupom.
+      const xmlPos = artifacts.xmlPath || gravado.xmlPath;
+      if (xmlPos && fs.existsSync(xmlPos)) {
+        xml = fs.readFileSync(xmlPos, "utf8") || xml;
+      }
     } catch (printErr) {
       log.warn(
         { err: printErr.message, chave, xmlPath: gravado.xmlPath },

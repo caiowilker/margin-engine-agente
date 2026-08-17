@@ -52,8 +52,14 @@ const PAYMENT_FORM_LABELS = Object.freeze({
   CREDIT: "Cartao",
   DEBIT: "Cartao",
   PIX_LOCAL: "PIX na entrega",
+  PIX_ENTREGA: "PIX na entrega",
   PIX: "PIX",
   PIX_MANUAL: "PIX",
+  CREDITO: "Cartao credito",
+  DEBITO: "Cartao debito",
+  CARTAO_CREDITO: "Cartao credito",
+  CARTAO_DEBITO: "Cartao debito",
+  MAQUININHA: "Cartao",
 });
 
 function isStationTicket(printType) {
@@ -125,6 +131,13 @@ function normalizarPedidoPayload(raw) {
     deliveryFee: moneyOrNull(o.deliveryFee ?? o.delivery_fee ?? o.taxaEntrega ?? o.taxa_entrega),
     bottleDeposit: moneyOrNull(o.bottleDeposit ?? o.bottle_deposit ?? o.caucao ?? o.caucaoReais),
     notes: o.notes ?? null,
+    courierName: (() => {
+      const raw =
+        o.courierName ??
+        o.courier_name ??
+        (o.courier && typeof o.courier === "object" ? o.courier.name : null);
+      return raw != null && String(raw).trim() ? String(raw).trim() : null;
+    })(),
     paymentForm: o.paymentForm ?? o.payment_form ?? null,
     cashChangeFor:
       o.cashChangeFor != null
@@ -185,6 +198,25 @@ function wrapThermalLines(text, maxCols) {
   }
   if (current) lines.push(current);
   return lines;
+}
+
+/** Horário curto na comanda: 17/08 17:35 */
+function formatCreatedAtForPrint(raw) {
+  if (raw == null || !String(raw).trim()) return null;
+  const s = String(raw).trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  if (m) {
+    return `${m[3]}/${m[2]} ${m[4]}:${m[5]}`;
+  }
+  const d = new Date(s);
+  if (!Number.isNaN(d.getTime())) {
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const min = String(d.getMinutes()).padStart(2, "0");
+    return `${dd}/${mm} ${hh}:${min}`;
+  }
+  return toThermalText(s);
 }
 
 /** Telefone legível na comanda: (11) 98888-7777 */
@@ -256,4 +288,5 @@ module.exports = {
   fmtTotal,
   wrapThermalLines,
   formatPhoneForPrint,
+  formatCreatedAtForPrint,
 };

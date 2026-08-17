@@ -3,6 +3,12 @@
 **Última atualização:** 2026-08-17  
 **Versão:** `1.0.11`
 
+## Cupom fiscal em contingência off-line (2026-08-17)
+
+- XML assinado (tpEmis=9) já é cupom: `resolverXmlParaCupom` / `garantirXmlParaCupom` não consultam SEFAZ.
+- Reimpressão DANFC-e relaxa QR (`origem: contingencia`); banner `EMITIDA EM CONTINGENCIA`.
+- QR relido do XML após DANFE local.
+
 ## Gaveta/cupom intermitente 14–50s (2026-08-17)
 
 - Sintoma: impressão quase sempre <1s; picos de 14–50s; gaveta no teste rápida e depois “não abre”; caixa e celular lentos no mesmo instante.

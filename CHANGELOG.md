@@ -6,6 +6,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+- **Cupom fiscal em contingência:** XML assinado (tpEmis=9) imprime sem consulta SEFAZ; QR opcional; banner `EMITIDA EM CONTINGENCIA`.
 - **Gaveta/cupom intermitente 14–50s:** WinSpool RAW isolado em `worker_threads` (event loop do PDV não congela); lock fail-fast; coalesce/throttle da gaveta; keepalive USB 40s; `printerDrawer=off` ainda permite botão de teste (`force`).
 - **Relatório térmico de vendas do histórico:** seleção múltipla no `/pdv/historico` envia um job `relatorio` ao agente (`POST /impressora/relatorio`) com produtos agregados — mesma fila da térmica, sem reimprimir N cupons. teste recarregava a config; o poll do backend aplicava `printerDrawer=false` (default Java) por cima do `.env`. Hardware da térmica (gaveta/porta/modelo) deixou de ser sobrescrito pelo catálogo; o painel operacional não edita mais essas chaves.
 - Keepalive USB não enfileira ping enquanto o worker WinSpool ainda está em WritePrinter (mesmo após timeout do job HTTP).

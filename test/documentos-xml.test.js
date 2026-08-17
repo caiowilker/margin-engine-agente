@@ -99,6 +99,17 @@ test("xmlProntoParaCupom — aceita NFC-e off-line (tpEmis=9) sem infProt", () =
   assert.strictEqual(docs.xmlProntoParaCupom(nfeOnly), false);
 });
 
+test("resolverXmlParaCupom — usa XML de contingência sem consultar protocolo", () => {
+  const chaveOff = "31260612343055000183650010000000061982839999";
+  const offline = `<?xml version="1.0"?><NFe xmlns="http://www.portalfiscal.inf.br/nfe"><infNFe Id="NFe${chaveOff}"><ide><tpEmis>9</tpEmis></ide></infNFe></NFe>`;
+  const file = path.join(xmlRoot, `${chaveOff}-nfe.xml`);
+  fs.writeFileSync(file, offline);
+  const resolved = docs.resolverXmlParaCupom(chaveOff, file);
+  assert.ok(resolved, "deveria aceitar XML local da contingência");
+  assert.ok(resolved.endsWith(`${chaveOff}-nfe.xml`));
+  assert.strictEqual(docs.resolverXmlParaImpressao(chaveOff, file), null);
+});
+
 test("localizarPdfPorChave — encontra PDF aninhado ACBr", () => {
   const p = docs.localizarPdfPorChave(chave, "55");
   assert.ok(p, "deveria encontrar PDF");

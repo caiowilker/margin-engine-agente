@@ -78,6 +78,10 @@ test("FOOTER e banners — mesma fonte ACBr e native", () => {
   assert.ok(FOOTER.obrigado);
   assert.ok(FOOTER.volte);
   assert.deepStrictEqual(bannersStatusCupom({ origem: "offline" }), [BANNER.offline]);
+  assert.deepStrictEqual(bannersStatusCupom({ origem: "contingencia" }), [BANNER.contingencia]);
+  assert.deepStrictEqual(bannersStatusCupom({ statusFiscal: "CONTINGENCIA_OFFLINE" }), [
+    BANNER.contingencia,
+  ]);
   assert.deepStrictEqual(bannersStatusCupom({ origem: "local", vendaCancelada: true }), [
     BANNER.cancelada,
     BANNER.offline,

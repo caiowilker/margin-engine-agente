@@ -622,6 +622,34 @@ function resolverXmlParaImpressao(chave, xmlPathHint) {
   return null;
 }
 
+/**
+ * XML para cupom térmico: autorizado (procNFe) ou assinado em contingência (tpEmis 4/6/7/9).
+ * Nunca exige infProt — SEFAZ fora não pode bloquear a DANFC-e.
+ */
+function resolverXmlParaCupom(chave, xmlPathHint) {
+  const k = String(chave || "").replace(/\D/g, "");
+  const autorizado = resolverXmlParaImpressao(k, xmlPathHint);
+  if (autorizado) return autorizado;
+
+  const aceitar = (filePath) => {
+    if (!filePath || !fs.existsSync(filePath)) return null;
+    try {
+      const xml = fs.readFileSync(filePath, "utf8");
+      return xmlProntoParaCupom(xml) ? filePath : null;
+    } catch (_) {
+      return null;
+    }
+  };
+
+  const hint = aceitar(xmlPathHint);
+  if (hint) return hint;
+
+  const local = k.length === 44 ? localizarXmlPorChave(k) : null;
+  if (local?.path && xmlProntoParaCupom(local.xml)) return local.path;
+
+  return null;
+}
+
 function extrairQrCodeDoXml(xml) {
   if (!xml || typeof xml !== "string") return null;
   const cdata = xml.match(/<qrCode>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/qrCode>/i);
@@ -837,13 +865,14 @@ function resolverDocumentoFiscalLocal(chave, numeroVenda) {
     const local = localizarXmlPorChave(k);
     if (local?.path) {
       const prot = local.prot || extrairProtNFe(local.xml || "");
+      const contingencia = xmlEmitidoEmContingencia(local.xml || "");
       return {
         chave: k,
         xml_path: local.path,
         numero_venda: numeroVenda || null,
-        c_stat: prot?.cStat || "100",
+        c_stat: prot?.cStat || (contingencia ? null : "100"),
         protocolo: prot?.nProt || null,
-        tipo: "AUTORIZADA",
+        tipo: contingencia ? "CONTINGENCIA_OFFLINE" : "AUTORIZADA",
       };
     }
   }
@@ -897,6 +926,7 @@ module.exports = {
   xmlEmitidoEmContingencia,
   xmlProntoParaCupom,
   resolverXmlParaImpressao,
+  resolverXmlParaCupom,
   resolverDocumentoFiscalLocal,
   iniciarBackupRetryScheduler,
   pararBackupRetryScheduler,

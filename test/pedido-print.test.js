@@ -106,6 +106,31 @@ test("renderPedidoTags entrega: tel, endereco, pagto, troco, TOTAL", () => {
   assert.ok(!tags.includes("Levar"));
 });
 
+test("comanda entrega inclui motoboy e horario legivel", () => {
+  const tags = renderPedidoTags({
+    printType: "entrega",
+    eventType: "ORDER_READY",
+    orderNumber: "ORD-7",
+    customerName: "Lia",
+    customerPhone: "11911112222",
+    courierName: "Carlos",
+    deliveryAddress: "Rua C, 30 — Centro, Campinas — SP — CEP 13010-100",
+    paymentForm: "PIX_LOCAL",
+    deliveryFee: 5,
+    total: 40,
+    createdAt: "2026-08-17T17:35:00",
+    items: [
+      { name: "X-Burger", quantity: 2, unit: "UN", unitPrice: 15, lineTotal: 30, notes: "sem cebola" },
+    ],
+  });
+  assert.ok(tags.includes("Motoboy"));
+  assert.ok(tags.includes("Carlos"));
+  assert.ok(tags.includes("PIX na entrega"));
+  assert.ok(tags.includes("17/08 17:35"));
+  assert.ok(tags.includes("sem cebola"));
+  assert.ok(tags.includes("30,00"));
+});
+
 test("comanda entrega imprime taxa de entrega antes do TOTAL", () => {
   const tags = renderPedidoTags({
     printType: "entrega",
