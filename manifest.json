@@ -1,6 +1,6 @@
 {
-  "versao": "1.0.11",
-  "geradoEm": "2026-08-17T22:44:44.361Z",
+  "versao": "1.0.12",
+  "geradoEm": "2026-08-17T23:13:21.334Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -112,7 +112,7 @@
     },
     {
       "arquivo": "fiscal/drivers/acbrLibDriver.js",
-      "sha256": "81ed4f39a4e141ce0609f5ddb49afdfd9e3ae2368ffeae7a04975c9fd9873aaa"
+      "sha256": "02506351fd321fd60bf073231293747e19dda21f4e88390e2beb349d49bf5b5a"
     },
     {
       "arquivo": "fiscal/drivers/acbrLibProcessRecycle.js",
@@ -276,7 +276,7 @@
     },
     {
       "arquivo": "frontend-dist/api-backend.json",
-      "sha256": "8c8c6edd9ba716a45dcba58a5cd9d11f53347ee3aac5c5b55f2b955c51b27212"
+      "sha256": "95b6694cbcb6aeafea089b58c445eca3ed3efd67b976c381910dddfed8b6ed8e"
     },
     {
       "arquivo": "frontend-dist/apple-touch-icon.png",
@@ -5844,7 +5844,7 @@
     },
     {
       "arquivo": "frontend-dist/version.json",
-      "sha256": "8045e95d5da784d30689cca253eb64f5bd7b8dc02f94ee44d66ed63b8a9d11d0"
+      "sha256": "4f44fde2c2abc5d168749d1953f70a9b98290d47cee08cf860ce2f1cc14eecfb"
     },
     {
       "arquivo": "frontend-dist/workbox-3147e214.js",
@@ -5912,7 +5912,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "888b0c933526bc5324c2de21f1827d2265c09aec39ad4c95ddaf2a83a978d4ba"
+      "sha256": "4625eb8b551678b3fe4a62f1e7492cce462ad394da33c4b2b7d96e6b77c9f504"
     },
     {
       "arquivo": "print/acbrPosExports.js",
@@ -5996,7 +5996,7 @@
     },
     {
       "arquivo": "print/escpos/impressoraCore.js",
-      "sha256": "e572864bdd8d9d6f0043df0e3d68b6768cb990227fc9ac28589e49d687fa89ed"
+      "sha256": "e7741a12dd86b5cff173f70a9b10a2e3c467f905adc072c10bc0d4c7a1178dda"
     },
     {
       "arquivo": "print/factory.js",
@@ -6028,7 +6028,7 @@
     },
     {
       "arquivo": "print/printerLogo.js",
-      "sha256": "3151165a00efcc0c8b677e1c69d0181298b32ae759e3c2d2fe032bb9e6ab3944"
+      "sha256": "e4573153ae7a076bd8993d32ae1a345e24b415e9015bdca42d880d912ba6a0b0"
     },
     {
       "arquivo": "print/printerLogoSize.js",

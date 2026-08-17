@@ -59,6 +59,7 @@ test("hot path — logo só rawBytes; sem Image.load/ler/sharp", () => {
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/\/\/.*$/gm, "");
   assert.ok(body.includes("rawBytes"));
+  assert.ok(!/preencherLogoRasterSeFrio/.test(body));
   assert.ok(!/Image\.load/.test(body));
   assert.ok(!/\.ler\(\)/.test(body));
   assert.ok(!/prepararArquivoEscpos/.test(body));

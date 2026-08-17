@@ -149,8 +149,9 @@ let cacheDescobertaEm = 0;
 let cacheImpressoraEscolhida = null;
 let ultimaImpressoraUsada = null;
 let printLock = Promise.resolve();
-/** Cache em memória — raster ESC/POS pronto (rawBytes). Hot path NUNCA Image.load/toBitmap. */
+/** Cache em memória — raster ESC/POS GS v 0 pronto (rawBytes). Hot path NUNCA Image.load/toBitmap. */
 let logoEscposImageCache = { key: null, image: null, rawBytes: null, paintedAt: 0 };
+let _logoRasterWarmInflight = null;
 
 /** Single-flight warm — evita sharp/Add-Type competindo com o cupom. */
 let _warmHotPathInflight = null;
@@ -865,7 +866,7 @@ function stopSpoolerKeepAlive() {
 
 function scheduleLogoWarmOnce() {
   if (_logoWarmScheduled || _warmHotPathInflight) return;
-  if (logoEscposImageCache.rawBytes) return;
+  if (logoEscposCachePronto()) return;
   _logoWarmScheduled = true;
   const tryWarm = (attempt) => {
     if (impressaoEmAndamentoLocal()) {
@@ -878,7 +879,7 @@ function scheduleLogoWarmOnce() {
       return;
     }
     _logoWarmScheduled = false;
-    if (_warmHotPathInflight || logoEscposImageCache.rawBytes) return;
+    if (_warmHotPathInflight || logoEscposCachePronto()) return;
     warmPrintHotPath().catch(() => {});
   };
   unrefTimer(setImmediate(() => tryWarm(0)));
@@ -889,7 +890,7 @@ async function warmPrintHotPath(opts = {}) {
   if (!opts.force && impressaoEmAndamentoLocal()) {
     return { rawHelper: false, logo: false, skipped: "printing" };
   }
-  if (!opts.force && isPrintHotPathReady() && logoEscposImageCache.rawBytes) {
+  if (!opts.force && isPrintHotPathReady() && logoEscposCachePronto()) {
     // Ainda aquece host persistente / koffi se ainda não estiver pronto
     if (process.platform === "win32") {
       setImmediate(() => {
@@ -1916,7 +1917,7 @@ async function imprimirRender(renderFn) {
       return enviarBuffer(buffer);
     });
   } finally {
-    if (!logoEscposImageCache.rawBytes) scheduleLogoWarmOnce();
+    if (!logoEscposCachePronto()) scheduleLogoWarmOnce();
   }
 }
 
@@ -2112,17 +2113,112 @@ function renderCupom(printer, payload) {
   return renderCupomConteudo(printer, payload);
 }
 
+/**
+ * Raster GS v 0 (GS v 0 / 1D 76 30) — compatível com Elgin i9 / POS80.
+ * ESC * (image/d24) + LF por faixa some ou distorce a logo nessas térmicas.
+ * Bytes montados direto: o warm antigo usava MemoryDevice sem printer.flush(),
+ * então o cache ficava com buffer vazio e a logo nunca ia para o cupom.
+ */
+function montarBytesLogoGsv0(image) {
+  if (!image || typeof image.toRaster !== "function") {
+    throw new TypeError("escpos.Image required");
+  }
+  const raster = image.toRaster();
+  const widthBytes = Number(raster.width) || 0;
+  const height = Number(raster.height) || 0;
+  if (widthBytes <= 0 || height <= 0) {
+    throw new Error("Logo raster vazio");
+  }
+  const data = Buffer.isBuffer(raster.data) ? raster.data : Buffer.from(raster.data);
+  const expected = widthBytes * height;
+  if (data.length < expected) {
+    throw new Error("Logo raster incompleto");
+  }
+  const align = Buffer.from([0x1b, 0x61, 0x01]);
+  const gsv0 = Buffer.from([0x1d, 0x76, 0x30, 0x00]);
+  const dims = Buffer.alloc(4);
+  dims.writeUInt16LE(widthBytes & 0xffff, 0);
+  dims.writeUInt16LE(height & 0xffff, 2);
+  return Buffer.concat([align, gsv0, dims, data.subarray(0, expected), Buffer.from([0x0a])]);
+}
+
+function logoEscposCachePronto() {
+  return !!(logoEscposImageCache.rawBytes && logoEscposImageCache.rawBytes.length);
+}
+
+function loadEscposImage(caminho) {
+  return new Promise((resolve, reject) => {
+    // escpos@3 chama callback(image) no sucesso — NÃO callback(null, image).
+    escpos.Image.load(caminho, (first, second) => {
+      if (first instanceof Error) return reject(first);
+      const image = second || first;
+      if (image && typeof image.toRaster === "function") return resolve(image);
+      reject(new Error("Image.load falhou"));
+    });
+  });
+}
+
+async function warmLogoEscposImage(caminho, info, opts = {}) {
+  if (!caminho) return false;
+  if (!opts.evenIfPrinting && impressaoEmAndamentoLocal()) return false;
+  const size = info?.printSize || require("../printerLogoSize").resolveLogoPrintSize(info || {});
+  const cacheKey = `${info?.sha256 || caminho}|${size.escposWidthDots}|gsv0`;
+  if (logoEscposImageCache.key === cacheKey && logoEscposCachePronto()) {
+    return true;
+  }
+  if (_logoRasterWarmInflight) {
+    try {
+      await _logoRasterWarmInflight;
+    } catch (_) {}
+    if (logoEscposImageCache.key === cacheKey && logoEscposCachePronto()) return true;
+  }
+
+  const work = (async () => {
+    const t0 = performance.now();
+    const image = await loadEscposImage(caminho);
+    const rawBytes = montarBytesLogoGsv0(image);
+    if (!rawBytes.length) return false;
+    logoEscposImageCache = { key: cacheKey, image, rawBytes, paintedAt: 0 };
+    log.info(
+      {
+        loadMs: performance.now() - t0,
+        bytes: rawBytes.length,
+        cacheKey: cacheKey.slice(0, 24),
+        metric: "print.logo_warm_image",
+      },
+      "[ImpressoraCore] Logo raster GS v 0 aquecido no cache",
+    );
+    return true;
+  })();
+
+  _logoRasterWarmInflight = work;
+  try {
+    return await work;
+  } catch (err) {
+    log.warn(
+      {
+        motivo: err instanceof Error ? err.message : "raster_failed",
+        metric: "print.logo_warm_image_error",
+      },
+      "[ImpressoraCore] Falha ao rasterizar logo ESC/POS",
+    );
+    return false;
+  } finally {
+    if (_logoRasterWarmInflight === work) _logoRasterWarmInflight = null;
+  }
+}
+
 async function imprimirLogoCupomEscpos(printer, payload) {
   const t0 = performance.now();
   const phases = { paintMs: 0, cacheHit: false, skipped: null };
   try {
     const printerLogo = require("../printerLogo");
-    // Hot path: só toggle em memória — NUNCA ler()/BMP/sharp/Image.load/toBitmap.
+    // Hot path: só toggle + rawBytes — NUNCA ler()/BMP/sharp/Image.load/toBitmap.
     if (!printerLogo.exibirLogoCupomHabilitado(payload)) {
       phases.skipped = "toggle_or_missing";
       return;
     }
-    if (!logoEscposImageCache.rawBytes) {
+    if (!logoEscposCachePronto()) {
       phases.skipped = "cache_miss";
       log.warn(
         {
@@ -3114,64 +3210,11 @@ module.exports = {
     logoEscposImageCache = { key: null, image: null, rawBytes: null, paintedAt: 0 };
   },
   isLogoEscposReady() {
-    return !!(logoEscposImageCache.rawBytes && logoEscposImageCache.rawBytes.length);
+    return logoEscposCachePronto();
   },
   isPrintHotPathReady,
   isWarmHotPathInFlight,
-  async warmLogoEscposImage(caminho, info) {
-    if (!caminho) return false;
-    if (impressaoEmAndamentoLocal()) return false;
-    const size = info?.printSize || require("../printerLogoSize").resolveLogoPrintSize(info || {});
-    const density = size.density || "d24";
-    const cacheKey = `${info?.sha256 || caminho}|${size.escposWidthDots}|${density}`;
-    if (
-      logoEscposImageCache.key === cacheKey &&
-      logoEscposImageCache.rawBytes &&
-      logoEscposImageCache.rawBytes.length
-    ) {
-      return true;
-    }
-    const t0 = performance.now();
-    const image = await new Promise((resolve, reject) => {
-      escpos.Image.load(caminho, (err, img) => {
-        if (err) reject(err);
-        else resolve(img);
-      });
-    });
-    if (impressaoEmAndamentoLocal()) return false;
-
-    // Pré-raster completo (align + bitmap + feed) — hot path só printer.raw(bytes).
-    const device = new MemoryDevice();
-    const rawBytes = await new Promise((resolve, reject) => {
-      device.open((err) => {
-        if (err) return reject(err);
-        const printer = new escpos.Printer(device, { encoding: "CP860" });
-        try {
-          printer.align("ct");
-          Promise.resolve(printer.image(image, density))
-            .then(() => {
-              printer.feed(1);
-              device.close(() => resolve(device.getBuffer()));
-            })
-            .catch(reject);
-        } catch (e) {
-          reject(e);
-        }
-      });
-    });
-
-    logoEscposImageCache = { key: cacheKey, image, rawBytes, paintedAt: 0 };
-    log.info(
-      {
-        loadMs: performance.now() - t0,
-        bytes: rawBytes.length,
-        cacheKey: cacheKey.slice(0, 24),
-        metric: "print.logo_warm_image",
-      },
-      "[ImpressoraCore] Logo raster ESC/POS aquecido no cache",
-    );
-    return true;
-  },
+  warmLogoEscposImage,
   warmRawWin32Helper,
   warmPrintHotPath,
   startSpoolerKeepAlive,
@@ -3223,5 +3266,15 @@ module.exports = {
     stopSpoolerKeepAlive,
     gerarBuffer,
     imprimirLogoCupomEscpos,
+    montarBytesLogoGsv0,
+    getLogoEscposRawBytes() {
+      return logoEscposImageCache.rawBytes;
+    },
+    setLogoEscposRawBytes(buf) {
+      logoEscposImageCache = {
+        ...logoEscposImageCache,
+        rawBytes: buf,
+      };
+    },
   },
 };

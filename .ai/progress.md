@@ -1,7 +1,21 @@
 # PROGRESS — Agente Local
 
 **Última atualização:** 2026-08-17  
-**Versão:** `1.0.11`
+**Versão:** `1.0.12`
+
+## Logo térmica nativa (GS v 0) — 2026-08-17
+
+- Sintoma: cupom comercial (RAW:Windows / POS80) saía sem logo, mesmo com BMP ativo.
+- Causas: (1) o aquecimento gravava o raster no `MutableBuffer` e fechava o device **sem flush** — cache com buffer vazio; (2) cache frio omitia a logo e o warm recusava durante o job; (3) `ESC *` + LF por faixa some na Elgin i9.
+- Fix: bytes **GS v 0** (`1D 76 30`) montados direto; aquecimento em background (boot / após upload / após cupom). Hot path do cupom permanece só `printer.raw()` — sem Image.load/sharp no salão.
+- Cache frio: este cupom segue sem logo (rápido); o seguinte já leva a imagem.
+- Sem alteração em NFC-e, pulso de gaveta, `order_print_enabled` / `dining_surface_enabled` nem `preferNativeEscPos`.
+- Cupom fiscal com chave continua ACBr (`<bmp>`). Cozinha continua sem logo.
+
+## NFC-e off-line — SyntaxError `xml` (2026-08-17)
+
+- `acbrLibDriver.emitirNfceContingenciaOffline` declarava `xml` duas vezes — o driver lib não carregava (`Identifier 'xml' has already been declared`).
+- Corrigido para um único `let xml`, relendo o XML após o DANFE.
 
 ## Cupom fiscal em contingência off-line (2026-08-17)
 

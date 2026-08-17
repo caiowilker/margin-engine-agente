@@ -424,11 +424,33 @@ test("imprimirLogoCupomEscpos — hot path sem Image.load / sharp (só cache raw
   assert.ok(body.includes("logo_hotpath_cache_miss"));
   assert.ok(body.includes("rawBytes"));
   assert.ok(body.includes("exibirLogoCupomHabilitado"));
+  assert.ok(!/preencherLogoRasterSeFrio/.test(body), "cupom não espera raster da logo");
   assert.ok(!/escpos\.Image\.load/.test(body), "hot path não pode Image.load");
   assert.ok(!/prepararArquivoEscpos/.test(body), "hot path não pode sharp/prepararArquivo");
   assert.ok(!/printer\.image\(/.test(body), "hot path não pode toBitmap via image()");
   assert.ok(!/get-pixels/.test(body));
   assert.ok(!/\.ler\(\)/.test(body), "hot path não pode ler() (BMP sync)");
+});
+
+test("logo ESC/POS — montarBytesLogoGsv0 gera header GS v 0", () => {
+  const escpos = require("escpos");
+  const core = require("../print/escpos/impressoraCore");
+  const widthPx = 16;
+  const heightPx = 8;
+  const colors = 4;
+  const data = new Uint8Array(widthPx * heightPx * colors);
+  for (let i = 0; i < data.length; i += 4) {
+    const black = i % 32 === 0;
+    data[i] = black ? 0 : 255;
+    data[i + 1] = black ? 0 : 255;
+    data[i + 2] = black ? 0 : 255;
+    data[i + 3] = 255;
+  }
+  const image = new escpos.Image({ data, shape: [widthPx, heightPx, colors] });
+  const bytes = core.__test.montarBytesLogoGsv0(image);
+  assert.ok(bytes.includes(Buffer.from([0x1b, 0x61, 0x01])));
+  assert.ok(bytes.includes(Buffer.from([0x1d, 0x76, 0x30, 0x00])));
+  assert.ok(!bytes.includes(Buffer.from([0x1b, 0x2a, 0x21])));
 });
 
 test("RAW script — ASCII-only (PowerShell 5.1 sem BOM)", () => {

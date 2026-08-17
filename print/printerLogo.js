@@ -392,7 +392,21 @@ async function salvar(opts = {}) {
   }
 
   salvarMeta(meta);
-  return ler();
+  const saved = ler();
+  if (saved.ativo && saved.caminhoAbsoluto) {
+    const dirAtSave = LOGO_DIR;
+    setImmediate(() => {
+      try {
+        refreshLogoPaths();
+        if (LOGO_DIR !== dirAtSave) return;
+      } catch (_) {
+        return;
+      }
+      // Fora do cupom: não compete com o cabo. Se houver impressão em voo, o warm espera.
+      warmLogoEscpos({ evenIfPrinting: false }).catch(() => {});
+    });
+  }
+  return saved;
 }
 
 function remover() {
@@ -664,32 +678,28 @@ function getLastLogoSkipReason() {
   return lastLogoSkipReason;
 }
 
-async function warmLogoEscpos() {
+async function warmLogoEscpos(opts = {}) {
   try {
-    // Nunca competir com cupom em voo (sharp/Image.load no main = PDV travado).
-    try {
-      const core = require("./escpos/impressoraCore");
-      if (typeof core.isWarmHotPathInFlight === "function" && core.isWarmHotPathInFlight()) {
-        /* single-flight no core — segue */
-      }
-      const pjs = require("./printJobService");
-      if (typeof pjs.impressaoEmAndamento === "function" && pjs.impressaoEmAndamento()) {
-        return false;
-      }
-    } catch (_) {}
+    // Nunca sharp/Image.load no event loop enquanto o cupom está no cabo.
+    if (!opts.evenIfPrinting) {
+      try {
+        const pjs = require("./printJobService");
+        if (typeof pjs.impressaoEmAndamento === "function" && pjs.impressaoEmAndamento()) {
+          return false;
+        }
+      } catch (_) {}
+    }
     const info = ler();
     if (!(info.ativo && info.caminhoAbsoluto)) return false;
     const pathOut = await prepararArquivoEscpos(info);
     if (!pathOut) return false;
-    try {
-      const core = require("./escpos/impressoraCore");
-      if (typeof core.warmLogoEscposImage === "function") {
-        await core.warmLogoEscposImage(pathOut, info);
-      }
-    } catch (_) {}
-    return true;
+    const core = require("./escpos/impressoraCore");
+    if (typeof core.warmLogoEscposImage !== "function") return false;
+    return await core.warmLogoEscposImage(pathOut, info, {
+      evenIfPrinting: !!opts.evenIfPrinting,
+    });
   } catch (err) {
-    log.debug({ err: err?.message }, "[PrinterLogo] warm falhou");
+    log.warn({ err: err?.message }, "[PrinterLogo] warm falhou");
     return false;
   }
 }

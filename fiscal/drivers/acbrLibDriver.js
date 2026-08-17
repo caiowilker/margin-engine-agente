@@ -607,7 +607,7 @@ function emitirNfceContingenciaOffline(inst, runtime, nativeIniPath, modelo, num
 
     const destXml = PATHS.xml || runtime.notas;
     const gravado = contingenciaOffline.gravarXmlAssinado(inst, destXml, chave);
-    const xml = gravado.xml;
+    let xml = gravado.xml;
     const meta = contingenciaOffline.metaDoXml(xml);
 
     contingenciaOfflineQueue.enqueue({
@@ -621,7 +621,6 @@ function emitirNfceContingenciaOffline(inst, runtime, nativeIniPath, modelo, num
     });
 
     let pdfPath = null;
-    let xml = gravado.xml;
     try {
       const artifacts = persistNativeEmissaoOutputs(inst, runtime, chave, modelo, {
         xmlJaSalvo: gravado.xmlPath,
