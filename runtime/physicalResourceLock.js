@@ -45,14 +45,18 @@ async function run(key, fn, label = "physical", opts = {}) {
       ? Math.floor(opts.waitMs)
       : 0;
   const tEnter = Date.now();
+  const state = { timedOut: false, acquired: false };
+  const makeWaitErr = (waitedMs) => {
+    const err = new Error(
+      `Timeout aguardando recurso físico "${key}" (${waitMs}ms; esperou ${waitedMs}ms)`,
+    );
+    err.code = "PHYSICAL_LOCK_WAIT_TIMEOUT";
+    err.printTimedOut = true;
+    return err;
+  };
   const runPromise = entry.tail.then(async () => {
     const waitedMs = Date.now() - tEnter;
-    if (waitMs > 0 && waitedMs > waitMs) {
-      const err = new Error(
-        `Timeout aguardando recurso físico "${key}" (${waitMs}ms; esperou ${waitedMs}ms)`,
-      );
-      err.code = "PHYSICAL_LOCK_WAIT_TIMEOUT";
-      err.printTimedOut = true;
+    if (state.timedOut || (waitMs > 0 && waitedMs > waitMs)) {
       log.warn(
         {
           key,
@@ -63,8 +67,9 @@ async function run(key, fn, label = "physical", opts = {}) {
         },
         "[PhysicalLock] Espera esgotada — sem segundo envio",
       );
-      throw err;
+      throw makeWaitErr(waitedMs);
     }
+    state.acquired = true;
     if (waitedMs > 200) {
       log.info(
         { key, label, waitedMs, metric: "physical_lock.wait" },
@@ -89,7 +94,30 @@ async function run(key, fn, label = "physical", opts = {}) {
     }
   });
   entry.tail = runPromise.catch(() => {});
-  return runPromise;
+  if (!(waitMs > 0)) return runPromise;
+  let timer;
+  return Promise.race([
+    runPromise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        if (state.acquired) return;
+        state.timedOut = true;
+        const waitedMs = Date.now() - tEnter;
+        log.warn(
+          {
+            key,
+            label,
+            waitedMs,
+            waitMs,
+            metric: "physical_lock.wait_timeout",
+            failFast: true,
+          },
+          "[PhysicalLock] Espera esgotada (fail-fast) — sem segundo envio",
+        );
+        reject(makeWaitErr(waitedMs));
+      }, waitMs);
+    }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 function resetForTests() {

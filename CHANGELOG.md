@@ -6,6 +6,11 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+- **Gaveta/cupom intermitente 14–50s:** WinSpool RAW isolado em `worker_threads` (event loop do PDV não congela); lock fail-fast; coalesce/throttle da gaveta; keepalive USB 40s; `printerDrawer=off` ainda permite botão de teste (`force`).
+- **Relatório térmico de vendas do histórico:** seleção múltipla no `/pdv/historico` envia um job `relatorio` ao agente (`POST /impressora/relatorio`) com produtos agregados — mesma fila da térmica, sem reimprimir N cupons. teste recarregava a config; o poll do backend aplicava `printerDrawer=false` (default Java) por cima do `.env`. Hardware da térmica (gaveta/porta/modelo) deixou de ser sobrescrito pelo catálogo; o painel operacional não edita mais essas chaves.
+- Keepalive USB não enfileira ping enquanto o worker WinSpool ainda está em WritePrinter (mesmo após timeout do job HTTP).
+- **Relatório térmico no histórico:** seleção de vendas no PDV imprime um consolidado de produtos (`POST /impressora/relatorio`, tipo `relatorio` na fila) — não reimprime N cupons.
+
 - **Impressão RAW rápida (Win serviço):** tmp/script/DLL em `ProgramData\MarginEngine\impressao\raw`; escrita async; script memoizado (sem I/O sync por cupom); waits `PRINT_CORE_LOCK_WAIT_MS` / `PRINT_PHYSICAL_LOCK_WAIT_MS`; métricas `print.raw_phase` / `print.event_loop_lag` / `physical_lock.wait_timeout`.
 
 ## [1.0.10] - 2026-08-10

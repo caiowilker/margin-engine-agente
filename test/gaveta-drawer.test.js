@@ -159,9 +159,10 @@ test("gaveta coalesce — janela recente após mark", () => {
     resetGavetaPulse();
   });
 
-  await testAsync("abrirGaveta force=true ignora coalesce", async () => {
+  await testAsync("abrirGaveta force=true ignora coalesce de 800ms", async () => {
     process.env.PRINTER_DRAWER = "true";
     process.env.PRINTER_DRAWER_COALESCE_MS = "800";
+    process.env.PRINTER_DRAWER_FORCE_MIN_MS = "0";
     resetGavetaPulse();
     markGavetaPulseSent();
     assert.strictEqual(gavetaPulseRecente(), true);
@@ -174,6 +175,33 @@ test("gaveta coalesce — janela recente após mark", () => {
       // Sem spooler no CI — o importante é não ter retornado coalesced
       assert.ok(!(r && r.coalesced === true));
     }
+    resetGavetaPulse();
+    delete process.env.PRINTER_DRAWER_FORCE_MIN_MS;
+  });
+
+  await testAsync("abrirGaveta force=true respeita throttle mínimo", async () => {
+    process.env.PRINTER_DRAWER = "true";
+    process.env.PRINTER_DRAWER_FORCE_MIN_MS = "400";
+    resetGavetaPulse();
+    markGavetaPulseSent();
+    const r = await core.abrirGaveta({ force: true });
+    assert.strictEqual(r.ok, true);
+    assert.strictEqual(r.coalesced, true);
+    assert.strictEqual(r.metric, "print.gaveta_force_throttled");
+    resetGavetaPulse();
+    delete process.env.PRINTER_DRAWER_FORCE_MIN_MS;
+  });
+
+  await testAsync("PRINTER_DRAWER=false ainda permite teste com force", async () => {
+    process.env.PRINTER_DRAWER = "false";
+    process.env.PRINTER_DRAWER_FORCE_MIN_MS = "0";
+    resetGavetaPulse();
+    const skipped = await core.abrirGaveta();
+    assert.strictEqual(skipped.skipped, true);
+    const r = await core.abrirGaveta({ force: true }).catch((e) => e);
+    assert.ok(!(r && r.skipped === true), "force não deve skip por PRINTER_DRAWER=false");
+    process.env.PRINTER_DRAWER = "true";
+    delete process.env.PRINTER_DRAWER_FORCE_MIN_MS;
     resetGavetaPulse();
   });
 

@@ -56,6 +56,7 @@ const OP_TO_TIPO = Object.freeze({
   },
   imprimirTeste: () => TIPOS.TESTE,
   imprimirPedido: (payload) => TIPOS.PEDIDO_COMANDA,
+  imprimirRelatorio: () => TIPOS.RELATORIO,
   imprimirVasilhame: () => TIPOS.VASILHAME,
   imprimirCrediario: () => TIPOS.CREDIARIO,
   imprimirRaw: () => TIPOS.ETIQUETA_TERMICA,

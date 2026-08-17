@@ -74,6 +74,35 @@ async function run() {
   await Promise.all([slow, late]);
   assert.strictEqual(ranLate, false, "fn não deve rodar após wait timeout");
 
+  // Fail-fast: rejeita no waitMs, sem esperar o holder terminar (~250ms)
+  lock.resetForTests();
+  const tFast = Date.now();
+  const holder = lock.run(
+    "fail-fast",
+    async () => {
+      await new Promise((r) => setTimeout(r, 250));
+      return "ok";
+    },
+    "holder",
+  );
+  let lateWaitMs = null;
+  const waiter = lock
+    .run("fail-fast", async () => "late", "waiter", { waitMs: 40 })
+    .then(
+      () => {
+        throw new Error("deveria ter estourado waitMs (fail-fast)");
+      },
+      (err) => {
+        assert.strictEqual(err.code, "PHYSICAL_LOCK_WAIT_TIMEOUT");
+        lateWaitMs = Date.now() - tFast;
+      },
+    );
+  await Promise.all([holder, waiter]);
+  assert.ok(
+    lateWaitMs != null && lateWaitMs < 120,
+    `wait timeout deve falhar ~40ms, não após o holder (foi ${lateWaitMs}ms)`,
+  );
+
   process.env.PHYSICAL_USB_TOPOLOGY = "separate";
   assert.strictEqual(map.resolvePosprinterKey(), "posprinter");
   assert.strictEqual(map.resolveNfeKey(), "nfe");

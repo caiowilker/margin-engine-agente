@@ -10,6 +10,7 @@ test("rawWinspoolNative — load falha gracioso fora do Windows", () => {
   native.resetForTests();
   if (process.platform !== "win32") {
     assert.equal(native.isAvailable(), false);
+    assert.equal(native.workerBusy(), false);
   }
 });
 

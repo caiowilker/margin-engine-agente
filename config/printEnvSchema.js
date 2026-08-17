@@ -59,6 +59,15 @@ const PRINT_ENV_FIELDS = [
       "Após soft kill: quanto segurar o physicalLock antes de liberar (evita 2º cupom no USB ocupado)",
   },
   {
+    env: "PRINT_SPOOLER_KEEPALIVE_MS",
+    kind: "int",
+    min: 0,
+    max: 120000,
+    default: 40000,
+    comment:
+      "Ping OpenPrinter periódico (0=off) para USB não dormir; 1º envio após idle era 14–50s",
+  },
+  {
     env: "PRINT_CORE_LOCK_WAIT_MS",
     kind: "int",
     min: 500,

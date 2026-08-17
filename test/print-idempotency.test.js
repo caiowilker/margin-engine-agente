@@ -121,6 +121,26 @@ test("resolveIdempotencyKey — cupom por numeroVenda (anti-retry front)", () =>
   assert.ok(sv.startsWith("imprimirCupom:sv:V-100:"));
 });
 
+test("resolveIdempotencyKey — relatório por clickId (anti-retry)", () => {
+  const payload = {
+    operador: "Maria",
+    faturamento: 10,
+    vendas: [{ numero: "V1", total: 10 }],
+    itens: [{ codigo: "A", nome: "X", quantidade: 1, total: 10 }],
+    clickId: "clk-rel-1",
+  };
+  assert.equal(
+    resolveIdempotencyKey("imprimirRelatorio", [payload], {}),
+    "relatorio:clk-rel-1",
+  );
+  const semClick = resolveIdempotencyKey(
+    "imprimirRelatorio",
+    [{ ...payload, clickId: undefined }],
+    {},
+  );
+  assert.ok(String(semClick).startsWith("relatorio:fp:"));
+});
+
 test("fingerprint estável — createdAt não entra", () => {
   const a = fingerprintPedido({
     orderId: "o",

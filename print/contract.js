@@ -30,6 +30,7 @@ const REQUIRED_METHODS = [
   "imprimirFechamento",
   "imprimirMovimentoCaixa",
   "imprimirPedido",
+  "imprimirRelatorio",
   "imprimirVasilhame",
   "imprimirCrediario",
   "imprimirTeste",

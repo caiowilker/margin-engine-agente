@@ -85,6 +85,23 @@ test("MemoryDevice — chunks (sem concat por write)", () => {
   assert.ok(!/write\(data[\s\S]*Buffer\.concat\(\[this\.buffer/.test(body));
 });
 
+test("RAW koffi — writeRaw é awaited (não bloqueia o event loop)", () => {
+  const src = fs.readFileSync(CORE, "utf8");
+  assert.ok(src.includes("await native.writeRaw"));
+  const native = fs.readFileSync(
+    path.join(__dirname, "../print/rawWinspoolNative.js"),
+    "utf8",
+  );
+  assert.ok(native.includes("worker_threads"));
+  assert.ok(native.includes("writeRawSync"));
+  assert.ok(native.includes("function workerBusy"));
+  const avail = native.match(/function isAvailable\(\) \{[\s\S]*?\n\}/);
+  assert.ok(avail, "isAvailable deve existir");
+  assert.ok(!avail[0].includes("loadApi"), "isAvailable não pode carregar koffi no HTTP");
+  assert.ok(fs.existsSync(path.join(__dirname, "../print/rawWinspoolWorker.js")));
+  assert.ok(src.includes("native.workerBusy"));
+});
+
 test("cleanup RAW — unlink async", () => {
   const src = fs.readFileSync(CORE, "utf8");
   assert.ok(src.includes("fs.promises.unlink(tmpCfg)"));

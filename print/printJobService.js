@@ -57,6 +57,7 @@ function isTipoRapido(tipo) {
     tipo === "pedido_comanda" ||
     tipo === "vasilhame_emprestimo" ||
     tipo === "crediario_recebimento" ||
+    tipo === "relatorio" ||
     tipo === "etiqueta_termica" ||
     tipo === "teste" ||
     tipo === "gaveta"
@@ -82,6 +83,7 @@ function prioridadeParaJob(tipo, payload) {
     tipo === "suprimento" ||
     tipo === "vasilhame_emprestimo" ||
     tipo === "crediario_recebimento" ||
+    tipo === "relatorio" ||
     tipo === "etiqueta_termica"
   ) {
     return 2;
@@ -239,6 +241,25 @@ function enfileirar(op, args, opts = {}) {
   const id = store.novoId();
   const c = cfg();
   const tipo = resolverTipo(op, payload);
+  if (tipo === "gaveta" || op === "abrirGaveta") {
+    const existingGaveta = store.buscarJobAtivoPorTipo("gaveta");
+    if (existingGaveta) {
+      store.registrarEvento(
+        existingGaveta.id,
+        "GAVETA_COALESCE",
+        `${op} status=${existingGaveta.status}`,
+      );
+      log.info(
+        {
+          jobId: existingGaveta.id,
+          status: existingGaveta.status,
+          metric: "print.gaveta_job_coalesced",
+        },
+        "[PrintJob] Gaveta coalescida — sem segundo pulso na fila",
+      );
+      return { ...rowToJob(existingGaveta), coalesced: true, deduplicado: true };
+    }
+  }
   const row = {
     id,
     tipo,

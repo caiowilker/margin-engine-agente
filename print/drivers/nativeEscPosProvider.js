@@ -28,6 +28,7 @@ module.exports = {
     const porta = routes.requirePortaForPrintType(p?.printType ?? p?.print_type);
     return routes.withPortaOverride(porta, () => core.imprimirPedido(p));
   },
+  imprimirRelatorio: (p) => core.imprimirRelatorio(p),
   imprimirVasilhame: (p) => core.imprimirVasilhame(p),
   imprimirCrediario: (p) => core.imprimirCrediario(p),
   /** ZPL/PPLA — bytes raw, nunca ACBr tags. */

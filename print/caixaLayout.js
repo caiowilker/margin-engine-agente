@@ -437,7 +437,10 @@ module.exports = {
   buildAberturaLayout,
   buildFechamentoLayout,
   buildMovimentoLayout,
+  pushHeaderEmpresa,
+  pushSep,
   fmtR$,
+  fmtR$OrDash,
   labelForma,
   FORMA_LABELS,
 };

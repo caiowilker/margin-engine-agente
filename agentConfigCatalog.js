@@ -8,6 +8,17 @@ const CHAVES_SSOT_LOCAL = new Set([
   "nfeUf",
 ]);
 
+/**
+ * Hardware da térmica: SSOT no agente (INI/.env / painel Impressora).
+ * O catálogo Java usa printerDrawer=false (“abrir após venda”); se o merge
+ * aplicar esse default, o poll de config desliga a gaveta sozinho no PDV.
+ */
+const CHAVES_SSOT_HARDWARE = new Set([
+  "printerDrawer",
+  "printerPorta",
+  "printerModel",
+]);
+
 /** @typedef {"boolean"|"number"|"string"} ConfigTipo */
 /** @typedef {"fiscal"|"disco"|"alertas"|"recovery"|"operacao"|"impressora"} ConfigGrupo */
 
@@ -735,11 +746,20 @@ function mesclarComDefaults(operacional) {
   const cat = getCatalogoAtivo();
   /** @type {Record<string, boolean|number|string>} */
   const base = valoresPadraoCompletos();
-  if (!operacional || typeof operacional !== "object") return base;
-  for (const [k, v] of Object.entries(operacional)) {
-    if (cat[k] && v !== undefined && v !== null) {
-      base[k] = validarValor(k, v);
+  const op = operacional && typeof operacional === "object" ? operacional : {};
+  for (const k of CHAVES_SSOT_HARDWARE) {
+    const explicit =
+      Object.prototype.hasOwnProperty.call(op, k) && op[k] !== undefined && op[k] !== null;
+    const vazio = explicit && typeof op[k] === "string" && String(op[k]).trim() === "";
+    if (!explicit || vazio) {
+      const envVal = lerEnvFallback(k);
+      if (envVal !== undefined) base[k] = envVal;
     }
+  }
+  for (const [k, v] of Object.entries(op)) {
+    if (!cat[k] || v === undefined || v === null) continue;
+    if (CHAVES_SSOT_HARDWARE.has(k) && typeof v === "string" && v.trim() === "") continue;
+    base[k] = validarValor(k, v);
   }
   return base;
 }
@@ -773,7 +793,7 @@ function aplicarNoProcessEnv(operacional) {
   const merged = mesclarComDefaults(operacional);
   const cat = getCatalogoAtivo();
   for (const [k, v] of Object.entries(merged)) {
-    if (CHAVES_SSOT_LOCAL.has(k)) continue;
+    if (CHAVES_SSOT_LOCAL.has(k) || CHAVES_SSOT_HARDWARE.has(k)) continue;
     const def = cat[k];
     if (!def) continue;
     process.env[def.env] =
@@ -798,6 +818,7 @@ function filtrarSomenteOverrides(operacional) {
 module.exports = {
   CATALOGO,
   CHAVES_SSOT_LOCAL,
+  CHAVES_SSOT_HARDWARE,
   lerEnvFallback,
   valoresPadraoCompletos,
   mesclarComDefaults,

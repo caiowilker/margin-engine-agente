@@ -38,6 +38,7 @@ const CUPOM_TIPOS = new Set([
   "reimpressao",
   "teste",
   "gaveta",
+  "relatorio",
 ]);
 
 function stableHash(obj) {
@@ -180,6 +181,22 @@ function resolveIdempotencyKey(op, args, opts = {}) {
       return `crediario:sv:${fp}:${clickId}`.slice(0, 190);
     }
     return `crediario:${fp}`.slice(0, 190);
+  }
+
+  if (op === "imprimirRelatorio") {
+    const clickId = String(payload.clickId || payload.click_id || "").trim();
+    const numeros = (Array.isArray(payload.vendas) ? payload.vendas : [])
+      .map((v) => String(v.numero || v.numeroVenda || "").trim())
+      .filter(Boolean)
+      .sort();
+    const fp = fingerprintCupom({
+      total: payload.faturamento,
+      itens: payload.itens,
+    });
+    if (clickId) {
+      return `relatorio:${clickId}`.slice(0, 190);
+    }
+    return `relatorio:fp:${numeros.join(",")}:${fp}`.slice(0, 190);
   }
 
   if (op !== "imprimirPedido") return null;

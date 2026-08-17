@@ -161,6 +161,23 @@ function proximoJobPronto() {
   );
 }
 
+/** Gaveta: um pulso por vez — cliques extras não enfileiram WritePrinter extra. */
+function buscarJobAtivoPorTipo(tipo) {
+  const t = String(tipo || "").trim();
+  if (!t) return null;
+  return (
+    initDb()
+      .prepare(
+        `SELECT * FROM print_jobs
+         WHERE tipo = ?
+           AND status IN ('PENDENTE', 'ENVIANDO', 'REPROCESSANDO')
+         ORDER BY criado_em DESC
+         LIMIT 1`,
+      )
+      .get(t) || null
+  );
+}
+
 function listarJobs(opts = {}) {
   const limit = Math.min(Number(opts.limit) || 50, 200);
   const status = opts.status ? String(opts.status) : null;
@@ -312,6 +329,7 @@ module.exports = {
   atualizarJob,
   buscarJob,
   buscarPorIdempotencyKey,
+  buscarJobAtivoPorTipo,
   proximoJobPronto,
   listarJobs,
   contadores,

@@ -28,7 +28,7 @@ const SUGESTOES = [
     acao: "Aguarde alguns minutos e consulte Diagnóstico → Fila fiscal.",
   },
   {
-    teste: /impressora|print|escpos/i,
+    teste: /WritePrinter falhou|OpenPrinter falhou|RAW_PRINT_TIMEOUT|impressora.*(offline|n[aã]o encontrada)|printer\.raw is not a function|PRINTER_PORTA_INDEFINIDA/i,
     causa: "Falha de comunicação com a impressora",
     acao: "Verifique cabo USB/rede e teste em Configuração → Impressão.",
   },

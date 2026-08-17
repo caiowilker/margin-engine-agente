@@ -288,12 +288,18 @@ function noBoot(delayMs = 2500) {
             "[PrinterBootstrap] Print hot-path aquecido",
           );
         }
+        try {
+          core.startSpoolerKeepAlive?.();
+        } catch (_) {}
       } catch (err) {
         global.__printWarmState = { ok: false, ms: null, at: Date.now(), err: err?.message };
         log.warn(
           { err: err?.message, metric: "print.warm_failed" },
           "[PrinterBootstrap] Falha ao aquecer print hot-path",
         );
+        try {
+          core.startSpoolerKeepAlive?.();
+        } catch (_) {}
       }
     });
 

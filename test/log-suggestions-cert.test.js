@@ -17,6 +17,11 @@ test("expirado mantém causa de validade", () => {
   assert.match(s.causa, /expirad/i);
 });
 
+test("latência de impressão (E2E) não vira 'falha de cabo USB'", () => {
+  const s = sugerirParaErro("[PrintJob] E2E >1s — regressão de latência");
+  assert.doesNotMatch(s.causa, /comunicação com a impressora/i);
+});
+
 test("PKCS12 mac verify → senha", () => {
   const s = sugerirParaErro("PKCS12_parse:mac verify failure");
   assert.match(s.causa, /senha/i);

@@ -33,6 +33,9 @@ function aplicarRemoto(cfg) {
   for (const chave of catalog.CHAVES_SSOT_LOCAL) {
     delete filtrado[chave];
   }
+  for (const chave of catalog.CHAVES_SSOT_HARDWARE) {
+    delete filtrado[chave];
+  }
   const merged = catalog.mesclarComDefaults(filtrado);
   operacional = merged;
   fonte = "backend";

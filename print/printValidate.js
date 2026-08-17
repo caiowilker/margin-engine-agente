@@ -85,6 +85,15 @@ function validarAntesEnfileirar(op, args) {
     return { ok: true, args: [normalizado] };
   }
 
+  if (op === "imprimirRelatorio") {
+    if (!payload || typeof payload !== "object") {
+      throw new Error("Payload de relatório de vendas inválido.");
+    }
+    const { normalizarRelatorioVendasPayload } = require("./relatorioVendasLayout");
+    const normalizado = normalizarRelatorioVendasPayload(payload);
+    return { ok: true, args: [normalizado] };
+  }
+
   if (op === "imprimirRaw") {
     const { normalizarPayloadRaw } = require("./rawLabelPrint");
     const normalizado = normalizarPayloadRaw(payload);

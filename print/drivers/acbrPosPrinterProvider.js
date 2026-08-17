@@ -536,6 +536,12 @@ module.exports = {
       ),
     );
   },
+  imprimirRelatorio: (p) =>
+    imprimirViaTags(
+      loadAcbrTags("relatorioVendasAcbrTags").renderRelatorioVendasTags,
+      p,
+      native.imprimirRelatorio,
+    ),
   imprimirVasilhame: (p) =>
     imprimirViaTags(
       loadAcbrTags("vasilhameAcbrTags").renderVasilhameTags,

@@ -458,20 +458,25 @@ function printCoreLockWaitMs() {
 function comLockImpressao(fn) {
   const waitMs = printCoreLockWaitMs();
   const tEnter = Date.now();
+  const state = { timedOut: false, acquired: false };
+  const makeWaitErr = (waitedMs) => {
+    const err = new Error(
+      `Timeout aguardando fila de impressão (${waitMs}ms; esperou ${waitedMs}ms)`,
+    );
+    err.code = "PRINT_LOCK_WAIT_TIMEOUT";
+    err.printTimedOut = true;
+    return err;
+  };
   const run = printLock.then(async () => {
     const waitedMs = Date.now() - tEnter;
-    if (waitedMs > waitMs) {
-      const err = new Error(
-        `Timeout aguardando fila de impressão (${waitMs}ms; esperou ${waitedMs}ms)`,
-      );
-      err.code = "PRINT_LOCK_WAIT_TIMEOUT";
-      err.printTimedOut = true;
+    if (state.timedOut || waitedMs > waitMs) {
       log.warn(
         { waitedMs, waitMs, metric: "print.core_lock_wait_timeout" },
         "[ImpressoraCore] Lock interno esgotado — sem envio",
       );
-      throw err;
+      throw makeWaitErr(waitedMs);
     }
+    state.acquired = true;
     if (waitedMs > 200) {
       log.info(
         { waitedMs, metric: "print.core_lock_wait" },
@@ -481,7 +486,27 @@ function comLockImpressao(fn) {
     return fn();
   });
   printLock = run.catch(() => {});
-  return run;
+  let timer;
+  return Promise.race([
+    run,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        if (state.acquired) return;
+        state.timedOut = true;
+        const waitedMs = Date.now() - tEnter;
+        log.warn(
+          {
+            waitedMs,
+            waitMs,
+            metric: "print.core_lock_wait_timeout",
+            failFast: true,
+          },
+          "[ImpressoraCore] Lock interno esgotado (fail-fast) — sem envio",
+        );
+        reject(makeWaitErr(waitedMs));
+      }, waitMs);
+    }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 // ── Device em memoria (gera buffer ESC/POS) ───────────────────────────────────
@@ -773,6 +798,71 @@ function unrefTimer(t) {
   return t;
 }
 
+let _spoolerKeepAliveTimer = null;
+let _spoolerKeepAliveInflight = false;
+
+function spoolerKeepAliveMs() {
+  return Math.max(
+    0,
+    parseInt(process.env.PRINT_SPOOLER_KEEPALIVE_MS || "40000", 10) || 0,
+  );
+}
+
+/**
+ * USB selective suspend: 1º OpenPrinter após idle pode levar 14–50s e congelava
+ * o caixa. Ping periódico Open/Close (sem papel) no worker isolado.
+ */
+function startSpoolerKeepAlive() {
+  const ms = spoolerKeepAliveMs();
+  if (ms <= 0) return;
+  if (_spoolerKeepAliveTimer) return;
+  try {
+    const native = require("../rawWinspoolNative");
+    if (process.platform !== "win32") return;
+    if (typeof native.isAvailable === "function" && !native.isAvailable()) return;
+  } catch (_) {
+    return;
+  }
+  const tick = () => {
+    if (_spoolerKeepAliveInflight) return;
+    if (impressaoEmAndamentoLocal()) return;
+    let native;
+    try {
+      native = require("../rawWinspoolNative");
+    } catch (_) {
+      return;
+    }
+    if (typeof native.workerBusy === "function" && native.workerBusy()) return;
+    const nome = resolverNomeRawConfigurado();
+    if (!nome) return;
+    _spoolerKeepAliveInflight = true;
+    Promise.resolve()
+      .then(() => native.pingPrinter(nome, { timeoutMs: 2000 }))
+      .then((r) => {
+        if (r?.pingMs > 500) {
+          log.warn(
+            { pingMs: r.pingMs, printer: nome, metric: "print.spooler_keepalive_slow" },
+            "[ImpressoraCore] Keepalive do spooler lento",
+          );
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        _spoolerKeepAliveInflight = false;
+      });
+  };
+  _spoolerKeepAliveTimer = unrefTimer(setInterval(tick, ms));
+  unrefTimer(setTimeout(tick, Math.min(8000, ms)));
+}
+
+function stopSpoolerKeepAlive() {
+  if (_spoolerKeepAliveTimer) {
+    clearInterval(_spoolerKeepAliveTimer);
+    _spoolerKeepAliveTimer = null;
+  }
+  _spoolerKeepAliveInflight = false;
+}
+
 function scheduleLogoWarmOnce() {
   if (_logoWarmScheduled || _warmHotPathInflight) return;
   if (logoEscposImageCache.rawBytes) return;
@@ -995,7 +1085,9 @@ async function enviarRawWindowsFast(nomeImpressora, buffer) {
       const native = require("../rawWinspoolNative");
       if (native.isAvailable()) {
         const tSend = Date.now();
-        const result = native.writeRaw(nomeImpressora, buffer);
+        const result = await native.writeRaw(nomeImpressora, buffer, {
+          timeoutMs: rawPrintTimeoutMs(),
+        });
         const sendMs = Date.now() - tSend;
         logRawWin32Timing(result.timings, {
           printer: nomeImpressora,
@@ -2430,6 +2522,11 @@ async function renderPedido(printer, payload) {
   await renderThermalLayoutEscpos(printer, buildPedidoLayout(payload), payload);
 }
 
+async function renderRelatorioVendas(printer, payload) {
+  const { buildRelatorioVendasLayout } = require("../relatorioVendasLayout");
+  await renderThermalLayoutEscpos(printer, buildRelatorioVendasLayout(payload), payload);
+}
+
 /** Aplica layout térmico compartilhado (caixa / pedidos) no ESC/POS. */
 async function renderThermalLayoutEscpos(printer, layout, payload) {
   const { sep: linha } = helpers();
@@ -2665,6 +2762,12 @@ function imprimirPedido(payload) {
   });
 }
 
+function imprimirRelatorio(payload) {
+  const { normalizarRelatorioVendasPayload } = require("../relatorioVendasLayout");
+  const p = normalizarRelatorioVendasPayload(payload);
+  return imprimirRender((printer) => renderRelatorioVendas(printer, p));
+}
+
 function imprimirVasilhame(payload) {
   const { normalizarVasilhamePayload } = require("../vasilhameAcbrTags");
   const p = normalizarVasilhamePayload(payload);
@@ -2859,6 +2962,11 @@ function gavetaCoalesceMs() {
   return Math.max(0, parseInt(process.env.PRINTER_DRAWER_COALESCE_MS || "800", 10) || 800);
 }
 
+/** Mesmo no botão teste: não martelar USB (cliques seguidos travam o spooler). */
+function gavetaForceMinMs() {
+  return Math.max(0, parseInt(process.env.PRINTER_DRAWER_FORCE_MIN_MS || "400", 10) || 0);
+}
+
 function markGavetaPulseSent() {
   _lastGavetaPulseAt = Date.now();
 }
@@ -2953,16 +3061,27 @@ async function imprimirComGavetaOpcional(renderFn, payload, opts = {}) {
  * @param {{ force?: boolean }} [opts] force=true ignora coalesce (botão teste / abertura explícita).
  */
 function abrirGaveta(opts = {}) {
-  if (!drawerEnabled()) {
+  const force = opts === true || opts?.force === true;
+  // Sem gaveta nas vendas: ainda permite o botão de teste (force).
+  if (!drawerEnabled() && !force) {
     return Promise.resolve({ ok: true, skipped: true, motivo: "PRINTER_DRAWER=false" });
   }
-  const force = opts === true || opts?.force === true;
   if (!force && gavetaPulseRecente()) {
     return Promise.resolve({
       ok: true,
       gaveta: true,
       coalesced: true,
       metric: "print.gaveta_coalesced",
+    });
+  }
+  const forceMin = gavetaForceMinMs();
+  if (force && forceMin > 0 && Date.now() - _lastGavetaPulseAt < forceMin) {
+    return Promise.resolve({
+      ok: true,
+      gaveta: true,
+      coalesced: true,
+      forced: true,
+      metric: "print.gaveta_force_throttled",
     });
   }
   const buffer = drawerPulseBuffer();
@@ -3055,6 +3174,8 @@ module.exports = {
   },
   warmRawWin32Helper,
   warmPrintHotPath,
+  startSpoolerKeepAlive,
+  stopSpoolerKeepAlive,
   rawWorkDir,
   ensureRawPrintScript,
   buildRawPrintScriptContent,
@@ -3073,6 +3194,7 @@ module.exports = {
   imprimirFechamento,
   imprimirMovimentoCaixa,
   imprimirPedido,
+  imprimirRelatorio,
   imprimirVasilhame,
   imprimirCrediario,
   /** Bytes crus (ZPL/PPLA) — sem ESC/POS/ACBr. */
@@ -3096,6 +3218,9 @@ module.exports = {
     resetGavetaPulse() {
       _lastGavetaPulseAt = 0;
     },
+    gavetaForceMinMs,
+    startSpoolerKeepAlive,
+    stopSpoolerKeepAlive,
     gerarBuffer,
     imprimirLogoCupomEscpos,
   },

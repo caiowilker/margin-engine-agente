@@ -74,6 +74,15 @@ async function run() {
   assert.ok(mock._jobs.length >= 1);
   assert.strictEqual(mock._jobs[0].tipo, "teste");
 
+  store.resetDbForTests();
+  store.initDb();
+  const g1 = pjs.enfileirar("abrirGaveta", [{ force: true }]);
+  const g2 = pjs.enfileirar("abrirGaveta", [{ force: true }]);
+  assert.ok(g1.id);
+  assert.strictEqual(g1.tipo, "gaveta");
+  assert.strictEqual(g2.coalesced, true);
+  assert.strictEqual(g2.id, g1.id);
+
   cleanup();
   console.log("print-job-service.test.js — OK");
 }

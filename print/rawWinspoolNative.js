@@ -1,13 +1,26 @@
 /**
  * WinSpool RAW via koffi — sem PowerShell por cupom.
- * Carrega winspool.drv uma vez no processo; OpenPrinter→WritePrinter→Close.
+ * Carrega winspool.drv uma vez; OpenPrinter→WritePrinter→Close.
+ *
+ * writeRawSync é síncrono (bloqueia o thread em que roda).
+ * writeRaw despacha para worker_threads — o event loop do agente não congela
+ * se o spooler USB dormir (14–50s). HANDLE fica no mesmo worker (não cruzar
+ * threads koffi.async).
  *
  * Fallback: caller usa persistent PS / spawn legado se este módulo falhar.
  */
+const { Worker, isMainThread } = require("worker_threads");
+const path = require("path");
 const log = require("../logger").child({ modulo: "raw_winspool_koffi" });
 
 let api = null;
 let loadError = null;
+let worker = null;
+let seq = 0;
+/** @type {Map<number, { resolve: Function, reject: Function, timer?: NodeJS.Timeout }>} */
+const pending = new Map();
+/** ids no worker — permanece após timeout do Promise (WritePrinter ainda pode estar rodando). */
+const inflight = new Set();
 
 function isWindows() {
   return process.platform === "win32";
@@ -26,7 +39,6 @@ function loadApi() {
     const winspool = koffi.load("winspool.drv");
     const kernel32 = koffi.load("kernel32.dll");
 
-    // DOC_INFO_1A — StartDocPrinter level 1
     const DOC_INFO_1A = koffi.struct("DOC_INFO_1A", {
       pDocName: "str",
       pOutputFile: "str",
@@ -73,11 +85,18 @@ function loadApi() {
   }
 }
 
+function makeTimeoutError(ms) {
+  const err = new Error(`Timeout WinSpool RAW (${ms}ms) — WritePrinter/OpenPrinter não concluiu`);
+  err.code = "RAW_PRINT_TIMEOUT";
+  err.printTimedOut = true;
+  return err;
+}
+
 /**
- * Envia buffer RAW para a impressora Windows.
- * @returns {{ ok: true, backend: 'koffi', timings: object }}
+ * Envia buffer RAW na thread atual (bloqueante).
+ * Usado pelo worker isolado — NÃO chamar no event loop do agente.
  */
-function writeRaw(printerName, buffer) {
+function writeRawSync(printerName, buffer) {
   const t0 = Date.now();
   const timings = {
     backend: "koffi",
@@ -132,8 +151,8 @@ function writeRaw(printerName, buffer) {
       const ok = a.WritePrinter(h, buf, buf.length, writtenOut);
       mark("WritePrinter", t);
       timings.written = writtenOut[0] || 0;
-      timings.AllocCopy = 0; // in-process — sem AllocHGlobal
-      timings.AddType = 0; // sem PowerShell
+      timings.AllocCopy = 0;
+      timings.AddType = 0;
       if (!ok) {
         const err = new Error(`WritePrinter falhou (GetLastError=${a.GetLastError()})`);
         err.code = "RAW_WRITE";
@@ -176,24 +195,190 @@ function writeRaw(printerName, buffer) {
   return { ok: true, backend: "koffi", timings };
 }
 
-function isAvailable() {
-  if (!isWindows()) return false;
-  try {
-    loadApi();
-    return true;
-  } catch (_) {
-    return false;
+/** Acorda o spooler sem imprimir papel (USB selective suspend). */
+function pingPrinterSync(printerName) {
+  const a = loadApi();
+  const t0 = Date.now();
+  const hPtr = [null];
+  const opened = a.OpenPrinterA(String(printerName), hPtr, null);
+  if (!opened || !hPtr[0]) {
+    const err = new Error(
+      `OpenPrinter ping falhou: ${printerName} (GetLastError=${a.GetLastError()})`,
+    );
+    err.code = "RAW_OPEN_PRINTER";
+    throw err;
   }
+  try {
+    a.ClosePrinter(hPtr[0]);
+  } catch (_) {}
+  return { ok: true, pingMs: Date.now() - t0 };
+}
+
+function rejectAll(err) {
+  inflight.clear();
+  for (const [id, p] of pending) {
+    clearTimeout(p.timer);
+    p.reject(err);
+    pending.delete(id);
+  }
+}
+
+function workerBusy() {
+  return inflight.size > 0;
+}
+
+function ensureWorker() {
+  if (!isMainThread) {
+    const err = new Error("WinSpool worker só no processo principal");
+    err.code = "RAW_KOFFI_WORKER";
+    throw err;
+  }
+  if (worker) return worker;
+  const workerPath = path.join(__dirname, "rawWinspoolWorker.js");
+  worker = new Worker(workerPath);
+  worker.on("message", (msg) => {
+    inflight.delete(msg.id);
+    const p = pending.get(msg.id);
+    if (!p) {
+      log.info(
+        {
+          id: msg.id,
+          ok: !!msg.ok,
+          metric: "print.raw_koffi_late_result",
+        },
+        "[RawWinspool] resultado tardio ignorado (timeout já falhou o job; anti-dupla)",
+      );
+      return;
+    }
+    pending.delete(msg.id);
+    clearTimeout(p.timer);
+    if (msg.ok) {
+      p.resolve(msg.result);
+      return;
+    }
+    const err = new Error(msg.error || "WinSpool worker falhou");
+    err.code = msg.code || "RAW_KOFFI_WORKER";
+    p.reject(err);
+  });
+  worker.on("error", (err) => {
+    log.warn({ err: err?.message, metric: "print.raw_koffi_worker_error" }, "[RawWinspool] worker error");
+    const wrap = err instanceof Error ? err : new Error(String(err));
+    wrap.code = wrap.code || "RAW_KOFFI_WORKER";
+    rejectAll(wrap);
+    worker = null;
+  });
+  worker.on("exit", (code) => {
+    worker = null;
+    if (pending.size === 0 && inflight.size === 0) return;
+    const err = new Error(`WinSpool worker saiu (${code})`);
+    err.code = "RAW_KOFFI_WORKER";
+    rejectAll(err);
+  });
+  return worker;
+}
+
+function postToWorker(payload, timeoutMs) {
+  ensureWorker();
+  const id = ++seq;
+  inflight.add(id);
+  return new Promise((resolve, reject) => {
+    const entry = { resolve, reject, timer: null };
+    if (timeoutMs > 0) {
+      entry.timer = setTimeout(() => {
+        if (!pending.has(id)) return;
+        pending.delete(id);
+        log.warn(
+          {
+            timeoutMs,
+            op: payload.op || "write",
+            printer: payload.printer,
+            inflight: inflight.size,
+            metric: "print.raw_koffi_worker_timeout",
+          },
+          "[RawWinspool] timeout — event loop livre; worker continua (anti-dupla: sem segundo envio)",
+        );
+        reject(makeTimeoutError(timeoutMs));
+      }, timeoutMs);
+    }
+    pending.set(id, entry);
+    try {
+      worker.postMessage({ ...payload, id });
+    } catch (err) {
+      inflight.delete(id);
+      pending.delete(id);
+      clearTimeout(entry.timer);
+      reject(err);
+    }
+  });
+}
+
+function defaultTimeoutMs(opts = {}) {
+  const n = parseInt(
+    opts.timeoutMs != null
+      ? opts.timeoutMs
+      : process.env.PRINTER_RAW_TIMEOUT_MS || "4000",
+    10,
+  );
+  return Number.isFinite(n) && n > 0 ? n : 4000;
+}
+
+/**
+ * Envia buffer RAW sem bloquear o event loop (worker isolado).
+ * Timeout: falha o job; o worker NÃO é morto no meio do WritePrinter (anti-dupla).
+ */
+async function writeRaw(printerName, buffer, opts = {}) {
+  const timeoutMs = defaultTimeoutMs(opts);
+  if (!isMainThread) {
+    return writeRawSync(printerName, buffer);
+  }
+  const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+  return postToWorker(
+    {
+      op: "write",
+      printer: String(printerName || ""),
+      b64: buf.toString("base64"),
+    },
+    timeoutMs,
+  );
+}
+
+async function pingPrinter(printerName, opts = {}) {
+  const timeoutMs =
+    opts.timeoutMs != null ? opts.timeoutMs : Math.min(2000, defaultTimeoutMs(opts));
+  if (!isMainThread) {
+    return pingPrinterSync(printerName);
+  }
+  return postToWorker({ op: "ping", printer: String(printerName || "") }, timeoutMs);
+}
+
+/**
+ * Porta de decisão no processo HTTP: só Windows.
+ * loadApi/koffi NÃO rodam aqui — OpenPrinter no event loop congelava o caixa.
+ * Falha real de koffi aparece no worker e cai no fallback persistente.
+ */
+function isAvailable() {
+  return isWindows();
 }
 
 function resetForTests() {
   api = null;
   loadError = null;
+  rejectAll(new Error("resetForTests"));
+  if (worker) {
+    try {
+      worker.terminate();
+    } catch (_) {}
+    worker = null;
+  }
 }
 
 module.exports = {
   writeRaw,
+  writeRawSync,
+  pingPrinter,
+  pingPrinterSync,
   isAvailable,
+  workerBusy,
   loadApi,
   resetForTests,
 };

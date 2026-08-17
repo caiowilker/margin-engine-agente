@@ -3634,6 +3634,23 @@ function iniciarServidor() {
     },
   );
 
+  app.post("/impressora/relatorio", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    try {
+      const resultado = await impressora.imprimirRelatorio(req.body);
+      if (resultado?.queued || resultado?.async) {
+        return res.status(202).json({
+          ok: true,
+          fila: true,
+          jobId: resultado.jobId,
+          mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
+        });
+      }
+      res.json({ ok: true, jobId: resultado?.jobId || null });
+    } catch (err) {
+      responderErroImpressao(res, err);
+    }
+  });
+
   app.post("/impressora/pedido", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       const resultado = await impressora.imprimirPedido(req.body);

@@ -1,7 +1,21 @@
 # PROGRESS — Agente Local
 
-**Última atualização:** 2026-08-01  
-**Versão:** `1.0.6` — hotfix pós-install (HTTP :9100 estável no boot)
+**Última atualização:** 2026-08-17  
+**Versão:** `1.0.11`
+
+## Gaveta/cupom intermitente 14–50s (2026-08-17)
+
+- Sintoma: impressão quase sempre <1s; picos de 14–50s; gaveta no teste rápida e depois “não abre”; caixa e celular lentos no mesmo instante.
+- Causa: `WritePrinter` koffi síncrono no event loop + USB sleep; fila `PENDENTE` atrás do hang; timeout de lock só depois de adquirir; flood de `force` no teste.
+- Fix: worker isolado WinSpool; lock fail-fast; coalesce/throttle de gaveta; keepalive 40s (sem ping se worker ocupado); log suggestion não marca E2E>1s como cabo USB.
+- Revisão de solidez 2026-08-17: koffi não carrega no processo HTTP; hardware só no painel Impressora; `inflight` após timeout; se a loja já gravou `PRINTER_DRAWER=false`, o operador precisa Sim+Salvar uma vez.
+- ADR: `.ai/decisions/ADR-print-koffi-worker-event-loop-20260817.md`.
+
+## Relatório térmico de vendas selecionadas (2026-08-17)
+
+- Histórico: marcar vendas e imprimir consolidado de produtos na Elgin (não fiscal).
+- Um job `relatorio` via `printJobService` — layout compartilhado ESC/POS + ACBr tags.
+- Front busca `GET /pdv/vendas/{n}/detalhe` (máx. 40, pool de 4) e agrega por código.
 
 ## Impressão lenta ~112s neste PC (2026-08-01)
 
