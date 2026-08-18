@@ -1,24 +1,56 @@
 /**
- * Contingência off-line NFC-e (tpEmis=9 / teOffLine) — isolada da emissão normal
- * e da contingência EPEC (tpEmis=4).
+ * Contingência off-line NFC-e — isolada da emissão normal e do EPEC.
  *
- * Flag: CONTINGENCIA_OFFLINE_AUTO=true
- * Probe: Timeout ACBr 3–5s + 1 retry rápido (não confunde SEFAZ lenta com queda).
- * FormaEmissao só na sessão; never persiste teOffLine no INI.
+ * Dois numeradores (não misturar):
+ * - XML/SEFAZ `tpEmis`: 1 = normal, 9 = off-line NFC-e (MOC / NT 2016.002).
+ * - ACBrLib `[NFe] FormaEmissao`: 0 = teNormal, 8 = teOffLine
+ *   https://acbr.sourceforge.io/ACBrLib/ConfiguracoesdaBiblioteca16.html
+ *   ACBrMonitor `NFE.SetFormaEmissao` usa 1-based (9 = OffLine); a Lib é 0-based.
+ *
+ * Ordem: FormaEmissao=8 na sessão → INI [Identificacao] com tpEmis=9 + dhCont + xJust
+ * → CarregarINI → Assinar → GravarXML. Sem NFE_Enviar até a SEFAZ voltar.
+ * dhCont/xJust com tpEmis=1 = rejeição 556. tpEmis=9 sem eles = rejeição 557.
+ *
+ * Flag: CONTINGENCIA_OFFLINE_AUTO=true (probe). Contingência já ativa não usa probe.
+ * FormaEmissao só na sessão; never persiste teOffLine no INI da DLL.
  */
 const fs = require("fs");
 const path = require("path");
 const fiscalDhEmiIni = require("./fiscalDhEmiIni");
 const { writeFileAtomicSync } = require("../runtime/atomicWrite");
 
+/** ACBrLib [NFe] FormaEmissao — teNormal */
 const FORMA_NORMAL = "0";
-const FORMA_OFFLINE = "9";
+/** ACBrLib [NFe] FormaEmissao — teOffLine (não é o tpEmis do XML) */
+const FORMA_OFFLINE = "8";
+const TP_EMIS_XML_OFFLINE = "9";
 const JUSTIFICATIVA_PADRAO = "Falha de comunicacao com a SEFAZ no momento da emissao";
 
 function isEnabled() {
   const raw = String(process.env.CONTINGENCIA_OFFLINE_AUTO || "").trim().toLowerCase();
   if (raw === "0" || raw === "false" || raw === "off" || raw === "no") return false;
   return raw === "1" || raw === "true" || raw === "on" || raw === "yes";
+}
+
+/** Contingência já ligada pelo operador/watchdog (contingencia.json). Sem I/O de ACBr. */
+function lerEstadoContingenciaArquivo(filePath) {
+  try {
+    if (!filePath || !fs.existsSync(filePath)) return { ativa: false };
+    const j = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    return { ativa: j && j.ativa === true };
+  } catch (_) {
+    return { ativa: false };
+  }
+}
+
+function isContingenciaOperacionalAtiva() {
+  try {
+    const { getDirectoryManager } = require("../runtime/directoryManager");
+    const p = getDirectoryManager().file("agent", "contingencia.json");
+    return lerEstadoContingenciaArquivo(p).ativa === true;
+  } catch (_) {
+    return false;
+  }
 }
 
 function probeTimeoutMs() {
@@ -49,17 +81,25 @@ function statusServicoOperacional(parsed, respostaBruta) {
 
 function aplicarTpEmisOffline(iniContent, opts = {}) {
   const dhCont = fiscalDhEmiIni.formatarDhEmiAcbrIni(opts.dhCont || new Date());
-  let xJust = String(opts.xJust || JUSTIFICATIVA_PADRAO).trim().slice(0, 255);
+  let xJust = String(opts.xJust || JUSTIFICATIVA_PADRAO).trim().slice(0, 256);
   if (xJust.length < 15) xJust = JUSTIFICATIVA_PADRAO;
 
   const lines = String(iniContent || "").split(/\r?\n/);
   let hasTpEmis = false;
   let hasDhCont = false;
   let hasXJust = false;
-  const out = lines.map((line) => {
+  let inIdent = false;
+  let identEnd = -1;
+
+  const out = lines.map((line, idx) => {
+    const sect = line.match(/^\[([^\]]+)\]\s*$/);
+    if (sect) {
+      if (inIdent) identEnd = idx;
+      inIdent = /^identificacao$/i.test(String(sect[1]).trim());
+    }
     if (/^tpEmis=/i.test(line)) {
       hasTpEmis = true;
-      return "tpEmis=9";
+      return `tpEmis=${TP_EMIS_XML_OFFLINE}`;
     }
     if (/^dhCont=/i.test(line)) {
       hasDhCont = true;
@@ -71,10 +111,62 @@ function aplicarTpEmisOffline(iniContent, opts = {}) {
     }
     return line;
   });
-  if (!hasTpEmis) out.push("tpEmis=9");
-  if (!hasDhCont) out.push(`dhCont=${dhCont}`);
-  if (!hasXJust) out.push(`xJust=${xJust}`);
+  if (inIdent && identEnd < 0) identEnd = out.length;
+
+  const extras = [];
+  if (!hasTpEmis) extras.push(`tpEmis=${TP_EMIS_XML_OFFLINE}`);
+  if (!hasDhCont) extras.push(`dhCont=${dhCont}`);
+  if (!hasXJust) extras.push(`xJust=${xJust}`);
+  if (extras.length) {
+    const insertAt = identEnd >= 0 ? identEnd : out.length;
+    out.splice(insertAt, 0, ...extras);
+  }
   return out.join("\n");
+}
+
+/**
+ * XML assinado tem de ser off-line de verdade.
+ * 556 = dhCont/xJust com tpEmis=1. 557 = tpEmis=9 sem dhCont/xJust.
+ */
+function xmlNfceOfflineValido(xml) {
+  const s = String(xml || "");
+  const tp = s.match(/<tpEmis>\s*(\d+)\s*<\/tpEmis>/i);
+  const tpEmis = tp ? tp[1] : "";
+  const hasDh = /<dhCont>\s*[^<\s][^<]*<\/dhCont>/i.test(s);
+  const just = s.match(/<xJust>\s*([^<]*)<\/xJust>/i);
+  const xJust = just ? String(just[1]).trim() : "";
+
+  if (tpEmis === "1" && (hasDh || xJust.length > 0)) {
+    return {
+      ok: false,
+      motivo: "556",
+      detalhe: "tpEmis=1 com dhCont/xJust (justificativa não cabe em emissão normal)",
+    };
+  }
+  if (tpEmis !== TP_EMIS_XML_OFFLINE) {
+    return {
+      ok: false,
+      motivo: "tpEmis",
+      detalhe: `tpEmis=${tpEmis || "ausente"} (esperado ${TP_EMIS_XML_OFFLINE})`,
+    };
+  }
+  if (!hasDh) {
+    return { ok: false, motivo: "557", detalhe: "dhCont ausente no XML assinado" };
+  }
+  if (xJust.length < 15) {
+    return { ok: false, motivo: "557", detalhe: "xJust ausente ou com menos de 15 caracteres" };
+  }
+  return { ok: true };
+}
+
+function assertXmlNfceOffline(xml) {
+  const check = xmlNfceOfflineValido(xml);
+  if (check.ok) return check;
+  throw new Error(
+    `[ContingenciaOffline] XML inválido para off-line (${check.motivo}: ${check.detalhe}). ` +
+      `ACBrLib FormaEmissao deve ser ${FORMA_OFFLINE} (teOffLine) e o INI [Identificacao] ` +
+      `tpEmis=${TP_EMIS_XML_OFFLINE} com dhCont e xJust (≥15).`,
+  );
 }
 
 function escreverIniOffline(iniPath, opts = {}) {
@@ -98,8 +190,16 @@ function lerFormaEmissao(inst) {
   return FORMA_NORMAL;
 }
 
+function normalizarFormaEmissaoLib(valor) {
+  const v = String(valor ?? "").trim();
+  if (v === FORMA_OFFLINE) return FORMA_OFFLINE;
+  // "9" é tpEmis XML / Monitor — na Lib é inválido e deixava teNormal de fato.
+  if (v === "" || v === "9") return FORMA_NORMAL;
+  return v;
+}
+
 function gravarFormaEmissao(inst, valor, log) {
-  const v = String(valor ?? FORMA_NORMAL);
+  const v = normalizarFormaEmissaoLib(valor ?? FORMA_NORMAL);
   inst.configGravarValor("NFe", "FormaEmissao", v);
   try {
     inst.configGravarValor("ACBrNFe", "FormaEmissao", v);
@@ -107,6 +207,43 @@ function gravarFormaEmissao(inst, valor, log) {
   if (log) {
     log.info({ formaEmissao: v }, "[ContingenciaOffline] FormaEmissao alterada (somente sessão)");
   }
+}
+
+/**
+ * NFE_CarregarINI recarrega FormaEmissao do INI global (teNormal=0).
+ * Deve ser chamado depois do CarregarINI e antes do Assinar.
+ */
+function garantirFormaEmissaoOffline(inst, log) {
+  gravarFormaEmissao(inst, FORMA_OFFLINE, log);
+  const lida = lerFormaEmissao(inst);
+  if (lida !== FORMA_OFFLINE) {
+    if (log) {
+      log.warn(
+        { lida, esperado: FORMA_OFFLINE },
+        "[ContingenciaOffline] FormaEmissao não ficou teOffLine após CarregarINI — reaplicando",
+      );
+    }
+    gravarFormaEmissao(inst, FORMA_OFFLINE, log);
+  }
+}
+
+/** Lê XML assinado da lista ACBr (índices variam entre versões da DLL). */
+function lerXmlAssinadoDaLista(inst) {
+  for (const idx of [0, -1, 1]) {
+    try {
+      const x = String(inst.obterXml(idx) || "").trim();
+      if (x.length > 80) return x;
+    } catch (_) {
+      /* próximo índice */
+    }
+  }
+  try {
+    const x = String(inst.obterXml() || "").trim();
+    if (x.length > 80) return x;
+  } catch (_) {
+    /* ignore */
+  }
+  return "";
 }
 
 function lerTimeoutNfe(inst) {
@@ -316,8 +453,11 @@ function terminalId() {
 module.exports = {
   FORMA_NORMAL,
   FORMA_OFFLINE,
+  TP_EMIS_XML_OFFLINE,
   JUSTIFICATIVA_PADRAO,
   isEnabled,
+  isContingenciaOperacionalAtiva,
+  lerEstadoContingenciaArquivo,
   probeTimeoutMs,
   probeRetryDelayMs,
   alertaIdadeHoras,
@@ -325,8 +465,13 @@ module.exports = {
   statusServicoOperacional,
   aplicarTpEmisOffline,
   escreverIniOffline,
+  xmlNfceOfflineValido,
+  assertXmlNfceOffline,
   lerFormaEmissao,
   gravarFormaEmissao,
+  garantirFormaEmissaoOffline,
+  lerXmlAssinadoDaLista,
+  normalizarFormaEmissaoLib,
   probeStatusServico,
   probeStatusServicoComRetry,
   gravarXmlAssinado,

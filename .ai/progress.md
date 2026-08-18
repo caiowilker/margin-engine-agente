@@ -3,6 +3,43 @@
 **Última atualização:** 2026-08-17  
 **Versão:** `1.0.12`
 
+## PDF 2ª via repetindo outra nota (2026-08-18)
+
+- Sintoma: 2ª via / PDF A4 sempre vinha da NFC-e anterior (chave na tela certa, DANFC-e de outra venda).
+- Causa: após `skipCache` o agente reaproveitava o PDF **canônico velho** (nome com a chave, conteúdo de outra nota) e a lista nativa da ACBr podia imprimir o documento do índice 0 anterior.
+- Fix: snapshot da pasta antes de gerar; só aceita arquivo **novo**; rejeita PDF cuja chave embutida não bate; `limparLista` + conferência do XML na lista antes de `ImprimirPDF`; front com cache-bust no download.
+
+## PDF DANFC-e de outra nota (2026-08-17)
+
+- Sintoma: modal/ chave corretos, PDF térmico de venda diferente.
+- Causa: `persistNativeEmissaoOutputs` pegava o PDF **mais recente** da pasta staging quando o da chave não existia — copiava para `{chave}-danfce.pdf`.
+- Fix: só aceita PDF cujo nome contém a chave; download (`obterPdfDocumento`) regera sempre do XML com `skipCache`.
+
+## NFC-e off-line — fila SQLite no boot (2026-08-17)
+
+- Sintoma: venda em contingência com `FALHA_TEMPORARIA` — `[ContingenciaOffline] fila SQLite não inicializada`; ao desligar contingência a emissão normal voltava.
+- Causa: `contingenciaOfflineQueue.bind()` só rodava no fim de `iniciarServidor()`; a fila fiscal podia emitir off-line antes.
+- Fix: `fila.inicializar()` no boot + bind da fila off-line na mesma `fila.db`; `lazyEnsureDb()` abre/sobe schema sob demanda; `encerrarContingencia` fecha janela `dhCont`.
+
+## NFC-e off-line — regressão FormaEmissao pós-build (2026-08-17)
+
+- Sintoma: contingência ligada passou a cair em cupom **não fiscal**; emissão normal com internet OK.
+- Causa: `NFE_CarregarINI` restaura `FormaEmissao=0` (teNormal) **depois** de gravarmos `8` na sessão — XML saía com `tpEmis=1` ou sem `dhCont`/`xJust` e o assert abortava o job.
+- Fix: `garantirFormaEmissaoOffline()` **após** CarregarINI; retry de Assinar (até 2×); `lerXmlAssinadoDaLista()` para obter XML; front não imprime não fiscal quando contingência está ativa.
+
+## NFC-e off-line — FormaEmissao Lib vs tpEmis XML (2026-08-17)
+
+- A ACBrLib `[NFe] FormaEmissao` é 0-based: **0 = teNormal, 8 = teOffLine**. O XML/SEFAZ usa **tpEmis=9** (off-line). ACBrMonitor `SetFormaEmissao(9)` não se aplica à Lib.
+- Gravávamos `FormaEmissao=9` na sessão (inválido, enum 0–8): a lib ficava em teNormal, o XML saía com `tpEmis=1` e/ou `dhCont`/`xJust` no lugar errado → rejeição **556** (tags de contingência em emissão normal) ou **557** (off-line sem justificativa).
+- `dhCont`/`xJust` passam a ser injetados em `[Identificacao]`, não no fim do INI. Após Assinar, o XML é validado (`tpEmis=9` + `dhCont` + `xJust` ≥15). Sem `NFE_Enviar`. FormaEmissao volta a **0** no finally.
+- Emissão **normal** (contingência desligada) continua `tpEmis=1`, `FormaEmissao=0`, `NFE_Enviar`.
+
+## NFC-e em contingência — fila pausada (2026-08-17)
+
+- Ligar contingência pausava **toda** a fila fiscal: o checkout enfileirava a NFC-e e nada rodava (tela “tremia” no poll).
+- Com a fila pausada o worker agora processa só **NFC-e 65** (tpEmis=9, Assinar + XML local) e callback. NF-e 55 / EPEC / cancelamento continuam parados.
+- Emissão **normal** (contingência desligada) segue NFE_Enviar sem probe extra.
+
 ## Logo térmica nativa (GS v 0) — 2026-08-17
 
 - Sintoma: cupom comercial (RAW:Windows / POS80) saía sem logo, mesmo com BMP ativo.

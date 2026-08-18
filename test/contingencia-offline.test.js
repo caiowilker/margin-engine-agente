@@ -28,6 +28,38 @@ test("flag desligada por padrão; liga só com true", () => {
   assert.equal(offline.isEnabled(), false);
 });
 
+test("jobEhEmissaoNfce65 — NFC-e sim, NF-e 55 não", () => {
+  const { jobEhEmissaoNfce65, jobPermitidoComFilaPausada } = require("../filaFiscal");
+  assert.equal(jobEhEmissaoNfce65({ tipo: "EMISSAO", payload: "{}" }), true);
+  assert.equal(
+    jobEhEmissaoNfce65({
+      tipo: "EMISSAO",
+      payload: JSON.stringify({ modeloDocumento: "65" }),
+    }),
+    true,
+  );
+  assert.equal(
+    jobEhEmissaoNfce65({
+      tipo: "EMISSAO",
+      payload: JSON.stringify({ modeloDocumento: "55" }),
+    }),
+    false,
+  );
+  assert.equal(jobPermitidoComFilaPausada({ tipo: "CALLBACK_BACKEND" }), true);
+  assert.equal(jobPermitidoComFilaPausada({ tipo: "EPEC" }), false);
+});
+
+test("lerEstadoContingenciaArquivo só liga com ativa true", () => {
+  const { lerEstadoContingenciaArquivo } = require("../fiscal/contingenciaOffline");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cont-json-"));
+  const p = path.join(dir, "contingencia.json");
+  assert.equal(lerEstadoContingenciaArquivo(p).ativa, false);
+  fs.writeFileSync(p, JSON.stringify({ ativa: false }), "utf8");
+  assert.equal(lerEstadoContingenciaArquivo(p).ativa, false);
+  fs.writeFileSync(p, JSON.stringify({ ativa: true, motivo: "SEFAZ_OFFLINE" }), "utf8");
+  assert.equal(lerEstadoContingenciaArquivo(p).ativa, true);
+});
+
 test("probeTimeoutMs fica entre 3s e 5s", () => {
   const offline = require("../fiscal/contingenciaOffline");
   process.env.CONTINGENCIA_OFFLINE_PROBE_MS = "1000";
@@ -36,6 +68,16 @@ test("probeTimeoutMs fica entre 3s e 5s", () => {
   assert.equal(offline.probeTimeoutMs(), 5000);
   process.env.CONTINGENCIA_OFFLINE_PROBE_MS = "4000";
   assert.equal(offline.probeTimeoutMs(), 4000);
+});
+
+test("FORMA_OFFLINE da Lib é 8 (teOffLine); tpEmis XML é 9", () => {
+  const { FORMA_OFFLINE, FORMA_NORMAL, TP_EMIS_XML_OFFLINE, normalizarFormaEmissaoLib } =
+    require("../fiscal/contingenciaOffline");
+  assert.equal(FORMA_NORMAL, "0");
+  assert.equal(FORMA_OFFLINE, "8");
+  assert.equal(TP_EMIS_XML_OFFLINE, "9");
+  assert.equal(normalizarFormaEmissaoLib("9"), "0");
+  assert.equal(normalizarFormaEmissaoLib("8"), "8");
 });
 
 test("aplicarTpEmisOffline troca tpEmis e inclui dhCont/xJust sem alterar o restante", () => {
@@ -50,6 +92,58 @@ test("aplicarTpEmisOffline troca tpEmis e inclui dhCont/xJust sem alterar o rest
   assert.match(out, /dhCont=14\/08\/2026 12:00:00/);
   assert.match(out, /xJust=Falha de comunicacao com a SEFAZ/);
   assert.match(out, /nNF=10/);
+});
+
+test("aplicarTpEmisOffline injeta dhCont/xJust em [Identificacao], não no fim do INI", () => {
+  const { aplicarTpEmisOffline } = require("../fiscal/contingenciaOffline");
+  const ini =
+    "[Identificacao]\ntpEmis=1\nnNF=10\nserie=1\n\n[Emitente]\nCNPJCPF=14256223000155\n";
+  const out = aplicarTpEmisOffline(ini, {
+    dhCont: new Date(2026, 7, 14, 12, 0, 0),
+    xJust: "Falha de comunicacao com a SEFAZ",
+  });
+  const ident = out.split("[Emitente]")[0];
+  const emitente = out.split("[Emitente]")[1];
+  assert.match(ident, /tpEmis=9/);
+  assert.match(ident, /dhCont=14\/08\/2026 12:00:00/);
+  assert.match(ident, /xJust=Falha de comunicacao com a SEFAZ/);
+  assert.doesNotMatch(emitente, /dhCont=/);
+  assert.doesNotMatch(emitente, /xJust=/);
+  assert.doesNotMatch(emitente, /tpEmis=/);
+});
+
+test("aplicarTpEmisOffline substitui dhCont=0 do modelo ACBr", () => {
+  const { aplicarTpEmisOffline } = require("../fiscal/contingenciaOffline");
+  const ini = "[Identificacao]\ntpEmis=1\ndhCont=0\nxJust=\n";
+  const out = aplicarTpEmisOffline(ini, {
+    dhCont: new Date(2026, 7, 14, 12, 0, 0),
+    xJust: "Falha de comunicacao com a SEFAZ",
+  });
+  assert.match(out, /dhCont=14\/08\/2026 12:00:00/);
+  assert.doesNotMatch(out, /dhCont=0/);
+  assert.match(out, /xJust=Falha de comunicacao com a SEFAZ/);
+  assert.equal((out.match(/^tpEmis=/gm) || []).length, 1);
+  assert.equal((out.match(/^dhCont=/gm) || []).length, 1);
+});
+
+test("xmlNfceOfflineValido distingue 556, 557 e XML off-line ok", () => {
+  const { xmlNfceOfflineValido } = require("../fiscal/contingenciaOffline");
+  const ok = xmlNfceOfflineValido(
+    `<ide><tpEmis>9</tpEmis><dhCont>2026-08-14T12:00:00-03:00</dhCont>` +
+      `<xJust>Falha de comunicacao com a SEFAZ</xJust></ide>`,
+  );
+  assert.equal(ok.ok, true);
+
+  const rej556 = xmlNfceOfflineValido(
+    `<ide><tpEmis>1</tpEmis><dhCont>2026-08-14T12:00:00-03:00</dhCont>` +
+      `<xJust>Falha de comunicacao com a SEFAZ</xJust></ide>`,
+  );
+  assert.equal(rej556.ok, false);
+  assert.equal(rej556.motivo, "556");
+
+  const rej557 = xmlNfceOfflineValido(`<ide><tpEmis>9</tpEmis></ide>`);
+  assert.equal(rej557.ok, false);
+  assert.equal(rej557.motivo, "557");
 });
 
 test("statusServicoOperacional reconhece 107 e rejeita vazio", () => {
@@ -97,6 +191,27 @@ test("probe restaura Timeout da sessão e não chama Enviar", () => {
   assert.equal(lastTimeout[2], "30000");
 });
 
+test("lazyEnsureDb abre fila.db antes do bind do index", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nfce-lazy-"));
+  const prevDb = process.env.DB_PATH;
+  process.env.DB_PATH = path.join(dir, "fila.db");
+  try {
+    delete require.cache[require.resolve("../fila")];
+    delete require.cache[require.resolve("../fiscal/contingenciaOfflineQueue")];
+    const fila = require("../fila");
+    const queue = require("../fiscal/contingenciaOfflineQueue");
+    assert.equal(fila.getDatabase(), null);
+    assert.equal(queue.lazyEnsureDb(), true);
+    const dh = queue.obterOuAbrirJanelaDhCont(new Date(2026, 7, 14, 11, 0, 0));
+    assert.match(dh, /14\/08\/2026 11:00:00/);
+    fila.inicializar();
+    assert.ok(fila.getDatabase());
+  } finally {
+    if (prevDb === undefined) delete process.env.DB_PATH;
+    else process.env.DB_PATH = prevDb;
+  }
+});
+
 test("gravarFormaEmissao não chama configGravar (disco) — só Valor em sessão", () => {
   const { gravarFormaEmissao, FORMA_OFFLINE, FORMA_NORMAL } = require("../fiscal/contingenciaOffline");
   const calls = [];
@@ -111,8 +226,40 @@ test("gravarFormaEmissao não chama configGravar (disco) — só Valor em sessã
   gravarFormaEmissao(inst, FORMA_OFFLINE, null);
   gravarFormaEmissao(inst, FORMA_NORMAL, null);
   assert.ok(calls.every((c) => c[0] === "valor"));
-  assert.ok(calls.some((c) => c[3] === "9"));
+  assert.ok(calls.some((c) => c[3] === "8"));
   assert.ok(calls.some((c) => c[3] === "0"));
+  assert.ok(calls.every((c) => c[3] !== "9"));
+});
+
+test("garantirFormaEmissaoOffline reaplica teOffLine após CarregarINI resetar sessão", () => {
+  const { garantirFormaEmissaoOffline, FORMA_OFFLINE } = require("../fiscal/contingenciaOffline");
+  let forma = "0";
+  const inst = {
+    configGravarValor(_sec, key, val) {
+      if (key === "FormaEmissao") forma = String(val);
+    },
+    configLerValor(_sec, key) {
+      if (key === "FormaEmissao") return forma;
+      return "0";
+    },
+  };
+  garantirFormaEmissaoOffline(inst, null);
+  assert.equal(forma, FORMA_OFFLINE);
+});
+
+test("lerXmlAssinadoDaLista tenta índices alternativos da ACBrLib", () => {
+  const { lerXmlAssinadoDaLista } = require("../fiscal/contingenciaOffline");
+  const xml =
+    "<NFe><ide><tpEmis>9</tpEmis><dhCont>2026-08-14T12:00:00-03:00</dhCont>" +
+    "<xJust>Falha de comunicacao com a SEFAZ</xJust></ide></NFe>";
+  const inst = {
+    obterXml(idx) {
+      if (idx === 0) throw new Error("idx 0 indisponível");
+      if (idx === -1) return xml;
+      return "";
+    },
+  };
+  assert.equal(lerXmlAssinadoDaLista(inst), xml);
 });
 
 test("fila SQLite enqueue / transmitido / falha permanece pendente", () => {

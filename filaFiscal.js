@@ -396,6 +396,23 @@ function atualizarPayload(jobId, patch) {
   );
 }
 
+function jobEhEmissaoNfce65(job) {
+  if (!job || String(job.tipo) !== "EMISSAO") return false;
+  try {
+    const p = typeof job.payload === "string" ? JSON.parse(job.payload) : job.payload;
+    const modelo = String(p?.modeloDocumento || p?.modelo || "65");
+    return modelo === "65";
+  } catch (_) {
+    return true;
+  }
+}
+
+function jobPermitidoComFilaPausada(job) {
+  if (!job) return false;
+  if (String(job.tipo) === "CALLBACK_BACKEND") return true;
+  return jobEhEmissaoNfce65(job);
+}
+
 function proximoJob(tiposPermitidos = null) {
   init();
   let sql = `
@@ -409,6 +426,20 @@ function proximoJob(tiposPermitidos = null) {
   return tiposPermitidos?.length
     ? db.prepare(sql).get(...tiposPermitidos)
     : db.prepare(sql).get();
+}
+
+function proximoJobNfceContingencia() {
+  init();
+  const rows = db
+    .prepare(
+      `SELECT * FROM fila_fiscal
+       WHERE status IN ('PENDENTE','FALHA_TEMPORARIA')
+         AND tipo IN ('EMISSAO','CALLBACK_BACKEND')
+         AND datetime(proxima_tentativa) <= datetime('now')
+       ORDER BY prioridade ASC, id ASC LIMIT 20`,
+    )
+    .all();
+  return rows.find(jobPermitidoComFilaPausada) || null;
 }
 
 function marcarJob(id, status, erro = null) {
@@ -475,11 +506,13 @@ function marcarIncerto(id, erro, correlationId, numeroVenda, meta = {}) {
 }
 
 async function processarUm(opcoes = {}) {
-  const { apenasTipos = null, flag = "processandoFiscal" } = opcoes;
-  if (filaPausada || (flag === "processandoFiscal" ? processandoFiscal : processandoPdf))
+  const { apenasTipos = null, flag = "processandoFiscal", somenteContingenciaNfce = false } = opcoes;
+  if (flag === "processandoFiscal" ? processandoFiscal : processandoPdf)
     return false;
 
-  const job = proximoJob(apenasTipos);
+  const job = somenteContingenciaNfce
+    ? proximoJobNfceContingencia()
+    : proximoJob(apenasTipos);
   if (!job) return false;
 
   if (flag === "processandoFiscal") processandoFiscal = true;
@@ -670,8 +703,16 @@ function iniciarWorker(intervalMs = WORKER_MS) {
       liberarJobsTravados();
     } catch (_) {}
     let again = true;
-    while (again && !filaPausada) {
-      again = await processarUm({ apenasTipos: tiposFiscal, flag: "processandoFiscal" });
+    while (again) {
+      if (filaPausada) {
+        again = await processarUm({
+          apenasTipos: ["EMISSAO", "CALLBACK_BACKEND"],
+          flag: "processandoFiscal",
+          somenteContingenciaNfce: true,
+        });
+      } else {
+        again = await processarUm({ apenasTipos: tiposFiscal, flag: "processandoFiscal" });
+      }
     }
   }, intervalMs);
 
@@ -1085,14 +1126,21 @@ function aguardarConclusao(correlationId, timeoutMs = 120000) {
 }
 
 function dispararProcessamento() {
-  if (filaPausada) return;
   setImmediate(async () => {
     let again = true;
-    while (again && !filaPausada) {
-      again = await processarUm({
-        apenasTipos: ["EMISSAO", "CANCELAMENTO", "CALLBACK_BACKEND", "INUTILIZACAO", "EPEC", "EVENTO_FISCAL"],
-        flag: "processandoFiscal",
-      });
+    while (again) {
+      if (filaPausada) {
+        again = await processarUm({
+          apenasTipos: ["EMISSAO", "CALLBACK_BACKEND"],
+          flag: "processandoFiscal",
+          somenteContingenciaNfce: true,
+        });
+      } else {
+        again = await processarUm({
+          apenasTipos: ["EMISSAO", "CANCELAMENTO", "CALLBACK_BACKEND", "INUTILIZACAO", "EPEC", "EVENTO_FISCAL"],
+          flag: "processandoFiscal",
+        });
+      }
     }
   });
   setImmediate(async () => {
@@ -1431,6 +1479,8 @@ module.exports = {
   pararWorkers,
   pausarFila,
   retomarFila,
+  jobEhEmissaoNfce65,
+  jobPermitidoComFilaPausada,
   status,
   listar,
   salvarDocumento,

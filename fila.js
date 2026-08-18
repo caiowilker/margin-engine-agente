@@ -129,6 +129,7 @@ function atualizarConfig(url, token) {
 }
 
 function inicializar() {
+  if (db) return db;
   carregarConfigPersistida();
 
   const dir = path.dirname(DB_PATH);
@@ -172,6 +173,12 @@ function inicializar() {
 
   console.log(`[Fila SQLite] Banco iniciado em ${DB_PATH}`);
   recuperarEnviandoPresos();
+  try {
+    require("./fiscal/contingenciaOfflineQueue").bind(db);
+  } catch (err) {
+    console.warn("[ContingenciaOffline] bind na fila.db falhou:", err.message);
+  }
+  return db;
 }
 
 /** Após reinício do agente, vendas em ENVIANDO não têm request HTTP ativo — volta para PENDENTE. */
@@ -856,6 +863,7 @@ function purgeAntigos(dias = 30) {
 
 module.exports = {
   inicializar,
+  getDatabase: () => db || null,
   atualizarConfig,
   enfileirar,
   tentarBackend,

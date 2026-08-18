@@ -3,14 +3,36 @@
  * WAL + BEGIN IMMEDIATE + claim com lock de sync evitam XML perdido/duplicado.
  */
 const crypto = require("crypto");
+const path = require("path");
 const fiscalDhEmiIni = require("./fiscalDhEmiIni");
 const { terminalId } = require("./contingenciaOffline");
 
 let db = null;
 
 function bind(database) {
+  if (!database) return false;
   db = database;
   ensureSchema();
+  return true;
+}
+
+/** Garante fila.db aberta antes de dhCont/enqueue — evita FALHA_TEMPORARIA no boot. */
+function lazyEnsureDb() {
+  if (db) return true;
+  try {
+    const filaDb = require("../fila").getDatabase?.();
+    if (filaDb) return bind(filaDb);
+  } catch (_) {}
+  try {
+    const Database = require("better-sqlite3");
+    const { getDirectoryManager } = require("../runtime/directoryManager");
+    const dbPath =
+      process.env.DB_PATH || getDirectoryManager().file("agent", "fila.db");
+    getDirectoryManager().ensurePath(path.dirname(dbPath), "agentData");
+    return bind(new Database(dbPath));
+  } catch (_) {
+    return false;
+  }
 }
 
 function ensureSchema() {
@@ -53,13 +75,16 @@ function ensureSchema() {
 }
 
 function withImmediate(fn) {
-  if (!db) throw new Error("[ContingenciaOffline] fila SQLite não inicializada");
+  if (!lazyEnsureDb()) {
+    throw new Error("[ContingenciaOffline] fila SQLite não inicializada");
+  }
   const trx = db.transaction(fn);
   if (typeof trx.immediate === "function") return trx.immediate();
   return trx();
 }
 
 function enqueue(row) {
+  lazyEnsureDb();
   ensureSchema();
   const chave = String(row.chave || "").replace(/\D/g, "");
   if (chave.length !== 44) {
@@ -247,6 +272,7 @@ function metricasIdade() {
 }
 
 function obterOuAbrirJanelaDhCont(agora = new Date()) {
+  lazyEnsureDb();
   ensureSchema();
   const formatado = fiscalDhEmiIni.formatarDhEmiAcbrIni(agora);
   return withImmediate(() => {
@@ -289,6 +315,7 @@ function janelaAberta() {
 
 module.exports = {
   bind,
+  lazyEnsureDb,
   ensureSchema,
   enqueue,
   listPendentes,

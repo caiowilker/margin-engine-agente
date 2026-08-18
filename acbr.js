@@ -1913,12 +1913,16 @@ async function gerarPdfFiscal(chave, xmlPath, modeloDocumento = "65", opts = {})
   const formatoPdf = normalizarFormatoPdfNfce(opts.formatoPdf, modelo);
   const destino = destinoPdfFiscal(chave, modelo, formatoPdf);
   const docs = require("./documentosFiscais");
-  const existente = docs.localizarPdfPorChave(chave, modelo, formatoPdf);
-  if (existente && docs.pdfValidoParaModelo(existente, modelo, formatoPdf)) {
-    if (path.resolve(existente) !== path.resolve(destino)) {
-      fs.copyFileSync(existente, destino);
+  if (opts.skipCache) {
+    docs.aposentarPdfCanonico(destino);
+  } else {
+    const existente = docs.localizarPdfPorChave(chave, modelo, formatoPdf);
+    if (existente && docs.pdfValidoParaChave(existente, chave, modelo, formatoPdf)) {
+      if (path.resolve(existente) !== path.resolve(destino)) {
+        fs.copyFileSync(existente, destino);
+      }
+      return destino;
     }
-    return destino;
   }
   const xml = resolverXmlChave(chave, xmlPath);
   const larguraCod = process.env.DANFE_LARGURA_COD_PROD || "72";
@@ -1951,16 +1955,20 @@ async function gerarPdfFiscal(chave, xmlPath, modeloDocumento = "65", opts = {})
     `NFE.ImprimirDANFEPDF(${qAcbr(xml)},,${marca},${pdfParams.viaConsumidor},${pdfParams.simplificado})`,
   ];
 
+  const dirsPdf = [PATHS.saida, PATHS.pdf, PATHS.xml];
+  const snapPdf = docs.snapshotPdfs(dirsPdf);
+
   for (const cmd of comandos) {
     try {
       const enviar = modelo === "55" ? (c) => enviarNfeModelo(c, 55, ACBR_TIMEOUT_EMISSAO) : enviarNfe;
       const resposta = await enviar(cmd);
       const p = parseResposta(resposta);
-      const candidato =
-        (p.pathPdf && fs.existsSync(p.pathPdf) && p.pathPdf) ||
-        (fs.existsSync(destino) && destino);
-      if (candidato && fs.statSync(candidato).size > 128) {
-        if (candidato !== destino) fs.copyFileSync(candidato, destino);
+      const candidato = p.pathPdf && fs.existsSync(p.pathPdf) ? p.pathPdf : null;
+      if (candidato && docs.pdfValidoParaChave(candidato, chave, modelo, formatoPdf)) {
+        fs.mkdirSync(path.dirname(destino), { recursive: true });
+        if (path.resolve(candidato) !== path.resolve(destino)) {
+          fs.copyFileSync(candidato, destino);
+        }
         return destino;
       }
     } catch (_) {
@@ -1968,23 +1976,19 @@ async function gerarPdfFiscal(chave, xmlPath, modeloDocumento = "65", opts = {})
     }
   }
 
-  const achadoAninhado = docs.localizarPdfPorChave(chave, modelo, formatoPdf);
-  if (achadoAninhado && docs.pdfValidoParaModelo(achadoAninhado, modelo, formatoPdf)) {
-    if (path.resolve(achadoAninhado) !== path.resolve(destino)) {
-      fs.copyFileSync(achadoAninhado, destino);
-    }
-    return destino;
-  }
+  const novo = docs.capturarPdfRecemGerado(chave, modelo, formatoPdf, destino, {
+    snapshot: snapPdf,
+    dirs: dirsPdf,
+    somenteNovos: true,
+  });
+  if (novo) return novo;
 
-  for (const dir of [PATHS.saida, PATHS.pdf, PATHS.xml]) {
-    if (!fs.existsSync(dir)) continue;
-    const arquivos = fs.readdirSync(dir);
-    const match = arquivos.find(
-      (f) => f.includes(chave) && f.toLowerCase().endsWith(".pdf"),
-    );
-    if (match) {
-      const origem = path.join(dir, match);
-      fs.copyFileSync(origem, destino);
+  if (!opts.skipCache) {
+    const achadoAninhado = docs.localizarPdfPorChave(chave, modelo, formatoPdf);
+    if (achadoAninhado && docs.pdfValidoParaChave(achadoAninhado, chave, modelo, formatoPdf)) {
+      if (path.resolve(achadoAninhado) !== path.resolve(destino)) {
+        fs.copyFileSync(achadoAninhado, destino);
+      }
       return destino;
     }
   }

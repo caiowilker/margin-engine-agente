@@ -426,6 +426,20 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
           }
 
           if (
+            contingenciaOffline.isModeloNfce(modelo) &&
+            contingenciaOffline.isContingenciaOperacionalAtiva()
+          ) {
+            return emitirNfceContingenciaOffline(
+              inst,
+              runtime,
+              nativeIniPath,
+              modelo,
+              numeracao,
+              { ok: false, motivo: "contingencia_ativa" },
+            );
+          }
+
+          if (
             contingenciaOffline.isEnabled() &&
             contingenciaOffline.isModeloNfce(modelo)
           ) {
@@ -567,12 +581,10 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
 }
 
 /**
- * NFC-e off-line (tpEmis=9): Assinar → GravarXML (disco) → fila → DANFE.
- * Impressão nunca precede a persistência do XML. Restaura teNormal no finally.
+ * NFC-e off-line: FormaEmissao=8 (teOffLine) → INI tpEmis=9 + dhCont/xJust
+ * → Assinar → GravarXML. Sem NFE_Enviar. Restaura teNormal=0 no finally.
  */
 function emitirNfceContingenciaOffline(inst, runtime, nativeIniPath, modelo, numeracao, probe) {
-  const prevForma = contingenciaOffline.lerFormaEmissao(inst);
-  contingenciaOffline.gravarFormaEmissao(inst, contingenciaOffline.FORMA_OFFLINE, log);
   try {
     try {
       inst.limparLista();
@@ -580,25 +592,61 @@ function emitirNfceContingenciaOffline(inst, runtime, nativeIniPath, modelo, num
 
     const dhCont = contingenciaOfflineQueue.obterOuAbrirJanelaDhCont(new Date());
     const iniOffline = contingenciaOffline.escreverIniOffline(nativeIniPath, { dhCont });
-    inst.carregarINI(iniOffline);
-    log.info(
-      { iniPath: iniOffline, dhCont },
-      "[ContingenciaOffline] NFE_CarregarINI (tpEmis=9)",
-    );
-    acbrLibRuntime.reloadNativeCertAfterCarregarIni(inst, runtime);
-
-    inst.assinar();
-    log.info("[ContingenciaOffline] NFE_Assinar OK");
-    try {
-      inst.validar();
-    } catch (valErr) {
-      log.warn({ err: valErr.message }, "[ContingenciaOffline] NFE_Validar avisou — XML será gravado");
-    }
 
     let xmlPeek = "";
-    try {
-      xmlPeek = String(inst.obterXml(0) || "");
-    } catch (_) {}
+    let ultimoCheck = null;
+    const maxAssinar = 2;
+    for (let tentativa = 1; tentativa <= maxAssinar; tentativa++) {
+      if (tentativa > 1) {
+        try {
+          inst.limparLista();
+        } catch (_) {}
+      }
+      inst.carregarINI(iniOffline);
+      // CarregarINI restaura FormaEmissao=0 do INI global — teOffLine só após o INI do documento.
+      contingenciaOffline.garantirFormaEmissaoOffline(inst, log);
+      if (tentativa === 1) {
+        log.info(
+          {
+            iniPath: iniOffline,
+            dhCont,
+            formaEmissaoLib: contingenciaOffline.lerFormaEmissao(inst),
+            tpEmisXml: contingenciaOffline.TP_EMIS_XML_OFFLINE,
+          },
+          "[ContingenciaOffline] NFE_CarregarINI (FormaEmissao=8 / tpEmis=9)",
+        );
+      }
+      acbrLibRuntime.reloadNativeCertAfterCarregarIni(inst, runtime);
+
+      inst.assinar();
+      log.info({ tentativa }, "[ContingenciaOffline] NFE_Assinar OK");
+      try {
+        inst.validar();
+      } catch (valErr) {
+        log.warn({ err: valErr.message }, "[ContingenciaOffline] NFE_Validar avisou — XML será gravado");
+      }
+
+      xmlPeek = contingenciaOffline.lerXmlAssinadoDaLista(inst);
+      ultimoCheck = contingenciaOffline.xmlNfceOfflineValido(xmlPeek);
+      if (ultimoCheck.ok) break;
+      log.warn(
+        {
+          tentativa,
+          motivo: ultimoCheck.motivo,
+          detalhe: ultimoCheck.detalhe,
+          formaEmissaoLib: contingenciaOffline.lerFormaEmissao(inst),
+          xmlLen: xmlPeek.length,
+        },
+        "[ContingenciaOffline] XML pós-assinar inválido — nova tentativa",
+      );
+    }
+
+    if (!xmlPeek.trim()) {
+      throw new Error("[ContingenciaOffline] XML vazio após NFE_Assinar");
+    }
+    if (!ultimoCheck?.ok) {
+      contingenciaOffline.assertXmlNfceOffline(xmlPeek);
+    }
     const metaPeek = contingenciaOffline.metaDoXml(xmlPeek);
     const chave = String(metaPeek.chave || "").replace(/\D/g, "");
     if (chave.length !== 44) {
@@ -608,6 +656,7 @@ function emitirNfceContingenciaOffline(inst, runtime, nativeIniPath, modelo, num
     const destXml = PATHS.xml || runtime.notas;
     const gravado = contingenciaOffline.gravarXmlAssinado(inst, destXml, chave);
     let xml = gravado.xml;
+    contingenciaOffline.assertXmlNfceOffline(xml);
     const meta = contingenciaOffline.metaDoXml(xml);
 
     contingenciaOfflineQueue.enqueue({
@@ -674,7 +723,7 @@ function emitirNfceContingenciaOffline(inst, runtime, nativeIniPath, modelo, num
       dhCont,
     };
   } finally {
-    contingenciaOffline.gravarFormaEmissao(inst, prevForma || contingenciaOffline.FORMA_NORMAL, log);
+    contingenciaOffline.gravarFormaEmissao(inst, contingenciaOffline.FORMA_NORMAL, log);
     try {
       inst.limparLista();
     } catch (_) {}
@@ -684,15 +733,16 @@ function emitirNfceContingenciaOffline(inst, runtime, nativeIniPath, modelo, num
 let syncOfflineInflight = null;
 
 async function sincronizarNfceOfflineLib() {
-  if (!contingenciaOffline.isEnabled()) {
-    return { ok: true, skipped: true, motivo: "desabilitado" };
-  }
   if (getIntegrationMode() !== "native") {
     return { ok: true, skipped: true, motivo: "nao_nativo" };
   }
   if (syncOfflineInflight) return syncOfflineInflight;
 
   syncOfflineInflight = (async () => {
+    const pendentesAntes = contingenciaOfflineQueue.contarPendentes();
+    if (pendentesAntes === 0) {
+      return { ok: true, skipped: true, motivo: "sem_pendentes", pendentes: 0 };
+    }
     const { rows: pendentes } = contingenciaOfflineQueue.claimPendentes(10, 180_000);
     const resultados = [];
     for (const row of pendentes) {
@@ -704,7 +754,6 @@ async function sincronizarNfceOfflineLib() {
       }
       try {
         const resultado = await withNativeLib("offlineRetransmit", (inst, runtime) => {
-          const prevForma = contingenciaOffline.lerFormaEmissao(inst);
           contingenciaOffline.gravarFormaEmissao(inst, contingenciaOffline.FORMA_NORMAL, log);
           try {
             inst.limparLista();
@@ -717,21 +766,32 @@ async function sincronizarNfceOfflineLib() {
               chave: p0.chave || row.chave,
               cStat: p0.cStat,
               protocolo: p0.protocolo,
+              xMotivo: p0.xMotivo,
+              dhRecbto: p0.dhRecbto,
+              numero: p0.numero,
+              serie: p0.serie,
               xmlPath: artifacts.xmlPath,
               pdfPath: artifacts.pdfPath,
             };
           } finally {
-            contingenciaOffline.gravarFormaEmissao(
-              inst,
-              prevForma || contingenciaOffline.FORMA_NORMAL,
-              log,
-            );
+            contingenciaOffline.gravarFormaEmissao(inst, contingenciaOffline.FORMA_NORMAL, log);
             try {
               inst.limparLista();
             } catch (_) {}
           }
         });
         contingenciaOfflineQueue.marcarTransmitido(resultado.chave, resultado.protocolo);
+        try {
+          await require("../../fiscalService").notificarOfflineTransmitido(
+            resultado,
+            row.numero_venda,
+          );
+        } catch (cbErr) {
+          log.warn(
+            { chave: resultado.chave, err: cbErr.message },
+            "[ContingenciaOffline] Transmitida SEFAZ — callback backend pendente",
+          );
+        }
         resultados.push({ chave: resultado.chave, ok: true, cStat: resultado.cStat });
         log.info(
           { chave: resultado.chave, protocolo: resultado.protocolo },
@@ -745,6 +805,17 @@ async function sincronizarNfceOfflineLib() {
             const cs = String(cons?.cStat || "");
             if (cs === "100" || cs === "150" || cons?.situacao === "AUTORIZADA") {
               contingenciaOfflineQueue.marcarTransmitido(row.chave, cons.protocolo);
+              try {
+                await require("../../fiscalService").notificarOfflineTransmitido(
+                  {
+                    chave: row.chave,
+                    cStat: cs,
+                    protocolo: cons.protocolo,
+                    xMotivo: cons.xMotivo,
+                  },
+                  row.numero_venda,
+                );
+              } catch (_) {}
               resultados.push({ chave: row.chave, ok: true, cStat: cs, via: "consulta_duplicidade" });
               continue;
             }
@@ -1312,6 +1383,11 @@ function persistNativeEmissaoOutputs(inst, runtime, chave, modelo, opts = {}) {
     modelo,
     formatoPdf: String(modelo) === "55" ? "a4" : "termico",
   });
+  const destPdf = destinoPdfCanonico(k, modelo);
+  const dirsPdf = [PATHS.pdf, PATHS.saida, runtime.pdf, runtime.notas, runtime.root].filter(
+    Boolean,
+  );
+  const snapPdf = docs.snapshotPdfs(dirsPdf);
   try {
     inst.imprimirPDF();
   } catch (pdfErr) {
@@ -1323,23 +1399,16 @@ function persistNativeEmissaoOutputs(inst, runtime, chave, modelo, opts = {}) {
     }
   }
 
-  const destPdf = destinoPdfCanonico(k, modelo);
-  let stagedPdf = acbrLibRuntime.findStagedArtifact(runtime, k, ".pdf");
-  if (!stagedPdf && fs.existsSync(runtime.pdf)) {
-    const recent = fs
-      .readdirSync(runtime.pdf)
-      .filter((f) => f.toLowerCase().endsWith(".pdf"))
-      .map((f) => ({ f, m: fs.statSync(path.join(runtime.pdf, f)).mtimeMs }))
-      .sort((a, b) => b.m - a.m)[0];
-    if (recent) stagedPdf = path.join(runtime.pdf, recent.f);
-  }
-  if (stagedPdf && fs.existsSync(stagedPdf)) {
-    fs.mkdirSync(path.dirname(destPdf), { recursive: true });
-    fs.copyFileSync(stagedPdf, destPdf);
-    pdfPathCanon = destPdf;
+  const captured = docs.capturarPdfRecemGerado(k, modelo, "termico", destPdf, {
+    snapshot: snapPdf,
+    dirs: dirsPdf,
+    somenteNovos: true,
+  });
+  if (captured) {
+    pdfPathCanon = captured;
     fiscalTrace.trace("Persist", "PDF copiado para ProgramData", { chave: k, path: pdfPathCanon });
   } else {
-    fiscalTrace.warn("Persist", "PDF não encontrado no staging", {
+    fiscalTrace.warn("Persist", "PDF não encontrado no staging (chave não bate)", {
       chave: k,
       destPdf,
       runtimePdf: runtime.pdf,
@@ -1378,26 +1447,46 @@ function resolveXmlPathForPdf(chave, xmlPath) {
   return null;
 }
 
-function descobrirPdfGerado(chave, modeloDocumento, destino) {
+function xmlListaContemChave(xml, chave) {
+  const k = String(chave || "").replace(/\D/g, "");
+  if (k.length !== 44) return false;
+  const s = String(xml || "");
+  return s.includes(k) || s.replace(/\D/g, "").includes(k);
+}
+
+function lerXmlListaNativa(inst) {
+  try {
+    return String(inst.obterXml(0) || "");
+  } catch (_) {
+    return "";
+  }
+}
+
+/** A lista ACBr é compartilhada — imprimirPDF do índice 0 da nota anterior gerava o PDF repetido. */
+function carregarXmlDaChaveNaLista(inst, xmlRel, chave) {
+  const k = String(chave || "").replace(/\D/g, "");
+  const tentar = () => {
+    try {
+      inst.limparLista();
+    } catch (_) {}
+    inst.carregarXML(xmlRel);
+    return lerXmlListaNativa(inst);
+  };
+  let xml = tentar();
+  if (xmlListaContemChave(xml, k)) return xml;
+  xml = tentar();
+  if (xml && !xmlListaContemChave(xml, k)) {
+    const outra = xml.match(/Id="NFe(\d{44})"/i)?.[1] || xml.match(/\d{44}/)?.[0];
+    throw new Error(
+      `[ACBrLib] lista nativa tem outro XML (${outra || "chave ausente"}), não ${k} — recusando PDF`,
+    );
+  }
+  return xml;
+}
+
+function descobrirPdfGerado(chave, modeloDocumento, destino, formatoPdf = "termico", opts = {}) {
   const docs = require("../../documentosFiscais");
-  const achado = docs.localizarPdfPorChave(chave, modeloDocumento);
-  if (achado && docs.isPdfValid(achado)) {
-    if (path.resolve(achado) !== path.resolve(destino)) {
-      fs.copyFileSync(achado, destino);
-    }
-    return destino;
-  }
-  for (const dir of [PATHS.saida, PATHS.pdf, PATHS.xml]) {
-    if (!dir || !fs.existsSync(dir)) continue;
-    const match = fs
-      .readdirSync(dir)
-      .find((f) => f.includes(String(chave)) && f.toLowerCase().endsWith(".pdf"));
-    if (match) {
-      fs.copyFileSync(path.join(dir, match), destino);
-      return destino;
-    }
-  }
-  return null;
+  return docs.capturarPdfRecemGerado(chave, modeloDocumento, formatoPdf, destino, opts);
 }
 
 async function gerarPdfFiscalLib(chave, xmlPath, modeloDocumento = "65", opts = {}) {
@@ -1413,22 +1502,19 @@ async function gerarPdfFiscalLib(chave, xmlPath, modeloDocumento = "65", opts = 
   const destino = destinoPdfCanonico(chave, modelo, formatoPdf);
   const docs = require("../../documentosFiscais");
 
-  const existente = docs.localizarPdfPorChave(chave, modelo, formatoPdf);
-  if (existente && docs.pdfValidoParaModelo(existente, modelo, formatoPdf)) {
-    if (path.resolve(existente) !== path.resolve(destino)) {
-      fs.copyFileSync(existente, destino);
+  if (opts.skipCache) {
+    docs.aposentarPdfCanonico(destino);
+  } else {
+    const existente = docs.localizarPdfPorChave(chave, modelo, formatoPdf);
+    if (existente && docs.pdfValidoParaChave(existente, chave, modelo, formatoPdf)) {
+      if (path.resolve(existente) !== path.resolve(destino)) {
+        fs.copyFileSync(existente, destino);
+      }
+      return destino;
     }
-    return destino;
-  }
-  if (fs.existsSync(destino) && docs.pdfValidoParaModelo(destino, modelo, formatoPdf)) {
-    return destino;
-  }
-
-  const stagedPdf = acbrLibRuntime.findStagedArtifactAnywhere(chave, ".pdf");
-  if (stagedPdf && docs.pdfValidoParaModelo(stagedPdf, modelo, formatoPdf)) {
-    fs.mkdirSync(path.dirname(destino), { recursive: true });
-    fs.copyFileSync(stagedPdf, destino);
-    return destino;
+    if (fs.existsSync(destino) && docs.pdfValidoParaChave(destino, chave, modelo, formatoPdf)) {
+      return destino;
+    }
   }
 
   if (mode !== "native") {
@@ -1441,13 +1527,25 @@ async function gerarPdfFiscalLib(chave, xmlPath, modeloDocumento = "65", opts = 
       `[ACBrLib] XML não encontrado para PDF da chave ${chave}. Emita novamente ou verifique PathSalvar.`,
     );
   }
+  try {
+    const xmlDisk = fs.readFileSync(xmlAbs, "utf8");
+    if (!xmlListaContemChave(xmlDisk, chave)) {
+      throw new Error(`[ACBrLib] XML em disco não contém a chave ${chave}`);
+    }
+  } catch (err) {
+    if (String(err.message || "").includes("não contém a chave")) throw err;
+    throw new Error(`[ACBrLib] XML ilegível para PDF da chave ${chave}: ${err.message}`);
+  }
 
   fs.mkdirSync(path.dirname(destino), { recursive: true });
 
+  let snapPdf = null;
+  let dirsPdf = [PATHS.pdf, PATHS.saida];
   await withNativeLib("imprimirPDF", (inst, runtime) => {
+    dirsPdf = [...new Set([PATHS.pdf, PATHS.saida, runtime.pdf, runtime.notas, runtime.root].filter(Boolean))];
+    snapPdf = docs.snapshotPdfs(dirsPdf);
     const xmlRel = acbrLibRuntime.resolveNativeLibRelativePath(xmlAbs, runtime);
-    inst.limparLista();
-    inst.carregarXML(xmlRel);
+    carregarXmlDaChaveNaLista(inst, xmlRel, chave);
     acbrLibRuntime.reloadNativeCertAfterCarregarIni(inst, runtime);
     if (modelo === "55") {
       try {
@@ -1469,14 +1567,13 @@ async function gerarPdfFiscalLib(chave, xmlPath, modeloDocumento = "65", opts = 
     return true;
   });
 
-  const achado =
-    descobrirPdfGerado(chave, modelo, destino) ||
-    acbrLibRuntime.findStagedArtifactAnywhere(chave, ".pdf");
-  if (achado && docs.pdfValidoParaModelo(achado, modelo, formatoPdf)) {
-    if (path.resolve(achado) !== path.resolve(destino)) {
-      fs.copyFileSync(achado, destino);
-    }
-    log.info({ chave, pdfPath: destino, native: true }, "[ACBrLib] PDF gerado (nativo)");
+  const achado = descobrirPdfGerado(chave, modelo, destino, formatoPdf, {
+    snapshot: snapPdf,
+    dirs: dirsPdf,
+    somenteNovos: true,
+  });
+  if (achado) {
+    log.info({ chave, pdfPath: destino, native: true, formatoPdf }, "[ACBrLib] PDF gerado (nativo)");
     return destino;
   }
 
@@ -1878,7 +1975,7 @@ const exportedDriver = wrapAcbrExports({
   ),
   gerarPdfDanfe: executarNativo(
     "gerarPdfDanfe",
-    (chave, xmlPath) => gerarPdfFiscalLib(chave, xmlPath, "55"),
+    (chave, xmlPath, opts) => gerarPdfFiscalLib(chave, xmlPath, "55", opts),
     resolveEmissaoTimeoutMs(),
   ),
   warnIfSelectedAtBoot,

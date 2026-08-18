@@ -157,6 +157,162 @@ function pdfValidoParaModelo(filePath, modeloDocumento, formatoPdf = "termico") 
   return !pareceDanfeA4(filePath);
 }
 
+function chaveNfe44(chave) {
+  return String(chave || "").replace(/\D/g, "");
+}
+
+/**
+ * Extrai chaves NFC-e/NF-e (44 dígitos, modelo 55/65) do binário do PDF.
+ * Cobre dígitos contínuos, com espaços e UTF-16LE.
+ */
+function extrairChavesNfeDoPdf(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return [];
+  const buf = fs.readFileSync(filePath);
+  const found = new Set();
+  const coletar = (text) => {
+    const digits = String(text || "").replace(/\D/g, "");
+    for (let i = 0; i + 44 <= digits.length; i++) {
+      const k = digits.slice(i, i + 44);
+      const mod = k.slice(20, 22);
+      if (mod === "55" || mod === "65") found.add(k);
+    }
+  };
+  coletar(buf.toString("latin1"));
+  coletar(buf.toString("utf16le"));
+  return [...found];
+}
+
+/**
+ * false = o PDF pertence a outra nota.
+ * true  = a chave bate, ou o PDF não tem chave extraível (inconclusivo).
+ */
+function pdfChaveCompativel(filePath, chave) {
+  const k = chaveNfe44(chave);
+  if (k.length !== 44 || !isPdfValid(filePath)) return false;
+  const keys = extrairChavesNfeDoPdf(filePath);
+  if (keys.length === 0) return true;
+  return keys.includes(k);
+}
+
+function pdfValidoParaChave(filePath, chave, modeloDocumento, formatoPdf = "termico") {
+  return (
+    pdfValidoParaModelo(filePath, modeloDocumento, formatoPdf) &&
+    pdfChaveCompativel(filePath, chave)
+  );
+}
+
+function listarPdfsEmDirs(dirs, maxDepth = 2) {
+  const out = [];
+  const seen = new Set();
+  function walk(dir, depth) {
+    if (!dir || depth > maxDepth || !fs.existsSync(dir)) return;
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (_) {
+      return;
+    }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        walk(full, depth + 1);
+        continue;
+      }
+      if (!e.isFile() || !e.name.toLowerCase().endsWith(".pdf")) continue;
+      const abs = path.resolve(full);
+      if (seen.has(abs)) continue;
+      seen.add(abs);
+      try {
+        const st = fs.statSync(abs);
+        out.push({ path: abs, mtimeMs: st.mtimeMs, size: st.size });
+      } catch (_) {
+        /* ignore */
+      }
+    }
+  }
+  for (const d of dirs || []) walk(d, 0);
+  return out;
+}
+
+function snapshotPdfs(dirs) {
+  const map = new Map();
+  for (const f of listarPdfsEmDirs(dirs)) {
+    map.set(f.path, `${f.mtimeMs}:${f.size}`);
+  }
+  return map;
+}
+
+function pdfsAlteradosDesde(snapshot, dirs) {
+  const prev = snapshot instanceof Map ? snapshot : new Map();
+  return listarPdfsEmDirs(dirs).filter(
+    (f) => prev.get(f.path) !== `${f.mtimeMs}:${f.size}`,
+  );
+}
+
+/** Remove o canônico antes de regenerar — senão o download reaproveita o PDF velho. */
+function aposentarPdfCanonico(destino) {
+  if (!destino || !fs.existsSync(destino)) return false;
+  const bak = `${destino}.stale-${Date.now()}`;
+  try {
+    fs.renameSync(destino, bak);
+    try {
+      fs.unlinkSync(bak);
+    } catch (_) {
+      /* ignore */
+    }
+    return true;
+  } catch (_) {
+    try {
+      fs.unlinkSync(destino);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+}
+
+/**
+ * Captura o PDF que a ACBr acabou de gravar e copia para o path canônico da chave.
+ * Nunca devolve arquivo de outra nota, mesmo que seja o "mais recente" da pasta.
+ */
+function capturarPdfRecemGerado(chave, modeloDocumento, formatoPdf, destino, opts = {}) {
+  const k = chaveNfe44(chave);
+  if (k.length !== 44 || !destino) return null;
+  const modelo = String(modeloDocumento || "65");
+  const formato = String(formatoPdf || "termico").toLowerCase();
+  const dirs = [
+    ...new Set(
+      [path.dirname(destino), PATHS.pdf, PATHS.saida, ...(opts.dirs || [])].filter(Boolean),
+    ),
+  ];
+  const ok = (p) => pdfValidoParaChave(p, k, modelo, formato);
+
+  let candidatos = opts.snapshot
+    ? pdfsAlteradosDesde(opts.snapshot, dirs)
+    : listarPdfsEmDirs(dirs);
+  candidatos = candidatos.filter((f) => ok(f.path));
+  candidatos.sort((a, b) => {
+    const aKey = path.basename(a.path).includes(k) ? 1 : 0;
+    const bKey = path.basename(b.path).includes(k) ? 1 : 0;
+    if (bKey !== aKey) return bKey - aKey;
+    return b.mtimeMs - a.mtimeMs;
+  });
+
+  let src = candidatos[0]?.path || null;
+  if (!src && !opts.somenteNovos) {
+    const loc = localizarPdfPorChave(k, modelo, formato);
+    if (loc && ok(loc)) src = loc;
+  }
+  if (!src || !ok(src)) return null;
+
+  fs.mkdirSync(path.dirname(destino), { recursive: true });
+  if (path.resolve(src) !== path.resolve(destino)) {
+    fs.copyFileSync(src, destino);
+  }
+  if (!ok(destino)) return null;
+  return destino;
+}
+
 function backupQueuePath() {
   return getDirectoryManager().file("agent", "backup-pending.jsonl");
 }
@@ -739,7 +895,7 @@ function localizarPdfPorChave(chave, modeloDocumento = "65", formatoPdf = "termi
     const doc = filaFiscal.buscarDocumentoPorChave(k);
     if (
       doc?.pdf_path &&
-      pdfValidoParaModelo(doc.pdf_path, modelo, formato)
+      pdfValidoParaChave(doc.pdf_path, k, modelo, formato)
     ) {
       return doc.pdf_path;
     }
@@ -748,7 +904,7 @@ function localizarPdfPorChave(chave, modeloDocumento = "65", formatoPdf = "termi
   const suffix = suffixPdfModelo(modelo, formato);
 
   const flat = path.join(PATHS.pdf, `${k}-${suffix}.pdf`);
-  if (pdfValidoParaModelo(flat, modelo, formato)) return flat;
+  if (pdfValidoParaChave(flat, k, modelo, formato)) return flat;
 
   const cnpj = extrairCnpjDaChave(k);
   const aamm = k.slice(2, 6);
@@ -777,7 +933,7 @@ function localizarPdfPorChave(chave, modeloDocumento = "65", formatoPdf = "termi
     ];
     for (const nome of candidatos) {
       const full = path.join(dir, nome);
-      if (pdfValidoParaModelo(full, modelo, formato)) return full;
+      if (pdfValidoParaChave(full, k, modelo, formato)) return full;
     }
     try {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -787,7 +943,7 @@ function localizarPdfPorChave(chave, modeloDocumento = "65", formatoPdf = "termi
           e.name.toLowerCase().endsWith(".pdf") &&
           e.name.includes(k),
       );
-      if (match && pdfValidoParaModelo(path.join(dir, match.name), modelo, formato)) {
+      if (match && pdfValidoParaChave(path.join(dir, match.name), k, modelo, formato)) {
         return path.join(dir, match.name);
       }
     } catch (_) {
@@ -797,7 +953,7 @@ function localizarPdfPorChave(chave, modeloDocumento = "65", formatoPdf = "termi
 
   for (const raiz of [PATHS.pdf, PATHS.saida]) {
     const found = buscarArquivoPdfRecursivo(raiz, k);
-    if (found && pdfValidoParaModelo(found, modelo, formato)) return found;
+    if (found && pdfValidoParaChave(found, k, modelo, formato)) return found;
   }
   return null;
 }
@@ -836,7 +992,7 @@ function copiarPdfParaCanonico(chave, srcPath, modeloDocumento = "65", formatoPd
     PATHS.pdf,
     `${k}-${suffixPdfModelo(modeloDocumento, formatoPdf)}.pdf`,
   );
-  if (!srcPath || !pdfValidoParaModelo(srcPath, modeloDocumento, formatoPdf)) return null;
+  if (!srcPath || !pdfValidoParaChave(srcPath, k, modeloDocumento, formatoPdf)) return null;
   if (path.resolve(srcPath) !== path.resolve(dest)) {
     fs.copyFileSync(srcPath, dest);
   }
@@ -904,6 +1060,12 @@ module.exports = {
   isPdfValid,
   pareceDanfeA4,
   pdfValidoParaModelo,
+  pdfChaveCompativel,
+  pdfValidoParaChave,
+  extrairChavesNfeDoPdf,
+  snapshotPdfs,
+  aposentarPdfCanonico,
+  capturarPdfRecemGerado,
   extrairXmlDaResposta,
   normalizarXmlNfe,
   extrairQrCodeDoXml,

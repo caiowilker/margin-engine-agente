@@ -470,6 +470,11 @@ async function boot() {
     }
   });
   filaFiscal.init();
+  try {
+    fila.inicializar();
+  } catch (err) {
+    console.warn("[Boot] fila.db não inicializada cedo:", err.message);
+  }
   fiscalService.registrarHandlersFila(lerConfig);
   registrarHandlerEpecFila();
 
@@ -3492,6 +3497,7 @@ function iniciarServidor() {
         body.observacao || "Encerrado pelo operador.",
       ).slice(0, 500);
       await tentarSincronizarEpecs().catch(() => {});
+      await tentarSincronizarNfceOffline().catch(() => {});
       const resultado = await verificarEncerrarContingenciaEpec({
         force: true,
         observacao,
@@ -4708,6 +4714,16 @@ async function encerrarContingencia({ observacao, force = false } = {}) {
     observacao: null,
   };
   salvarContingencia(estadoContingencia);
+
+  try {
+    require("./fiscal/contingenciaOfflineQueue").fecharJanelaDhCont();
+  } catch (_) {}
+
+  try {
+    await tentarSincronizarNfceOffline();
+  } catch (err) {
+    console.warn("[ContingenciaOffline] Sync ao encerrar contingência:", err.message);
+  }
 
   try {
     filaFiscal.retomarFila();

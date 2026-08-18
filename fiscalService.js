@@ -1,5 +1,6 @@
 // Orquestração fiscal local — emissão idempotente, recovery, sem token em SQLite
 const crypto = require("crypto");
+const fs = require("fs");
 const http = require("http");
 const https = require("https");
 const fiscalDriver = require("./fiscalDriver");
@@ -182,11 +183,11 @@ async function gerarPdfParaModelo(chave, xmlPath, modeloDocumento) {
   return gerarPdfComXml(chave, xmlAutorizado, modelo);
 }
 
-async function gerarPdfComXml(chave, xmlPathAutorizado, modeloDocumento, formatoPdf = "termico") {
+async function gerarPdfComXml(chave, xmlPathAutorizado, modeloDocumento, formatoPdf = "termico", opts = {}) {
   const modelo = String(modeloDocumento || "65");
-  const opts = { formatoPdf };
-  if (modelo === "55") return fiscalDriver.gerarPdfDanfe(chave, xmlPathAutorizado);
-  return fiscalDriver.gerarPdfDanfce(chave, xmlPathAutorizado, opts);
+  const pdfOpts = { formatoPdf, skipCache: opts.skipCache === true };
+  if (modelo === "55") return fiscalDriver.gerarPdfDanfe(chave, xmlPathAutorizado, pdfOpts);
+  return fiscalDriver.gerarPdfDanfce(chave, xmlPathAutorizado, pdfOpts);
 }
 
 function deveGerarPdfSincrono(resultado) {
@@ -466,6 +467,70 @@ async function persistirAposAutorizacao(cfg, numeroVenda, correlationId, resulta
     pdfPendente: !pdfPath && GERAR_PDF_HABILITADO && !GERAR_PDF_EMIT,
     numeroVenda,
   };
+}
+
+/** Após transmitir NFC-e off-line à SEFAZ — atualiza documento local e callback backend. */
+async function notificarOfflineTransmitido(resultado, numeroVendaHint) {
+  if (!_lerConfigFn || !resultado?.chave) return;
+  const chave = String(resultado.chave).replace(/\D/g, "");
+  if (chave.length !== 44) return;
+  if (!isCStatAutorizado(resultado.cStat)) return;
+
+  const doc =
+    filaFiscal.buscarDocumentoPorChave(chave) ||
+    (numeroVendaHint ? filaFiscal.buscarDocumentoPorVenda(numeroVendaHint) : null);
+  const numeroVenda = numeroVendaHint || doc?.numero_venda;
+  if (!numeroVenda) return;
+
+  const cfg = await _lerConfigFn();
+  const modelo = resultado.modeloDocumento || inferirModeloDocumento(doc, chave);
+  let xmlPath = resultado.xmlPath || doc?.xml_path || null;
+  if (resultado.xml) {
+    xmlPath = docs.salvarXmlAutorizado(chave, resultado.xml) || xmlPath;
+  }
+  const xmlContent =
+    resultado.xml ||
+    (xmlPath ? lerConteudoXmlAutorizado(xmlPath) : null) ||
+    null;
+  let pdfPath = resultado.pdfPath || doc?.pdf_path || null;
+  const pdfContentBase64 =
+    pdfPath && docs.isPdfValid(pdfPath) ? docs.lerArquivoBase64(pdfPath) : null;
+
+  filaFiscal.salvarDocumento({
+    chave,
+    numeroVenda,
+    correlationId: doc?.correlation_id || null,
+    serieNfe: resultado.serie || resultado.serieNfe || doc?.serie_nfe,
+    numeroNfe: resultado.numero || resultado.numeroNfe || doc?.numero_nfe,
+    cStat: resultado.cStat,
+    protocolo: resultado.protocolo,
+    xmlPath,
+    pdfPath,
+    tipo: "AUTORIZADA",
+    modeloDocumento: modelo,
+  });
+
+  const callbackPayload = montarCallbackPayload({
+    correlationId: doc?.correlation_id || null,
+    chave,
+    numeroNfe: resultado.numero || resultado.numeroNfe || doc?.numero_nfe,
+    serieNfe: resultado.serie || resultado.serieNfe || doc?.serie_nfe,
+    qrcode: resultado.qrcode || resultado.qrcodeNfe || docs.extrairQrCodeDoXml(xmlContent || ""),
+    protocolo: resultado.protocolo,
+    cStat: resultado.cStat,
+    xMotivo: resultado.xMotivo,
+    dhRecbto: resultado.dhRecbto,
+    xmlContent,
+    xmlPath,
+    pdfPath,
+    pdfContentBase64,
+    modeloDocumento: modelo,
+    statusFiscal: "AUTORIZADA",
+    recuperado: true,
+  });
+
+  agendarCallbackBackend(cfg, numeroVenda, doc?.correlation_id || null, callbackPayload);
+  filaFiscal.dispararProcessamento();
 }
 
 async function persistirDocumentosFiscais(cfg, numeroVenda, correlationId, resultado) {
@@ -1485,29 +1550,16 @@ async function obterPdfDocumento(chave, numeroVenda, formatoPdf = "termico") {
   }
 
   let pdfPath = doc?.pdf_path;
-  if (!docs.pdfValidoParaModelo(pdfPath, modelo, formato) && chaveDoc) {
+  if (!docs.pdfValidoParaChave(pdfPath, chaveDoc, modelo, formato) && chaveDoc) {
     const encontrado = docs.localizarPdfPorChave(chaveDoc, modelo, formato);
-    if (encontrado && docs.pdfValidoParaModelo(encontrado, modelo, formato)) {
+    if (encontrado && docs.pdfValidoParaChave(encontrado, chaveDoc, modelo, formato)) {
       pdfPath = docs.copiarPdfParaCanonico(chaveDoc, encontrado, modelo, formato);
     }
   }
-  const pdfDesatualizado =
-    docs.pdfValidoParaModelo(pdfPath, modelo, formato) &&
-    xmlAutorizado &&
-    doc?.xml_path &&
-    doc.xml_path !== xmlAutorizado;
-  const pdfFormatoIncorreto =
-    (modelo === "55" && docs.isPdfValid(pdfPath) && !docs.pareceDanfeA4(pdfPath)) ||
-    (modelo === "65" &&
-      docs.isPdfValid(pdfPath) &&
-      !docs.pdfValidoParaModelo(pdfPath, modelo, formato));
-  if (
-    !docs.pdfValidoParaModelo(pdfPath, modelo, formato) ||
-    pdfDesatualizado ||
-    pdfFormatoIncorreto
-  ) {
-    pdfPath = await gerarPdfComXml(chaveDoc, xmlAutorizado, modelo, formato);
-  }
+  // Download explícito: sempre regera do XML autorizado (evita PDF cacheado de outra nota).
+  pdfPath = await gerarPdfComXml(chaveDoc, xmlAutorizado, modelo, formato, {
+    skipCache: true,
+  });
 
   const nv = doc?.numero_venda || numeroVenda;
   const corr = doc?.correlation_id || null;
@@ -2020,6 +2072,7 @@ module.exports = {
   callbackBackend,
   notificarPendenciaFiscalFailSafe,
   persistirDocumentosFiscais,
+  notificarOfflineTransmitido,
   registrarHandlersFila,
   PATHS,
 };
