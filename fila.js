@@ -223,10 +223,14 @@ function montarRespostaVenda(payload, opts = {}) {
   const numero = extrairNumeroVenda(payload);
   const { lucro, margem } = calcularLucroMargem(payload);
   const emitirNfce = payload?.emitirNfce === true;
+  const backend =
+    opts.numeroVendaBackend && String(opts.numeroVendaBackend).trim()
+      ? String(opts.numeroVendaBackend).trim()
+      : null;
   return {
     numeroVenda: String(numero),
     numeroVendaCliente: String(numero),
-    numeroVendaBackend: opts.numeroVendaBackend || null,
+    numeroVendaBackend: backend,
     emitidoEm: opts.emitidoEm || new Date().toISOString(),
     margem,
     lucro,
@@ -388,15 +392,23 @@ async function registrarLocalFirst(payload) {
   }
 
   const existente = db
-    ?.prepare(`SELECT status FROM fila_vendas WHERE numero_venda = ?`)
+    ?.prepare(
+      `SELECT status, numero_venda_backend FROM fila_vendas WHERE numero_venda = ?`,
+    )
     .get(String(numero));
 
   if (existente) {
-    const syncPendente = existente.status === "PENDENTE";
+    // ENVIANDO ainda não chegou ao backend — o PDV precisa retentar prepare.
+    const syncPendente =
+      existente.status === "PENDENTE" || existente.status === "ENVIANDO";
     if (syncPendente) {
       sincronizarVendaEmBackground(payload);
     }
-    return montarRespostaVenda(payload, { origem: "local", syncPendente });
+    return montarRespostaVenda(payload, {
+      origem: "local",
+      syncPendente,
+      numeroVendaBackend: existente.numero_venda_backend || null,
+    });
   }
 
   enfileirar(payload);

@@ -121,6 +121,44 @@ const payload = {
     assert.ok(row.payload?.itens?.length >= 1);
   });
 
+  await test("registrarLocalFirst — ENVIANDO ainda é syncPendente", async () => {
+    const numero = "PDV-TEST-ENVIANDO-1";
+    await fila.registrarLocalFirst({
+      ...payload,
+      numeroVendaCliente: numero,
+    });
+    const db = require("better-sqlite3")(dbPath);
+    db.prepare("UPDATE fila_vendas SET status = 'ENVIANDO' WHERE numero_venda = ?").run(
+      numero,
+    );
+    db.close();
+    const r = await fila.registrarLocalFirst({
+      ...payload,
+      numeroVendaCliente: numero,
+    });
+    assert.strictEqual(r.syncPendente, true);
+    assert.strictEqual(r.origem, "local");
+  });
+
+  await test("registrarLocalFirst — SINCRONIZADO devolve numeroVendaBackend", async () => {
+    const numero = "PDV-TEST-SYNCED-1";
+    await fila.registrarLocalFirst({
+      ...payload,
+      numeroVendaCliente: numero,
+    });
+    const db = require("better-sqlite3")(dbPath);
+    db.prepare(
+      "UPDATE fila_vendas SET status = 'SINCRONIZADO', numero_venda_backend = ? WHERE numero_venda = ?",
+    ).run("PDV-OFFICIAL-99", numero);
+    db.close();
+    const r = await fila.registrarLocalFirst({
+      ...payload,
+      numeroVendaCliente: numero,
+    });
+    assert.strictEqual(r.syncPendente, false);
+    assert.strictEqual(r.numeroVendaBackend, "PDV-OFFICIAL-99");
+  });
+
   await test("registrarLocalFirst — idempotente (INSERT OR IGNORE)", async () => {
     const p = { ...payload, numeroVendaCliente: "PDV-TEST-LOCAL-3" };
     await fila.registrarLocalFirst(p);
