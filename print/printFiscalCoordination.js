@@ -169,12 +169,9 @@ async function prepararImpressaoAposFiscal(opts = {}) {
 
   const fast = isFastNativePath(opts);
   if (fast) {
-    if (!fiscalEmUso()) {
-      return { aguardouMs: 0, timeout: false, fastNative: true };
-    }
-    const waitMs = parseInt(process.env.PRINT_FISCAL_WAIT_NATIVE_MS || "800", 10);
-    const wait = await aguardarFiscalLivre(waitMs);
-    return { ...wait, fastNative: true };
+    // Cupom comercial RAW não espera NFC-e/SEFAZ — isso atrasava 0,8s+ em
+    // “alguns” cupons. USB compartilhado serializa no physicalLock.
+    return { aguardouMs: 0, timeout: false, fastNative: true };
   }
 
   const acbrNativo = precisaPortaAcbrNativa();

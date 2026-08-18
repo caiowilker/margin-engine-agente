@@ -805,13 +805,13 @@ let _spoolerKeepAliveInflight = false;
 function spoolerKeepAliveMs() {
   return Math.max(
     0,
-    parseInt(process.env.PRINT_SPOOLER_KEEPALIVE_MS || "40000", 10) || 0,
+    parseInt(process.env.PRINT_SPOOLER_KEEPALIVE_MS || "5000", 10) || 0,
   );
 }
 
 /**
- * USB selective suspend: 1º OpenPrinter após idle pode levar 14–50s e congelava
- * o caixa. Ping periódico Open/Close (sem papel) no worker isolado.
+ * USB selective suspend: 1º OpenPrinter após idle atrasava 2–5s (às vezes 14–50s).
+ * Ping periódico no worker: mantém HANDLE aberto (não fecha a cada cupom).
  */
 function startSpoolerKeepAlive() {
   const ms = spoolerKeepAliveMs();
@@ -853,7 +853,7 @@ function startSpoolerKeepAlive() {
       });
   };
   _spoolerKeepAliveTimer = unrefTimer(setInterval(tick, ms));
-  unrefTimer(setTimeout(tick, Math.min(8000, ms)));
+  unrefTimer(setTimeout(tick, Math.min(1500, ms)));
 }
 
 function stopSpoolerKeepAlive() {

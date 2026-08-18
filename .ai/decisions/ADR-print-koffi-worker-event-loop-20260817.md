@@ -26,7 +26,7 @@ Efeitos em cadeia:
 2. Timeout no processo principal: job falha sem matar o worker no meio do WritePrinter (anti-dupla). Event loop permanece livre.
 3. Espera de lock é fail-fast (`Promise.race`) e o waiter **não** dispara segundo envio.
 4. Jobs de gaveta ativos (`PENDENTE`/`ENVIANDO`/`REPROCESSANDO`) coalescem. `force` tem throttle (`PRINTER_DRAWER_FORCE_MIN_MS=400`).
-5. Keepalive `OpenPrinter`+`ClosePrinter` a cada 40 s (`PRINT_SPOOLER_KEEPALIVE_MS`) para o USB não dormir. Não enfileira ping se o worker ainda está em WritePrinter (`workerBusy`, inclusive após timeout do job).
+5. Keepalive a cada 5 s (`PRINT_SPOOLER_KEEPALIVE_MS`) **mantém o HANDLE OpenPrinter aberto** no worker — não fecha a cada cupom. Open+Close a cada ping deixava o USB dormir; o próximo cupom levava 2–5s. Não enfileira ping se o worker ainda está em WritePrinter (`workerBusy`, inclusive após timeout do job).
 6. Sugestão de log de “cabo USB” só em erros reais de WinSpool/porta — não em métrica de latência.
 7. Hardware da térmica (gaveta/porta/modelo) é SSOT local (`PUT /config/impressora`). `isAvailable()` no processo HTTP **não** carrega koffi.
 
@@ -34,6 +34,14 @@ Efeitos em cadeia:
 
 - Travada USB ainda atrasa **aquele** cupom/gaveta, mas **não** o caixa nem o celular.
 - Cupom que estourar timeout pode sair no papel mesmo com job `ERRO` (envio abandonado no worker) — sem retry (já era a regra de `RAW_PRINT_TIMEOUT`).
-- Keepalive não compete com WritePrinter em andamento (`workerBusy` inclui o id após timeout).
+- Keepalive não compete com WritePrinter em andamento (`workerBusy` inclui o id após timeout). HANDLE permanece aberto entre cupons (Close só em erro / reset).
 - Painel operacional do PDV não edita gaveta/porta/modelo — só o painel Impressora.
 - Keepalive pode falhar em loja sem porta RAW configurada (no-op).
+
+---
+
+## Addendum 2026-08-18 — cupom não fiscal intermitente (2–5s)
+
+Causa: `ClosePrinter` a cada job + keepalive 40s (Open/Close). USB selective suspend; o próximo cupom comercial pagava OpenPrinter de 2–5s. Independente de QR NFC-e.
+
+Além do HANDLE persistente: path native **não espera** emissão fiscal (`PRINT_FISCAL_WAIT_NATIVE_MS`); SEFAZ ocupado ≠ impressora ocupada — USB compartilhado serializa no `physicalLock`.

@@ -93,8 +93,49 @@ function makeTimeoutError(ms) {
 }
 
 /**
+ * HANDLE WinSpool reutilizado no worker.
+ * OpenPrinter após USB dormir é o que atrasa “alguns” cupons (2–5s);
+ * ClosePrinter a cada job deixava o USB suspender de novo.
+ */
+let heldHandle = null;
+let heldPrinterName = "";
+
+function closeHeldHandle(apiRef) {
+  if (!heldHandle) return;
+  try {
+    (apiRef || loadApi()).ClosePrinter(heldHandle);
+  } catch (_) {}
+  heldHandle = null;
+  heldPrinterName = "";
+}
+
+function acquireHandle(a, printerName) {
+  const name = String(printerName || "");
+  if (heldHandle && heldPrinterName === name) {
+    return { handle: heldHandle, reused: true, openMs: 0 };
+  }
+  closeHeldHandle(a);
+  const t = Date.now();
+  const hPtr = [null];
+  const opened = a.OpenPrinterA(name, hPtr, null);
+  const openMs = Date.now() - t;
+  if (!opened || !hPtr[0]) {
+    const err = new Error(
+      `OpenPrinter falhou: ${name} (GetLastError=${a.GetLastError()})`,
+    );
+    err.code = "RAW_OPEN_PRINTER";
+    throw err;
+  }
+  heldHandle = hPtr[0];
+  heldPrinterName = name;
+  return { handle: heldHandle, reused: false, openMs };
+}
+
+/**
  * Envia buffer RAW na thread atual (bloqueante).
  * Usado pelo worker isolado — NÃO chamar no event loop do agente.
+ * HANDLE permanece aberto após sucesso (USB não dorme). Close só em erro.
+ * Retry de HANDLE velho só em StartDoc/StartPage — nunca após WritePrinter (anti-dupla).
  */
 function writeRawSync(printerName, buffer) {
   const t0 = Date.now();
@@ -102,32 +143,21 @@ function writeRawSync(printerName, buffer) {
     backend: "koffi",
     printer: String(printerName || ""),
     bytes: buffer?.length || 0,
+    written: 0,
+    AllocCopy: 0,
+    AddType: 0,
   };
   const mark = (name, since) => {
     timings[name] = Date.now() - since;
   };
 
-  const a = loadApi();
-  let t = Date.now();
-  const hPtr = [null];
-  const opened = a.OpenPrinterA(String(printerName), hPtr, null);
-  mark("OpenPrinter", t);
-  if (!opened || !hPtr[0]) {
-    const err = new Error(
-      `OpenPrinter falhou: ${printerName} (GetLastError=${a.GetLastError()})`,
-    );
-    err.code = "RAW_OPEN_PRINTER";
-    throw err;
-  }
-  const h = hPtr[0];
-
-  try {
+  const sendOn = (a, h) => {
     const doc = {
       pDocName: "PDV Cupom",
       pOutputFile: null,
       pDatatype: "RAW",
     };
-    t = Date.now();
+    let t = Date.now();
     const jobId = a.StartDocPrinterA(h, 1, doc);
     mark("StartDocPrinter", t);
     if (!jobId) {
@@ -135,7 +165,6 @@ function writeRawSync(printerName, buffer) {
       err.code = "RAW_START_DOC";
       throw err;
     }
-
     try {
       t = Date.now();
       if (!a.StartPagePrinter(h)) {
@@ -151,8 +180,6 @@ function writeRawSync(printerName, buffer) {
       const ok = a.WritePrinter(h, buf, buf.length, writtenOut);
       mark("WritePrinter", t);
       timings.written = writtenOut[0] || 0;
-      timings.AllocCopy = 0;
-      timings.AddType = 0;
       if (!ok) {
         const err = new Error(`WritePrinter falhou (GetLastError=${a.GetLastError()})`);
         err.code = "RAW_WRITE";
@@ -167,10 +194,31 @@ function writeRawSync(printerName, buffer) {
       a.EndDocPrinter(h);
       mark("EndDocPrinter", t);
     }
-  } finally {
-    t = Date.now();
-    a.ClosePrinter(h);
-    mark("ClosePrinter", t);
+  };
+
+  const a = loadApi();
+  let acquired = acquireHandle(a, printerName);
+  timings.OpenPrinter = acquired.openMs;
+  timings.handleReused = acquired.reused;
+
+  try {
+    try {
+      sendOn(a, acquired.handle);
+    } catch (err) {
+      const staleBeforeWrite =
+        acquired.reused &&
+        (err?.code === "RAW_START_DOC" || err?.code === "RAW_START_PAGE");
+      if (!staleBeforeWrite) throw err;
+      closeHeldHandle(a);
+      acquired = acquireHandle(a, printerName);
+      timings.OpenPrinter = acquired.openMs;
+      timings.handleReused = false;
+      timings.handleReopened = true;
+      sendOn(a, acquired.handle);
+    }
+  } catch (err) {
+    closeHeldHandle(a);
+    throw err;
   }
 
   timings.totalMs = Date.now() - t0;
@@ -183,7 +231,6 @@ function writeRawSync(printerName, buffer) {
     "WritePrinter",
     "EndPagePrinter",
     "EndDocPrinter",
-    "ClosePrinter",
   ]) {
     if (typeof timings[k] === "number" && timings[k] > slowestMs) {
       slowestMs = timings[k];
@@ -195,23 +242,16 @@ function writeRawSync(printerName, buffer) {
   return { ok: true, backend: "koffi", timings };
 }
 
-/** Acorda o spooler sem imprimir papel (USB selective suspend). */
+/** Mantém o HANDLE aberto — Open+Close a cada ping deixava o USB dormir de novo. */
 function pingPrinterSync(printerName) {
   const a = loadApi();
   const t0 = Date.now();
-  const hPtr = [null];
-  const opened = a.OpenPrinterA(String(printerName), hPtr, null);
-  if (!opened || !hPtr[0]) {
-    const err = new Error(
-      `OpenPrinter ping falhou: ${printerName} (GetLastError=${a.GetLastError()})`,
-    );
-    err.code = "RAW_OPEN_PRINTER";
-    throw err;
-  }
-  try {
-    a.ClosePrinter(hPtr[0]);
-  } catch (_) {}
-  return { ok: true, pingMs: Date.now() - t0 };
+  const acquired = acquireHandle(a, printerName);
+  return {
+    ok: true,
+    pingMs: Date.now() - t0,
+    handleReused: acquired.reused,
+  };
 }
 
 function rejectAll(err) {
@@ -361,6 +401,7 @@ function isAvailable() {
 }
 
 function resetForTests() {
+  closeHeldHandle();
   api = null;
   loadError = null;
   rejectAll(new Error("resetForTests"));

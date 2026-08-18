@@ -86,6 +86,29 @@ test("MemoryDevice — chunks (sem concat por write)", () => {
   assert.ok(!/write\(data[\s\S]*Buffer\.concat\(\[this\.buffer/.test(body));
 });
 
+test("cupom comercial native não espera SEFAZ", () => {
+  const src = fs.readFileSync(
+    path.join(__dirname, "../print/printFiscalCoordination.js"),
+    "utf8",
+  );
+  const start = src.indexOf("const fast = isFastNativePath");
+  const end = src.indexOf("const acbrNativo", start);
+  const body = src.slice(start, end > 0 ? end : start + 600);
+  assert.ok(body.includes("fastNative: true"));
+  assert.ok(
+    !body.includes("aguardarFiscalLivre"),
+    "RAW comercial não pode esperar NFC-e/SEFAZ",
+  );
+});
+
+test("keepalive USB default 5s e HANDLE persistente", () => {
+  const { getPrintEnvField } = require("../config/printEnvSchema");
+  const field = getPrintEnvField("PRINT_SPOOLER_KEEPALIVE_MS");
+  assert.strictEqual(field.default, 5000);
+  const core = fs.readFileSync(CORE, "utf8");
+  assert.ok(core.includes('PRINT_SPOOLER_KEEPALIVE_MS || "5000"'));
+});
+
 test("RAW koffi — writeRaw é awaited (não bloqueia o event loop)", () => {
   const src = fs.readFileSync(CORE, "utf8");
   assert.ok(src.includes("await native.writeRaw"));
@@ -96,6 +119,14 @@ test("RAW koffi — writeRaw é awaited (não bloqueia o event loop)", () => {
   assert.ok(native.includes("worker_threads"));
   assert.ok(native.includes("writeRawSync"));
   assert.ok(native.includes("function workerBusy"));
+  assert.ok(native.includes("heldHandle"), "HANDLE WinSpool reutilizado entre cupons");
+  assert.ok(native.includes("acquireHandle"));
+  const closeFinally = native.match(/a\.ClosePrinter\(h\)/);
+  assert.ok(
+    native.includes("RAW_START_DOC") && native.includes("RAW_START_PAGE"),
+    "HANDLE velho só reabre antes de WritePrinter",
+  );
+  assert.ok(native.includes("handleReopened"));
   const avail = native.match(/function isAvailable\(\) \{[\s\S]*?\n\}/);
   assert.ok(avail, "isAvailable deve existir");
   assert.ok(!avail[0].includes("loadApi"), "isAvailable não pode carregar koffi no HTTP");

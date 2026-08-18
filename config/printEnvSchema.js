@@ -63,9 +63,9 @@ const PRINT_ENV_FIELDS = [
     kind: "int",
     min: 0,
     max: 120000,
-    default: 40000,
+    default: 5000,
     comment:
-      "Ping OpenPrinter periódico (0=off) para USB não dormir; 1º envio após idle era 14–50s",
+      "Ping OpenPrinter periódico (0=off); HANDLE RAW fica aberto entre cupons para o USB não dormir",
   },
   {
     env: "PRINT_CORE_LOCK_WAIT_MS",
@@ -112,8 +112,8 @@ const PRINT_ENV_FIELDS = [
     kind: "int",
     min: 0,
     max: 5000,
-    default: 800,
-    comment: "Espera cortesia se fiscal ativo (native path)",
+    default: 0,
+    comment: "Cortesia se fiscal ativo no path ACBr; native comercial não espera SEFAZ",
   },
   {
     env: "PRINT_FAST_NATIVE",

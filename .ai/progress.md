@@ -1,7 +1,13 @@
 # PROGRESS — Agente Local
 
-**Última atualização:** 2026-08-17  
+**Última atualização:** 2026-08-18  
 **Versão:** `1.0.12`
+
+## Cupom não fiscal lento em alguns tickets (2026-08-18)
+
+- Sintoma: a maioria sai na hora; uns cupons **não fiscais** levam alguns segundos (não é QR da NFC-e).
+- Causa: cada cupom fazia OpenPrinter + ClosePrinter. O USB dormia; o próximo OpenPrinter pagava 2–5s. Keepalive 40s só abria e fechava de novo. Path native ainda esperava até 800ms se a NFC-e estava emitindo.
+- Fix: HANDLE WinSpool fica aberto entre cupons (fecha só em erro). Keepalive 5s só garante o HANDLE. Cupom comercial RAW não espera SEFAZ — USB compartilhado serializa no physicalLock.
 
 ## PDF 2ª via repetindo outra nota (2026-08-18)
 
