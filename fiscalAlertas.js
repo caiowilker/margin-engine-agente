@@ -272,26 +272,50 @@ function verificarTaxaCStat999() {
 }
 
 function verificarContingenciaOfflineIdade(snapshot) {
-  if (!snapshot || snapshot.alertaIdade !== true) {
+  if (!snapshot || (snapshot.alertaIdade !== true && snapshot.alertaPrazoLegal !== true)) {
     estadoFilaSustentada.set("nfce_offline", { alertado: false });
+    estadoFilaSustentada.set("nfce_offline_prazo", { alertado: false });
     return;
   }
   const horas = Number(snapshot.maisAntigaHoras || 0);
   const limite = Number(snapshot.alertaIdadeHoras || 2);
   const qtd = (snapshot.estouradas && snapshot.estouradas.length) || 0;
   const anterior = estadoFilaSustentada.get("nfce_offline") || { alertado: false };
-  if (anterior.alertado) return;
-  const mensagem = `NFC-e off-line pendente há ${horas.toFixed(1)}h (limite ${limite}h, ${qtd} nota(s)) — risco fiscal se o sync não estiver rodando`;
-  const dados = {
-    nome: "nfce_offline",
-    maisAntigaHoras: horas,
-    limiteHoras: limite,
-    pendentes: snapshot.pendentes,
-    estouradas: qtd,
-  };
-  logCritico("CONTINGENCIA_OFFLINE_IDADE", mensagem, dados);
-  void enviarWebhook("CONTINGENCIA_OFFLINE_IDADE", mensagem, dados);
-  estadoFilaSustentada.set("nfce_offline", { alertado: true, desde: Date.now() });
+  if (snapshot.alertaIdade === true && !anterior.alertado) {
+    const mensagem = `NFC-e off-line pendente há ${horas.toFixed(1)}h (limite ${limite}h, ${qtd} nota(s)) — risco fiscal se o sync não estiver rodando`;
+    const dados = {
+      nome: "nfce_offline",
+      maisAntigaHoras: horas,
+      limiteHoras: limite,
+      pendentes: snapshot.pendentes,
+      estouradas: qtd,
+    };
+    logCritico("CONTINGENCIA_OFFLINE_IDADE", mensagem, dados);
+    void enviarWebhook("CONTINGENCIA_OFFLINE_IDADE", mensagem, dados);
+    estadoFilaSustentada.set("nfce_offline", { alertado: true, desde: Date.now() });
+  }
+
+  const anteriorLegal = estadoFilaSustentada.get("nfce_offline_prazo") || { alertado: false };
+  if (snapshot.alertaPrazoLegal === true && !anteriorLegal.alertado) {
+    const qtdLegal = (snapshot.estouradasPrazoLegal && snapshot.estouradasPrazoLegal.length) || 0;
+    const prazo = Number(snapshot.prazoLegalHoras || 24);
+    logCritico(
+      "CONTINGENCIA_OFFLINE_PRAZO_LEGAL",
+      `NFC-e off-line fora do prazo legal de ${prazo}h (${qtdLegal} nota(s)) — transmitir imediatamente`,
+      {
+        nome: "nfce_offline_prazo_legal",
+        maisAntigaHoras: horas,
+        prazoLegalHoras: prazo,
+        pendentes: snapshot.pendentes,
+        estouradasPrazoLegal: qtdLegal,
+      },
+    );
+    void enviarWebhook("CONTINGENCIA_OFFLINE_PRAZO_LEGAL", "prazo legal 24h", {
+      pendentes: snapshot.pendentes,
+      prazoLegalHoras: prazo,
+    });
+    estadoFilaSustentada.set("nfce_offline_prazo", { alertado: true, desde: Date.now() });
+  }
 }
 
 function executarMonitoramento(deps = {}) {

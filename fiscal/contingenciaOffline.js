@@ -72,11 +72,60 @@ function isModeloNfce(modelo) {
   return String(modelo || "65") === "65";
 }
 
+/**
+ * Só cStat 107 autoriza NFC-e. 108/109 = SEFAZ paralisada → contingência, não emissão normal.
+ */
 function statusServicoOperacional(parsed, respostaBruta) {
   const cStat = String(parsed?.cStat || "");
-  if (cStat === "107" || cStat === "108") return true;
+  if (cStat === "107") return true;
+  if (cStat === "108" || cStat === "109") return false;
   const t = String(parsed?.xMotivo || respostaBruta || "").toUpperCase();
+  if (t.includes("PARALISADO")) return false;
   return t.includes("SERVICO EM OPERACAO");
+}
+
+/** Dígito 35 da chave (0-based 34) = tpEmis. Off-line NFC-e exige 9. */
+function tpEmisDaChave(chave) {
+  const k = String(chave || "").replace(/\D/g, "");
+  if (k.length !== 44) return "";
+  return k.charAt(34);
+}
+
+function extrairChaveDoXmlNfce(xml) {
+  const s = String(xml || "");
+  const id = s.match(/Id\s*=\s*"NFe(\d{44})"/i);
+  if (id) return id[1];
+  const ch = s.match(/<chNFe>\s*(\d{44})\s*<\/chNFe>/i);
+  return ch ? ch[1] : "";
+}
+
+function xmlTemAssinatura(xml) {
+  return /<Signature[\s>]/i.test(String(xml || ""));
+}
+
+function prazoLegalHoras() {
+  const n = parseFloat(process.env.CONTINGENCIA_OFFLINE_PRAZO_LEGAL_HORAS || "24");
+  return Number.isFinite(n) && n > 0 ? n : 24;
+}
+
+/** Módulo 11 da chave NFC-e (43 dígitos → cDV). */
+function dvChaveNfe(base43) {
+  const d = String(base43 || "").replace(/\D/g, "");
+  if (d.length !== 43) return "";
+  let soma = 0;
+  let peso = 2;
+  for (let i = 42; i >= 0; i--) {
+    soma += Number(d.charAt(i)) * peso;
+    peso = peso === 9 ? 2 : peso + 1;
+  }
+  const resto = soma % 11;
+  return String(resto === 0 || resto === 1 ? 0 : 11 - resto);
+}
+
+function chaveNfeDvValido(chave) {
+  const k = String(chave || "").replace(/\D/g, "");
+  if (k.length !== 44) return false;
+  return dvChaveNfe(k.slice(0, 43)) === k.charAt(43);
 }
 
 function aplicarTpEmisOffline(iniContent, opts = {}) {
@@ -97,6 +146,7 @@ function aplicarTpEmisOffline(iniContent, opts = {}) {
       if (inIdent) identEnd = idx;
       inIdent = /^identificacao$/i.test(String(sect[1]).trim());
     }
+    if (!inIdent) return line;
     if (/^tpEmis=/i.test(line)) {
       hasTpEmis = true;
       return `tpEmis=${TP_EMIS_XML_OFFLINE}`;
@@ -118,8 +168,11 @@ function aplicarTpEmisOffline(iniContent, opts = {}) {
   if (!hasDhCont) extras.push(`dhCont=${dhCont}`);
   if (!hasXJust) extras.push(`xJust=${xJust}`);
   if (extras.length) {
-    const insertAt = identEnd >= 0 ? identEnd : out.length;
-    out.splice(insertAt, 0, ...extras);
+    if (identEnd >= 0) {
+      out.splice(identEnd, 0, ...extras);
+    } else {
+      out.unshift("[Identificacao]", ...extras, "");
+    }
   }
   return out.join("\n");
 }
@@ -156,7 +209,59 @@ function xmlNfceOfflineValido(xml) {
   if (xJust.length < 15) {
     return { ok: false, motivo: "557", detalhe: "xJust ausente ou com menos de 15 caracteres" };
   }
-  return { ok: true };
+  const chave = extrairChaveDoXmlNfce(s);
+  if (chave.length === 44) {
+    const tpChave = tpEmisDaChave(chave);
+    if (tpChave && tpChave !== TP_EMIS_XML_OFFLINE) {
+      return {
+        ok: false,
+        motivo: "chave",
+        detalhe:
+          `chave dígito 35=${tpChave} (esperado ${TP_EMIS_XML_OFFLINE}) — a chave não é off-line`,
+      };
+    }
+    if (!chaveNfeDvValido(chave)) {
+      return {
+        ok: false,
+        motivo: "cDV",
+        detalhe: "dígito verificador da chave inválido",
+      };
+    }
+  }
+  const dest = s.match(/<idDest>\s*(\d+)\s*<\/idDest>/i);
+  if (dest && dest[1] !== "1") {
+    return {
+      ok: false,
+      motivo: "idDest",
+      detalhe: `idDest=${dest[1]} — NFC-e off-line só vale para operação interna (idDest=1)`,
+    };
+  }
+  return { ok: true, chave: chave || undefined };
+}
+
+/**
+ * Transmissão posterior: mesmo XML assinado, mesma chave (MOC — não regenerar cNF/tpEmis).
+ */
+function assertXmlProntoParaTransmissao(xml, chaveEsperada) {
+  const check = xmlNfceOfflineValido(xml);
+  if (!check.ok) {
+    throw new Error(
+      `[ContingenciaOffline] XML não pode ser transmitido (${check.motivo}: ${check.detalhe}).`,
+    );
+  }
+  const esperada = String(chaveEsperada || "").replace(/\D/g, "");
+  const doXml = extrairChaveDoXmlNfce(xml);
+  if (esperada.length === 44 && doXml && doXml !== esperada) {
+    throw new Error(
+      `[ContingenciaOffline] chave do XML (${doXml}) diverge da fila (${esperada}) — abortando envio`,
+    );
+  }
+  if (!xmlTemAssinatura(xml)) {
+    throw new Error(
+      "[ContingenciaOffline] XML sem assinatura — não transmitir sem re-assinar em teOffLine",
+    );
+  }
+  return { ok: true, chave: doXml || esperada };
 }
 
 function assertXmlNfceOffline(xml) {
@@ -407,6 +512,25 @@ function gravarXmlAssinado(inst, destDir, chave) {
   return { xmlPath: destino, xml: verificado, gravouLib };
 }
 
+/**
+ * Após o DANFE a Lib preenche infNFeSupl/qrCode. Grava de volta no arquivo da fila
+ * só se a chave e o tpEmis=9 permanecerem iguais.
+ */
+function persistirXmlFilaAposDanfe(xmlPath, xmlCandidato, chave) {
+  const k = String(chave || "").replace(/\D/g, "");
+  const xml = String(xmlCandidato || "");
+  if (!xmlPath || !xml.trim() || k.length !== 44) return null;
+  if (!xmlTemAssinatura(xml)) return null;
+  const check = xmlNfceOfflineValido(xml);
+  if (!check.ok) return null;
+  const doXml = extrairChaveDoXmlNfce(xml);
+  if (doXml && doXml !== k) return null;
+  writeFileAtomicSync(xmlPath, xml, { encoding: "utf8" });
+  const verificado = fs.readFileSync(xmlPath, "utf8");
+  assertXmlNfceOffline(verificado);
+  return verificado;
+}
+
 function metaDoXml(xml) {
   const docs = require("../documentosFiscais");
   const chave = docs.extrairChaveDoXml(xml);
@@ -420,6 +544,14 @@ function metaDoXml(xml) {
  */
 function classificarResultadoSync(err) {
   const fiscalRetry = require("../fiscalRetry");
+  const msg = String(err?.message || err || "");
+  if (
+    /XML não pode ser transmitido|chave do XML|XML sem assinatura|XML inválido para off-line|chave devolvida|diverge da impressa/i.test(
+      msg,
+    )
+  ) {
+    return { tipo: "REJEICAO", reter: false, cStat: "xml" };
+  }
   const cStat = fiscalRetry.extrairCStat(err);
   const n = cStat ? parseInt(cStat, 10) : NaN;
 
@@ -467,6 +599,13 @@ module.exports = {
   escreverIniOffline,
   xmlNfceOfflineValido,
   assertXmlNfceOffline,
+  assertXmlProntoParaTransmissao,
+  tpEmisDaChave,
+  extrairChaveDoXmlNfce,
+  xmlTemAssinatura,
+  prazoLegalHoras,
+  dvChaveNfe,
+  chaveNfeDvValido,
   lerFormaEmissao,
   gravarFormaEmissao,
   garantirFormaEmissaoOffline,
@@ -475,6 +614,7 @@ module.exports = {
   probeStatusServico,
   probeStatusServicoComRetry,
   gravarXmlAssinado,
+  persistirXmlFilaAposDanfe,
   xmlTemChave,
   metaDoXml,
   classificarResultadoSync,

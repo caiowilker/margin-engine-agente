@@ -18,10 +18,14 @@ test("ISO Z preserva instante", () => {
   );
 });
 
-test("formatar não gera Invalid Date", () => {
-  const out = formatarDataHoraExibicao("2026-07-16 14:30:00");
-  assert.match(out, /^\d{2}\/\d{2}\/2026 \d{2}:\d{2}$/);
-  assert.doesNotMatch(out, /Invalid/);
+test("formatar ISO Z no fuso da loja (America/Sao_Paulo)", () => {
+  const out = formatarDataHoraExibicao("2026-07-16T17:30:00.000Z", { comSegundos: true });
+  assert.equal(out, "16/07/2026 14:30:00");
+});
+
+test("LocalDateTime com T sem fuso permanece relógio de parede", () => {
+  const out = formatarDataHoraExibicao("2026-08-12T15:28:32", { comSegundos: true });
+  assert.equal(out, "12/08/2026 15:28:32");
 });
 
 test("texto composto do diagnóstico", () => {

@@ -122,7 +122,7 @@ function enqueue(row) {
 }
 
 function listPendentes(limit = 20) {
-  if (!db) return [];
+  if (!lazyEnsureDb()) return [];
   ensureSchema();
   return db
     .prepare(
@@ -135,7 +135,7 @@ function listPendentes(limit = 20) {
  * Claim atômico para um ciclo de sync (evita dois processos no mesmo XML).
  */
 function claimPendentes(limit = 10, ttlMs = 120000) {
-  if (!db) return { token: null, rows: [] };
+  if (!lazyEnsureDb()) return { token: null, rows: [] };
   ensureSchema();
   const token = crypto.randomBytes(12).toString("hex");
   const until = Date.now() + Math.max(30_000, ttlMs);
@@ -207,7 +207,7 @@ function marcarFalha(chave, erro) {
 }
 
 function contarPendentes() {
-  if (!db) return 0;
+  if (!lazyEnsureDb()) return 0;
   try {
     ensureSchema();
     const row = db
@@ -220,7 +220,7 @@ function contarPendentes() {
 }
 
 function contarRejeicoes() {
-  if (!db) return 0;
+  if (!lazyEnsureDb()) return 0;
   try {
     const row = db
       .prepare(`SELECT COUNT(*) AS n FROM nfce_offline_pendentes WHERE status='FALHA_PERMANENTE'`)
@@ -232,11 +232,21 @@ function contarRejeicoes() {
 }
 
 function metricasIdade() {
-  if (!db) {
-    return { pendentes: 0, rejeicoes: 0, maisAntigaIso: null, maisAntigaHoras: 0, estouradas: [] };
+  if (!lazyEnsureDb()) {
+    return {
+      pendentes: 0,
+      rejeicoes: 0,
+      maisAntigaIso: null,
+      maisAntigaHoras: 0,
+      estouradas: [],
+      alertaPrazoLegal: false,
+      estouradasPrazoLegal: [],
+    };
   }
   ensureSchema();
-  const horasLimite = require("./contingenciaOffline").alertaIdadeHoras();
+  const offline = require("./contingenciaOffline");
+  const horasLimite = offline.alertaIdadeHoras();
+  const horasLegal = offline.prazoLegalHoras();
   const pendentes = contarPendentes();
   const rejeicoes = contarRejeicoes();
   const oldest = db
@@ -249,17 +259,21 @@ function metricasIdade() {
     const t = Date.parse(oldest.criado_em);
     if (Number.isFinite(t)) maisAntigaHoras = (Date.now() - t) / 3_600_000;
   }
-  const estouradas = db
+  const todasPendentes = db
     .prepare(
       `SELECT chave, numero_venda, criado_em, tentativas
        FROM nfce_offline_pendentes
        WHERE status='PENDENTE'`,
     )
-    .all()
-    .filter((r) => {
-      const t = Date.parse(r.criado_em);
-      return Number.isFinite(t) && (Date.now() - t) / 3_600_000 >= horasLimite;
-    });
+    .all();
+  const idadeHoras = (iso) => {
+    const t = Date.parse(iso);
+    return Number.isFinite(t) ? (Date.now() - t) / 3_600_000 : 0;
+  };
+  const estouradas = todasPendentes.filter((r) => idadeHoras(r.criado_em) >= horasLimite);
+  const estouradasPrazoLegal = todasPendentes.filter(
+    (r) => idadeHoras(r.criado_em) >= horasLegal,
+  );
   return {
     pendentes,
     rejeicoes,
@@ -268,6 +282,9 @@ function metricasIdade() {
     alertaIdadeHoras: horasLimite,
     alertaIdade: estouradas.length > 0,
     estouradas,
+    prazoLegalHoras: horasLegal,
+    alertaPrazoLegal: estouradasPrazoLegal.length > 0,
+    estouradasPrazoLegal,
   };
 }
 

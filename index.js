@@ -3523,6 +3523,10 @@ function iniciarServidor() {
 
   app.post("/contingencia/sincronizar", exigirAgentToken, async (req, res) => {
     try {
+      const offlineSync = await tentarSincronizarNfceOffline().catch((err) => ({
+        ok: false,
+        erro: err.message,
+      }));
       const sync = await tentarSincronizarEpecs();
       const auto = await verificarEncerrarContingenciaEpec({
         observacao: "EPECs sincronizados — contingência encerrada automaticamente.",
@@ -3530,6 +3534,7 @@ function iniciarServidor() {
       res.json({
         ok: true,
         ...sync,
+        offline: offlineSync,
         contingenciaEncerrada: auto.encerrou === true,
         encerrarMotivo: auto.motivo,
       });

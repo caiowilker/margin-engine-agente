@@ -336,6 +336,14 @@ async function emitirDocumentoLib(payload, modeloDf) {
   if (mode === "native") {
     return await emitirViaNativeLib(iniPath, modeloDf, numeracao);
   }
+  if (
+    contingenciaOffline.isModeloNfce(modeloDf) &&
+    contingenciaOffline.isContingenciaOperacionalAtiva()
+  ) {
+    throw new Error(
+      "[ContingenciaOffline] NFC-e em contingência exige ACBrLib nativa (tpEmis=9). O Monitor TCP não emite off-line.",
+    );
+  }
   return await emitirViaParidade(iniPath, Number(modeloDf), numeracao);
 }
 
@@ -462,6 +470,11 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
             }
           }
 
+          contingenciaOffline.gravarFormaEmissao(
+            inst,
+            contingenciaOffline.FORMA_NORMAL,
+            null,
+          );
           inst.carregarINI(nativeIniPath);
           log.info({ iniPath: nativeIniPath }, "[ACBrLib] NFE_CarregarINI OK");
 
@@ -602,8 +615,9 @@ function emitirNfceContingenciaOffline(inst, runtime, nativeIniPath, modelo, num
           inst.limparLista();
         } catch (_) {}
       }
+      contingenciaOffline.garantirFormaEmissaoOffline(inst, log);
       inst.carregarINI(iniOffline);
-      // CarregarINI restaura FormaEmissao=0 do INI global — teOffLine só após o INI do documento.
+      // CarregarINI restaura FormaEmissao=0 do INI global — teOffLine de novo antes de Assinar.
       contingenciaOffline.garantirFormaEmissaoOffline(inst, log);
       if (tentativa === 1) {
         log.info(
@@ -628,6 +642,13 @@ function emitirNfceContingenciaOffline(inst, runtime, nativeIniPath, modelo, num
 
       xmlPeek = contingenciaOffline.lerXmlAssinadoDaLista(inst);
       ultimoCheck = contingenciaOffline.xmlNfceOfflineValido(xmlPeek);
+      if (ultimoCheck.ok && !contingenciaOffline.xmlTemAssinatura(xmlPeek)) {
+        ultimoCheck = {
+          ok: false,
+          motivo: "assinatura",
+          detalhe: "XML sem Signature após NFE_Assinar",
+        };
+      }
       if (ultimoCheck.ok) break;
       log.warn(
         {
@@ -675,17 +696,28 @@ function emitirNfceContingenciaOffline(inst, runtime, nativeIniPath, modelo, num
         xmlJaSalvo: gravado.xmlPath,
       });
       pdfPath = artifacts.pdfPath || null;
-      // ACBr preenche infNFeSupl/qrCode ao gerar DANFE — reler disco para o cupom.
-      const xmlPos = artifacts.xmlPath || gravado.xmlPath;
-      if (xmlPos && fs.existsSync(xmlPos)) {
-        xml = fs.readFileSync(xmlPos, "utf8") || xml;
-      }
+      const xmlLista = contingenciaOffline.lerXmlAssinadoDaLista(inst);
+      const xmlPos =
+        xmlLista ||
+        (artifacts.xmlPath && fs.existsSync(artifacts.xmlPath)
+          ? fs.readFileSync(artifacts.xmlPath, "utf8")
+          : "");
+      const consolidado = contingenciaOffline.persistirXmlFilaAposDanfe(
+        gravado.xmlPath,
+        xmlPos,
+        chave,
+      );
+      if (consolidado) xml = consolidado;
     } catch (printErr) {
       log.warn(
         { err: printErr.message, chave, xmlPath: gravado.xmlPath },
         "[ContingenciaOffline] DANFE falhou após XML gravado — XML preservado na fila",
       );
     }
+
+    const xmlFila = fs.readFileSync(gravado.xmlPath, "utf8");
+    contingenciaOffline.assertXmlNfceOffline(xmlFila);
+    xml = xmlFila;
 
     fiscalTrace.trace("ContingenciaOffline", "NFC-e gravada sem envio SEFAZ", {
       chave,
@@ -753,17 +785,40 @@ async function sincronizarNfceOfflineLib() {
         continue;
       }
       try {
+        const xmlDisco = fs.readFileSync(xmlPath, "utf8");
+        try {
+          contingenciaOffline.assertXmlProntoParaTransmissao(xmlDisco, row.chave);
+        } catch (valErr) {
+          contingenciaOfflineQueue.marcarRejeicao(row.chave, valErr.message, "xml");
+          resultados.push({
+            chave: row.chave,
+            ok: false,
+            tipo: "REJEICAO",
+            erro: valErr.message,
+          });
+          continue;
+        }
         const resultado = await withNativeLib("offlineRetransmit", (inst, runtime) => {
           contingenciaOffline.gravarFormaEmissao(inst, contingenciaOffline.FORMA_NORMAL, log);
           try {
             inst.limparLista();
             inst.carregarXML(xmlPath);
+            const xmlLista =
+              contingenciaOffline.lerXmlAssinadoDaLista(inst) || xmlDisco;
+            contingenciaOffline.assertXmlProntoParaTransmissao(xmlLista, row.chave);
             const resposta = inst.enviar(1, false, true, false);
             const p0 = acbrLibResposta.parseRespostaLib(resposta);
             acbr.assertAutorizada(p0, resposta, "65");
-            const artifacts = persistNativeEmissaoOutputs(inst, runtime, p0.chave || row.chave, "65");
+            const chaveFila = String(row.chave).replace(/\D/g, "");
+            const chaveRet = String(p0.chave || "").replace(/\D/g, "");
+            if (chaveRet.length === 44 && chaveRet !== chaveFila) {
+              throw new Error(
+                `[ContingenciaOffline] chave devolvida (${chaveRet}) diverge da impressa (${chaveFila})`,
+              );
+            }
+            const artifacts = persistNativeEmissaoOutputs(inst, runtime, chaveFila, "65");
             return {
-              chave: p0.chave || row.chave,
+              chave: chaveFila,
               cStat: p0.cStat,
               protocolo: p0.protocolo,
               xMotivo: p0.xMotivo,

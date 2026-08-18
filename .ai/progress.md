@@ -3,6 +3,21 @@
 **Última atualização:** 2026-08-18  
 **Versão:** `1.0.12`
 
+## Comanda/mesa — horário no fuso da loja (2026-08-18)
+
+- Comanda, mesa e pré-conta imprimiam a hora UTC da string ISO (`toISOString` / `Z`).
+- Passa pelo mesmo formatador da tela/cupom: `America/Sao_Paulo`. LocalDateTime sem fuso continua relógio de parede.
+
+## NFC-e off-line — solidez da emissão e da transmissão (2026-08-18)
+
+- XML assinado só entra na fila com `tpEmis=9`, `dhCont`, `xJust`, dígito 35 da chave = 9, cDV módulo 11 e `idDest=1`.
+- Transmissão posterior envia o **mesmo** XML (sem re-assinar). A chave da SEFAZ tem de ser a impressa. XML inválido sai da fila; timeout permanece pendente. `cStat` 100/150 = autorizada.
+- QR do DANFE só grava na fila se chave/assinatura/tpEmis permanecerem. Monitor TCP não emite off-line.
+- Probe automático: só `107` é SEFAZ no ar; `108`/`109` não autorizam (vão para off-line). Emissão normal inalterada, só reseta `FormaEmissao=0` antes do CarregarINI.
+- Probe automático: só `107` é SEFAZ no ar; `108`/`109` não autorizam (vão para off-line). Emissão normal inalterada, só reseta `FormaEmissao=0` antes do CarregarINI.
+- Sincronizar no painel também transmite NFC-e off-line. Alerta de prazo legal 24h.
+- ADR: `.ai/decisions/ADR-nfce-contingencia-offline-solidez-20260818.md`.
+
 ## Instalador Windows lento no caixa (2026-08-18)
 
 - Sintoma: `Margin-Engine-Setup` levava vários minutos (extração + “Configurando…”).

@@ -131,6 +131,13 @@ test("comanda entrega inclui motoboy e horario legivel", () => {
   assert.ok(tags.includes("30,00"));
 });
 
+test("comanda converte ISO UTC (Z) para horário da loja", () => {
+  const { formatCreatedAtForPrint } = require("../print/pedidoPrint");
+  assert.equal(formatCreatedAtForPrint("2026-08-17T20:35:00.000Z"), "17/08 17:35");
+  assert.equal(formatCreatedAtForPrint("2026-08-17T17:35:00"), "17/08 17:35");
+  assert.equal(formatCreatedAtForPrint("17/08/2026, 17:35:00"), "17/08 17:35");
+});
+
 test("comanda entrega imprime taxa de entrega antes do TOTAL", () => {
   const tags = renderPedidoTags({
     printType: "entrega",

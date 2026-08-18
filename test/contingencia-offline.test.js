@@ -144,6 +144,26 @@ test("xmlNfceOfflineValido distingue 556, 557 e XML off-line ok", () => {
   const rej557 = xmlNfceOfflineValido(`<ide><tpEmis>9</tpEmis></ide>`);
   assert.equal(rej557.ok, false);
   assert.equal(rej557.motivo, "557");
+
+  const chaveOff = "35260814256223000155650010000000019000000010";
+  const chaveOn = "35260814256223000155650010000000011000000010";
+  assert.equal(require("../fiscal/contingenciaOffline").tpEmisDaChave(chaveOff), "9");
+  assert.equal(require("../fiscal/contingenciaOffline").tpEmisDaChave(chaveOn), "1");
+  const chaveErrada = xmlNfceOfflineValido(
+    `<infNFe Id="NFe${chaveOn}"><ide><tpEmis>9</tpEmis>` +
+      `<dhCont>2026-08-14T12:00:00-03:00</dhCont>` +
+      `<xJust>Falha de comunicacao com a SEFAZ</xJust></ide></infNFe>`,
+  );
+  assert.equal(chaveErrada.ok, false);
+  assert.equal(chaveErrada.motivo, "chave");
+
+  const idDest2 = xmlNfceOfflineValido(
+    `<ide><tpEmis>9</tpEmis><idDest>2</idDest>` +
+      `<dhCont>2026-08-14T12:00:00-03:00</dhCont>` +
+      `<xJust>Falha de comunicacao com a SEFAZ</xJust></ide>`,
+  );
+  assert.equal(idDest2.ok, false);
+  assert.equal(idDest2.motivo, "idDest");
 });
 
 test("statusServicoOperacional reconhece 107 e rejeita vazio", () => {
@@ -152,7 +172,11 @@ test("statusServicoOperacional reconhece 107 e rejeita vazio", () => {
   assert.equal(statusServicoOperacional({ cStat: "0", xMotivo: "" }), false);
   assert.equal(
     statusServicoOperacional({ cStat: "108", xMotivo: "Servico Paralisado Momentaneamente" }),
-    true,
+    false,
+  );
+  assert.equal(
+    statusServicoOperacional({ cStat: "109", xMotivo: "Servico Paralisado sem Previsao" }),
+    false,
   );
 });
 
@@ -387,4 +411,77 @@ test("GravarXML verifica disco antes de qualquer impressão", () => {
   assert.equal(imprimiu, false);
   assert.ok(fs.existsSync(r.xmlPath));
   assert.ok(xmlTemChave(fs.readFileSync(r.xmlPath, "utf8"), chave));
+});
+
+test("assertXmlProntoParaTransmissao exige assinatura e a mesma chave", () => {
+  const {
+    assertXmlProntoParaTransmissao,
+    xmlTemAssinatura,
+    prazoLegalHoras,
+    dvChaveNfe,
+    chaveNfeDvValido,
+  } = require("../fiscal/contingenciaOffline");
+  const base43 = "3526081425622300015565001000000001900000001";
+  const chave = base43 + dvChaveNfe(base43);
+  assert.equal(chaveNfeDvValido(chave), true);
+  assert.equal(chave.length, 44);
+  const xml =
+    `<NFe><infNFe Id="NFe${chave}"><ide><tpEmis>9</tpEmis><idDest>1</idDest>` +
+    `<dhCont>2026-08-14T12:00:00-03:00</dhCont>` +
+    `<xJust>Falha de comunicacao com a SEFAZ</xJust></ide></infNFe>` +
+    `<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"></Signature></NFe>`;
+  assert.equal(xmlTemAssinatura(xml), true);
+  const r = assertXmlProntoParaTransmissao(xml, chave);
+  assert.equal(r.ok, true);
+  assert.equal(r.chave, chave);
+  assert.throws(
+    () => assertXmlProntoParaTransmissao(xml.replace("<Signature", "<X"), chave),
+    /assinatura/i,
+  );
+  assert.equal(prazoLegalHoras(), 24);
+});
+
+test("cDV inválido recusa XML mesmo com tpEmis=9", () => {
+  const { xmlNfceOfflineValido } = require("../fiscal/contingenciaOffline");
+  const chaveRuim = "35260814256223000155650010000000019000000010";
+  const r = xmlNfceOfflineValido(
+    `<infNFe Id="NFe${chaveRuim}"><ide><tpEmis>9</tpEmis><idDest>1</idDest>` +
+      `<dhCont>2026-08-14T12:00:00-03:00</dhCont>` +
+      `<xJust>Falha de comunicacao com a SEFAZ</xJust></ide></infNFe>`,
+  );
+  assert.equal(r.ok, false);
+  assert.equal(r.motivo, "cDV");
+});
+
+test("persistirXmlFilaAposDanfe só grava se chave e assinatura baterem", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nfce-danfe-"));
+  const { dvChaveNfe, persistirXmlFilaAposDanfe } = require("../fiscal/contingenciaOffline");
+  const chave = "3526081425622300015565001000000001900000001" + dvChaveNfe("3526081425622300015565001000000001900000001");
+  const xmlPath = path.join(dir, `${chave}-nfe.xml`);
+  const xml =
+    `<NFe><infNFe Id="NFe${chave}"><ide><tpEmis>9</tpEmis><idDest>1</idDest>` +
+    `<dhCont>2026-08-14T12:00:00-03:00</dhCont>` +
+    `<xJust>Falha de comunicacao com a SEFAZ</xJust></ide></infNFe>` +
+    `<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"></Signature></NFe>`;
+  fs.writeFileSync(xmlPath, xml, "utf8");
+  const comQr = xml.replace("</ide>", "</ide><infNFeSupl><qrCode>https://qr</qrCode></infNFeSupl>");
+  const out = persistirXmlFilaAposDanfe(xmlPath, comQr, chave);
+  assert.ok(out.includes("https://qr"));
+  assert.ok(fs.readFileSync(xmlPath, "utf8").includes("https://qr"));
+  const recusado = persistirXmlFilaAposDanfe(xmlPath, comQr.replace("<Signature", "<X"), chave);
+  assert.equal(recusado, null);
+});
+
+test("classificarResultadoSync: XML inválido sai da fila (não retenta)", () => {
+  const { classificarResultadoSync } = require("../fiscal/contingenciaOffline");
+  const r = classificarResultadoSync(
+    new Error("[ContingenciaOffline] XML sem assinatura — não transmitir"),
+  );
+  assert.equal(r.tipo, "REJEICAO");
+  assert.equal(r.reter, false);
+  const diverge = classificarResultadoSync(
+    new Error("[ContingenciaOffline] chave devolvida (aaa) diverge da impressa (bbb)"),
+  );
+  assert.equal(diverge.tipo, "REJEICAO");
+  assert.equal(diverge.reter, false);
 });
