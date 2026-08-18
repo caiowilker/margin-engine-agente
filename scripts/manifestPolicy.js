@@ -77,6 +77,9 @@ const EXCLUDE_EXTENSIONS = Object.freeze(
     ".7z",
     ".rar",
     ".map",
+    // Vite gera .br/.gz para CDN; o agente serve o JS/CSS original.
+    ".br",
+    ".gz",
   ]),
 );
 

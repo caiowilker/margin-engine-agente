@@ -11,6 +11,16 @@ const path = require("path");
 const os = require("os");
 const { execSync, execFileSync } = require("child_process");
 const { resolveNpmFromArgs } = require("../runtime/shellUtils");
+const {
+  packagedInstall,
+  shouldSkipNpmCi,
+  shouldSkipManifestRegen,
+  shouldSkipPredeploy,
+  icaclsGrantCommand,
+  manifestEntriesPresent,
+  INSTALL_WAIT_ONLINE_MS,
+  INSTALL_WAIT_RETRY_MS,
+} = require("./installerSpeed");
 
 const appDir = path.resolve(process.argv[2] || path.join(__dirname, ".."));
 const args = process.argv.slice(3);
@@ -255,8 +265,11 @@ function ensureWindowsPermissions(dm) {
   if (process.platform !== "win32") return;
   const root = dm.ROOT;
   try {
-    run(`icacls "${root}" /grant *S-1-5-32-545:(OI)(CI)M /T /C`, { stdio: "pipe" });
-    initBootstrapLog().info({ acao: "permissions", diretorio: root }, "Permissões aplicadas");
+    run(icaclsGrantCommand(root, { recurse: mode === "repair" }), { stdio: "pipe" });
+    initBootstrapLog().info(
+      { acao: "permissions", diretorio: root, recurse: mode === "repair" },
+      "Permissões aplicadas",
+    );
   } catch (err) {
     initBootstrapLog().warn({ err: err.message }, "Não foi possível ajustar todas as permissões");
   }
@@ -339,8 +352,7 @@ function validateDependencies() {
 }
 
 function npmInstallIfNeeded() {
-  if (mode === "repair") return;
-  if (nativeDepsReady()) {
+  if (shouldSkipNpmCi({ mode, nativeReady: nativeDepsReady() })) {
     initBootstrapLog().info({ acao: "skip_npm_ci" }, "Dependências nativas já empacotadas no instalador");
     ensureKoffi();
     require(path.join(appDir, "runtime", "acbrKoffiTopology")).enforceSingleKoffi({ appRoot: appDir });
@@ -403,8 +415,10 @@ function validatePostUpdate() {
   try {
     const { verificarManifestBoot } = require(path.join(appDir, "manifestUpdater"));
     if (typeof verificarManifestBoot === "function") {
-      const ok = verificarManifestBoot();
-      if (ok === false) throw new Error("Integridade do manifest falhou");
+      const check = verificarManifestBoot();
+      if (check && check.ok === false) {
+        throw new Error(check.motivo || "Integridade do manifest falhou");
+      }
     }
   } catch (err) {
     initBootstrapLog().warn({ err: err.message }, "Verificação de manifest reportou aviso");
@@ -413,6 +427,15 @@ function validatePostUpdate() {
 }
 
 function generateManifest() {
+  if (shouldSkipManifestRegen({
+    nativeReady: nativeDepsReady(),
+    packaged: packagedInstall(appDir),
+    manifestPresent: fs.existsSync(path.join(appDir, "manifest.json")),
+    entriesPresent: manifestEntriesPresent(appDir),
+  })) {
+    initBootstrapLog().info({ acao: "skip_manifest_regen" }, "Manifest já veio no instalador e está completo");
+    return;
+  }
   const manifestScript = path.join(appDir, "scripts", "generate-manifest.js");
   if (fs.existsSync(manifestScript)) {
     run(`node "${manifestScript}"`, { inherit: true });
@@ -439,6 +462,10 @@ function startAgentService() {
 }
 
 function runPredeploy() {
+  if (shouldSkipPredeploy({ nativeReady: nativeDepsReady(), packaged: packagedInstall(appDir) })) {
+    initBootstrapLog().info({ acao: "skip_predeploy" }, "Pré-deploy já rodou no build do instalador");
+    return;
+  }
   try {
     runNpm(["run", "predeploy"], { inherit: true });
   } catch (err) {
@@ -463,7 +490,7 @@ function registerService() {
 function waitForOnline() {
   if (!withService) return { ok: false, skipped: true };
   try {
-    run(`node "${path.join(appDir, "scripts", "installer-wait-online.js")}" "${appDir}" --timeout=120000`, {
+    run(`node "${path.join(appDir, "scripts", "installer-wait-online.js")}" "${appDir}" --timeout=${INSTALL_WAIT_ONLINE_MS}`, {
       inherit: true,
     });
     return { ok: true };
@@ -575,7 +602,7 @@ async function main() {
   let startResult = { ok: false };
   try {
     const ctl = require(path.join(appDir, "scripts", "installer-service-control"));
-    startResult = ctl.startService({ waitMs: 60000 });
+    startResult = ctl.startService({ waitMs: INSTALL_WAIT_ONLINE_MS });
     initBootstrapLog().info({ acao: "service_start", ...startResult }, "Start do serviço pós-registro");
   } catch (err) {
     initBootstrapLog().warn({ err: err.message }, "startService pós-registro falhou");
@@ -590,7 +617,7 @@ async function main() {
     initBootstrapLog().warn({ acao: "wait_online_retry" }, "Agente offline — novo start + espera");
     try {
       const ctl = require(path.join(appDir, "scripts", "installer-service-control"));
-      ctl.startService({ waitMs: 45000 });
+      ctl.startService({ waitMs: INSTALL_WAIT_RETRY_MS });
     } catch {
       /* ignore */
     }

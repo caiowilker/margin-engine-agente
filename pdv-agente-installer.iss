@@ -43,15 +43,16 @@ VersionInfoVersion={#MyAppVersion}
 VersionInfoCopyright={#MyAppCopyright}
 VersionInfoTextVersion={#MyAppVersion}
 DefaultDirName={autopf}\{#MyInstallDir}
-UsePreviousAppDir=no
+UsePreviousAppDir=yes
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=no
 OutputDir=output
 OutputBaseFilename=Margin-Engine-Setup-{#MyAppVersion}
-Compression=lzma2/max
+Compression=lzma2/fast
 SolidCompression=yes
-ArchitecturesAllowed=x64
-ArchitecturesInstallIn64BitMode=x64
+LZMAUseSeparateProcess=yes
+ArchitecturesAllowed=x64os
+ArchitecturesInstallIn64BitMode=x64os
 PrivilegesRequired=admin
 ; Fecha processos que travam arquivos ao atualizar sobre instalação existente
 CloseApplications=yes
@@ -76,16 +77,20 @@ Name: "desktopicon"; Description: "Criar atalho do Margin Engine na Área de Tra
 Name: "repairmode"; Description: "Reparar instalação (serviço, atalhos, firewall e dependências)"; GroupDescription: "Manutenção:"; Flags: unchecked
 
 [Files]
-Source: "dist\node\*"; DestDir: "{app}\node"; Flags: recursesubdirs createallsubdirs
-Source: "dist\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "node_modules\*,data\*,daemon\*,frontend-dist\*,.env,homolog-acbrlib\*,test\*,.git\*,RESULTADO-*.md,*.log,*.db,*.db-shm,*.db-wal"
-Source: "dist\app\node_modules\*"; DestDir: "{app}\app\node_modules"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
-Source: "dist\app\acbrlib\data\Schemas\*"; DestDir: "{app}\app\acbrlib\data\Schemas"; Flags: recursesubdirs createallsubdirs ignoreversion
+; nocompression em binários já compactados (node.exe, DLLs) — extract sem LZMA.
+; frontend .br/.gz são para CDN; o agente serve o arquivo original.
+; Schemas entram uma vez via dist\app\* (não duplicar a pasta XSD).
+; node_modules e PosPrinter: sem skipifsourcedoesntexist — compile falha se o prepare-build não rodou.
+Source: "dist\node\*"; DestDir: "{app}\node"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression; Excludes: "CHANGELOG.md,README.md,install_tools.bat,node_modules\npm\docs\*,node_modules\npm\man\*"
+Source: "dist\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "node_modules\*,data\*,daemon\*,frontend-dist\*,templates\*,.env,homolog-acbrlib\*,test\*,.git\*,RESULTADO-*.md,*.log,*.db,*.db-shm,*.db-wal,acbrlib\lib\*,posprinter\lib\*"
+Source: "dist\app\node_modules\*"; DestDir: "{app}\app\node_modules"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\app\acbrlib\lib\*"; DestDir: "{app}\app\acbrlib\lib"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression
+Source: "dist\app\posprinter\lib\*"; DestDir: "{app}\app\posprinter\lib"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression
 Source: "dist\app\acbrlib\data\config\ACBrNFeServicos.ini"; DestDir: "{app}\app\acbrlib\data\config"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist
 Source: "dist\app\acbrlib\data\config\acbrlib.ini"; DestDir: "{app}\app\acbrlib\data\config"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist
 Source: "dist\app\data\acbrlib.ini"; DestDir: "{app}\app\data"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist
 Source: "dist\app\.env.example"; DestDir: "{app}\app"; DestName: ".env.example"; Flags: ignoreversion
-Source: "dist\app\frontend-dist\*"; DestDir: "{app}\app\frontend-dist"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
-Source: "dist\app\docs\*"; DestDir: "{app}\app\docs"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
+Source: "dist\app\frontend-dist\*"; DestDir: "{app}\app\frontend-dist"; Flags: recursesubdirs createallsubdirs ignoreversion; Excludes: "*.br,*.gz"
 Source: "dist\app\templates\*"; DestDir: "{app}\app\templates"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
 Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "assets\margin-engine.ico"; DestDir: "{app}\app\assets"; Flags: ignoreversion
@@ -122,7 +127,7 @@ Name: "{group}\Margin Engine"; Filename: "{app}\app\scripts\open-pdv.cmd"; Worki
 Name: "{commondesktop}\Margin Engine"; Filename: "{app}\app\scripts\open-pdv.cmd"; WorkingDir: "{app}\app"; IconFilename: "{app}\app\assets\margin-engine.ico"; Comment: "Abrir Margin Engine em http://localhost:9100/"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\node\node.exe"; Parameters: """{app}\app\scripts\installer-bootstrap.js"" ""{app}\app"" --mode={code:GetBootstrapMode}{code:GetBootstrapFlags} --npm={app}\node\npm.cmd"; WorkingDir: "{app}\app"; Flags: runhidden waituntilterminated; StatusMsg: "Configurando Margin Engine (serviço, firewall e diagnóstico)..."
+Filename: "{app}\node\node.exe"; Parameters: """{app}\app\scripts\installer-bootstrap.js"" ""{app}\app"" --mode={code:GetBootstrapMode}{code:GetBootstrapFlags} --npm={app}\node\npm.cmd"; WorkingDir: "{app}\app"; Flags: runhidden waituntilterminated; StatusMsg: "Iniciando o Margin Engine..."
 
 [UninstallRun]
 Filename: "{app}\node\node.exe"; Parameters: """{app}\app\install-service.js"" --uninstall"; WorkingDir: "{app}\app"; Flags: runhidden waituntilterminated; RunOnceId: "RemoverServicoMarginEngine"
@@ -298,7 +303,7 @@ begin
     Exit;
   if CurPageID = wpSelectTasks then
   begin
-    if IsTaskSelected('repairmode') then
+    if WizardIsTaskSelected('repairmode') then
       BootstrapMode := 'repair';
   end;
 end;
@@ -345,7 +350,7 @@ end;
 function GetBootstrapFlags(Param: String): String;
 begin
   Result := ' --service --firewall --open';
-  if IsTaskSelected('desktopicon') then
+  if WizardIsTaskSelected('desktopicon') then
     Result := Result + ' --desktop';
 end;
 
@@ -364,11 +369,13 @@ var
   I: Integer;
 begin
   Result := '';
-  ReportPath := ExpandConstant('{#MarginDataRoot}\Diagnostics\install-last-report.txt');
+  { Falha desta execução primeiro — não reaproveitar relatório antigo do ProgramData. }
+  ReportPath := ExpandConstant('{app}\app\data\install-bootstrap-error.txt');
   if FileExists(ReportPath) then
   begin
     if LoadStringsFromFile(ReportPath, Lines) then
     begin
+      Result := 'Configuração pós-instalação incompleta:' + #13#10;
       for I := 0 to GetArrayLength(Lines) - 1 do
       begin
         if I > 0 then
@@ -378,12 +385,11 @@ begin
       Exit;
     end;
   end;
-  ReportPath := ExpandConstant('{app}\app\data\install-bootstrap-error.txt');
+  ReportPath := ExpandConstant('{#MarginDataRoot}\Diagnostics\install-last-report.txt');
   if FileExists(ReportPath) then
   begin
     if LoadStringsFromFile(ReportPath, Lines) then
     begin
-      Result := 'Configuração pós-instalação incompleta:' + #13#10;
       for I := 0 to GetArrayLength(Lines) - 1 do
       begin
         if I > 0 then
@@ -407,9 +413,7 @@ begin
       Exit;
     end;
   end;
-  Result := 'Diagnóstico não gerado. Verifique:' + #13#10 +
-    ExpandConstant('{#MarginDataRoot}\Diagnostics\install-bootstrap-error.txt') + #13#10 +
-    ExpandConstant('{app}\app\data\install-bootstrap-error.txt');
+  Result := '';
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -419,12 +423,10 @@ begin
   if CurStep = ssDone then
   begin
     Report := ReadDiagnosticReport;
-    if Pos('ATENÇÃO', Report) > 0 then
-      MsgBox(Report, mbError, MB_OK)
-    else if Pos('Problemas encontrados', Report) > 0 then
-      MsgBox(Report, mbInformation, MB_OK)
-    else if Report <> '' then
-      MsgBox(Report, mbInformation, MB_OK);
+    if (Pos('ATENÇÃO', Report) > 0) or
+       (Pos('incompleta', Report) > 0) or
+       (Pos('Problemas encontrados', Report) > 0) then
+      MsgBox(Report, mbError, MB_OK);
   end;
 end;
 

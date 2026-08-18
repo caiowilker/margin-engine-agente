@@ -71,7 +71,7 @@ $frontIndex = Join-Path $App "frontend-dist\index.html"
 if (Test-Path $frontIndex) {
     Write-Host "[OK] frontend-dist - PDV offline + /api-proxy em :9100"
 } else {
-    Write-Warning "frontend-dist ausente - rode sync com build do margin-engine-front"
+    Write-Error "frontend-dist ausente - rode sync:windows-build com build do margin-engine-front"
 }
 
 if (-not $SkipNpm) {
@@ -93,16 +93,6 @@ if (-not $SkipNpm) {
         Write-Error "koffi.node win32_x64 ausente - npm ci incompleto; PosPrinter cai no fallback native"
     }
     Write-Host '[OK] koffi + win32_x64/koffi.node (FFI PosPrinter sem VS Build Tools)'
-
-    Write-Host "==> npm run manifest"
-    & (Join-Path $Node "npm.cmd") run manifest
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-    Write-Host "==> npm run predeploy"
-    & (Join-Path $Node "npm.cmd") run predeploy
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning "predeploy reportou avisos - revise antes de distribuir o .exe"
-    }
     Pop-Location
 } else {
     $sqlite = Join-Path $App "node_modules\better-sqlite3\build\Release\better_sqlite3.node"
@@ -111,12 +101,40 @@ if (-not $SkipNpm) {
     }
 }
 
+$frontDir = Join-Path $App "frontend-dist"
+if (Test-Path $frontDir) {
+    Get-ChildItem -Path $frontDir -Recurse -Include *.br,*.gz -File -ErrorAction SilentlyContinue |
+        Remove-Item -Force
+    Write-Host "[OK] frontend-dist sem .br/.gz"
+}
+
+$speedJs = Join-Path $App "scripts\installerSpeed.js"
+Assert-Path $speedJs "scripts/installerSpeed.js - sync incompleto; o bootstrap do .exe quebra"
+
+Push-Location $App
+Write-Host "==> npm run manifest (payload final, sem .br/.gz)"
+& (Join-Path $Node "npm.cmd") run manifest
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 @{
     version = $pkg.version
     builtAt = (Get-Date).ToUniversalTime().ToString("o")
     installerAppId = "C7E3A1D2-4F5B-4E6A-9D0C-1B2A3C4D5E6F"
     installDir = "Margin Engine"
 } | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $App "BUILD_STAMP.json")
+
+Write-Host "==> assert-installer-payload"
+& (Join-Path $Node "node.exe") (Join-Path $App "scripts\assert-installer-payload.js") $App
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+if (-not $SkipNpm) {
+    Write-Host "==> npm run predeploy"
+    & (Join-Path $Node "npm.cmd") run predeploy
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "predeploy reportou avisos - revise antes de distribuir o .exe"
+    }
+}
+Pop-Location
 
 $inno = @(
     "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",

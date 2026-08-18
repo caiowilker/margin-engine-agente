@@ -50,6 +50,8 @@ test("deveIncluirArquivo — bloqueia nativos e testes", () => {
   assert.strictEqual(deveIncluirArquivo("acbrlib/ACBrNFe64.dll"), false);
   assert.strictEqual(deveIncluirArquivo("better-sqlite3.node"), false);
   assert.strictEqual(deveIncluirArquivo("foo.test.js"), false);
+  assert.strictEqual(deveIncluirArquivo("frontend-dist/assets/app.js.br"), false);
+  assert.strictEqual(deveIncluirArquivo("frontend-dist/assets/app.js.gz"), false);
 });
 
 test("listarArquivosUpdate — cobre print/fiscal/runtime/package.json", () => {
@@ -75,6 +77,7 @@ test("listarArquivosUpdate — cobre print/fiscal/runtime/package.json", () => {
   assert.ok(!lista.some((a) => a.startsWith("node_modules/")));
   assert.ok(!lista.some((a) => a.startsWith("test/")));
   assert.ok(!lista.some((a) => a.startsWith("scripts/")));
+  assert.ok(!lista.some((a) => a.endsWith(".br") || a.endsWith(".gz")));
   assert.ok(!lista.includes("manifest.json"));
   assert.ok(!lista.some((a) => a === "assets/margin-engine.ico" || a.startsWith("assets/")));
   for (const dir of INCLUDE_DIRS.filter((d) => d !== "frontend-dist")) {

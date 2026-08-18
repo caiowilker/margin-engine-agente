@@ -14,7 +14,7 @@ Fluxo de build do instalador: `build/windows/LEIA-ME.md` e `docs/INSTALADOR-WIND
 
 O instalador enterprise:
 - Copia o agente, ACBrLib, schemas XSD, PDV offline (`frontend-dist`) e Node portátil
-- Executa bootstrap (`npm ci`, `rebuild better-sqlite3`, manifest, serviço Windows)
+- Executa bootstrap (serviço Windows, firewall, diagnóstico — sem `npm ci` no caixa quando o `.exe` já traz `node_modules`)
 - Preserva dados em `%ProgramData%\MarginEngine` em atualizações
 - Bloqueia downgrade de versão
 

@@ -187,7 +187,7 @@ const payload = {
       "UPDATE fila_vendas SET status = 'ENVIANDO' WHERE numero_venda = ?",
     ).run("PDV-TEST-ENVIANDO");
     db.close();
-    fila.inicializar();
+    fila.recuperarEnviandoPresos();
     const row = fila.listar().find((x) => x.numero_venda === "PDV-TEST-ENVIANDO");
     assert.ok(row);
     assert.strictEqual(row.status, "PENDENTE");

@@ -53,7 +53,7 @@ Isso:
 
 - Gera `manifest.json`
 - Copia o agente para `dist\app\` (preserva `acbrlib\data\Schemas`)
-- Builda e copia `frontend-dist` (produção)
+- Builda e copia `frontend-dist` **sem** `*.br`/`*.gz` (o agente não usa compressão CDN)
 - Copia `.iss` e scripts desta pasta
 - **Falha** se faltar XSDs ou DLLs críticas
 
@@ -112,7 +112,7 @@ Preserva: `.env`, `data\`, `acbrlib.ini`, `node_modules` da instalação.
 | ACBrLib NFe + schemas XSD | Sim |
 | ACBr PosPrinter | Sim |
 | PDV offline (frontend-dist) | Sim |
-| node_modules (npm ci no build) | Sim — obrigatório em prepare-build.ps1 |
+| node_modules (npm ci **no build**, não no caixa) | Sim — obrigatório em prepare-build.ps1 |
 | **koffi** (FFI PosPrinter) | Sim — prebuild Windows; sem ele o Diagnóstico mostra ME-011b |
 | Impressora | Auto-detect (configuração no painel :9100) |
 | Certificado / CSC | Painel do agente após instalação (não no wizard) |

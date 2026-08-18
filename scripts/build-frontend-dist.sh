@@ -37,7 +37,7 @@ echo "==> Build frontend ($ENV) em $FRONT_ROOT"
 
 echo "==> Copiando dist → $TARGET"
 mkdir -p "$TARGET"
-rsync -a --delete "$FRONT_ROOT/dist/" "$TARGET/"
+rsync -a --delete --exclude '*.br' --exclude '*.gz' "$FRONT_ROOT/dist/" "$TARGET/"
 
 API_URL=""
 case "$ENV" in

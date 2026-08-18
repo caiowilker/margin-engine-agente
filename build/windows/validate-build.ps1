@@ -24,7 +24,9 @@ $checks = @(
     @{ Path = "dist\app\acbrlib\data\Schemas\NFSe"; Hint = "Schemas NFS-e" },
     @{ Path = "dist\app\frontend-dist\index.html"; Hint = "PDV offline" },
     @{ Path = "dist\app\frontend-dist\api-backend.json"; Hint = "api-backend.json" },
-    @{ Path = "dist\app\BUILD_STAMP.json"; Hint = "BUILD_STAMP (prepare-build.ps1)" },
+    @{ Path = "dist\app\scripts\installer-bootstrap.js"; Hint = "installer-bootstrap" },
+    @{ Path = "dist\app\scripts\installerSpeed.js"; Hint = "installerSpeed (install rapido)" },
+    @{ Path = "dist\app\scripts\assert-installer-payload.js"; Hint = "assert-installer-payload" },
     @{ Path = "dist\app\node_modules\better-sqlite3\build\Release\better_sqlite3.node"; Hint = "better-sqlite3 nativo (rode prepare-build.ps1 sem -SkipNpm)" },
     @{ Path = "dist\app\node_modules\koffi\package.json"; Hint = "koffi (ACBr PosPrinter FFI - prepare-build.ps1)" },
     @{ Path = "dist\app\node_modules\koffi\build\koffi\win32_x64\koffi.node"; Hint = "koffi.node win32_x64 (sem VS Build Tools)" },
@@ -81,6 +83,24 @@ if ($bundlePath -and (Test-Path $bundlePath) -and (Select-String -Path $bundlePa
     Write-Host "[FALHA] Frontend bundle - api-proxy nao encontrado no JS"
     $fail++
 }
+
+$iss = Join-Path $Root "pdv-agente-installer.iss"
+if (Test-Path $iss) {
+    $issText = Get-Content $iss -Raw
+    if ($issText -match "Compression=lzma2/fast") {
+        Write-Host "[OK] Inno Compression=lzma2/fast"
+    } else {
+        Write-Host "[FALHA] Inno sem lzma2/fast"
+        $fail++
+    }
+    if ($issText -match 'acbrlib\\data\\Schemas') {
+        Write-Host "[FALHA] .iss duplica Schemas XSD"
+        $fail++
+    } else {
+        Write-Host "[OK] Schemas XSD sem linha duplicada no .iss"
+    }
+}
+
 
 if ($fail -gt 0) {
     Write-Error "$fail verificacao(oes) falharam - rode sync:windows-build antes de compilar"

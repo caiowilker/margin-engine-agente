@@ -878,4 +878,5 @@ module.exports = {
   resetarFalhas,
   statusAuth,
   purgeAntigos,
+  recuperarEnviandoPresos,
 };

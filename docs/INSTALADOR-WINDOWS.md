@@ -21,6 +21,10 @@ Instalador profissional via **Inno Setup** (`pdv-agente-installer.iss`).
 
 **Nenhuma tela extra** (certificado, CSC, porta, etc.).
 
+## Velocidade no caixa
+
+O `.exe` já traz Node, `node_modules` nativo, manifest e frontend. Extração usa `lzma2/fast`; binários (Node/DLLs) saem sem recompressão LZMA. O bootstrap no caixa **não** refaz `npm ci` nem SHA-256 quando `BUILD_STAMP.json` está presente **e** o manifest lista só arquivos existentes (sem `.br`/`.gz`). Reparo aplica ACL em árvore (`/T`).
+
 ## Modos (mesmo `.exe`)
 
 | Modo | Como executar |
@@ -38,7 +42,7 @@ Script: `scripts/installer-bootstrap.js`
 2. Aplica permissões (Windows)
 3. Cria logs e configuração inicial (`.env` padrão)
 4. Valida dependências (Node, SQLite, manifest)
-5. `npm ci`, `rebuild better-sqlite3`, `manifest`, `predeploy`
+5. Dependências nativas, manifest e predeploy **já vêm do build** (`prepare-build.ps1`). No caixa o bootstrap **não** roda `npm ci` nem recalcula SHA-256 se existir `BUILD_STAMP.json` e `node_modules`.
 6. Regra de firewall na porta do agente (instalação/atualização)
 7. Registra serviço Windows automaticamente
 8. Gera diagnóstico inicial em `Diagnostics/install-last-report.txt`

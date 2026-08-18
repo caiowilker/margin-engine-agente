@@ -75,7 +75,7 @@ if (-not $SkipFrontBuild) {
     $fdSrc = Join-Path $AgentRoot "frontend-dist"
     if (Test-Path (Join-Path $fdSrc "index.html")) {
         Write-Host "==> Copiando frontend-dist"
-        Sync-Tree -Source $fdSrc -Dest (Join-Path $AppDest "frontend-dist") -ExcludeDirNames @() -ExcludeFileGlobs @()
+        Sync-Tree -Source $fdSrc -Dest (Join-Path $AppDest "frontend-dist") -ExcludeDirNames @() -ExcludeFileGlobs @("*.br", "*.gz")
     } else {
         Write-Warning "frontend-dist ausente"
     }

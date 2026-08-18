@@ -71,11 +71,11 @@ if [[ "$SYNC_FRONT" == "1" ]]; then
   if [[ -f "$AGENT_ROOT/frontend-dist/index.html" ]]; then
     echo "==> Copiando frontend-dist → dist/app/frontend-dist"
     mkdir -p "$BUILD_ROOT/dist/app/frontend-dist"
-    rsync -a --delete "$AGENT_ROOT/frontend-dist/" "$BUILD_ROOT/dist/app/frontend-dist/"
+    rsync -a --delete --exclude '*.br' --exclude '*.gz' "$AGENT_ROOT/frontend-dist/" "$BUILD_ROOT/dist/app/frontend-dist/"
   elif [[ -f "$FRONT_ROOT/dist/index.html" ]]; then
     echo "==> Copiando frontend-dist ← $FRONT_ROOT/dist"
     mkdir -p "$BUILD_ROOT/dist/app/frontend-dist"
-    rsync -a --delete "$FRONT_ROOT/dist/" "$BUILD_ROOT/dist/app/frontend-dist/"
+    rsync -a --delete --exclude '*.br' --exclude '*.gz' "$FRONT_ROOT/dist/" "$BUILD_ROOT/dist/app/frontend-dist/"
   else
     echo "AVISO: frontend-dist não atualizado"
   fi

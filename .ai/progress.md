@@ -3,6 +3,13 @@
 **Última atualização:** 2026-08-18  
 **Versão:** `1.0.12`
 
+## Instalador Windows lento no caixa (2026-08-18)
+
+- Sintoma: `Margin-Engine-Setup` levava vários minutos (extração + “Configurando…”).
+- Causa: LZMA máximo em ~8000 arquivos; XSD duplicado; `.br`/`.gz` mortos; bootstrap recalculava SHA-256, predeploy, `icacls /T` e até 165s de wait.
+- Fix: `lzma2/fast`, nocompression em Node/DLLs, um só copy de schemas, SPA sem compressão CDN, skip npm/hash/predeploy no pacote com `BUILD_STAMP` **e** manifest coerente, ACL na raiz ( /T só no reparo), wait 60s+30s, `assert-installer-payload` no prepare-build, update no diretório anterior (`UsePreviousAppDir=yes`), popup só se o bootstrap falhar.
+- ADR: `.ai/decisions/ADR-instalador-windows-rapido-20260818.md`.
+
 ## Cupom não fiscal lento em alguns tickets (2026-08-18)
 
 - Sintoma: a maioria sai na hora; uns cupons **não fiscais** levam alguns segundos (não é QR da NFC-e).
