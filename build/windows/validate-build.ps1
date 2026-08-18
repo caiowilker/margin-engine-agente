@@ -93,6 +93,12 @@ if (Test-Path $iss) {
         Write-Host "[FALHA] Inno sem lzma2/fast"
         $fail++
     }
+    if ($issText -match 'dist\\node\\\*".*nocompression solidbreak') {
+        Write-Host "[OK] Node portatil com nocompression solidbreak"
+    } else {
+        Write-Host "[FALHA] dist\\node sem nocompression solidbreak (CRC no node.exe)"
+        $fail++
+    }
     if ($issText -match 'acbrlib\\data\\Schemas') {
         Write-Host "[FALHA] .iss duplica Schemas XSD"
         $fail++

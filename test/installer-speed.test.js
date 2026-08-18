@@ -117,8 +117,16 @@ describe("pdv-agente-installer.iss — extração rápida e fail-fast", () => {
 
   it("exclui .br/.gz do frontend e não comprime Node/DLLs", () => {
     assert.match(iss, /Excludes: "\*\.br,\*\.gz"/);
-    assert.match(iss, /dist\\node\\\*".*nocompression/s);
+    assert.match(iss, /dist\\node\\\*".*nocompression solidbreak/s);
     assert.match(iss, /acbrlib\\lib\\\*".*nocompression/);
+    assert.match(iss, /posprinter\\lib\\\*".*nocompression/);
+  });
+
+  it("separa bloco uncompressed do LZMA solid (evita CRC no node.exe)", () => {
+    const nodeLine = iss.split("\n").find((l) => l.includes('Source: "dist\\node\\*"'));
+    assert.ok(nodeLine && /nocompression/i.test(nodeLine) && /solidbreak/i.test(nodeLine));
+    const appLine = iss.split("\n").find((l) => l.includes('Source: "dist\\app\\*"'));
+    assert.ok(appLine && /solidbreak/i.test(appLine), "dist\\app\\* precisa de SolidBreak após o bloco Node/DLLs");
   });
 
   it("atualiza no diretório anterior e usa APIs Inno atuais", () => {

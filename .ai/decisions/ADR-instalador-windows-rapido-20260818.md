@@ -9,7 +9,7 @@ O `Margin-Engine-Setup-*.exe` levava vários minutos no ponto de venda. O payloa
 
 ## Decisão
 
-1. Compressão Inno: `lzma2/fast` + solid; Node portátil e DLLs ACBr/PosPrinter com `nocompression`.
+1. Compressão Inno: `lzma2/fast` + solid; Node portátil e DLLs ACBr/PosPrinter com `nocompression` **e** `SolidBreak` (bloco próprio). Sem `SolidBreak`, o Inno mistura `node.exe` no stream LZMA e falha CRC na extração (*arquivo de origem está corrompido*).
 2. Schemas XSD entram uma única vez via `dist\app\*`.
 3. Frontend do instalador sem `*.br` e `*.gz` (política do manifest alinhada).
 4. Bootstrap empacotado (`BUILD_STAMP.json` + `node_modules` nativo): não roda `npm ci`, não regenera manifest, não roda predeploy.
@@ -22,5 +22,6 @@ O `Margin-Engine-Setup-*.exe` levava vários minutos no ponto de venda. O payloa
 
 - Instalação no caixa deixa de ser CPU-bound no LZMA máximo e deixa de repetir trabalho já feito no `prepare-build.ps1`.
 - Pacote um pouco maior (binários sem recompressão); extração bem mais rápida.
+- `nocompression` sem `SolidBreak` misturava `node.exe` no stream LZMA solid e o Inno reportava *arquivo de origem está corrompido* no caixa.
 - Reparo com `node_modules` quebrado ainda executa `npm ci`.
 - Manifest incoerente (update parcial / pacote velho) não deixa `manifestOk: false` no boot: regenera no caixa.
