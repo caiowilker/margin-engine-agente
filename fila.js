@@ -499,6 +499,11 @@ async function tentarBackend(payload) {
 }
 
 async function sincronizar(opts = {}) {
+  if (db) {
+    // /fila/sincronizar do PDV: ENVIANDO não entra no lote — devolve para PENDENTE
+    // (POST em voo continua; duplicata é idempotente por numeroVendaCliente).
+    recuperarEnviandoPresos();
+  }
   if (syncEmAndamento) {
     return { sincronizadas: 0, falhas: 0, emAndamento: true };
   }

@@ -193,6 +193,20 @@ const payload = {
     assert.strictEqual(row.status, "PENDENTE");
   });
 
+  await test("sincronizar — ENVIANDO volta para PENDENTE para entrar no lote", async () => {
+    const p = { ...payload, numeroVendaCliente: "PDV-TEST-SYNC-ENVIANDO" };
+    await fila.registrarLocalFirst(p);
+    const db = require("better-sqlite3")(dbPath);
+    db.prepare(
+      "UPDATE fila_vendas SET status = 'ENVIANDO' WHERE numero_venda = ?",
+    ).run("PDV-TEST-SYNC-ENVIANDO");
+    db.close();
+    await fila.sincronizar();
+    const row = fila.listar().find((x) => x.numero_venda === "PDV-TEST-SYNC-ENVIANDO");
+    assert.ok(row);
+    assert.strictEqual(row.status, "PENDENTE");
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
 })();
