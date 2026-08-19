@@ -18,17 +18,11 @@
 - Sincronizar no painel também transmite NFC-e off-line. Alerta de prazo legal 24h.
 - ADR: `.ai/decisions/ADR-nfce-contingencia-offline-solidez-20260818.md`.
 
-## Instalador — CRC falso no node.exe (2026-08-18)
-
-- Sintoma: no caixa, “O arquivo de origem está corrompido” em `Program Files\Margin Engine\node\node.exe`; ignorar deixava o assistente seguir.
-- Causa: `nocompression` do Node/DLLs dentro do LZMA **solid**, sem `SolidBreak` — o Inno falhava o CRC na extração. Antes da otimização de velocidade o Node ia comprimido e não falhava.
-- Fix: bloco uncompressed com `SolidBreak`; payload (`dist\app\*`) em bloco LZMA novo. Requer rebuild do `Margin-Engine-Setup-*.exe`.
-
 ## Instalador Windows lento no caixa (2026-08-18)
 
 - Sintoma: `Margin-Engine-Setup` levava vários minutos (extração + “Configurando…”).
 - Causa: LZMA máximo em ~8000 arquivos; XSD duplicado; `.br`/`.gz` mortos; bootstrap recalculava SHA-256, predeploy, `icacls /T` e até 165s de wait.
-- Fix: `lzma2/fast`, nocompression em Node/DLLs **com SolidBreak** (bloco próprio — sem isso o Inno falha CRC no `node.exe`), um só copy de schemas, SPA sem compressão CDN, skip npm/hash/predeploy no pacote com `BUILD_STAMP` **e** manifest coerente, ACL na raiz ( /T só no reparo), wait 60s+30s, `assert-installer-payload` no prepare-build, update no diretório anterior (`UsePreviousAppDir=yes`), popup só se o bootstrap falhar.
+- Fix: `lzma2/fast`, nocompression em Node/DLLs, um só copy de schemas, SPA sem compressão CDN, skip npm/hash/predeploy no pacote com `BUILD_STAMP` **e** manifest coerente, ACL na raiz ( /T só no reparo), wait 60s+30s, `assert-installer-payload` no prepare-build, update no diretório anterior (`UsePreviousAppDir=yes`), popup só se o bootstrap falhar.
 - ADR: `.ai/decisions/ADR-instalador-windows-rapido-20260818.md`.
 
 ## Cupom não fiscal lento em alguns tickets (2026-08-18)

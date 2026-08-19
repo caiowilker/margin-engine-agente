@@ -77,16 +77,15 @@ Name: "desktopicon"; Description: "Criar atalho do Margin Engine na Área de Tra
 Name: "repairmode"; Description: "Reparar instalação (serviço, atalhos, firewall e dependências)"; GroupDescription: "Manutenção:"; Flags: unchecked
 
 [Files]
-; nocompression + SolidBreak: Node/DLLs num bloco próprio, sem misturar no LZMA solid.
-; Sem SolidBreak o Inno falha CRC no node.exe ("arquivo de origem está corrompido").
+; nocompression em binários já compactados (node.exe, DLLs) — extract sem LZMA.
 ; frontend .br/.gz são para CDN; o agente serve o arquivo original.
 ; Schemas entram uma vez via dist\app\* (não duplicar a pasta XSD).
 ; node_modules e PosPrinter: sem skipifsourcedoesntexist — compile falha se o prepare-build não rodou.
-Source: "dist\node\*"; DestDir: "{app}\node"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression solidbreak; Excludes: "CHANGELOG.md,README.md,install_tools.bat,node_modules\npm\docs\*,node_modules\npm\man\*"
+Source: "dist\node\*"; DestDir: "{app}\node"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression; Excludes: "CHANGELOG.md,README.md,install_tools.bat,node_modules\npm\docs\*,node_modules\npm\man\*"
+Source: "dist\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "node_modules\*,data\*,daemon\*,frontend-dist\*,templates\*,.env,homolog-acbrlib\*,test\*,.git\*,RESULTADO-*.md,*.log,*.db,*.db-shm,*.db-wal,acbrlib\lib\*,posprinter\lib\*"
+Source: "dist\app\node_modules\*"; DestDir: "{app}\app\node_modules"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "dist\app\acbrlib\lib\*"; DestDir: "{app}\app\acbrlib\lib"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression
 Source: "dist\app\posprinter\lib\*"; DestDir: "{app}\app\posprinter\lib"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression
-Source: "dist\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs solidbreak; Excludes: "node_modules\*,data\*,daemon\*,frontend-dist\*,templates\*,.env,homolog-acbrlib\*,test\*,.git\*,RESULTADO-*.md,*.log,*.db,*.db-shm,*.db-wal,acbrlib\lib\*,posprinter\lib\*"
-Source: "dist\app\node_modules\*"; DestDir: "{app}\app\node_modules"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "dist\app\acbrlib\data\config\ACBrNFeServicos.ini"; DestDir: "{app}\app\acbrlib\data\config"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist
 Source: "dist\app\acbrlib\data\config\acbrlib.ini"; DestDir: "{app}\app\acbrlib\data\config"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist
 Source: "dist\app\data\acbrlib.ini"; DestDir: "{app}\app\data"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist
