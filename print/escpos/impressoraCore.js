@@ -2902,6 +2902,13 @@ async function renderCrediario(printer, payload) {
     .text(linha())
     .align("lt");
 
+  if (/parcial/i.test(String(payload.titulo || ""))) {
+    printer.align("ct").style("b").text("*** PAGAMENTO PARCIAL ***").style("normal").align("lt");
+  }
+  if (payload.reimpressao) {
+    printer.align("ct").style("b").text("*** SEGUNDA VIA ***").style("normal").align("lt");
+  }
+
   if (payload.clienteNome) printer.text("Cliente : " + tx(payload.clienteNome));
   if (payload.clienteDocumento) {
     printer.text("Doc     : " + toThermalDoc(payload.clienteDocumento));

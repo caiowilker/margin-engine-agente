@@ -47,6 +47,8 @@ function normalizarCrediarioPayload(raw = {}) {
     parcelasQuitadas: p.parcelasQuitadas != null ? Number(p.parcelasQuitadas) : null,
     parcelasParciais: p.parcelasParciais != null ? Number(p.parcelasParciais) : null,
     empresa: p.empresa || null,
+    reimpressao: !!p.reimpressao,
+    clickId: p.clickId || undefined,
   };
 }
 
@@ -68,6 +70,13 @@ function renderCrediarioTags(rawPayload = {}) {
     "<ce>Comprovante nao fiscal</ce>",
     sepEq(),
   );
+
+  if (/parcial/i.test(String(payload.titulo || ""))) {
+    lines.push("<ce><n>*** PAGAMENTO PARCIAL ***</n></ce>");
+  }
+  if (payload.reimpressao) {
+    lines.push("<ce><n>*** SEGUNDA VIA ***</n></ce>");
+  }
 
   if (payload.clienteNome) {
     lines.push(`Cliente : ${tx(payload.clienteNome)}`);
