@@ -133,6 +133,26 @@ async function enviarSyncBackend(cfg, payload) {
   return resp.json();
 }
 
+/** Zera cursor DistDFe no backend (fallback se o sync de erro não corrigir). */
+async function zerarNsuBackend(cfg, motivo) {
+  const base = String(cfg.backendUrl || "").replace(/\/$/, "");
+  const token = cfg.backendToken;
+  if (!base || !token) return null;
+  const q = motivo ? `?motivo=${encodeURIComponent(String(motivo).slice(0, 200))}` : "";
+  const resp = await fetch(`${base}/pdv/agente/manifesto/nsu/zerar${q}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+  });
+  if (!resp.ok) {
+    const txt = await resp.text().catch(() => "");
+    throw new Error(`Backend manifesto/nsu/zerar HTTP ${resp.status}: ${txt.slice(0, 200)}`);
+  }
+  return resp.json();
+}
+
 /**
  * DistDFe já avançou o cursor na SEFAZ. Se o POST /sync falhar depois disso,
  * o backend fica no NSU antigo e a próxima execução reconsulta o mesmo lote
@@ -396,6 +416,20 @@ function avaliarPaginaDist(dist) {
       erro: mensagemConsumoIndevido(xMotivo),
     };
   }
+  // cStat 589 — NSU informado superior ao maior NSU do Ambiente Nacional
+  if (
+    cStat === "589" ||
+    /nsu.*superior.*maior|superior ao maior nsu|nsu informado superior/i.test(xMotivo)
+  ) {
+    return {
+      parar: true,
+      naoAvancarNsu: true,
+      nsuSuperiorMax: true,
+      erro:
+        xMotivo ||
+        "Rejeicao: Numero do NSU informado superior ao maior NSU da base de dados do Ambiente Nacional (cStat 589)",
+    };
+  }
   if (cStat === "137") {
     return { parar: true, erro: null };
   }
@@ -559,6 +593,9 @@ async function executarSincronizacaoCore(_forcar = false) {
     }
     const certificado = /certific|expirad|senha|a1|a3/i.test(msg);
     const timeout = /timeout|timed out|ETIMEDOUT/i.test(msg);
+    const nsuSuperior =
+      String(ultimoCStat || "") === "589" ||
+      /nsu.*superior.*maior|superior ao maior nsu|cStat\s*589/i.test(msg);
     const resultadoErro = await enviarSyncBackend(cfg, {
       ultNsuInicial,
       // ultNsuAtual já volta para o NSU da página anterior quando nsuTravado.
@@ -570,10 +607,20 @@ async function executarSincronizacaoCore(_forcar = false) {
       erroCertificado: certificado,
       timeout,
       falha: true,
+      cStat: ultimoCStat || (nsuSuperior ? "589" : null),
     }).catch((e) => {
       log.warn({ err: e.message }, "Falha ao reportar erro manifesto");
       return null;
     });
+    // Se o POST /sync falhou ou não resetou, zera o cursor via endpoint dedicado.
+    if (nsuSuperior && !(resultadoErro && resultadoErro.nsuResetado === true)) {
+      await zerarNsuBackend(
+        cfg,
+        msg.slice(0, 180) || "Agente: cStat 589 NSU superior ao máximo do AN",
+      ).catch((e) => {
+        log.warn({ err: e.message }, "Falha ao zerar NSU após cStat 589");
+      });
+    }
     return {
       ok: false,
       erro: msg,

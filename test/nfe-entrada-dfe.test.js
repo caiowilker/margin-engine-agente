@@ -403,6 +403,28 @@ async function run() {
     assert.strictEqual(r.naoAvancarNsu, true);
   });
 
+  await test("avaliarPaginaDist — 589 NSU superior ao máximo do AN", () => {
+    const manifesto = require("../manifestoDestinatario");
+    const r = manifesto.avaliarPaginaDist({ cStat: "589", xmls: [], resumos: [] });
+    assert.strictEqual(r.parar, true);
+    assert.strictEqual(r.naoAvancarNsu, true);
+    assert.strictEqual(r.nsuSuperiorMax, true);
+    assert.ok(/NSU|589/i.test(r.erro));
+  });
+
+  await test("avaliarPaginaDist — mensagem NSU superior sem cStat", () => {
+    const manifesto = require("../manifestoDestinatario");
+    const r = manifesto.avaliarPaginaDist({
+      cStat: "999",
+      xMotivo:
+        "Rejeicao: Numero do NSU informado superior ao maior NSU da base de dados do Ambiente Nacional",
+      xmls: [],
+      resumos: [],
+    });
+    assert.strictEqual(r.nsuSuperiorMax, true);
+    assert.strictEqual(r.naoAvancarNsu, true);
+  });
+
   await test("cooldown 656 bloqueia sync sem bater na SEFAZ", async () => {
     const manifesto = require("../manifestoDestinatario");
     manifesto.limparCooldown656();
