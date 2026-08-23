@@ -1829,6 +1829,11 @@ async function inutilizarCompleto(cfg, body) {
 
 function registrarHandlersFila(lerConfigFn) {
   _lerConfigFn = lerConfigFn;
+  try {
+    require("./fiscal/reformaUbFlushPolicy").setConfigReader(lerConfigFn);
+  } catch (_) {
+    /* best-effort */
+  }
   filaFiscal.registrarHandler("CALLBACK_BACKEND", async (payload) => {
     const cfg = await lerConfigFn();
     await callbackBackend(

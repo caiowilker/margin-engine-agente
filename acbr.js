@@ -1715,9 +1715,16 @@ async function emitirNfceCore(payload) {
       : fiscalNumeracao.reservarProximoNumero(serie);
 
   const fiscalIniPolicy = require("./fiscal/fiscalIniPolicy");
+  const reformaUbFlush = require("./fiscal/reformaUbFlushPolicy");
   let iniBase;
   if (payload.documentIni && String(payload.documentIni).trim()) {
-    iniBase = patchNumeracaoIni(payload.documentIni, numeracao);
+    const live = await reformaUbFlush.aplicarPoliticaLiveFlush(null, payload.documentIni);
+    if (live.sanitizado) {
+      console.warn(
+        `[Fiscal/KillSwitch] documentIni sanitizado no flush NFC-e (${live.motivo})`,
+      );
+    }
+    iniBase = patchNumeracaoIni(live.ini, numeracao);
   } else {
     fiscalIniPolicy.requireDocumentIniOrAllowLocal(payload, "NFC-e");
     iniBase = montarIniNfce({ ...payload, empresa }, numeracao);
@@ -1771,9 +1778,16 @@ async function emitirNfeCore(payload) {
       : fiscalNumeracao.reservarProximoNumero(serie, modeloNum);
 
   const fiscalIniPolicy = require("./fiscal/fiscalIniPolicy");
+  const reformaUbFlush = require("./fiscal/reformaUbFlushPolicy");
   let iniBase;
   if (payload.documentIni && String(payload.documentIni).trim()) {
-    iniBase = patchNumeracaoIni(payload.documentIni, numeracao);
+    const live = await reformaUbFlush.aplicarPoliticaLiveFlush(null, payload.documentIni);
+    if (live.sanitizado) {
+      console.warn(
+        `[Fiscal/KillSwitch] documentIni sanitizado no flush NF-e (${live.motivo})`,
+      );
+    }
+    iniBase = patchNumeracaoIni(live.ini, numeracao);
   } else {
     fiscalIniPolicy.requireDocumentIniOrAllowLocal(payload, "NF-e");
     iniBase = montarIniNfe({ ...payload, empresa }, numeracao, destinatario);
