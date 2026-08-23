@@ -43,6 +43,13 @@ test("isPermanente — cStat 539 com duplicidade539 não é permanente imediato"
   assert.equal(fiscalRetry.isPermanente(err), false);
 });
 
+test("isPermanente — documentIni obrigatório (sem INI MFCS)", () => {
+  const err = new Error(
+    "documentIni obrigatório para NFC-e: o agente não monta INI fiscal em produção.",
+  );
+  assert.equal(fiscalRetry.isPermanente(err), true);
+});
+
 test("acaoParaCStat 539 — consultar chave", () => {
   assert.equal(fiscalRetry.acaoParaCStat("539"), "consultar_chave");
 });

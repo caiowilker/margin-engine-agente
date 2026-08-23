@@ -97,6 +97,8 @@ function isPermanente(err) {
   if (/csc.*inv[aá]lid/i.test(msg)) return true;
   if (/munic[ií]pio/i.test(msg)) return true;
   if (/dados fiscais incompletos/i.test(msg)) return true;
+  if (/documentIni obrigat[oó]rio/i.test(msg)) return true;
+  if (/n[aã]o monta INI fiscal/i.test(msg)) return true;
   if (/\bncm\b/i.test(msg) && /inv[aá]lid|ausente|obrigat/i.test(msg)) return true;
   if (/\bcfop\b/i.test(msg) && /inv[aá]lid|ausente|obrigat/i.test(msg)) return true;
   if (/\bcst\b|\bcsosn\b/i.test(msg) && /inv[aá]lid|ausente|obrigat/i.test(msg)) return true;

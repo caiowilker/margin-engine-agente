@@ -1157,6 +1157,21 @@ async function enfileirarEmissao(cfg, body, opts = {}) {
   const numeroVenda = body.numeroVenda;
   if (!numeroVenda) throw new Error("numeroVenda obrigatório");
 
+  // Fail-closed: produção não enfileira sem INI do Margin Engine.
+  // Homolog com FISCAL_ALLOW_LOCAL_INI / HOMOLOG_ACBRLIB permite montagem local.
+  const fiscalIniPolicy = require("./fiscal/fiscalIniPolicy");
+  if (!fiscalIniPolicy.allowLocalIniBuild()) {
+    const ini = body?.documentIni;
+    if (!ini || !String(ini).trim()) {
+      const err = new Error(
+        "documentIni obrigatório para emissão: o agente não monta INI fiscal em produção. " +
+          "Use o Margin Engine (MFCS) ou habilite FISCAL_ALLOW_LOCAL_INI apenas em homologação.",
+      );
+      err.permanente = true;
+      throw err;
+    }
+  }
+
   const sync =
     opts.sync ||
     (process.env.FISCAL_EMITIR_SYNC || "false").toLowerCase() === "true";
@@ -1677,7 +1692,9 @@ async function cancelarCompleto(cfg, body) {
 async function enviarEventoCompleto(cfg, body) {
   const { documentIni, chave, chaveNfe, tipo, tipoEvento, modeloDocumento, correlationId } = body;
   if (!documentIni || !String(documentIni).trim()) {
-    throw new Error("documentIni obrigatório para evento fiscal");
+    const err = new Error("documentIni obrigatório para evento fiscal");
+    err.permanente = true;
+    throw err;
   }
   const res = await resolverDriverFiscal(body).enviarEventoFiscal({
     documentIni,

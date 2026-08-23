@@ -25,4 +25,18 @@ try {
 assert.strictEqual(threw, true);
 
 restore();
+
+process.env.EMISSAO_FISCAL = "true";
+process.env.AMBIENTE_SEFAZ = "producao";
+process.env.HOMOLOG_ACBRLIB = "true";
+threw = false;
+try {
+  assertProductionGuards();
+} catch (e) {
+  threw = true;
+  assert.match(e.message, /HOMOLOG_ACBRLIB/);
+}
+assert.strictEqual(threw, true);
+
+restore();
 console.log("boot-guards.test.js OK");

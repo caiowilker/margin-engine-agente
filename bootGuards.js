@@ -38,6 +38,9 @@ function assertProductionGuards() {
   if (isTruthy(process.env.FISCAL_ALLOW_LOCAL_INI)) {
     violations.push("FISCAL_ALLOW_LOCAL_INI=true");
   }
+  if (isTruthy(process.env.HOMOLOG_ACBRLIB)) {
+    violations.push("HOMOLOG_ACBRLIB=true");
+  }
   if (String(process.env.ACBR_DRIVER || "lib").toLowerCase() === "monitor") {
     violations.push("ACBR_DRIVER=monitor (use lib em produção)");
   }

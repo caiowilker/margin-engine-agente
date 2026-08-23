@@ -156,7 +156,9 @@ async function emitirNfseViaNativeLib(payload) {
     iniBase = String(payload.documentIni);
   } else {
     fiscalIniPolicy.requireDocumentIniOrAllowLocal(payload, "NFS-e");
-    throw new Error("documentIni obrigatório para NFS-e");
+    const err = new Error("documentIni obrigatório para NFS-e");
+    err.permanente = true;
+    throw err;
   }
 
   const ref = payload.numeroRps || payload.numeroVenda || Date.now();

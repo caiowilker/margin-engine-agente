@@ -11,6 +11,13 @@ assert.throws(
   /documentIni obrigatório/,
 );
 
+try {
+  policy.requireDocumentIniOrAllowLocal({}, "NFC-e");
+  assert.fail("deveria lançar");
+} catch (err) {
+  assert.equal(err.permanente, true, "falta de documentIni deve ser permanente (sem retry)");
+}
+
 process.env.FISCAL_ALLOW_LOCAL_INI = "true";
 policy.requireDocumentIniOrAllowLocal({}, "NFC-e");
 

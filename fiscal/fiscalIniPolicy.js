@@ -19,10 +19,12 @@ function requireDocumentIniOrAllowLocal(payload, contextLabel) {
   const ini = payload?.documentIni;
   if (ini && String(ini).trim()) return;
   if (allowLocalIniBuild()) return;
-  throw new Error(
+  const err = new Error(
     `documentIni obrigatório para ${contextLabel}: o agente não monta INI fiscal em produção. ` +
       "Use o Margin Engine (MFCS) ou habilite FISCAL_ALLOW_LOCAL_INI apenas em homologação.",
   );
+  err.permanente = true;
+  throw err;
 }
 
 module.exports = {

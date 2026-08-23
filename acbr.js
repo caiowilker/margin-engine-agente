@@ -1630,7 +1630,9 @@ async function enviarEventoFiscal(payload) {
   }
   const documentIni = payload?.documentIni;
   if (!documentIni || !String(documentIni).trim()) {
-    throw new Error("documentIni obrigatório para evento fiscal");
+    const err = new Error("documentIni obrigatório para evento fiscal");
+    err.permanente = true;
+    throw err;
   }
   const chave = payload?.chave || payload?.chaveNfe || null;
   const modeloRaw =

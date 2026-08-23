@@ -2507,7 +2507,12 @@ function iniciarServidor() {
       }
       return res.json(resultado);
     } catch (err) {
-      return res.status(500).json({ erro: err.message || "Erro ao enfileirar NFC-e" });
+      const status = err.permanente ? 400 : 500;
+      return res.status(status).json({
+        erro: err.message || "Erro ao enfileirar NFC-e",
+        permanente: !!err.permanente,
+        camposFaltando: err.camposFaltando || undefined,
+      });
     }
   });
 
@@ -2538,7 +2543,7 @@ function iniciarServidor() {
       }
       res.json(resultado);
     } catch (err) {
-      const body = { erro: err.message };
+      const body = { erro: err.message, permanente: !!err.permanente };
       const cStat =
         err.cStat || String(err.message || "").match(/cStat\s*(\d{3})/i)?.[1];
       if (cStat) body.cStat = cStat;
@@ -2550,7 +2555,8 @@ function iniciarServidor() {
       if (process.env.FISCAL_DEBUG === "1" && err.acbrRaw) {
         body.acbrRaw = err.acbrRaw;
       }
-      res.status(500).json(body);
+      if (err.camposFaltando) body.camposFaltando = err.camposFaltando;
+      res.status(err.permanente ? 400 : 500).json(body);
     }
   });
 

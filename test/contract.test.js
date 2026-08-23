@@ -69,6 +69,8 @@ function payloadEmitirFront(correlationId, numeroVenda) {
   return {
     numeroVenda,
     correlationId,
+    // MFCS fail-closed: produção exige INI do backend (contrato documentIni).
+    documentIni: "[Identificacao]\nmodelo=65\n",
     emitidoEm: new Date().toISOString(),
     cpfCliente: "",
     nomeCliente: "CONSUMIDOR",
