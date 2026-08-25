@@ -39,6 +39,26 @@ const LABEL_PGTO = {
   voucher: "VOUCHER",
 };
 
+function tx(value) {
+  return toThermalText(value);
+}
+
+function wrapThermalText(text, cols) {
+  const max = Math.max(16, Number(cols) || 42);
+  const raw = String(text || "").replace(/\s+/g, " ").trim();
+  if (!raw) return [];
+  const out = [];
+  let rest = raw;
+  while (rest.length > max) {
+    let cut = rest.lastIndexOf(" ", max);
+    if (cut < Math.floor(max * 0.5)) cut = max;
+    out.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) out.push(rest);
+  return out;
+}
+
 function fmtR$(v) {
   return (
     "R$ " +
@@ -47,9 +67,6 @@ function fmtR$(v) {
       maximumFractionDigits: 2,
     })
   );
-}
-function tx(v) {
-  return toThermalText(v);
 }
 
 function formatarLinhaEndereco(empresa) {
@@ -131,6 +148,24 @@ function renderCupomTags(rawPayload) {
   }
   if (payload.cpfCliente) lines.push(corpo(col2("CPF:", toThermalDoc(payload.cpfCliente))));
   if (payload.cnpjCliente) lines.push(corpo(col2("CNPJ:", toThermalDoc(payload.cnpjCliente))));
+  const enderecoCupom = tx(
+    payload.enderecoCliente || payload.enderecoEntrega || "",
+  ).trim();
+  if (enderecoCupom) {
+    lines.push(sepDash());
+    lines.push(corpo("Endereco entrega:"));
+    for (const line of wrapThermalText(enderecoCupom, COLS)) {
+      lines.push(corpo(line));
+    }
+  }
+  const obsCupom = tx(payload.observacao || "").trim();
+  if (obsCupom) {
+    if (!enderecoCupom) lines.push(sepDash());
+    lines.push(corpo("Obs:"));
+    for (const line of wrapThermalText(obsCupom, COLS)) {
+      lines.push(corpo(line));
+    }
+  }
 
   lines.push(sepDash());
   lines.push(linhaCorpo(buildCupomItemHeader(COLS)));
