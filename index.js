@@ -4311,10 +4311,32 @@ function iniciarServidor() {
   // Se montado antes, /fiscal/* e /health devolvem index.html → JSON parse error no PDV.
   const FRONTEND_DIST = path.join(__dirname, "frontend-dist");
   if (fs.existsSync(FRONTEND_INDEX)) {
-    app.use(express.static(FRONTEND_DIST));
+    // Shell/PWA: nunca cachear — após update.zip o PDV precisa puxar UI nova
+    // (dashboard 7d/30d / resumo-periodo). Assets hashed em /assets/ podem cachear.
+    const noStoreShell = (res) => {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+    };
+    app.use(express.static(FRONTEND_DIST, {
+      setHeaders(res, filePath) {
+        const base = path.basename(filePath);
+        if (
+          base === "index.html" ||
+          base === "sw.js" ||
+          base === "registerSW.js" ||
+          base === "version.json" ||
+          base === "manifest.webmanifest"
+        ) {
+          noStoreShell(res);
+        }
+      },
+    }));
     app.get(
       /^(?!\/api|\/api-proxy|\/status|\/health|\/venda|\/fila|\/mesa|\/impressora|\/acbr|\/ativar|\/auth|\/config|\/contingencia|\/diagnostico|\/updater|\/fiscal|\/lan|\/garcom).*$/,
-      (req, res) => res.sendFile(FRONTEND_INDEX),
+      (req, res) => {
+        noStoreShell(res);
+        res.sendFile(FRONTEND_INDEX);
+      },
     );
   }
 
