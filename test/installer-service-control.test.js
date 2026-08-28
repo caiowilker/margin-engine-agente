@@ -38,4 +38,14 @@ describe("installer-service-control — nomes SCM node-windows", () => {
     assert.match(src, /Atomics\.wait/);
     assert.doesNotMatch(src, /execFileSync\(process\.execPath, \["-e", `setTimeout/);
   });
+
+  it("expõe stop-preinstall e parada forçada", () => {
+    const src = require("fs").readFileSync(
+      require("path").join(__dirname, "..", "scripts", "installer-service-control.js"),
+      "utf8",
+    );
+    assert.match(src, /stop-preinstall/);
+    assert.match(src, /function forceStopScm/);
+    assert.match(src, /process\.exit\(0\)/);
+  });
 });

@@ -222,31 +222,19 @@ var
   ErrorCode: Integer;
   NodeExe: String;
   ScriptPath: String;
+  AppDir: String;
 begin
+  { Best-effort: não bloqueia o wizard — bootstrap e CloseApplications completam a parada. }
   Result := True;
-  { Instalação nova também para serviço de tentativa anterior (bootstrap falhou na 1ª vez). }
   if (BootstrapMode <> 'install') and (BootstrapMode <> 'update') and (BootstrapMode <> 'repair') then
     Exit;
   NodeExe := ExpandConstant('{app}\node\node.exe');
   ScriptPath := ExpandConstant('{app}\app\scripts\installer-service-control.js');
+  AppDir := ExpandConstant('{app}\app');
   if (not FileExists(NodeExe)) or (not FileExists(ScriptPath)) then
     Exit;
-  if not Exec(NodeExe, '"' + ScriptPath + '" stop', ExpandConstant('{app}\app'),
-    SW_HIDE, ewWaitUntilTerminated, ErrorCode) then
-  begin
-    MsgBox('Não foi possível parar o serviço Margin Engine antes da atualização.' + #13#10 +
-      'Pare manualmente em Serviços do Windows e execute o instalador novamente.',
-      mbError, MB_OK);
-    Result := False;
-    Exit;
-  end;
-  if ErrorCode <> 0 then
-  begin
-    MsgBox('O serviço Margin Engine não parou dentro do tempo esperado.' + #13#10 +
-      'Verifique Serviços do Windows e tente novamente.',
-      mbError, MB_OK);
-    Result := False;
-  end;
+  Exec(NodeExe, '"' + ScriptPath + '" stop-preinstall "' + AppDir + '"', AppDir,
+    SW_HIDE, ewWaitUntilTerminated, ErrorCode);
 end;
 
 function InitializeSetup: Boolean;
@@ -357,8 +345,7 @@ function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
   NeedsRestart := False;
-  if not StopMarginEngineService then
-    Result := 'O serviço Margin Engine precisa estar parado para concluir a instalação.';
+  StopMarginEngineService;
 end;
 
 function ReadDiagnosticReport: String;

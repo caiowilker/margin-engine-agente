@@ -420,7 +420,11 @@ function npmInstallIfNeeded() {
 function stopAgentService() {
   try {
     const ctl = require(path.join(appDir, "scripts", "installer-service-control"));
-    const r = ctl.stopService();
+    let r = ctl.stopService({ force: false, waitMs: 45_000 });
+    if (!r.ok && !r.skipped) {
+      initBootstrapLog().warn({ acao: "service_stop_force", ...r }, "Parada suave falhou — forçando");
+      r = ctl.stopService({ force: true, waitMs: 90_000 });
+    }
     if (!r.ok && !r.skipped) {
       throw new Error(r.error || `Serviço não parou (estado: ${r.state})`);
     }
@@ -709,9 +713,9 @@ async function main() {
   if (needsServiceCycle) {
     const stop = stopAgentService();
     if (!stop.ok && !stop.skipped) {
-      throw new Error(
-        stop.error ||
-          "Não foi possível parar o serviço Margin Engine. Encerre manualmente e execute novamente.",
+      initBootstrapLog().warn(
+        { acao: "service_stop_continue", ...stop },
+        "Serviço ainda ativo após parada — instalador continua (CloseApplications/bootstrap)",
       );
     }
     if (mode === "update") backupPreUpdate();

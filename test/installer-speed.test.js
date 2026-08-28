@@ -158,10 +158,18 @@ describe("pdv-agente-installer.iss — extração rápida e fail-fast", () => {
 
   it("para serviço também na instalação nova (retry após falha parcial)", () => {
     assert.match(iss, /BootstrapMode <> 'install'\)/);
+    assert.match(iss, /stop-preinstall/);
     assert.match(iss, /install-bootstrap-exit\.txt/);
     assert.doesNotMatch(
       iss,
       /if not IsExistingInstall then[\s\S]*if \(BootstrapMode <> 'update'\) and \(BootstrapMode <> 'repair'\)/,
     );
+  });
+
+  it("PrepareToInstall não bloqueia o wizard se o serviço demorar a parar", () => {
+    assert.match(iss, /StopMarginEngineService;/);
+    assert.doesNotMatch(iss, /if not StopMarginEngineService then/);
+    assert.doesNotMatch(iss, /O serviço Margin Engine precisa estar parado/);
+    assert.doesNotMatch(iss, /não parou dentro do tempo esperado/);
   });
 });

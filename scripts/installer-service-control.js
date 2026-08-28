@@ -18,6 +18,8 @@ const SERVICE_SCM_NAME = nodeWindowsServiceScmName(SERVICE_DISPLAY_NAME);
 const LEGACY_SCM_NAMES = LEGACY_DISPLAY_NAMES.map(nodeWindowsServiceScmName);
 
 const STOP_WAIT_MS = parseInt(process.env.INSTALLER_STOP_WAIT_MS || "45000", 10);
+const PREINSTALL_STOP_WAIT_MS = parseInt(process.env.INSTALLER_PREINSTALL_STOP_MS || "90000", 10);
+const FORCE_STOP_POLL_MS = 15_000;
 const POLL_MS = 500;
 
 function nodeWindowsServiceId(displayName) {
@@ -140,8 +142,71 @@ function sleep(ms) {
   Atomics.wait(new Int32Array(sab), 0, 0, ms);
 }
 
-function stopService() {
+function allKnownScmNames() {
+  return [
+    ...scmNameVariants(SERVICE_DISPLAY_NAME),
+    ...LEGACY_SCM_NAMES,
+    ...LEGACY_DISPLAY_NAMES.flatMap(scmNameVariants),
+  ];
+}
+
+function forceStopScm(scmName) {
+  if (!isWindows() || !scmName) return { ok: false, scmName, skipped: true };
+  const tried = [];
+  const killTargets = [scmName];
+  if (scmName.endsWith(".exe")) {
+    killTargets.push(scmName.slice(0, -4));
+  } else {
+    killTargets.push(`${scmName}.exe`);
+  }
+  for (const target of killTargets) {
+    try {
+      execSync(`taskkill /F /IM "${target}" /T`, { stdio: "pipe", encoding: "utf8" });
+      tried.push(`taskkill:${target}`);
+    } catch {
+      /* processo pode já ter encerrado */
+    }
+  }
+  try {
+    execSync(`sc.exe stop "${scmName}"`, { stdio: "pipe", encoding: "utf8" });
+    tried.push("sc:stop");
+  } catch {
+    /* ignore */
+  }
+  const deadline = Date.now() + FORCE_STOP_POLL_MS;
+  while (Date.now() < deadline) {
+    const st = queryStateForScm(scmName);
+    if (st === "stopped" || st === "missing") {
+      return { ok: true, scmName, state: st, forced: true, tried };
+    }
+    sleep(POLL_MS);
+  }
+  return {
+    ok: false,
+    scmName,
+    state: queryStateForScm(scmName),
+    forced: true,
+    tried,
+    error: "Serviço ainda ativo após parada forçada",
+  };
+}
+
+function forceStopAllMarginServices() {
+  const results = [];
+  for (const scmName of allKnownScmNames()) {
+    if (queryStateForScm(scmName) === "missing") continue;
+    results.push(forceStopScm(scmName));
+  }
+  return results;
+}
+
+function stopService(opts = {}) {
   if (!isWindows()) return { ok: true, skipped: true, state: "skipped" };
+  const waitMs = parseInt(
+    String(opts.waitMs || process.env.INSTALLER_STOP_WAIT_MS || STOP_WAIT_MS),
+    10,
+  );
+  const force = Boolean(opts.force);
   const scmName = resolveActiveScmName(SERVICE_DISPLAY_NAME);
   const before = queryStateForScm(scmName);
   if (before === "missing" || before === "stopped") {
@@ -150,9 +215,15 @@ function stopService() {
   try {
     execSync(`sc.exe stop "${scmName}"`, { stdio: "pipe", encoding: "utf8" });
   } catch (err) {
-    return { ok: false, state: queryStateForScm(scmName), scmName, error: err.message };
+    const st = queryStateForScm(scmName);
+    if (st === "stopped" || st === "missing") {
+      return { ok: true, state: st, scmName };
+    }
+    if (!force) {
+      return { ok: false, state: st, scmName, error: err.message };
+    }
   }
-  const deadline = Date.now() + STOP_WAIT_MS;
+  const deadline = Date.now() + Math.max(5000, waitMs);
   while (Date.now() < deadline) {
     const st = queryStateForScm(scmName);
     if (st === "stopped" || st === "missing") {
@@ -160,9 +231,20 @@ function stopService() {
     }
     sleep(POLL_MS);
   }
+  let state = queryStateForScm(scmName);
+  if (force && state !== "stopped" && state !== "missing") {
+    const forced = forceStopScm(scmName);
+    if (forced.ok) return { ...forced, graceful: false };
+    forceStopAllMarginServices();
+    state = queryStateForScm(scmName);
+    if (state === "stopped" || state === "missing") {
+      return { ok: true, state, scmName, forced: true, graceful: false };
+    }
+    return forced;
+  }
   return {
     ok: false,
-    state: queryStateForScm(scmName),
+    state,
     scmName,
     error: "Timeout aguardando parada do serviço",
   };
@@ -233,10 +315,17 @@ function startServiceForScm(scmName, waitMs) {
 if (require.main === module) {
   const cmd = process.argv[2];
   const appDir = process.argv[3] || process.env.MARGIN_ENGINE_AGENT_ROOT || null;
-  if (cmd === "stop") {
-    const r = stopService();
+  if (cmd === "stop" || cmd === "stop-preinstall") {
+    const preinstall = cmd === "stop-preinstall";
+    const r = stopService({
+      waitMs: preinstall ? PREINSTALL_STOP_WAIT_MS : STOP_WAIT_MS,
+      force: preinstall,
+    });
     console.log(JSON.stringify(r));
     const finalState = r.scmName ? queryStateForScm(r.scmName) : queryState();
+    if (preinstall) {
+      process.exit(0);
+    }
     const acceptable = r.ok || finalState === "stopped" || finalState === "missing";
     process.exit(acceptable ? 0 : 1);
   }
@@ -262,7 +351,7 @@ if (require.main === module) {
     const failed = results.some((r) => r && r.ok === false);
     process.exit(failed ? 1 : 0);
   }
-  console.error("Uso: installer-service-control.js stop|start|status|remove-legacy [appDir]");
+  console.error("Uso: installer-service-control.js stop|stop-preinstall|start|status|remove-legacy [appDir]");
   process.exit(2);
 }
 
@@ -280,4 +369,6 @@ module.exports = {
   startService,
   queryState,
   removeLegacyServices,
+  forceStopScm,
+  forceStopAllMarginServices,
 };
