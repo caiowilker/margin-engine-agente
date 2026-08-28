@@ -174,6 +174,12 @@ function pararRuntimeTimers() {
 async function encerrarGracefully(signal, code = 0) {
   if (encerrando) return;
   encerrando = true;
+  const paradaServico =
+    signal === "SIGTERM" ||
+    signal === "SIGINT" ||
+    signal === "AUTO_UPDATE" ||
+    signal === "LAN_BIND_RESTART" ||
+    signal === "UPDATER_ROLLBACK";
   console.log(`[Agente] Encerrando (${signal})...`);
   auditLog.registrar("AGENTE_SHUTDOWN", { signal });
   configSync.parar();
@@ -187,13 +193,15 @@ async function encerrarGracefully(signal, code = 0) {
     });
   });
 
-  const waitJobs = await filaFiscal.aguardarJobsAtivos(30000);
+  const waitJobs = await filaFiscal.aguardarJobsAtivos(paradaServico ? 8000 : 30000);
   if (!waitJobs.ok) {
     console.error(
-      "[Agente] Timeout 30s aguardando jobs fiscais:",
+      "[Agente] Timeout aguardando jobs fiscais:",
       JSON.stringify(waitJobs),
     );
-    code = 1;
+    if (!paradaServico) {
+      code = 1;
+    }
   }
 
   try {
@@ -345,6 +353,46 @@ function lerConfigSync() {
 }
 
 /**
+ * Recupera JWT no backend quando config.json sobreviveu mas o cofre Windows falhou
+ * (comum após restart/reparo — evita reinstalar só para reativar).
+ */
+async function recuperarCredenciaisSeNecessario(cfg) {
+  if (cfg?.backendToken) return cfg;
+  const dispositivoId = cfg?.dispositivoId || cfg?.pdvId;
+  const tenantId = cfg?.tenantId;
+  const backendUrl = cfg?.backendUrl || process.env.BACKEND_URL;
+  if (!dispositivoId || !tenantId || !backendUrl) return cfg;
+  try {
+    const fetch = require("node-fetch");
+    const base = String(backendUrl).replace(/\/$/, "");
+    const resp = await fetch(`${base}/pdv/ativar/renovar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dispositivoId: String(dispositivoId),
+        tenantId: String(tenantId),
+      }),
+      timeout: 15000,
+    });
+    if (!resp.ok) {
+      console.warn(
+        `[Boot] Recuperação de credenciais HTTP ${resp.status} — reative manualmente se necessário.`,
+      );
+      return cfg;
+    }
+    const dados = await resp.json();
+    if (!dados?.token) return cfg;
+    const atualizado = { ...cfg, backendToken: dados.token, ativado: true };
+    await salvarConfig(atualizado);
+    console.log("[Boot] Credenciais JWT recuperadas do backend (terminal já ativo).");
+    return atualizado;
+  } catch (err) {
+    console.warn("[Boot] Recuperação automática de credenciais:", err.message);
+    return cfg;
+  }
+}
+
+/**
  * Salva config: dados não-sensíveis em config.json, token no cofre.
  */
 async function salvarConfig(cfg) {
@@ -381,6 +429,7 @@ let config = {};
 
 async function boot() {
   config = await lerConfig();
+  config = await recuperarCredenciaisSeNecessario(config);
   sincronizarContextoLog(config);
 
   // Self-heal: IP LAN/WSL morto quebra /api-proxy (502) e print station.
@@ -439,13 +488,20 @@ async function boot() {
   } catch (err) {
     console.warn("[Boot] Reconciliação EMISSAO_FISCAL:", err.message);
   }
+
+  // HTTP na porta 9100 ANTES de integrity/recovery pesado — serviço Windows
+  // precisa responder /health logo após restart (evita ME-012 e crash-loop).
+  iniciarServidor();
+
   try {
-    fiscalStorage.recoverCorruptedBootDbs(
-      (process.env.FISCAL_INTEGRITY_STRICT || "true").toLowerCase() === "true",
-    );
+    const strictDefault =
+      (process.env.FISCAL_INTEGRITY_STRICT || "false").toLowerCase() === "true";
+    fiscalStorage.recoverCorruptedBootDbs(strictDefault);
   } catch (err) {
     console.error("[Boot] Falha integrity_check:", err.message);
-    throw err;
+    console.warn(
+      "[Boot] Agente permanece ONLINE — fiscal pode operar em modo degradado até reparo.",
+    );
   }
   const disco = fiscalStorage.verificarEspacoDisco();
   if (disco.degradado) {
@@ -477,10 +533,6 @@ async function boot() {
   }
   fiscalService.registrarHandlersFila(lerConfig);
   registrarHandlerEpecFila();
-
-  // HTTP na porta 9100 antes de recovery fiscal — evita agente "offline" durante
-  // consultas SEFAZ/ACBr (ex.: cStat 104) e impede loop de crash no boot.
-  iniciarServidor();
 
   filaFiscal.iniciarWorker();
   try {
@@ -2387,6 +2439,7 @@ function iniciarServidor() {
           codigoAtivacao: codigoFinal,
           ...(pdvNome ? { pdvNome } : {}),
           emissaoFiscal: fiscalDriver.EMISSAO_FISCAL,
+          ...(config.dispositivoId ? { dispositivoId: String(config.dispositivoId) } : {}),
         }),
       });
       if (!resp.ok) {
@@ -4511,10 +4564,10 @@ function iniciarServidor() {
     } catch (_) {}
   });
   process.on("SIGINT", () => {
-    encerrarGracefully("SIGINT", 0).catch(() => process.exit(1));
+    encerrarGracefully("SIGINT", 0).catch(() => process.exit(0));
   });
   process.on("SIGTERM", () => {
-    encerrarGracefully("SIGTERM", 0).catch(() => process.exit(1));
+    encerrarGracefully("SIGTERM", 0).catch(() => process.exit(0));
   });
 
   const lanNetwork = require("./lanNetwork");
@@ -4989,5 +5042,11 @@ async function tentarSincronizarEpecs() {
 // ── Dispara tudo ──────────────────────────────────────────────────────────────
 boot().catch((err) => {
   console.error("[Agente] Falha fatal no boot:", err);
+  if (httpServer && httpServer.listening) {
+    console.error(
+      "[Agente] HTTP ativo em modo degradado — reinicie o serviço após corrigir a causa.",
+    );
+    return;
+  }
   process.exit(1);
 });

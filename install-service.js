@@ -69,7 +69,15 @@ if (process.platform === "win32" && !fromInstaller) {
 
 // ── Instala dependências se necessário ───────────────────────────────────────
 const nodeModules = path.join(__dirname, "node_modules");
+const buildStamp = path.join(__dirname, "BUILD_STAMP.json");
 if (!fs.existsSync(nodeModules)) {
+  if (fromInstaller || fs.existsSync(buildStamp)) {
+    console.error(
+      "\n✗ Pacote incompleto — node_modules ausente no instalador empacotado.",
+    );
+    console.error("  Recompile com prepare-build.ps1 e distribua um novo .exe.\n");
+    process.exit(1);
+  }
   console.log("  Instalando dependências (npm install)...");
   try {
     execSync("npm install --loglevel=error", {
@@ -153,15 +161,30 @@ const svc = new Service({
   ],
   wait: 2,
   grow: 0.5,
-  maxRestarts: 10,
+  maxRestarts: 40,
   abortOnError: false,
 });
+
+function configureWindowsServiceRecovery(scmName) {
+  if (process.platform !== "win32") return;
+  try {
+    execSync(
+      `sc.exe failure "${scmName}" reset=86400 actions=restart/60000/restart/60000/restart/120000`,
+      { stdio: "pipe", encoding: "utf8" },
+    );
+    execSync(`sc.exe failureflag "${scmName}" 1`, { stdio: "pipe", encoding: "utf8" });
+    console.log(`✓ Recuperação automática SCM configurada (${scmName})`);
+  } catch (err) {
+    console.warn(`⚠ Não foi possível configurar recovery SCM: ${err.message}`);
+  }
+}
 
 const { removeLegacyServices } = require("./scripts/installer-service-control");
 
 svc.on("install", () => {
   console.log("\n✓ Serviço instalado — iniciando...");
   console.log(`  PDV disponível em: ${AGENT_PUBLIC_BASE}`);
+  configureWindowsServiceRecovery("marginengine.exe");
   try {
     svc.start();
   } catch (e) {
@@ -173,12 +196,13 @@ svc.on("install", () => {
       if (finished) return;
       const r = tryStartViaScm();
       finishInstall(r?.ok ? 0 : 1);
-    }, 4000);
+    }, NO_OPEN_SCM_DELAY_MS);
   }
 });
 
 svc.on("alreadyinstalled", () => {
   console.log("\n⚠  Serviço já instalado. Iniciando...");
+  configureWindowsServiceRecovery("marginengine.exe");
   try {
     svc.start();
   } catch (e) {
@@ -189,7 +213,7 @@ svc.on("alreadyinstalled", () => {
       if (finished) return;
       const r = tryStartViaScm();
       finishInstall(r?.ok ? 0 : 1);
-    }, 4000);
+    }, NO_OPEN_SCM_DELAY_MS);
   }
 });
 
@@ -223,7 +247,7 @@ svc.on("error", (e) => {
 function tryStartViaScm() {
   try {
     const ctl = require("./scripts/installer-service-control");
-    const r = ctl.startService({ waitMs: 45000 });
+    const r = ctl.startService({ waitMs: SCM_WAIT_MS });
     console.log(
       r.ok
         ? `✓ Serviço confirmado via SCM (${r.scmName})`
@@ -251,11 +275,24 @@ function openPanelIfNeeded() {
 }
 
 // ── Executar ──────────────────────────────────────────────────────────────────
-const INSTALL_TIMEOUT_MS = 120000;
+const INSTALL_TIMEOUT_MS = fromInstaller ? 150_000 : 120_000;
+const NO_OPEN_SCM_DELAY_MS = fromInstaller ? 12_000 : 4_000;
+const SCM_WAIT_MS = fromInstaller ? 120_000 : 45_000;
 let finished = false;
 
 function finishInstall(code) {
   if (finished) return;
+  if (fromInstaller && code !== 0) {
+    try {
+      const ctl = require("./scripts/installer-service-control");
+      const st = ctl.queryState();
+      if (st === "running") {
+        code = 0;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
   finished = true;
   setTimeout(() => process.exit(code), 400);
 }

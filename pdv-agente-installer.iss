@@ -15,7 +15,7 @@
 ; ============================================================
 
 #define MyAppName "Margin Engine"
-#define MyAppVersion "1.0.12"
+#define MyAppVersion "1.0.17"
 #define MyAppPublisher "Margin Engine"
 #define MyAppCompany "Margin Engine"
 #define MyAppURL "https://marginengine.com.br"
@@ -224,9 +224,8 @@ var
   ScriptPath: String;
 begin
   Result := True;
-  if not IsExistingInstall then
-    Exit;
-  if (BootstrapMode <> 'update') and (BootstrapMode <> 'repair') then
+  { Instalação nova também para serviço de tentativa anterior (bootstrap falhou na 1ª vez). }
+  if (BootstrapMode <> 'install') and (BootstrapMode <> 'update') and (BootstrapMode <> 'repair') then
     Exit;
   NodeExe := ExpandConstant('{app}\node\node.exe');
   ScriptPath := ExpandConstant('{app}\app\scripts\installer-service-control.js');
@@ -369,6 +368,18 @@ var
   I: Integer;
 begin
   Result := '';
+  { Código de saída do bootstrap desta execução }
+  ReportPath := ExpandConstant('{app}\app\data\install-bootstrap-exit.txt');
+  if FileExists(ReportPath) then
+  begin
+    if LoadStringsFromFile(ReportPath, Lines) then
+    begin
+      if (GetArrayLength(Lines) > 0) and (Trim(Lines[0]) <> '0') then
+      begin
+        Result := 'A configuração pós-instalação falhou (código ' + Trim(Lines[0]) + ').' + #13#10;
+      end;
+    end;
+  end;
   { Falha desta execução primeiro — não reaproveitar relatório antigo do ProgramData. }
   ReportPath := ExpandConstant('{app}\app\data\install-bootstrap-error.txt');
   if FileExists(ReportPath) then
@@ -425,7 +436,8 @@ begin
     Report := ReadDiagnosticReport;
     if (Pos('ATENÇÃO', Report) > 0) or
        (Pos('incompleta', Report) > 0) or
-       (Pos('Problemas encontrados', Report) > 0) then
+       (Pos('Problemas encontrados', Report) > 0) or
+       (Pos('pós-instalação falhou', Report) > 0) then
       MsgBox(Report, mbError, MB_OK);
   end;
 end;

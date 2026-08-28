@@ -29,4 +29,13 @@ describe("installer-service-control — nomes SCM node-windows", () => {
     const ctl = require("../scripts/installer-service-control");
     assert.equal(typeof ctl.startService, "function");
   });
+
+  it("sleep usa Atomics.wait (sem spawn Node a cada poll)", () => {
+    const src = require("fs").readFileSync(
+      require("path").join(__dirname, "..", "scripts", "installer-service-control.js"),
+      "utf8",
+    );
+    assert.match(src, /Atomics\.wait/);
+    assert.doesNotMatch(src, /execFileSync\(process\.execPath, \["-e", `setTimeout/);
+  });
 });

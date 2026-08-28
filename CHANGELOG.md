@@ -8,11 +8,34 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 - **Cupom fiscal em contingência:** XML assinado (tpEmis=9) imprime sem consulta SEFAZ; QR opcional; banner `EMITIDA EM CONTINGENCIA`.
 - **Cupom não fiscal intermitente 2–5s:** HANDLE WinSpool permanece aberto entre cupons (USB não dorme); keepalive 5s; path native não espera NFC-e/SEFAZ. Retry de HANDLE velho só em StartDoc/StartPage (nunca após WritePrinter).
-- **Relatório térmico de vendas do histórico:** seleção múltipla no `/pdv/historico` envia um job `relatorio` ao agente (`POST /impressora/relatorio`) com produtos agregados — mesma fila da térmica, sem reimprimir N cupons. teste recarregava a config; o poll do backend aplicava `printerDrawer=false` (default Java) por cima do `.env`. Hardware da térmica (gaveta/porta/modelo) deixou de ser sobrescrito pelo catálogo; o painel operacional não edita mais essas chaves.
+- **Relatório térmico de vendas do histórico:** seleção múltipla no `/pdv/historico` envia um job `relatorio` ao agente (`POST /impressora/relatorio`) com produtos agregados — mesma fila da térmica, sem reimprimir N cupons.
 - Keepalive USB não enfileira ping enquanto o worker WinSpool ainda está em WritePrinter (mesmo após timeout do job HTTP).
-- **Relatório térmico no histórico:** seleção de vendas no PDV imprime um consolidado de produtos (`POST /impressora/relatorio`, tipo `relatorio` na fila) — não reimprime N cupons.
-
 - **Impressão RAW rápida (Win serviço):** tmp/script/DLL em `ProgramData\MarginEngine\impressao\raw`; escrita async; script memoizado (sem I/O sync por cupom); waits `PRINT_CORE_LOCK_WAIT_MS` / `PRINT_PHYSICAL_LOCK_WAIT_MS`; métricas `print.raw_phase` / `print.event_loop_lag` / `physical_lock.wait_timeout`.
+
+## [1.0.17] - 2026-08-28
+
+### Fixed — instalador Windows enterprise (1ª instalação sólida)
+
+- Bootstrap: stop do serviço também no **install**; auto-reparo inline se health falhar; exit code explícito para o Inno Setup.
+- Espera do agente: 120s + retry 60s (teto 180s); health in-process com backoff adaptativo.
+- SCM: polling com `Atomics.wait` (sem spawn Node a cada poll); fail-fast se pacote empacotado sem `node_modules`.
+- `install-service.js`: timeouts maiores no fluxo `--from-installer`; sucesso só com serviço **RUNNING**.
+
+### Fixed — agente sobrevive a restart do serviço Windows
+
+- HTTP sobe antes de SQLite/integrity; boot degradado; recuperação JWT via `/pdv/ativar/renovar`; shutdown limpo SIGTERM/SIGINT.
+
+## [1.0.14] - 2026-08-27
+
+### Fixed — dashboard 7d/30d em PDVs instalados (Essencial/Mercado)
+
+- `frontend-dist` rebuild com `resumoPeriodo` + DRE operacional sem gate `ABC_DRE` no front.
+- Datas civis locais (sem deslocamento UTC após 21h BRT).
+- `Cache-Control: no-store` em `index.html`, `sw.js`, `registerSW.js`, `version.json` e `manifest.webmanifest` (força UI nova após update remoto).
+
+### Alterado
+
+- Versão **1.0.14** — publicar `dist/update.zip` no CDN e atualizar `PDV_AGENTE_*` no Render.
 
 ## [1.0.10] - 2026-08-10
 

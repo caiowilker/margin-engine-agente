@@ -12,6 +12,9 @@ const {
   manifestEntriesPresent,
   INSTALL_WAIT_ONLINE_MS,
   INSTALL_WAIT_RETRY_MS,
+  INSTALL_BOOTSTRAP_MAX_MS,
+  remainingBootstrapBudgetMs,
+  clampWaitMs,
 } = require("../scripts/installerSpeed");
 
 describe("installerSpeed — instalação rápida e sólida no caixa", () => {
@@ -92,10 +95,22 @@ describe("installerSpeed — instalação rápida e sólida no caixa", () => {
     assert.match(repair, /(^|\s)\/T(\s|$)/);
   });
 
-  it("espera o agente 60s + retry 30s (Defender no 1º boot), não 120s+45s", () => {
-    assert.equal(INSTALL_WAIT_ONLINE_MS, 60_000);
-    assert.equal(INSTALL_WAIT_RETRY_MS, 30_000);
-    assert.ok(INSTALL_WAIT_ONLINE_MS + INSTALL_WAIT_RETRY_MS < 100_000);
+  it("espera o agente 120s + retry 60s (Defender/ACBr no 1º boot)", () => {
+    assert.equal(INSTALL_WAIT_ONLINE_MS, 120_000);
+    assert.equal(INSTALL_WAIT_RETRY_MS, 60_000);
+    assert.equal(INSTALL_BOOTSTRAP_MAX_MS, 180_000);
+    assert.ok(INSTALL_WAIT_ONLINE_MS + INSTALL_WAIT_RETRY_MS <= INSTALL_BOOTSTRAP_MAX_MS);
+  });
+
+  it("bootstrap usa um único caminho de start (sem startAgentService duplicado)", () => {
+    const bootstrap = fs.readFileSync(
+      path.join(__dirname, "..", "scripts", "installer-bootstrap.js"),
+      "utf8",
+    );
+    assert.match(bootstrap, /function bringAgentOnline\(/);
+    assert.doesNotMatch(bootstrap, /function startAgentService\(/);
+    assert.match(bootstrap, /function runAutoRepairIfOffline\(/);
+    assert.match(bootstrap, /writeBootstrapExit\(/);
   });
 });
 
@@ -138,6 +153,15 @@ describe("pdv-agente-installer.iss — extração rápida e fail-fast", () => {
     assert.doesNotMatch(
       iss,
       /posprinter\\lib\\\*".*skipifsourcedoesntexist/,
+    );
+  });
+
+  it("para serviço também na instalação nova (retry após falha parcial)", () => {
+    assert.match(iss, /BootstrapMode <> 'install'\)/);
+    assert.match(iss, /install-bootstrap-exit\.txt/);
+    assert.doesNotMatch(
+      iss,
+      /if not IsExistingInstall then[\s\S]*if \(BootstrapMode <> 'update'\) and \(BootstrapMode <> 'repair'\)/,
     );
   });
 });

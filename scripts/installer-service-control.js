@@ -8,7 +8,8 @@
  */
 const fs = require("fs");
 const path = require("path");
-const { execSync, execFileSync } = require("child_process");
+const { execSync } = require("child_process");
+const { Atomics } = require("worker_threads");
 
 const SERVICE_DISPLAY_NAME = "Margin Engine";
 const LEGACY_DISPLAY_NAMES = ["PDV Margin Engine"];
@@ -134,7 +135,9 @@ function queryState() {
 }
 
 function sleep(ms) {
-  execFileSync(process.execPath, ["-e", `setTimeout(()=>{}, ${ms})`], { stdio: "ignore" });
+  if (ms <= 0) return;
+  const sab = new SharedArrayBuffer(4);
+  Atomics.wait(new Int32Array(sab), 0, 0, ms);
 }
 
 function stopService() {
@@ -233,7 +236,9 @@ if (require.main === module) {
   if (cmd === "stop") {
     const r = stopService();
     console.log(JSON.stringify(r));
-    process.exit(r.ok ? 0 : 1);
+    const finalState = r.scmName ? queryStateForScm(r.scmName) : queryState();
+    const acceptable = r.ok || finalState === "stopped" || finalState === "missing";
+    process.exit(acceptable ? 0 : 1);
   }
   if (cmd === "start") {
     const r = startService();

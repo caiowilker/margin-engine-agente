@@ -110,6 +110,26 @@ No caixa: Diagnóstico → **Verificar atualização** → **Aplicar agora** (co
 
 `AUTO_UPDATE` continua **desligado por padrão**. Ligue só com processo operacional claro.
 
+### Release 1.0.14 — dashboard 7d/30d (2026-08-27)
+
+Correção para PDVs instalados com UI antiga (KPIs zerados em “Últimos 7/30 dias”).
+
+**Publicar no Render** (valores gerados por `npm run package:update`):
+
+| Variável | Valor (build local 2026-08-27) |
+|----------|--------------------------------|
+| `PDV_AGENTE_VERSAO` | `1.0.14` |
+| `PDV_AGENTE_SHA256` | `e3804d90789cbc3a3014af3d5ce230a7c8f36396c05318dd05902ff1d3b8140e` |
+| `PDV_AGENTE_URL_DOWNLOAD` | URL HTTPS do `dist/update.zip` no CDN |
+| `PDV_AGENTE_CHANGELOG` | `Dashboard 7d/30d: resumo-periodo + DRE operacional` |
+
+**Validação no caixa** (após update remoto ou instalador):
+
+1. Diagnóstico → versão **1.0.14**, `manifestOk: true`.
+2. Dashboard PDV → preset **Últimos 7 dias** → F12 → rede deve mostrar
+   `GET /api-proxy/pdv/vendas/resumo-periodo` (e opcionalmente `/pdv/erp/dre`).
+3. KPIs de receita/qtd vendas devem refletir o período (não zero com vendas no histórico).
+
 1. **Pare o serviço** do agente (Serviços Windows → **Margin Engine** → Parar).
 2. **Faça backup** de `%ProgramData%\MarginEngine` (veja seção 6).
 3. Copie os arquivos novos **por cima** dos antigos em `%ProgramFiles%\Margin Engine\app\`, **exceto**:

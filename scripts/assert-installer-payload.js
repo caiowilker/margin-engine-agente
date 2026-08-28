@@ -19,6 +19,8 @@ function mustExist(rel, label) {
 
 mustExist("scripts/installerSpeed.js", "bootstrap velocidade");
 mustExist("scripts/installer-bootstrap.js", "bootstrap");
+mustExist("scripts/installer-wait-online.js", "wait online");
+mustExist("scripts/installer-service-control.js", "controle SCM");
 mustExist("scripts/open-pdv.cmd", "atalho PDV");
 mustExist("install-service.js", "serviço Windows");
 mustExist("manifest.json", "manifest");

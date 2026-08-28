@@ -20,6 +20,9 @@ const {
   manifestEntriesPresent,
   INSTALL_WAIT_ONLINE_MS,
   INSTALL_WAIT_RETRY_MS,
+  INSTALL_BOOTSTRAP_MAX_MS,
+  remainingBootstrapBudgetMs,
+  clampWaitMs,
 } = require("./installerSpeed");
 
 const appDir = path.resolve(process.argv[2] || path.join(__dirname, ".."));
@@ -106,6 +109,21 @@ function runNpm(npmArgs, opts = {}) {
   }
 }
 
+function clearBootstrapMarkers() {
+  const rels = [
+    "install-bootstrap-exit.txt",
+    "install-bootstrap-error.txt",
+    "install-last-report.txt",
+  ];
+  for (const rel of rels) {
+    try {
+      fs.unlinkSync(path.join(appDir, "data", rel));
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 function writeBootstrapFailure(err) {
   const text = [
     new Date().toISOString(),
@@ -132,6 +150,40 @@ function writeBootstrapFailure(err) {
     } catch {
       /* try next */
     }
+  }
+}
+
+function writeBootstrapExit(code) {
+  const text = String(code);
+  const targets = [
+    path.join(appDir, "data", "install-bootstrap-exit.txt"),
+    path.join(os.tmpdir(), "margin-install-bootstrap-exit.txt"),
+  ];
+  try {
+    const { getDirectoryManager } = require(path.join(appDir, "runtime", "directoryManager"));
+    targets.unshift(path.join(getDirectoryManager().PATHS.diagnostics, "install-bootstrap-exit.txt"));
+  } catch {
+    /* ignore */
+  }
+  for (const fp of targets) {
+    try {
+      fs.mkdirSync(path.dirname(fp), { recursive: true });
+      fs.writeFileSync(fp, text, "utf8");
+    } catch {
+      /* try next */
+    }
+  }
+}
+
+function getServiceCtl() {
+  return require(path.join(appDir, "scripts", "installer-service-control"));
+}
+
+function tryStartService(waitMs) {
+  try {
+    return getServiceCtl().startService({ waitMs });
+  } catch (err) {
+    return { ok: false, error: err.message };
   }
 }
 
@@ -444,23 +496,6 @@ function generateManifest() {
   runNpm(["run", "manifest"], { inherit: true });
 }
 
-function startAgentService() {
-  if (!withService) return { ok: true, skipped: true };
-  try {
-    const ctl = require(path.join(appDir, "scripts", "installer-service-control"));
-    const r = ctl.startService();
-    if (!r.ok && !r.skipped) {
-      throw new Error(r.error || `Serviço não iniciou (estado: ${r.state})`);
-    }
-    initBootstrapLog().info({ acao: "service_start", ...r }, "Serviço Margin Engine reiniciado");
-    return r;
-  } catch (err) {
-    if (process.platform !== "win32") return { ok: true, skipped: true };
-    initBootstrapLog().warn({ err: err.message }, "Não foi possível reiniciar o serviço automaticamente");
-    return { ok: false, error: err.message };
-  }
-}
-
 function runPredeploy() {
   if (shouldSkipPredeploy({ nativeReady: nativeDepsReady(), packaged: packagedInstall(appDir) })) {
     initBootstrapLog().info({ acao: "skip_predeploy" }, "Pré-deploy já rodou no build do instalador");
@@ -482,20 +517,134 @@ function registerService() {
     );
     return { ok: true };
   } catch (err) {
-    initBootstrapLog().warn({ err: err.message }, "Registro do serviço falhou — tente Reparar no instalador");
+    const recovered = verifyServiceRegistered();
+    if (recovered.ok) {
+      initBootstrapLog().warn(
+        { err: err.message, state: recovered.state },
+        "Registro reportou erro mas serviço presente no SCM — continuando",
+      );
+      return recovered;
+    }
+    initBootstrapLog().warn({ err: err.message }, "Registro do serviço falhou — tentará auto-reparo");
     return { ok: false, error: err.message };
   }
 }
 
-function waitForOnline() {
+function verifyServiceRegistered() {
+  if (process.platform !== "win32") return { ok: false, state: "skipped" };
+  try {
+    const ctl = require(path.join(appDir, "scripts", "installer-service-control"));
+    const st = ctl.queryState();
+    if (st === "missing") return { ok: false, state: st };
+    return { ok: true, recovered: true, state: st };
+  } catch {
+    return { ok: false, state: "unknown" };
+  }
+}
+
+async function runAutoRepairIfOffline(online, startResult, dm, serviceResult) {
+  if (online.ok || !withService || process.platform !== "win32") {
+    return { online, startResult, serviceResult, repaired: false };
+  }
+
+  initBootstrapLog().warn(
+    { acao: "auto_repair", agentOnline: online.ok, serviceRunning: startResult.ok },
+    "Primeira subida falhou — auto-reparo (mesmo fluxo do Reparar)",
+  );
+
+  stopAgentService();
+
+  try {
+    run(icaclsGrantCommand(dm.ROOT, { recurse: false }), { stdio: "pipe" });
+    initBootstrapLog().info({ acao: "auto_repair_acl" }, "Permissões na raiz aplicadas");
+  } catch (err) {
+    initBootstrapLog().warn({ err: err.message }, "Auto-reparo: ACL raiz parcial");
+  }
+
+  npmRepairSteps();
+
+  let nextServiceResult = serviceResult;
+  if (!verifyServiceRegistered().ok) {
+    initBootstrapLog().warn({ acao: "auto_repair_register" }, "Serviço ausente no SCM — re-registro");
+    nextServiceResult = registerService();
+  }
+
+  const repairBudget = Date.now();
+  let nextStart = tryStartService(clampWaitMs(INSTALL_WAIT_ONLINE_MS, repairBudget));
+  let nextOnline = await waitForOnlineAsync(clampWaitMs(INSTALL_WAIT_ONLINE_MS, repairBudget));
+
+  if (!nextOnline.ok) {
+    initBootstrapLog().warn({ acao: "auto_repair_acl_tree" }, "Auto-reparo — ACL recursiva (/T)");
+    try {
+      run(icaclsGrantCommand(dm.ROOT, { recurse: true }), { stdio: "pipe" });
+    } catch (err) {
+      initBootstrapLog().warn({ err: err.message }, "Auto-reparo: ACL /T parcial");
+    }
+    const retryMs = clampWaitMs(INSTALL_WAIT_RETRY_MS, repairBudget);
+    tryStartService(retryMs);
+    nextOnline = await waitForOnlineAsync(retryMs);
+    if (!nextStart.ok) nextStart = tryStartService(retryMs);
+  }
+
+  initBootstrapLog().info(
+    {
+      acao: "auto_repair_done",
+      agentOnline: nextOnline.ok,
+      serviceRunning: nextStart.ok,
+      serviceRegistered: nextServiceResult.ok,
+    },
+    "Auto-reparo concluído",
+  );
+
+  return {
+    online: nextOnline,
+    startResult: nextStart,
+    serviceResult: nextServiceResult,
+    repaired: true,
+  };
+}
+
+async function bringAgentOnline() {
+  if (!withService) {
+    return { online: { ok: false, skipped: true }, startResult: { ok: true, skipped: true } };
+  }
+
+  const budgetStarted = Date.now();
+  const firstWait = clampWaitMs(INSTALL_WAIT_ONLINE_MS, budgetStarted);
+  let startResult = tryStartService(firstWait);
+  initBootstrapLog().info({ acao: "service_start", ...startResult }, "Start do serviço pós-registro");
+
+  let online = await waitForOnlineAsync(firstWait);
+  if (!online.ok && remainingBootstrapBudgetMs(budgetStarted) > 5_000) {
+    initBootstrapLog().warn({ acao: "wait_online_retry" }, "Agente offline — retry start + espera");
+    const retryMs = clampWaitMs(INSTALL_WAIT_RETRY_MS, budgetStarted);
+    tryStartService(retryMs);
+    online = await waitForOnlineAsync(retryMs);
+    if (!startResult.ok) startResult = tryStartService(retryMs);
+  }
+
+  return { online, startResult };
+}
+
+async function waitForOnlineAsync(timeoutMs = INSTALL_WAIT_ONLINE_MS) {
   if (!withService) return { ok: false, skipped: true };
   try {
-    run(`node "${path.join(appDir, "scripts", "installer-wait-online.js")}" "${appDir}" --timeout=${INSTALL_WAIT_ONLINE_MS}`, {
-      inherit: true,
-    });
-    return { ok: true };
-  } catch {
-    initBootstrapLog().warn({ acao: "wait_online" }, "Agente ainda não respondeu — verifique o serviço Windows");
+    const { waitOnline } = require(path.join(appDir, "scripts", "installer-wait-online"));
+    const result = await waitOnline(timeoutMs);
+    if (result.ok) {
+      initBootstrapLog().info(
+        { acao: "wait_online", porta: result.port, waitedMs: result.waitedMs },
+        "Agente online",
+      );
+      return { ok: true, ...result };
+    }
+    initBootstrapLog().warn(
+      { acao: "wait_online", porta: result.port, waitedMs: result.waitedMs, timeoutMs },
+      "Agente ainda não respondeu",
+    );
+    return { ok: false, ...result };
+  } catch (err) {
+    initBootstrapLog().warn({ err: err.message, acao: "wait_online" }, "Falha ao aguardar agente");
     return { ok: false };
   }
 }
@@ -554,8 +703,9 @@ async function runDiagnostic() {
 
 async function main() {
   initBootstrapLog().info({ acao: "bootstrap_start", modo: mode }, "Margin Engine — bootstrap do instalador");
+  clearBootstrapMarkers();
 
-  const needsServiceCycle = withService && (mode === "update" || mode === "repair");
+  const needsServiceCycle = withService && (mode === "install" || mode === "update" || mode === "repair");
   if (needsServiceCycle) {
     const stop = stopAgentService();
     if (!stop.ok && !stop.skipped) {
@@ -597,36 +747,18 @@ async function main() {
     ensureFirewall();
   }
 
-  const serviceResult = registerService();
-  // Sempre força start + espera RUNNING (install-service com --no-open antes saía cedo demais)
-  let startResult = { ok: false };
-  try {
-    const ctl = require(path.join(appDir, "scripts", "installer-service-control"));
-    startResult = ctl.startService({ waitMs: INSTALL_WAIT_ONLINE_MS });
-    initBootstrapLog().info({ acao: "service_start", ...startResult }, "Start do serviço pós-registro");
-  } catch (err) {
-    initBootstrapLog().warn({ err: err.message }, "startService pós-registro falhou");
-    startResult = { ok: false, error: err.message };
-  }
-  if (needsServiceCycle) {
-    startAgentService();
-  }
+  let serviceResult = registerService();
+  const brought = await bringAgentOnline();
+  let online = brought.online;
+  let startResult = brought.startResult;
 
-  let online = waitForOnline();
-  if (!online.ok && withService) {
-    initBootstrapLog().warn({ acao: "wait_online_retry" }, "Agente offline — novo start + espera");
-    try {
-      const ctl = require(path.join(appDir, "scripts", "installer-service-control"));
-      ctl.startService({ waitMs: INSTALL_WAIT_RETRY_MS });
-    } catch {
-      /* ignore */
-    }
-    online = waitForOnline();
-  }
+  const repaired = await runAutoRepairIfOffline(online, startResult, dm, serviceResult);
+  online = repaired.online;
+  startResult = repaired.startResult;
+  serviceResult = repaired.serviceResult || serviceResult;
 
   createShortcuts();
-  // Abre painel se online; se serviço rodando mas health atrasou, ainda tenta abrir
-  if (online.ok || startResult.ok) {
+  if (online.ok) {
     openPanel();
   }
 
@@ -654,22 +786,26 @@ async function main() {
       agentOnline: online.ok,
       serviceOk: serviceResult.ok,
       serviceRunning: startResult.ok,
+      autoRepaired: repaired.repaired,
     },
     "Bootstrap concluído",
   );
 
   if ((!serviceResult.ok || !startResult.ok) && !nativeDepsReady()) {
+    writeBootstrapExit(1);
     process.exit(1);
   }
-  // Serviço registrado mas não iniciou — ainda assim exit 0 se deps ok, mas marca atenção no diagnóstico
-  if (withService && process.platform === "win32" && !startResult.ok && !online.ok) {
+  if (withService && process.platform === "win32" && !online.ok) {
+    writeBootstrapExit(1);
     process.exit(1);
   }
+  writeBootstrapExit(0);
   process.exit(0);
 }
 
 main().catch(async (err) => {
   writeBootstrapFailure(err);
+  writeBootstrapExit(1);
   try {
     initBootstrapLog().fatal({ err, acao: "bootstrap_fail" }, err.message);
   } catch {

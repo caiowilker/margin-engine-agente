@@ -23,7 +23,7 @@ Instalador profissional via **Inno Setup** (`pdv-agente-installer.iss`).
 
 ## Velocidade no caixa
 
-O `.exe` já traz Node, `node_modules` nativo, manifest e frontend. Extração usa `lzma2/fast`; binários (Node/DLLs) saem sem recompressão LZMA. O bootstrap no caixa **não** refaz `npm ci` nem SHA-256 quando `BUILD_STAMP.json` está presente **e** o manifest lista só arquivos existentes (sem `.br`/`.gz`). Reparo aplica ACL em árvore (`/T`).
+O `.exe` já traz Node, `node_modules` nativo, manifest e frontend. Extração usa `lzma2/fast`; binários (Node/DLLs) saem sem recompressão LZMA. O bootstrap no caixa **não** refaz `npm ci` nem SHA-256 quando `BUILD_STAMP.json` está presente **e** o manifest lista só arquivos existentes (sem `.br`/`.gz`). Reparo aplica ACL em árvore (`/T`). Espera do agente: 120 s + retry 60 s (health retorna antes se subir cedo); auto-reparo inline se a 1ª passagem falhar.
 
 ## Modos (mesmo `.exe`)
 
