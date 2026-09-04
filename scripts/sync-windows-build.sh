@@ -120,14 +120,21 @@ SCHEMA_DIR="$BUILD_ROOT/dist/app/acbrlib/data/Schemas"
 if [[ -d "$SCHEMA_SRC" ]]; then
   echo "==> Sincronizando schemas XSD (NFe+NFSe) do repo → dist/app"
   mkdir -p "$(dirname "$SCHEMA_DIR")"
+  # DrvFS/NTFS: case-insensitive — repo Linux pode ter ISSDSF + IssDSF.
+  # Cópia arquivo-a-arquivo mergeia colisões no mesmo destino físico.
   python3 - "$SCHEMA_SRC" "$SCHEMA_DIR" <<'PY'
 import os, shutil, sys
+
 src, dst = sys.argv[1], sys.argv[2]
-if os.path.isdir(dst):
-    shutil.rmtree(dst, ignore_errors=True)
-# 9p às vezes deixa residuais: remove se ainda existir e copia com dirs_exist_ok
-if os.path.exists(dst):
-    for root, dirs, files in os.walk(dst, topdown=False):
+
+
+def wipe(path: str) -> None:
+    if not os.path.exists(path):
+        return
+    shutil.rmtree(path, ignore_errors=True)
+    if not os.path.exists(path):
+        return
+    for root, dirs, files in os.walk(path, topdown=False):
         for f in files:
             try:
                 os.remove(os.path.join(root, f))
@@ -139,14 +146,54 @@ if os.path.exists(dst):
             except OSError:
                 pass
     try:
-        os.rmdir(dst)
+        os.rmdir(path)
     except OSError:
         pass
-if os.path.exists(dst):
-    shutil.copytree(src, dst, dirs_exist_ok=True)
-else:
-    shutil.copytree(src, dst)
-print(f"schemas copiados → {dst}")
+
+
+def resolve_ci(parent: str, name: str) -> str:
+    """Retorna path existente com mesmo nome (ignore case) ou parent/name."""
+    if not os.path.isdir(parent):
+        return os.path.join(parent, name)
+    want = name.casefold()
+    try:
+        for entry in os.listdir(parent):
+            if entry.casefold() == want:
+                return os.path.join(parent, entry)
+    except OSError:
+        pass
+    return os.path.join(parent, name)
+
+
+def ensure_dir(path: str) -> str:
+    """Cria path; se colisão de case, reutiliza o diretório existente."""
+    parent, name = os.path.split(path.rstrip(os.sep))
+    if not parent:
+        parent = os.sep
+    resolved = resolve_ci(parent, name) if name else path
+    os.makedirs(resolved, exist_ok=True)
+    return resolved
+
+
+wipe(dst)
+os.makedirs(dst, exist_ok=True)
+copied = 0
+for root, dirs, files in os.walk(src):
+    rel = os.path.relpath(root, src)
+    cur_dst = dst if rel == "." else ensure_dir(os.path.join(dst, rel))
+    # Re-resolve cada segmento (walk pode visitar IssDSF depois de ISSDSF)
+    if rel != ".":
+        parts = rel.split(os.sep)
+        cur = dst
+        for part in parts:
+            cur = ensure_dir(os.path.join(cur, part))
+        cur_dst = cur
+    for name in files:
+        sfile = os.path.join(root, name)
+        dfile = resolve_ci(cur_dst, name)
+        shutil.copy2(sfile, dfile)
+        copied += 1
+print(f"schemas copiados ({copied} arquivos) → {dst}")
 PY
 else
   echo "ERRO: ausente no repo — $SCHEMA_SRC"
