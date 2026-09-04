@@ -39,8 +39,7 @@ RSYNC_EXCLUDES=(
   --exclude frontend-dist
   --exclude '*.log'
   --exclude 'RESULTADO-*.md'
-  # Schemas XSD não vão no git (gitignore data/) — preservar no destino do build
-  --exclude 'acbrlib/data/Schemas'
+  # cert/log/notas/pdf locais — Schemas XSD VÃO no payload (fonte: repo)
   --exclude 'acbrlib/data/cert'
   --exclude 'acbrlib/data/log'
   --exclude 'acbrlib/data/notas'
@@ -111,22 +110,18 @@ fi
 check "$BUILD_ROOT/dist/app/print/printerBootstrap.js" "printerBootstrap (auto-detect)"
 check "$BUILD_ROOT/dist/app/fiscal/nfse/nfseLib.js" "fiscal/nfse/nfseLib.js"
 
-# Schemas ficam fora do git no rsync principal — preserva destino e completa do repo/instalação
+# Schemas: fonte canônica = repo (NFe + NFSe). Sempre re-sincroniza para o payload.
+SCHEMA_SRC="$AGENT_ROOT/acbrlib/data/Schemas"
 SCHEMA_DIR="$BUILD_ROOT/dist/app/acbrlib/data/Schemas"
-SCHEMA_COUNT="$(find "$SCHEMA_DIR" -maxdepth 2 -name '*.xsd' 2>/dev/null | wc -l | tr -d ' ')"
-if [[ "${SCHEMA_COUNT:-0}" -lt 10 ]]; then
-  for CANDIDATE in \
-    "/mnt/c/Program Files/Margin Engine/app/acbrlib/data/Schemas" \
-    "/mnt/c/Program Files (x86)/Margin Engine/app/acbrlib/data/Schemas"; do
-    if [[ -d "$CANDIDATE" ]]; then
-      echo "==> Restaurando Schemas a partir de: $CANDIDATE"
-      mkdir -p "$SCHEMA_DIR"
-      rsync -a "$CANDIDATE/" "$SCHEMA_DIR/"
-      break
-    fi
-  done
-  SCHEMA_COUNT="$(find "$SCHEMA_DIR" -maxdepth 2 -name '*.xsd' 2>/dev/null | wc -l | tr -d ' ')"
+if [[ -d "$SCHEMA_SRC" ]]; then
+  echo "==> Sincronizando schemas XSD (NFe+NFSe) do repo → dist/app"
+  mkdir -p "$SCHEMA_DIR"
+  rsync -a --delete "$SCHEMA_SRC/" "$SCHEMA_DIR/"
+else
+  echo "ERRO: ausente no repo — $SCHEMA_SRC"
+  FAIL=1
 fi
+SCHEMA_COUNT="$(find "$SCHEMA_DIR" -name '*.xsd' 2>/dev/null | wc -l | tr -d ' ')"
 if [[ "${SCHEMA_COUNT:-0}" -lt 10 ]]; then
   echo "ERRO: acbrlib/data/Schemas incompleto ($SCHEMA_COUNT .xsd)"
   FAIL=1
@@ -134,14 +129,7 @@ else
   echo "OK — schemas XSD: $SCHEMA_COUNT"
 fi
 
-# NFS-e: schemas municipais (excluídos do rsync principal por data/Schemas)
-NFSE_SRC="$AGENT_ROOT/acbrlib/data/Schemas/NFSe"
 NFSE_DST="$SCHEMA_DIR/NFSe"
-if [[ -d "$NFSE_SRC" ]]; then
-  echo "==> Sincronizando schemas NFS-e → dist/app/acbrlib/data/Schemas/NFSe"
-  mkdir -p "$NFSE_DST"
-  rsync -a "$NFSE_SRC/" "$NFSE_DST/"
-fi
 NFSE_XSD="$(find "$NFSE_DST" -name '*.xsd' 2>/dev/null | wc -l | tr -d ' ')"
 if [[ "${NFSE_XSD:-0}" -lt 50 ]]; then
   echo "ERRO: schemas NFS-e incompletos ($NFSE_XSD .xsd) — esperado >= 50"

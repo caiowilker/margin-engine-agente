@@ -4,9 +4,11 @@
  * Uso: node scripts/installer-apply-fiscal-config.js <appDir> <configJsonPath>
  *
  * Margin 1.0: paths oficiais agente-local/acbrlib/ + cofre fiscalSecrets.
+ * Schemas XSD são sempre garantidos (independente de emissaoFiscal / .env existente).
  */
 const fs = require("fs");
 const path = require("path");
+const { ensureInstallerSchemas } = require("./installer-ensure-schemas");
 
 const appDir = process.argv[2];
 const configPath = process.argv[3];
@@ -16,17 +18,34 @@ if (!appDir || !configPath || !fs.existsSync(configPath)) {
 }
 
 const cfg = JSON.parse(fs.readFileSync(configPath, "utf8"));
-const { getDirectoryManager } = require(path.join(appDir, "runtime", "directoryManager"));
-const dm = getDirectoryManager();
-const paths = dm.PATHS;
-dm.ensureAll();
-const marginRoot = paths.root;
+
+function resolveMarginRoot() {
+  try {
+    const { getDirectoryManager } = require(path.join(appDir, "runtime", "directoryManager"));
+    const dm = getDirectoryManager();
+    dm.ensureAll();
+    return dm.PATHS.root;
+  } catch (_) {
+    return process.env.PROGRAMDATA
+      ? path.join(process.env.PROGRAMDATA, "MarginEngine")
+      : path.join(appDir, "data", "MarginEngine");
+  }
+}
+
+const marginRoot = resolveMarginRoot();
+const schemasResult = ensureInstallerSchemas(appDir, marginRoot, {
+  logger: (m) => console.log(m),
+  requireNfse: true,
+});
+if (!schemasResult.ok) {
+  process.exit(1);
+}
 
 const envPath = path.join(appDir, ".env");
 if (fs.existsSync(envPath)) {
   const existing = fs.readFileSync(envPath, "utf8");
   if (/^ACBR_DRIVER=/m.test(existing) && !process.env.INSTALLER_FORCE_FISCAL) {
-    console.log("[installer] Configuração fiscal existente preservada");
+    console.log("[installer] Configuração fiscal existente preservada (schemas já garantidos)");
     process.exit(0);
   }
 }
@@ -36,8 +55,6 @@ const acbrLibDll = path.join(acbrLibDir, "lib", "ACBrNFe64.dll");
 const acbrNfseLibDll = path.join(acbrLibDir, "lib", "ACBrNFSe64.dll");
 const acbrLibIniDefault = path.join(acbrLibDir, "data", "config", "acbrlib.ini");
 const acbrLibIniData = path.join(appDir, "data", "acbrlib.ini");
-const acbrSchemasRoot = path.join(acbrLibDir, "data", "Schemas");
-const acbrSchemasBundled = path.join(acbrSchemasRoot, "NFe");
 const acbrServicosBundled = path.join(acbrLibDir, "data", "config", "ACBrNFeServicos.ini");
 
 const envExample = path.join(appDir, ".env.example");
@@ -50,10 +67,6 @@ function patchEnv(lines, key, value) {
   const line = `${key}=${value ?? ""}`;
   if (re.test(lines)) return lines.replace(re, line);
   return `${lines.replace(/\s*$/, "")}\n${line}\n`;
-}
-
-function tpAmbFromAmbiente(amb) {
-  return String(amb || "").toLowerCase() === "producao" ? "1" : "2";
 }
 
 /** ACBrLib Ambiente enum: 0=produção · 1=homologação */
@@ -114,13 +127,14 @@ if (Object.keys(vaultPatch).length > 0) {
   }
 }
 
+// Schemas já foram garantidos no início. Sem emissão ativa: só .env.
 if (cfg.driver !== "lib" || !cfg.emissaoFiscal) {
   console.log("[installer] Config fiscal aplicada (.env)");
   process.exit(0);
 }
 
 const certDestDir = path.join(marginRoot, "cert");
-const schemasDir = path.join(marginRoot, "acbr", "schemas", "NFe");
+const schemasDir = schemasResult.destNfe;
 const configDir = path.join(marginRoot, "acbr", "config");
 const xmlDir = path.join(marginRoot, "acbr", "xml");
 const pdfDir = path.join(marginRoot, "acbr", "pdf");
@@ -157,54 +171,6 @@ if (fs.existsSync(acbrServicosBundled)) {
     fs.copyFileSync(legacyServicos, servicosDest);
   }
 }
-
-function copiarSchemas(origem, destino) {
-  if (!fs.existsSync(origem)) return 0;
-  fs.mkdirSync(destino, { recursive: true });
-  let copiados = 0;
-  for (const entry of fs.readdirSync(origem, { withFileTypes: true })) {
-    const src = path.join(origem, entry.name);
-    const dst = path.join(destino, entry.name);
-    if (entry.isDirectory()) {
-      copiarSchemas(src, dst);
-    } else if (entry.isFile() && entry.name.endsWith(".xsd") && !fs.existsSync(dst)) {
-      fs.copyFileSync(src, dst);
-      copiados += 1;
-    }
-  }
-  return copiados;
-}
-
-function contarXsd(dir) {
-  if (!fs.existsSync(dir)) return 0;
-  let n = 0;
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const p = path.join(dir, entry.name);
-    if (entry.isDirectory()) n += contarXsd(p);
-    else if (entry.isFile() && entry.name.endsWith(".xsd")) n += 1;
-  }
-  return n;
-}
-
-const copiadosBundled = copiarSchemas(acbrSchemasBundled, schemasDir);
-const copiadosRoot = copiarSchemas(acbrSchemasRoot, schemasDir);
-const totalXsd = contarXsd(schemasDir);
-if (totalXsd < 10) {
-  console.error(
-    "[installer] ERRO: schemas XSD insuficientes após cópia (" +
-      totalXsd +
-      "). Esperado em " +
-      acbrSchemasRoot +
-      " — reinstale com build que inclua acbrlib/data/Schemas.",
-  );
-  process.exit(1);
-}
-console.log(
-  "[installer] schemas copiados:",
-  totalXsd,
-  "XSD(s); novos:",
-  copiadosBundled + copiadosRoot,
-);
 
 const ambLib = ambienteLibFromAmbiente(cfg.ambiente);
 const ambSefaz = String(cfg.ambiente || "homologacao").toLowerCase() === "producao" ? "producao" : "homologacao";

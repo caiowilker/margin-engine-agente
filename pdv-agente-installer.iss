@@ -79,13 +79,16 @@ Name: "repairmode"; Description: "Reparar instalação (serviço, atalhos, firew
 [Files]
 ; nocompression em binários já compactados (node.exe, DLLs) — extract sem LZMA.
 ; frontend .br/.gz são para CDN; o agente serve o arquivo original.
-; Schemas entram uma vez via dist\app\* (não duplicar a pasta XSD).
+; Schemas: dist\app\* + linha explícita acbrlib\data\Schemas (NFe/NFSe).
 ; node_modules e PosPrinter: sem skipifsourcedoesntexist — compile falha se o prepare-build não rodou.
 Source: "dist\node\*"; DestDir: "{app}\node"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression; Excludes: "CHANGELOG.md,README.md,install_tools.bat,node_modules\npm\docs\*,node_modules\npm\man\*"
 Source: "dist\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "node_modules\*,data\*,daemon\*,frontend-dist\*,templates\*,.env,homolog-acbrlib\*,test\*,.git\*,RESULTADO-*.md,*.log,*.db,*.db-shm,*.db-wal,acbrlib\lib\*,posprinter\lib\*"
 Source: "dist\app\node_modules\*"; DestDir: "{app}\app\node_modules"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "dist\app\acbrlib\lib\*"; DestDir: "{app}\app\acbrlib\lib"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression
 Source: "dist\app\posprinter\lib\*"; DestDir: "{app}\app\posprinter\lib"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression
+; Schemas XSD: linha explícita (além de dist\app\*) — payload fiscal nunca sai sem NFe/NFSe.
+; Excludes data\* do Source principal afeta só app\data, não acbrlib\data.
+Source: "dist\app\acbrlib\data\Schemas\*"; DestDir: "{app}\app\acbrlib\data\Schemas"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "dist\app\acbrlib\data\config\ACBrNFeServicos.ini"; DestDir: "{app}\app\acbrlib\data\config"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist
 Source: "dist\app\acbrlib\data\config\acbrlib.ini"; DestDir: "{app}\app\acbrlib\data\config"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist
 Source: "dist\app\data\acbrlib.ini"; DestDir: "{app}\app\data"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist

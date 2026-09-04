@@ -103,19 +103,24 @@ else { Write-Host "ERRO — package.json sem koffi (ACBr PosPrinter)"; $fail++ }
 Require (Join-Path $AppDest "print\printerBootstrap.js") "printerBootstrap"
 Require (Join-Path $AppDest "fiscal\nfse\nfseLib.js") "fiscal/nfse/nfseLib.js"
 
-# Schemas: pasta data é excluída do robocopy principal — completa NFSe do repo
-$nfseSrc = Join-Path $AgentRoot "acbrlib\data\Schemas\NFSe"
-$nfseDst = Join-Path $AppDest "acbrlib\data\Schemas\NFSe"
-if (Test-Path $nfseSrc) {
-    Write-Host "==> Sincronizando schemas NFS-e"
-    New-Item -ItemType Directory -Force -Path $nfseDst | Out-Null
-    Sync-Tree -Source $nfseSrc -Dest $nfseDst -ExcludeDirNames @() -ExcludeFileGlobs @()
+# Schemas: fonte canônica = repo (NFe + NFSe) — robocopy /XD data NÃO remove acbrlib\data,
+# mas reforçamos sync explícito para o payload do instalador nunca sair sem XSD.
+$schemasSrc = Join-Path $AgentRoot "acbrlib\data\Schemas"
+$schemasDst = Join-Path $AppDest "acbrlib\data\Schemas"
+if (Test-Path $schemasSrc) {
+    Write-Host "==> Sincronizando schemas XSD (NFe+NFSe) do repo"
+    New-Item -ItemType Directory -Force -Path $schemasDst | Out-Null
+    Sync-Tree -Source $schemasSrc -Dest $schemasDst -ExcludeDirNames @() -ExcludeFileGlobs @()
+} else {
+    Write-Host "ERRO — schemas ausentes no repo: $schemasSrc"
+    $fail++
 }
 
-$xsd = @(Get-ChildItem (Join-Path $AppDest "acbrlib\data\Schemas") -Filter "*.xsd" -Recurse -File -ErrorAction SilentlyContinue).Count
+$xsd = @(Get-ChildItem $schemasDst -Filter "*.xsd" -Recurse -File -ErrorAction SilentlyContinue).Count
 if ($xsd -ge 10) { Write-Host "OK — schemas XSD: $xsd" }
 else { Write-Host "ERRO — schemas XSD: $xsd"; $fail++ }
 
+$nfseDst = Join-Path $schemasDst "NFSe"
 $nfseXsd = @(Get-ChildItem $nfseDst -Filter "*.xsd" -Recurse -File -ErrorAction SilentlyContinue).Count
 if ($nfseXsd -ge 50) { Write-Host "OK — schemas NFS-e: $nfseXsd" }
 else { Write-Host "ERRO — schemas NFS-e: $nfseXsd (esperado >= 50)"; $fail++ }

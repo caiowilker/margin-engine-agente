@@ -34,6 +34,16 @@ mustExist("posprinter/lib/ACBrPosPrinter64.dll", "DLL PosPrinter");
 mustExist("node_modules/better-sqlite3/build/Release/better_sqlite3.node", "sqlite nativo");
 mustExist("node_modules/koffi/build/koffi/win32_x64/koffi.node", "koffi win32");
 
+const { assertBundledSchemas } = require("./installer-ensure-schemas");
+const schemasCheck = assertBundledSchemas(root, { requireNfse: true });
+if (!schemasCheck.ok) {
+  schemasCheck.errors.forEach((e) => fail.push(e));
+} else {
+  console.log(
+    `assert-installer-payload — schemas OK (total=${schemasCheck.total} nfe=${schemasCheck.totalNfe} nfse=${schemasCheck.totalNfse})`,
+  );
+}
+
 const front = path.join(root, "frontend-dist");
 if (fs.existsSync(front)) {
   const compressed = [];
