@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed — sync Windows build: Schemas via copytree (DrvFS)
+
+- `sync-windows-build.sh`: exclui `acbrlib/data/Schemas` do rsync principal e copia com Python
+  `copytree` (rsync mkstemp falhava em `NFSe/ISSDSF/1.00` no mount 9p/DrvFS e abortava o sync).
+- No NTFS, `IssDSF`/`ISSDSF` colidem por case-insensitive — payload Win fica com pastas versionadas.
+
 ### Fixed — instalador Windows: schemas XSD sempre no payload e no ProgramData
 
 - Sync (`sync-windows-build.sh`/`.ps1`) copia `acbrlib/data/Schemas` do repo (NFe+NFSe); não depende mais de instalação prévia.

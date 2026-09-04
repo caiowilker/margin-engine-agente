@@ -44,6 +44,8 @@ RSYNC_EXCLUDES=(
   --exclude 'acbrlib/data/log'
   --exclude 'acbrlib/data/notas'
   --exclude 'acbrlib/data/pdf'
+  # Schemas: cópia dedicada abaixo (rsync+--delete no DrvFS/9p falha em ISSDSF/1.00 etc.)
+  --exclude 'acbrlib/data/Schemas'
 )
 
 echo "==> Sincronizando agente → $BUILD_ROOT/dist/app"
@@ -111,12 +113,41 @@ check "$BUILD_ROOT/dist/app/print/printerBootstrap.js" "printerBootstrap (auto-d
 check "$BUILD_ROOT/dist/app/fiscal/nfse/nfseLib.js" "fiscal/nfse/nfseLib.js"
 
 # Schemas: fonte canônica = repo (NFe + NFSe). Sempre re-sincroniza para o payload.
+# Evita rsync --delete no DrvFS: mkstemp em subpastas (ex.: NFSe/ISSDSF/1.00) falha com ENOENT.
+# cp -a após rm -rf também falha se o dest residualar no 9p — usa Python copytree.
 SCHEMA_SRC="$AGENT_ROOT/acbrlib/data/Schemas"
 SCHEMA_DIR="$BUILD_ROOT/dist/app/acbrlib/data/Schemas"
 if [[ -d "$SCHEMA_SRC" ]]; then
   echo "==> Sincronizando schemas XSD (NFe+NFSe) do repo → dist/app"
-  mkdir -p "$SCHEMA_DIR"
-  rsync -a --delete "$SCHEMA_SRC/" "$SCHEMA_DIR/"
+  mkdir -p "$(dirname "$SCHEMA_DIR")"
+  python3 - "$SCHEMA_SRC" "$SCHEMA_DIR" <<'PY'
+import os, shutil, sys
+src, dst = sys.argv[1], sys.argv[2]
+if os.path.isdir(dst):
+    shutil.rmtree(dst, ignore_errors=True)
+# 9p às vezes deixa residuais: remove se ainda existir e copia com dirs_exist_ok
+if os.path.exists(dst):
+    for root, dirs, files in os.walk(dst, topdown=False):
+        for f in files:
+            try:
+                os.remove(os.path.join(root, f))
+            except OSError:
+                pass
+        for d in dirs:
+            try:
+                os.rmdir(os.path.join(root, d))
+            except OSError:
+                pass
+    try:
+        os.rmdir(dst)
+    except OSError:
+        pass
+if os.path.exists(dst):
+    shutil.copytree(src, dst, dirs_exist_ok=True)
+else:
+    shutil.copytree(src, dst)
+print(f"schemas copiados → {dst}")
+PY
 else
   echo "ERRO: ausente no repo — $SCHEMA_SRC"
   FAIL=1
