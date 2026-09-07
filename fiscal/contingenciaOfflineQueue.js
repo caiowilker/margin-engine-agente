@@ -121,6 +121,58 @@ function enqueue(row) {
   });
 }
 
+/**
+ * Recupera NFC-e cujo XML veio do backend (fila local vazia / outro terminal).
+ * Grava em disco, enfileira e deixa o sync transmitir.
+ */
+function enfileirarXmlAssinado(opts) {
+  const fs = require("fs");
+  const path = require("path");
+  const { PATHS } = require("../marginPaths");
+  const { writeFileAtomicSync } = require("../runtime/atomicWrite");
+  const { getDirectoryManager } = require("../runtime/directoryManager");
+  const offline = require("./contingenciaOffline");
+
+  const xml = String(opts?.xml || "").trim();
+  const chaveIn = String(opts?.chave || "").replace(/\D/g, "");
+  if (!xml) throw new Error("[ContingenciaOffline] XML ausente para enfileirar");
+  offline.assertXmlProntoParaTransmissao(xml, chaveIn || undefined);
+  const meta = offline.metaDoXml(xml);
+  const chave = (meta.chave || chaveIn || "").replace(/\D/g, "");
+  if (chave.length !== 44) {
+    throw new Error("[ContingenciaOffline] chave inválida no XML");
+  }
+  if (chaveIn && chaveIn !== chave) {
+    throw new Error("[ContingenciaOffline] chave do payload diverge do XML");
+  }
+
+  const destDir = PATHS.xml;
+  getDirectoryManager().ensurePath(destDir, "fiscal");
+  const xmlPath = path.join(destDir, `${chave}-nfe.xml`);
+  writeFileAtomicSync(xmlPath, xml, { encoding: "utf8" });
+  const verificado = fs.readFileSync(xmlPath, "utf8");
+  offline.assertXmlProntoParaTransmissao(verificado, chave);
+
+  enqueue({
+    chave,
+    numero: meta.numero || opts?.numeroNfe || null,
+    serie: meta.serie || opts?.serie || null,
+    xmlPath,
+    numeroVenda: opts?.numeroVenda || null,
+    dhCont: opts?.dhCont || obterOuAbrirJanelaDhCont(new Date()),
+    terminalId: opts?.terminalId || terminalId(),
+  });
+
+  return {
+    ok: true,
+    enfileirado: true,
+    chave,
+    xmlPath,
+    numeroVenda: opts?.numeroVenda || null,
+    pendentes: contarPendentes(),
+  };
+}
+
 function listPendentes(limit = 20) {
   if (!lazyEnsureDb()) return [];
   ensureSchema();
@@ -335,6 +387,7 @@ module.exports = {
   lazyEnsureDb,
   ensureSchema,
   enqueue,
+  enfileirarXmlAssinado,
   listPendentes,
   claimPendentes,
   marcarTransmitido,

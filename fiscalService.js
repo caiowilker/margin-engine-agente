@@ -1158,19 +1158,13 @@ async function enfileirarEmissao(cfg, body, opts = {}) {
   if (!numeroVenda) throw new Error("numeroVenda obrigatório");
 
   // Fail-closed: produção não enfileira sem INI do Margin Engine.
-  // Homolog com FISCAL_ALLOW_LOCAL_INI / HOMOLOG_ACBRLIB permite montagem local.
+  // Contingência NFC-e (ativa ou flag no payload) permite INI local — emissão online intacta.
   const fiscalIniPolicy = require("./fiscal/fiscalIniPolicy");
-  if (!fiscalIniPolicy.allowLocalIniBuild()) {
-    const ini = body?.documentIni;
-    if (!ini || !String(ini).trim()) {
-      const err = new Error(
-        "documentIni obrigatório para emissão: o agente não monta INI fiscal em produção. " +
-          "Use o Margin Engine (MFCS) ou habilite FISCAL_ALLOW_LOCAL_INI apenas em homologação.",
-      );
-      err.permanente = true;
-      throw err;
-    }
-  }
+  const modelo = String(body.modeloDocumento || body.modelo || "65");
+  fiscalIniPolicy.requireDocumentIniOrAllowLocal(
+    body,
+    modelo === "55" ? "NF-e" : modelo === "99" ? "NFS-e" : "NFC-e",
+  );
 
   const sync =
     opts.sync ||

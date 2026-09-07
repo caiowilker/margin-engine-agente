@@ -472,6 +472,44 @@ test("persistirXmlFilaAposDanfe só grava se chave e assinatura baterem", () => 
   assert.equal(recusado, null);
 });
 
+test("enfileirarXmlAssinado grava disco e sobe na fila (recuperação backend)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nfce-enf-"));
+  const db = new Database(path.join(dir, "fila.db"));
+  const marginPaths = require("../marginPaths");
+  const origXml = marginPaths.PATHS.xml;
+  marginPaths.PATHS.xml = path.join(dir, "xml");
+  fs.mkdirSync(marginPaths.PATHS.xml, { recursive: true });
+
+  const queue = require("../fiscal/contingenciaOfflineQueue");
+  queue.bind(db);
+  const { dvChaveNfe } = require("../fiscal/contingenciaOffline");
+  const base = "3526081425622300015565001000000001900000001";
+  const chave = base + dvChaveNfe(base);
+  // dígito 35 da chave deve ser 9 (off-line) — base acima usa posição correta?
+  // Use chave from persistir test pattern with tpEmis digit.
+  const xml =
+    `<NFe><infNFe Id="NFe${chave}"><ide><tpEmis>9</tpEmis><idDest>1</idDest>` +
+    `<nNF>1</nNF><serie>1</serie>` +
+    `<dhCont>2026-08-14T12:00:00-03:00</dhCont>` +
+    `<xJust>Falha de comunicacao com a SEFAZ</xJust></ide></infNFe>` +
+    `<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"></Signature></NFe>`;
+
+  try {
+    const out = queue.enfileirarXmlAssinado({
+      chave,
+      xml,
+      numeroVenda: "PDV-REC",
+    });
+    assert.equal(out.enfileirado, true);
+    assert.equal(out.chave, chave);
+    assert.equal(queue.contarPendentes(), 1);
+    assert.ok(fs.existsSync(out.xmlPath));
+  } finally {
+    marginPaths.PATHS.xml = origXml;
+    db.close();
+  }
+});
+
 test("classificarResultadoSync: XML inválido sai da fila (não retenta)", () => {
   const { classificarResultadoSync } = require("../fiscal/contingenciaOffline");
   const r = classificarResultadoSync(

@@ -3611,6 +3611,24 @@ function iniciarServidor() {
     }
   });
 
+  /** Enfileira XML do backend quando a fila local não tem a NFC-e (recuperação). */
+  app.post("/contingencia/offline/enfileirar", exigirAgentToken, (req, res) => {
+    try {
+      const body = req.body || {};
+      const out = require("./fiscal/contingenciaOfflineQueue").enfileirarXmlAssinado({
+        chave: body.chave,
+        xml: body.xml,
+        numeroVenda: body.numeroVenda,
+        numeroNfe: body.numeroNfe,
+        serie: body.serie,
+        dhCont: body.dhCont,
+      });
+      res.json(out);
+    } catch (err) {
+      res.status(400).json({ erro: err.message });
+    }
+  });
+
   app.get("/contingencia/offline/pendentes", exigirAgentToken, (req, res) => {
     try {
       const rows = require("./fiscal/contingenciaOfflineQueue").listPendentes(100);
