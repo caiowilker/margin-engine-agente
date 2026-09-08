@@ -15,11 +15,13 @@ describe("installer-payload-bundle", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "me-bundle-"));
     const nm = path.join(tmp, "node_modules", "better-sqlite3", "build", "Release");
     fs.mkdirSync(nm, { recursive: true });
-    fs.mkdirSync(path.join(tmp, "node_modules", "express"), { recursive: true });
+    for (const name of ["express", "node-windows", "koffi"]) {
+      fs.mkdirSync(path.join(tmp, "node_modules", name), { recursive: true });
+      fs.writeFileSync(path.join(tmp, "node_modules", name, "package.json"), "{}");
+    }
     fs.writeFileSync(path.join(tmp, "package.json"), JSON.stringify({ version: "9.9.9" }));
     fs.writeFileSync(path.join(tmp, "node_modules", "better-sqlite3", "package.json"), "{}");
     fs.writeFileSync(path.join(nm, "better_sqlite3.node"), "native");
-    fs.writeFileSync(path.join(tmp, "node_modules", "express", "package.json"), "{}");
 
     const schemas = path.join(tmp, "acbrlib", "data", "Schemas", "NFe");
     fs.mkdirSync(schemas, { recursive: true });

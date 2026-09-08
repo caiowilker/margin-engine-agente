@@ -132,8 +132,28 @@ Write-Host "==> pack vendor bundles (node_modules + schemas → ZIP)"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Assert-Path (Join-Path $App "vendor\node_modules.zip") "vendor\node_modules.zip apos pack"
 Assert-Path (Join-Path $App "vendor\schemas.zip") "vendor\schemas.zip apos pack"
-Write-Host "[OK] vendor bundles prontos (Inno copia 2 ZIPs, nao milhares de arquivos)"
+$nmZip = Get-Item (Join-Path $App "vendor\node_modules.zip")
+$schZip = Get-Item (Join-Path $App "vendor\schemas.zip")
+if ($nmZip.Length -lt 1MB) { Write-Error "node_modules.zip suspeito ($($nmZip.Length) bytes)" }
+if ($schZip.Length -lt 100KB) { Write-Error "schemas.zip suspeito ($($schZip.Length) bytes)" }
+Write-Host ("[OK] vendor bundles: nm={0:N1} MB schemas={1:N1} MB" -f ($nmZip.Length/1MB), ($schZip.Length/1MB))
 
+# Round-trip: extract em pasta temp e assert natives (qualidade extrema do payload).
+$probe = Join-Path $env:TEMP ("me-bundle-probe-" + [guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Force -Path $probe | Out-Null
+try {
+    Copy-Item (Join-Path $App "vendor\*") (Join-Path $probe "vendor") -Recurse -Force
+    Copy-Item (Join-Path $App "package.json") $probe -Force
+    & (Join-Path $Node "node.exe") (Join-Path $App "scripts\installer-payload-bundle.js") ensure $probe
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    $sqlite = Join-Path $probe "node_modules\better-sqlite3\build\Release\better_sqlite3.node"
+    $koffi = Join-Path $probe "node_modules\koffi\build\koffi\win32_x64\koffi.node"
+    if (-not (Test-Path $sqlite)) { Write-Error "probe extract: better_sqlite3.node ausente" }
+    if (-not (Test-Path $koffi)) { Write-Error "probe extract: koffi.node ausente" }
+    Write-Host "[OK] round-trip extract do bundle (sqlite+koffi)"
+} finally {
+    Remove-Item -Recurse -Force $probe -ErrorAction SilentlyContinue
+}
 if (-not $SkipNpm) {
     Write-Host "==> npm run predeploy"
     & (Join-Path $Node "npm.cmd") run predeploy

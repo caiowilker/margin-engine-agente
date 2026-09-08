@@ -170,6 +170,19 @@ function assertBundledSchemas(appDir, opts = {}) {
   return { ok: errors.length === 0, total, totalNfe, totalNfse, root, errors };
 }
 
+/** ProgramData já tem XSDs suficientes — skip de cópia no update. */
+function programDataSchemasReady(marginRoot, opts = {}) {
+  if (!marginRoot) return false;
+  const destNfe = path.join(marginRoot, "acbr", "schemas", "NFe");
+  const destNfse = path.join(marginRoot, "acbr", "schemas", "NFSe");
+  const totalNfe = contarXsd(destNfe);
+  const totalNfse = contarXsd(destNfse);
+  const requireNfse = opts.requireNfse !== false;
+  if (totalNfe < MIN_NFE_XSD) return false;
+  if (requireNfse && totalNfse < MIN_NFSE_XSD) return false;
+  return true;
+}
+
 module.exports = {
   MIN_NFE_XSD,
   MIN_NFSE_XSD,
@@ -178,4 +191,5 @@ module.exports = {
   bundledSchemasRoot,
   ensureInstallerSchemas,
   assertBundledSchemas,
+  programDataSchemasReady,
 };

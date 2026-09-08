@@ -23,16 +23,29 @@ Instalador profissional via **Inno Setup** (`pdv-agente-installer.iss`).
 
 ## Velocidade no caixa
 
-O `.exe` já traz Node, `node_modules` nativo, manifest e frontend. Extração usa `lzma2/fast`; binários (Node/DLLs) saem sem recompressão LZMA. O bootstrap no caixa **não** refaz `npm ci` nem SHA-256 quando `BUILD_STAMP.json` está presente **e** o manifest lista só arquivos existentes (sem `.br`/`.gz`). Reparo aplica ACL em árvore (`/T`). Espera do agente: 120 s + retry 60 s (health retorna antes se subir cedo); auto-reparo inline se a 1ª passagem falhar.
+O `.exe` traz Node, **`vendor/node_modules.zip` + `vendor/schemas.zip`** (não milhares de
+arquivos no Inno), manifest e frontend. Compressão `lzma2/fast` **sem solid**; binários
+(Node/DLLs) e ZIPs com `nocompression`. Bootstrap no caixa:
+
+1. Extrai NM ZIP se stamp mudou (verifica sqlite/koffi)
+2. Sobe serviço (update: skip reinstall se já no SCM)
+3. Aguarda `/health` + `ui.ok` (45s + retry 20s; teto 75s)
+4. Extrai/sincroniza schemas **depois** do online (fail-hard)
+5. Grava `install-bootstrap-timing.json`
+
+Sem `npm ci` / SHA-256 quando `BUILD_STAMP.json` + natives OK.
+
+**Silencioso no caixa:** `Margin-Engine-Setup-<ver>.exe /VERYSILENT /MODE=update`  
+(não abre o browser; ainda registra serviço e valida health).
 
 ## Modos (mesmo `.exe`)
 
 | Modo | Como executar |
 |------|----------------|
 | **Instalar** | Assistente normal |
-| **Reparar** | `Margin-Engine-Setup-1.0.0.exe /MODE=repair` |
-| **Atualizar** | `Margin-Engine-Setup-1.0.0.exe /MODE=update` ou upgrade sobre versão existente |
-| **Desinstalar** | `Margin-Engine-Setup-1.0.0.exe /MODE=uninstall` ou Painel de Controle |
+| **Reparar** | `…Setup.exe /MODE=repair` ou `/VERYSILENT /MODE=repair` |
+| **Atualizar** | `…Setup.exe /MODE=update` ou `/VERYSILENT /MODE=update` |
+| **Desinstalar** | `…Setup.exe /MODE=uninstall` ou Painel de Controle |
 
 ## O que o bootstrap faz automaticamente
 

@@ -23,6 +23,7 @@ const {
   INSTALL_BOOTSTRAP_MAX_MS,
   remainingBootstrapBudgetMs,
   clampWaitMs,
+  createBootstrapTiming,
 } = require("./installerSpeed");
 
 const appDir = path.resolve(process.argv[2] || path.join(__dirname, ".."));
@@ -349,7 +350,22 @@ function ensureFirewall() {
   if (process.platform !== "win32" || !withFirewall) return;
   const port = process.env.AGENT_PORT || process.env.PORT || "9100";
   const ruleName = `PDV Agente ${port}`;
-  // netsh primeiro (rápido); PowerShell só se falhar.
+  // Já existe → skip (update rápido).
+  try {
+    const shown = execSync(`netsh advfirewall firewall show rule name="${ruleName}"`, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    if (/Enabled:|Ativada:|Habilitada:/i.test(shown) || /Direction:|Direção:/i.test(shown)) {
+      initBootstrapLog().info(
+        { acao: "firewall_skip", porta: port, ruleName },
+        "Regra de firewall já presente",
+      );
+      return { ok: true, skipped: true };
+    }
+  } catch {
+    /* cria abaixo */
+  }
   try {
     try {
       run(`netsh advfirewall firewall delete rule name="${ruleName}"`, { stdio: "pipe" });
@@ -362,7 +378,7 @@ function ensureFirewall() {
       { acao: "firewall", porta: port, via: "netsh", profile: "Any" },
       "Regra de firewall registrada via netsh",
     );
-    return;
+    return { ok: true };
   } catch {
     /* fallback PowerShell */
   }
@@ -383,11 +399,13 @@ New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Protocol TCP -Loc
       { acao: "firewall", porta: port, via: "powershell", profile: "Any" },
       "Regra de firewall registrada (PowerShell)",
     );
+    return { ok: true };
   } catch {
     initBootstrapLog().warn(
       { porta: port },
       "Firewall não configurado (pode já existir ou política bloqueou)",
     );
+    return { ok: false };
   }
 }
 
@@ -507,13 +525,28 @@ function validatePostUpdate() {
   return true;
 }
 
-/** XSDs NFe/NFSe → ProgramData em todo install/update/repair (PathSchemas do ACBr). */
+/** XSDs NFe/NFSe → ProgramData. Update com PD já OK → skip. */
 function ensureProgramDataSchemas() {
   try {
     const { getDirectoryManager } = require(path.join(appDir, "runtime", "directoryManager"));
     const dm = getDirectoryManager();
-    const { ensureInstallerSchemas } = require(path.join(appDir, "scripts", "installer-ensure-schemas"));
-    const r = ensureInstallerSchemas(appDir, dm.ROOT, { requireNfse: true });
+    const {
+      ensureInstallerSchemas,
+      programDataSchemasReady,
+    } = require(path.join(appDir, "scripts", "installer-ensure-schemas"));
+
+    if (mode === "update" && programDataSchemasReady(dm.ROOT, { requireNfse: true })) {
+      initBootstrapLog().info(
+        { acao: "ensure_schemas_skip", reason: "programdata_ready" },
+        "Schemas ProgramData já suficientes — skip cópia",
+      );
+      return { ok: true, skipped: true };
+    }
+
+    const r = ensureInstallerSchemas(appDir, dm.ROOT, {
+      requireNfse: true,
+      onlyIfMissing: mode === "update",
+    });
     if (r && r.ok === false) {
       throw new Error(r.error || "schemas fiscais insuficientes no payload");
     }
@@ -521,9 +554,68 @@ function ensureProgramDataSchemas() {
       { acao: "ensure_schemas", ...r },
       "Schemas fiscais sincronizados com ProgramData",
     );
+    return r;
   } catch (err) {
     throw new Error(`Falha ao sincronizar schemas fiscais: ${err.message}`);
   }
+}
+
+function ensureNodeModulesBundle() {
+  const {
+    ensureNodeModulesFromBundle,
+  } = require(path.join(appDir, "scripts", "installer-payload-bundle"));
+  const r = ensureNodeModulesFromBundle(appDir, {
+    log: (fields, msg) => initBootstrapLog().info(fields, msg),
+  });
+  initBootstrapLog().info({ acao: "nm_bundle", ...r }, "Bundle node_modules verificado");
+  if (r.reason === "missing" && !nativeDepsReady()) {
+    throw new Error(
+      "vendor/node_modules.zip ausente e node_modules incompleto — reinstale com Setup atualizado",
+    );
+  }
+  return r;
+}
+
+function ensureSchemasBundleLocal() {
+  const {
+    ensureSchemasFromBundle,
+  } = require(path.join(appDir, "scripts", "installer-payload-bundle"));
+  const r = ensureSchemasFromBundle(appDir, {
+    log: (fields, msg) => initBootstrapLog().info(fields, msg),
+  });
+  initBootstrapLog().info({ acao: "schemas_bundle", ...r }, "Bundle schemas local verificado");
+  return r;
+}
+
+function writeBootstrapTiming(timing) {
+  if (!timing) return;
+  const snap = timing.snapshot();
+  const targets = [path.join(appDir, "data", "install-bootstrap-timing.json")];
+  try {
+    const { getDirectoryManager } = require(path.join(appDir, "runtime", "directoryManager"));
+    targets.unshift(path.join(getDirectoryManager().PATHS.diagnostics, "install-bootstrap-timing.json"));
+  } catch {
+    /* ignore */
+  }
+  const text = JSON.stringify(snap, null, 2);
+  for (const fp of targets) {
+    try {
+      fs.mkdirSync(path.dirname(fp), { recursive: true });
+      fs.writeFileSync(fp, text, "utf8");
+    } catch {
+      /* try next */
+    }
+  }
+  initBootstrapLog().info(
+    { acao: "bootstrap_timing", totalMs: snap.totalMs, phases: snap.phases.length },
+    "Timing do bootstrap gravado",
+  );
+}
+
+function ensurePayloadBundles() {
+  // Compat auto-reparo: ambos os bundles.
+  ensureNodeModulesBundle();
+  ensureSchemasBundleLocal();
 }
 
 function generateManifest() {
@@ -554,17 +646,6 @@ function runPredeploy() {
   } catch (err) {
     initBootstrapLog().warn({ err: err.message }, "Pré-deploy reportou avisos");
   }
-}
-
-function ensurePayloadBundles() {
-  const {
-    ensureAllBundles,
-  } = require(path.join(appDir, "scripts", "installer-payload-bundle"));
-  const r = ensureAllBundles(appDir, {
-    log: (fields, msg) => initBootstrapLog().info(fields, msg),
-  });
-  initBootstrapLog().info({ acao: "payload_bundles", ...r }, "Bundles de payload verificados");
-  return r;
 }
 
 function registerService() {
@@ -710,8 +791,28 @@ async function bringAgentOnline() {
   }
 
   const budgetStarted = Date.now();
+  // Só probe rápido se SCM já RUNNING (update skip-reinstall / retry).
+  const scmNow = verifyServiceRegistered();
+  if (scmNow.state === "running") {
+    try {
+      const { waitOnline } = require(path.join(appDir, "scripts", "installer-wait-online"));
+      const quick = await waitOnline(1_500);
+      if (quick.ok) {
+        initBootstrapLog().info(
+          { acao: "wait_online_already", porta: quick.port, waitedMs: quick.waitedMs },
+          "Agente já online — skip start longo",
+        );
+        return {
+          online: { ok: true, ...quick },
+          startResult: { ok: true, alreadyOnline: true, state: "running" },
+        };
+      }
+    } catch {
+      /* segue start normal */
+    }
+  }
+
   const firstWait = clampWaitMs(INSTALL_WAIT_ONLINE_MS, budgetStarted);
-  // SCM “running” ≠ HTTP up — start curto; o teto fica no /health
   let startResult = tryStartService(clampWaitMs(20_000, budgetStarted));
   initBootstrapLog().info({ acao: "service_start", ...startResult }, "Start do serviço pós-registro");
 
@@ -844,6 +945,7 @@ async function runDiagnosticLight(online) {
 }
 
 async function main() {
+  const timing = createBootstrapTiming(mode);
   initBootstrapLog().info({ acao: "bootstrap_start", modo: mode }, "Margin Engine — bootstrap do instalador");
   clearBootstrapMarkers();
 
@@ -858,6 +960,7 @@ async function main() {
     }
     if (mode === "update") backupPreUpdate();
   }
+  timing.mark("stop");
 
   validateDependencies();
   if (process.platform === "win32" && mode === "install") {
@@ -872,9 +975,11 @@ async function main() {
   ensureEnv();
   migrateEnvLanBind();
   ensureWindowsPermissions(dm);
+  timing.mark("dirs_acl");
 
-  // Extrai ZIPs ANTES de npm/serviço — caminho crítico do payload rápido.
-  ensurePayloadBundles();
+  // Só node_modules no caminho crítico — schemas locais depois do :9100 (menos I/O no boot).
+  ensureNodeModulesBundle();
+  timing.mark("nm_bundle");
 
   if (mode === "install" || mode === "update") {
     writeDefaultConfigs();
@@ -889,38 +994,50 @@ async function main() {
     npmRepairSteps();
     generateManifest();
   }
+  timing.mark("deps_validate");
 
-  // Serviço sobe cedo; schemas + firewall em paralelo com wait-online.
-  const sideJobs = Promise.all([
-    Promise.resolve().then(() => {
-      ensureProgramDataSchemas();
-    }),
-    Promise.resolve().then(() => {
-      ensureFirewall();
-    }),
-  ]);
+  // Firewall // com wait; schemas (local+ProgramData) DEPOIS do online — disco livre pro boot.
+  const fwJob = Promise.resolve().then(() => ensureFirewall());
 
   let serviceResult = registerService();
+  timing.mark("service_register");
   const brought = await bringAgentOnline();
   let online = brought.online;
   let startResult = brought.startResult;
+  timing.mark("wait_online");
 
   try {
-    await sideJobs;
+    await fwJob;
   } catch (err) {
-    initBootstrapLog().error({ err: err.message }, "Schemas/firewall falharam");
-    throw err;
+    initBootstrapLog().warn({ err: err.message }, "Firewall falhou (não bloqueia)");
   }
+  timing.mark("firewall");
+
+  // Schemas após health: não compete com cold start do agente; ainda fail-hard antes do Done.
+  ensureSchemasBundleLocal();
+  ensureProgramDataSchemas();
+  timing.mark("schemas");
 
   const repaired = await runAutoRepairIfOffline(online, startResult, dm, serviceResult);
   online = repaired.online;
   startResult = repaired.startResult;
   serviceResult = repaired.serviceResult || serviceResult;
+  if (repaired.repaired) {
+    try {
+      ensureSchemasBundleLocal();
+      ensureProgramDataSchemas();
+    } catch (err) {
+      initBootstrapLog().warn({ err: err.message }, "Schemas pós auto-reparo");
+      throw err;
+    }
+  }
+  timing.mark("auto_repair");
 
   createShortcuts();
   if (online.ok) {
     openPanel();
   }
+  timing.mark("shortcuts");
 
   if (!startResult.ok && withService && process.platform === "win32") {
     initBootstrapLog().error(
@@ -936,6 +1053,8 @@ async function main() {
     initBootstrapLog().warn({ err: err.message }, "Diagnóstico pós-instalação falhou");
     writeBootstrapFailure(err);
   }
+  timing.mark("diagnostic");
+  writeBootstrapTiming(timing);
 
   initBootstrapLog().info(
     {
@@ -948,6 +1067,7 @@ async function main() {
       serviceRunning: startResult.ok,
       autoRepaired: repaired.repaired,
       diagnosticLight: Boolean(report.light),
+      totalMs: timing.snapshot().totalMs,
     },
     "Bootstrap concluído",
   );

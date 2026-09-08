@@ -164,14 +164,31 @@ function needsExtract(appDir, zipRel, stampRel, installedStampRel, readyCheck) {
   return { needed: false, reason: "stamp_ok" };
 }
 
+function nativesFromBundleReady(appDir) {
+  const base = path.join(appDir, "node_modules");
+  const required = ["better-sqlite3", "node-windows", "express", "koffi"];
+  for (const name of required) {
+    if (!fs.existsSync(path.join(base, name, "package.json"))) return false;
+  }
+  if (
+    !fs.existsSync(
+      path.join(base, "better-sqlite3", "build", "Release", "better_sqlite3.node"),
+    )
+  ) {
+    return false;
+  }
+  if (process.platform === "win32") {
+    if (!fs.existsSync(path.join(base, "koffi", "build", "koffi", "win32_x64", "koffi.node"))) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function ensureNodeModulesFromBundle(appDir, opts = {}) {
   const log = typeof opts.log === "function" ? opts.log : () => {};
   const zipAbs = path.join(appDir, NODE_MODULES_ZIP);
-  const explodedOk =
-    fs.existsSync(path.join(appDir, "node_modules", "better-sqlite3", "package.json")) &&
-    fs.existsSync(
-      path.join(appDir, "node_modules", "better-sqlite3", "build", "Release", "better_sqlite3.node"),
-    );
+  const explodedOk = nativesFromBundleReady(appDir);
 
   if (!fs.existsSync(zipAbs)) {
     return { extracted: false, reason: explodedOk ? "exploded_only" : "missing" };
@@ -185,6 +202,11 @@ function ensureNodeModulesFromBundle(appDir, opts = {}) {
     () => explodedOk,
   );
   if (!check.needed) {
+    if (!nativesFromBundleReady(appDir)) {
+      throw new Error(
+        "node_modules stamp OK mas natives incompletos (sqlite/koffi) — delete node_modules e reinstale",
+      );
+    }
     log({ acao: "nm_bundle_skip", reason: check.reason }, "node_modules bundle OK");
     return { extracted: false, reason: check.reason };
   }
@@ -200,7 +222,7 @@ function ensureNodeModulesFromBundle(appDir, opts = {}) {
     }
   }
   extractZip(appDir, NODE_MODULES_ZIP, ".");
-  if (!fs.existsSync(path.join(nmDir, "better-sqlite3", "package.json"))) {
+  if (!nativesFromBundleReady(appDir)) {
     if (fs.existsSync(bak) && !fs.existsSync(nmDir)) {
       try {
         fs.renameSync(bak, nmDir);
@@ -208,7 +230,9 @@ function ensureNodeModulesFromBundle(appDir, opts = {}) {
         /* ignore */
       }
     }
-    throw new Error("Falha ao extrair vendor/node_modules.zip");
+    throw new Error(
+      "Falha ao extrair vendor/node_modules.zip (natives sqlite/koffi/express ausentes após extract)",
+    );
   }
   rmrf(bak);
   const expected = fs.existsSync(path.join(appDir, NODE_MODULES_STAMP))
@@ -263,6 +287,22 @@ function ensureSchemasFromBundle(appDir, opts = {}) {
     }
     throw new Error("Falha ao extrair vendor/schemas.zip");
   }
+  // Solidez: mesmo assert do prepare-build após extract.
+  const { assertBundledSchemas } = require("./installer-ensure-schemas");
+  const checkSchemas = assertBundledSchemas(appDir, { requireNfse: true });
+  if (!checkSchemas.ok) {
+    if (fs.existsSync(bak) && fs.existsSync(schemasDir)) {
+      try {
+        rmrf(schemasDir);
+        fs.renameSync(bak, schemasDir);
+      } catch {
+        /* ignore */
+      }
+    }
+    throw new Error(
+      checkSchemas.errors.join("; ") || "schemas inválidos após extract do ZIP",
+    );
+  }
   rmrf(bak);
   const expected = fs.existsSync(path.join(appDir, SCHEMAS_STAMP))
     ? fs.readFileSync(path.join(appDir, SCHEMAS_STAMP), "utf8").trim()
@@ -316,4 +356,5 @@ module.exports = {
   ensureAllBundles,
   ensureNodeModulesFromBundle,
   ensureSchemasFromBundle,
+  nativesFromBundleReady,
 };

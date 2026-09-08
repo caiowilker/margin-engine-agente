@@ -82,6 +82,28 @@ function clampWaitMs(requestedMs, startedAtMs, nowMs = Date.now()) {
   return Math.min(requestedMs, remainingBootstrapBudgetMs(startedAtMs, nowMs));
 }
 
+/** Cronômetro de fases do bootstrap — grava JSON para afinar o caixa. */
+function createBootstrapTiming(mode) {
+  const startedAt = Date.now();
+  const phases = [];
+  let last = startedAt;
+  return {
+    mark(name) {
+      const now = Date.now();
+      phases.push({ name, ms: now - last, atMs: now - startedAt });
+      last = now;
+    },
+    snapshot() {
+      return {
+        mode,
+        totalMs: Date.now() - startedAt,
+        phases,
+        finishedAt: new Date().toISOString(),
+      };
+    },
+  };
+}
+
 module.exports = {
   packagedInstall,
   shouldSkipNpmCi,
@@ -94,4 +116,5 @@ module.exports = {
   INSTALL_BOOTSTRAP_MAX_MS,
   remainingBootstrapBudgetMs,
   clampWaitMs,
+  createBootstrapTiming,
 };

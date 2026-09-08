@@ -76,10 +76,13 @@ describe("installer-bootstrap.js — contratos de solidez", () => {
     assert.match(bootstrap, /writeBootstrapFailure\(new Error\(detail\)\)/);
   });
 
-  it("extrai bundles e sobe serviço cedo (paralelo schemas/firewall)", () => {
-    assert.match(bootstrap, /ensurePayloadBundles\(/);
+  it("extrai NM cedo; schemas após online; timing gravado", () => {
+    assert.match(bootstrap, /ensureNodeModulesBundle\(/);
+    assert.match(bootstrap, /ensureSchemasBundleLocal\(/);
     assert.match(bootstrap, /skip_service_reinstall/);
     assert.match(bootstrap, /runDiagnosticLight/);
-    assert.match(bootstrap, /sideJobs/);
+    assert.match(bootstrap, /writeBootstrapTiming/);
+    assert.match(bootstrap, /wait_online_already/);
+    assert.doesNotMatch(bootstrap, /sideJobs/);
   });
 });

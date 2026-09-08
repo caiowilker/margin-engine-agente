@@ -95,6 +95,36 @@ describe("installerSpeed — instalação rápida e sólida no caixa", () => {
     assert.match(repair, /(^|\s)\/T(\s|$)/);
   });
 
+  it("programDataSchemasReady detecta PD suficiente", () => {
+    const { programDataSchemasReady, MIN_NFE_XSD, MIN_NFSE_XSD } = require("../scripts/installer-ensure-schemas");
+    const margin = fs.mkdtempSync(path.join(os.tmpdir(), "me-pd-ready-"));
+    assert.equal(programDataSchemasReady(margin), false);
+    const nfe = path.join(margin, "acbr", "schemas", "NFe");
+    const nfse = path.join(margin, "acbr", "schemas", "NFSe");
+    fs.mkdirSync(nfe, { recursive: true });
+    fs.mkdirSync(nfse, { recursive: true });
+    for (let i = 0; i < MIN_NFE_XSD; i++) {
+      fs.writeFileSync(path.join(nfe, `a${i}.xsd`), "<x/>");
+    }
+    for (let i = 0; i < MIN_NFSE_XSD; i++) {
+      fs.writeFileSync(path.join(nfse, `b${i}.xsd`), "<x/>");
+    }
+    assert.equal(programDataSchemasReady(margin, { requireNfse: true }), true);
+    fs.rmSync(margin, { recursive: true, force: true });
+  });
+
+  it("createBootstrapTiming acumula fases", () => {
+    const { createBootstrapTiming } = require("../scripts/installerSpeed");
+    const t = createBootstrapTiming("install");
+    t.mark("a");
+    t.mark("b");
+    const snap = t.snapshot();
+    assert.equal(snap.mode, "install");
+    assert.equal(snap.phases.length, 2);
+    assert.equal(snap.phases[0].name, "a");
+    assert.ok(typeof snap.totalMs === "number");
+  });
+
   it("espera o agente 45s + retry 20s (sucesso retorna antes; teto 75s)", () => {
     assert.equal(INSTALL_WAIT_ONLINE_MS, 45_000);
     assert.equal(INSTALL_WAIT_RETRY_MS, 20_000);
@@ -119,9 +149,14 @@ describe("installerSpeed — instalação rápida e sólida no caixa", () => {
     );
     assert.match(bootstrap, /function ensureProgramDataSchemas\(/);
     assert.match(bootstrap, /ensureProgramDataSchemas\(\)/);
-    assert.match(bootstrap, /ensurePayloadBundles\(/);
+    assert.match(bootstrap, /ensureNodeModulesBundle\(/);
+    assert.match(bootstrap, /ensureSchemasBundleLocal\(/);
+    assert.match(bootstrap, /ensure_schemas_skip/);
     assert.match(bootstrap, /skip_service_reinstall/);
     assert.match(bootstrap, /runDiagnosticLight/);
+    assert.match(bootstrap, /createBootstrapTiming/);
+    assert.match(bootstrap, /writeBootstrapTiming/);
+    assert.match(bootstrap, /firewall_skip/);
     assert.match(bootstrap, /throw new Error\(check\.motivo/);
     assert.doesNotMatch(
       bootstrap,
@@ -224,6 +259,13 @@ describe("pdv-agente-installer.iss — extração rápida e fail-fast", () => {
       "utf8",
     );
     assert.match(ctl, /INSTALLER_PREINSTALL_STOP_MS \|\| "10000"/);
+  });
+
+  it("DisableReadyPage, VERYSILENT e WizardSilent sem --open", () => {
+    assert.match(iss, /DisableReadyPage=yes/);
+    assert.match(iss, /VERYSILENT/);
+    assert.match(iss, /WizardSilent/);
+    assert.match(iss, /if not WizardSilent then/);
   });
 
   it("wait-online exige ui.ok no /health", () => {

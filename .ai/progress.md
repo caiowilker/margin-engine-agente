@@ -3,6 +3,20 @@
 **Última atualização:** 2026-09-08  
 **Versão:** `1.0.17`
 
+## Perf P2 — qualidade extrema install/update (2026-09-08)
+
+- `/VERYSILENT`: sem `--open` (WizardSilent); docs atualizados.
+- Pós-extract: assert natives (sqlite/koffi/express/node-windows) + assertBundledSchemas.
+- prepare-build: round-trip probe extract do ZIP antes do ISCC.
+- bringAgentOnline: se SCM já RUNNING e health OK → skip start longo.
+- P1 mantido: schemas pós-online, timing, firewall/PD skip.
+
+## Perf P1 — schemas pós-online + timing + skip (2026-09-08)
+
+- NM bundle no caminho crítico; schemas local+ProgramData **após** wait-online.
+- Update: skip cópia schemas se ProgramData já OK; firewall skip se regra existe.
+- Timing JSON (`install-bootstrap-timing.json`); DisableReadyPage; /VERYSILENT doc.
+
 ## Perf — instalador appliance rápido+sólido (2026-09-08)
 
 - `vendor/node_modules.zip` + `vendor/schemas.zip` (Inno copia 2 arquivos, não ~4k).

@@ -20,10 +20,18 @@ O `Margin-Engine-Setup-*.exe` levava vários minutos no ponto de venda. O payloa
 6. Espera do serviço/health: **45 s + retry 20 s** (sucesso retorna antes). Teto **75 s**.
    Wait-online exige `ui.ok`. `install-service --no-open` poll SCM ~200 ms.
    Update/repair: **skip reinstall** do serviço se já no SCM + natives OK (só `sc start`).
-   Schemas→ProgramData + firewall **em paralelo** com wait-online.
+   **NM ZIP** no caminho crítico; **schemas** (local + ProgramData) **após** `:9100` online
+   (menos I/O no cold start; ainda fail-hard antes do Done).
+   Update: skip ProgramData schemas se já suficientes; firewall skip se regra existe.
    Diagnóstico HTTP full só se health falhou (light se `ui.ok`).
+   Timing: `install-bootstrap-timing.json` (fases + totalMs).
+   Wizard: `DisableReadyPage=yes`; caixa pode usar `/VERYSILENT /MODE=update`
+   (WizardSilent → sem `--open`).
+   Pós-extract ZIP: fail-hard se natives/schemas inválidos; prepare-build faz
+   round-trip probe antes do ISCC.
+   Se SCM já RUNNING e `/health` OK → skip start longo (`wait_online_already`).
+   Timing: `install-bootstrap-timing.json` (fases + totalMs).
    Parada pré-update: 20 s + 25 s (skip se já parado). Preinstall Inno ≤10 s.
-   Firewall: `netsh` primeiro.
    `validatePostUpdate` falha o bootstrap se manifest/UI inválidos.
    **Sleep SCM:** `Atomics.wait` no **global** `Atomics` (nunca `require("worker_threads")`).
    Falha de wait-online grava `install-bootstrap-error.txt` com serviceResult/startResult.

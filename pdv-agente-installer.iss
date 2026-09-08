@@ -70,8 +70,9 @@ UninstallDisplayIcon={app}\app\assets\margin-engine.ico
 ChangesEnvironment=no
 MinVersion=10.0
 DisableDirPage=no
-DisableReadyPage=no
+DisableReadyPage=yes
 ShowLanguageDialog=no
+; Caixa: Setup.exe /VERYSILENT /MODE=update (sem wizard)
 
 [Languages]
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
@@ -148,7 +149,7 @@ Type: filesandordirs; Name: "{app}\app\acbrlib\data\Schemas"
 Type: filesandordirs; Name: "{app}\app\daemon"
 
 [Messages]
-brazilianportuguese.WelcomeLabel2=Este assistente instala o **Margin Engine** no ponto de venda.%n%nO sistema conecta impressão, documentos fiscais e operação offline ao navegador do PDV.%n%nSe já existe uma instalação, seus dados (configurações, certificados, vendas e logs) serão preservados automaticamente.%n%nAo concluir, o serviço será instalado e iniciado — não é necessário abrir o Gerenciador de Serviços do Windows.
+brazilianportuguese.WelcomeLabel2=Este assistente instala o **Margin Engine** no ponto de venda.%n%nO sistema conecta impressão, documentos fiscais e operação offline ao navegador do PDV.%n%nSe já existe uma instalação, seus dados (configurações, certificados, vendas e logs) serão preservados automaticamente.%n%nAo concluir, o serviço será instalado e iniciado — não é necessário abrir o Gerenciador de Serviços do Windows.%n%nAtualização silenciosa: execute o Setup com /VERYSILENT /MODE=update.
 brazilianportuguese.FinishedLabel=O Margin Engine foi instalado neste computador.%n%nO serviço local foi configurado para iniciar automaticamente com o Windows (não é necessário reiniciar o PC).%n%nO sistema deve abrir em http://localhost:9100/%n%nUse o atalho **Margin Engine** (sempre localhost) para acessar o painel e ativar o terminal de caixa.
 brazilianportuguese.FinishedRestartLabel=O Margin Engine foi atualizado. O serviço reinicia sozinho — não é necessário reiniciar o Windows. Se a porta 9100 não abrir, use Reparar no instalador.
 
@@ -348,7 +349,10 @@ end;
 
 function GetBootstrapFlags(Param: String): String;
 begin
-  Result := ' --service --firewall --open';
+  { Sempre serviço+firewall. --open só em wizard interativo (não /SILENT|/VERYSILENT). }
+  Result := ' --service --firewall';
+  if not WizardSilent then
+    Result := Result + ' --open';
   if WizardIsTaskSelected('desktopicon') then
     Result := Result + ' --desktop';
 end;
