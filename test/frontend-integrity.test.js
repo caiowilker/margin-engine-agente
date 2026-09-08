@@ -52,19 +52,21 @@ test("verificarFrontendDist ok com index + assets presentes", () => {
   }
 });
 
-test("verificarFrontendDist falha quando asset hashed sumiu (tela preta)", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "me-ui-bad-"));
+test("verificarFrontendDist favicon ausente e aviso suave — nao derruba UI", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "me-ui-soft-"));
   try {
     fs.mkdirSync(path.join(dir, "assets"));
+    fs.writeFileSync(path.join(dir, "assets", "app.js"), "1");
     fs.writeFileSync(
       path.join(dir, "index.html"),
       `<html><body><div id="root"></div>
-       <script src="/assets/index-MISSING.js"></script></body></html>`,
+       <script src="/assets/app.js"></script>
+       <link rel="icon" href="/icons/icon-32.png"></body></html>`,
     );
-    const r = verificarFrontendDist(dir);
-    assert.equal(r.ok, false);
-    assert.match(r.motivo, /ausentes|tela preta/i);
-    assert.ok(r.faltando.includes("/assets/index-MISSING.js"));
+    const r = verificarFrontendDist(dir, { skipCache: true });
+    assert.equal(r.ok, true);
+    assert.ok(Array.isArray(r.avisos));
+    assert.ok(r.avisos.includes("/icons/icon-32.png"));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

@@ -13,6 +13,7 @@ const {
   INSTALL_WAIT_ONLINE_MS,
   INSTALL_WAIT_RETRY_MS,
   INSTALL_BOOTSTRAP_MAX_MS,
+  INSTALL_START_WAIT_MS,
   remainingBootstrapBudgetMs,
   clampWaitMs,
 } = require("../scripts/installerSpeed");
@@ -132,6 +133,7 @@ describe("installerSpeed — instalação rápida e sólida no caixa", () => {
     assert.equal(INSTALL_WAIT_ONLINE_MS, 45_000);
     assert.equal(INSTALL_WAIT_RETRY_MS, 20_000);
     assert.equal(INSTALL_BOOTSTRAP_MAX_MS, 75_000);
+    assert.equal(INSTALL_START_WAIT_MS, 8_000);
     assert.ok(INSTALL_WAIT_ONLINE_MS + INSTALL_WAIT_RETRY_MS <= INSTALL_BOOTSTRAP_MAX_MS);
   });
 
@@ -255,14 +257,14 @@ describe("pdv-agente-installer.iss — extração rápida e fail-fast", () => {
     );
   });
 
-  it("PrepareToInstall cap ≤10s no stop-preinstall", () => {
+  it("PrepareToInstall cap ≤8s no stop-preinstall", () => {
     assert.match(iss, /StopMarginEngineService;/);
     assert.doesNotMatch(iss, /if not StopMarginEngineService then/);
     const ctl = fs.readFileSync(
       path.join(__dirname, "..", "scripts", "installer-service-control.js"),
       "utf8",
     );
-    assert.match(ctl, /INSTALLER_PREINSTALL_STOP_MS \|\| "10000"/);
+    assert.match(ctl, /INSTALLER_PREINSTALL_STOP_MS \|\| "8000"/);
   });
 
   it("DisableReadyPage, VERYSILENT e WizardSilent sem --open", () => {

@@ -21,6 +21,7 @@ const {
   INSTALL_WAIT_ONLINE_MS,
   INSTALL_WAIT_RETRY_MS,
   INSTALL_BOOTSTRAP_MAX_MS,
+  INSTALL_START_WAIT_MS,
   remainingBootstrapBudgetMs,
   clampWaitMs,
   createBootstrapTiming,
@@ -459,11 +460,8 @@ function stopAgentService() {
       );
       return { ok: true, skipped: true, state };
     }
-    let r = ctl.stopService({ force: false, waitMs: 20_000 });
-    if (!r.ok && !r.skipped) {
-      initBootstrapLog().warn({ acao: "service_stop_force", ...r }, "Parada suave falhou — forçando");
-      r = ctl.stopService({ force: true, waitMs: 25_000 });
-    }
+    // Estilo grande instalador: force cedo (sc stop + taskkill), sem 45s de soft-wait.
+    const r = ctl.stopService({ force: true, waitMs: 8_000 });
     if (!r.ok && !r.skipped) {
       throw new Error(r.error || `Serviço não parou (estado: ${r.state})`);
     }
@@ -709,14 +707,14 @@ function registerService() {
         { acao: "skip_service_reinstall", state: scm.state, mode },
         "Serviço já registrado — start sem reinstall",
       );
-      const started = tryStartService(20_000);
+      const started = tryStartService(INSTALL_START_WAIT_MS);
       const after = verifyServiceRegistered();
-      if (after.state === "running") {
+      if (after.state === "running" || (started && started.ok) || (started && started.healthDeferred)) {
         return {
           ...started,
           ok: true,
           skippedReinstall: true,
-          state: "running",
+          state: after.state === "running" ? "running" : started.state || after.state,
         };
       }
       initBootstrapLog().warn(
@@ -804,8 +802,11 @@ async function runAutoRepairIfOffline(online, startResult, dm, serviceResult) {
   }
 
   const repairBudget = Date.now();
-  let nextStart = tryStartService(clampWaitMs(20_000, repairBudget));
+  let nextStart = tryStartService(clampWaitMs(INSTALL_START_WAIT_MS, repairBudget));
   let nextOnline = await waitForOnlineAsync(clampWaitMs(INSTALL_WAIT_ONLINE_MS, repairBudget));
+  if (nextOnline.ok && healthVersionMatches(nextOnline)) {
+    nextStart = { ...nextStart, ok: true, confirmedByHealth: true };
+  }
 
   if (!nextOnline.ok) {
     initBootstrapLog().warn({ acao: "auto_repair_acl_tree" }, "Auto-reparo — ACL recursiva (/T)");
@@ -815,9 +816,13 @@ async function runAutoRepairIfOffline(online, startResult, dm, serviceResult) {
       initBootstrapLog().warn({ err: err.message }, "Auto-reparo: ACL /T parcial");
     }
     const retryMs = clampWaitMs(INSTALL_WAIT_RETRY_MS, repairBudget);
-    tryStartService(retryMs);
+    tryStartService(clampWaitMs(INSTALL_START_WAIT_MS, repairBudget));
     nextOnline = await waitForOnlineAsync(retryMs);
-    if (!nextStart.ok) nextStart = tryStartService(retryMs);
+    if (nextOnline.ok && healthVersionMatches(nextOnline)) {
+      nextStart = { ...nextStart, ok: true, confirmedByHealth: true };
+    } else if (!nextStart.ok) {
+      nextStart = tryStartService(clampWaitMs(INSTALL_START_WAIT_MS, repairBudget));
+    }
   }
 
   initBootstrapLog().info(
@@ -876,7 +881,8 @@ async function bringAgentOnline() {
   }
 
   const firstWait = clampWaitMs(INSTALL_WAIT_ONLINE_MS, budgetStarted);
-  let startResult = tryStartService(clampWaitMs(20_000, budgetStarted));
+  // SCM curto → health imediato (verdade do produto). Não queimar 20–60s no sc.exe.
+  let startResult = tryStartService(clampWaitMs(INSTALL_START_WAIT_MS, budgetStarted));
   initBootstrapLog().info({ acao: "service_start", ...startResult }, "Start do serviço pós-registro");
 
   let online = await waitForOnlineAsync(firstWait);
@@ -887,15 +893,22 @@ async function bringAgentOnline() {
     );
     online = { ...online, ok: false, versionMismatch: true };
   }
+  if (online.ok && healthVersionMatches(online)) {
+    startResult = { ...startResult, ok: true, confirmedByHealth: true };
+  }
   if (!online.ok && remainingBootstrapBudgetMs(budgetStarted) > 5_000) {
     initBootstrapLog().warn({ acao: "wait_online_retry" }, "Agente offline — retry start + espera");
     const retryMs = clampWaitMs(INSTALL_WAIT_RETRY_MS, budgetStarted);
-    tryStartService(retryMs);
+    tryStartService(clampWaitMs(INSTALL_START_WAIT_MS, budgetStarted));
     online = await waitForOnlineAsync(retryMs);
     if (online.ok && !healthVersionMatches(online)) {
       online = { ...online, ok: false, versionMismatch: true };
     }
-    if (!startResult.ok) startResult = tryStartService(retryMs);
+    if (online.ok && healthVersionMatches(online)) {
+      startResult = { ...startResult, ok: true, confirmedByHealth: true };
+    } else if (!startResult.ok) {
+      startResult = tryStartService(clampWaitMs(INSTALL_START_WAIT_MS, budgetStarted));
+    }
   }
 
   return { online, startResult };
@@ -1126,7 +1139,12 @@ async function main() {
 
   const scmFinal =
     withService && process.platform === "win32" ? verifyServiceRegistered() : { state: "skipped" };
-  const serviceUp = Boolean(startResult.ok) || scmFinal.state === "running";
+  // Health+versão corretos = processo vivo; SCM RUNNING é o ideal, mas
+  // locale/parse não pode derrubar instalação se o agente já responde.
+  const serviceUp =
+    Boolean(startResult.ok) ||
+    scmFinal.state === "running" ||
+    (Boolean(online.ok) && healthVersionMatches(online));
   const versionOk = !online.ok || healthVersionMatches(online);
 
   initBootstrapLog().info(

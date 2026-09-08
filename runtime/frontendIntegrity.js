@@ -12,6 +12,11 @@ const path = require("path");
 const ASSET_REF_RE =
   /(?:src|href)=["'](\/[^"']+\.(?:js|css|webmanifest|json|svg|png|ico))["']/gi;
 
+/** JS/CSS = tela preta se faltarem. Favicon/PNG/SVG/manifest = aviso, não derruba /health. */
+function isCriticalAssetRef(ref) {
+  return /\.(js|css)$/i.test(String(ref || ""));
+}
+
 /** Cache por mtime do index.html — /health e SPA pollam a cada ~150ms no instalador. */
 let _cache = { key: null, result: null };
 
@@ -80,19 +85,22 @@ function verificarFrontendDistUncached(frontendDistAbs, indexPath) {
     return { ok: false, motivo: "index.html sem #root (shell SPA inválido)" };
   }
   const refs = extrairRefsLocais(html);
-  const faltando = [];
+  const faltandoCritico = [];
+  const faltandoSuave = [];
   for (const ref of refs) {
     const rel = ref.replace(/^\//, "");
     const abs = path.join(frontendDistAbs, rel);
     if (!fs.existsSync(abs)) {
-      faltando.push(ref);
+      if (isCriticalAssetRef(ref)) faltandoCritico.push(ref);
+      else faltandoSuave.push(ref);
     }
   }
-  if (faltando.length) {
+  if (faltandoCritico.length) {
     return {
       ok: false,
-      motivo: `assets referenciados ausentes (${faltando.length}) — causa típica de tela preta`,
-      faltando: faltando.slice(0, 12),
+      motivo: `assets referenciados ausentes (${faltandoCritico.length}) — causa típica de tela preta`,
+      faltando: faltandoCritico.slice(0, 12),
+      avisos: faltandoSuave.length ? faltandoSuave.slice(0, 8) : undefined,
       refs: refs.length,
     };
   }
@@ -127,7 +135,11 @@ function verificarFrontendDistUncached(frontendDistAbs, indexPath) {
     }
   }
 
-  return { ok: true, refs: refs.length };
+  return {
+    ok: true,
+    refs: refs.length,
+    avisos: faltandoSuave.length ? faltandoSuave.slice(0, 8) : undefined,
+  };
 }
 
 /** HTML de recuperação — fundo claro, texto legível (não dark vazio). */
@@ -220,6 +232,7 @@ function injetarWatchdogRootVazio(html, timeoutMs = 3000) {
 
 module.exports = {
   extrairRefsLocais,
+  isCriticalAssetRef,
   verificarFrontendDist,
   invalidateFrontendIntegrityCache,
   htmlRecuperacaoUi,
