@@ -9,21 +9,26 @@ O `Margin-Engine-Setup-*.exe` levava vários minutos no ponto de venda. O payloa
 
 ## Decisão
 
-1. Compressão Inno: `lzma2/fast` + solid; Node portátil e DLLs ACBr/PosPrinter com `nocompression`.
-2. Schemas XSD entram uma única vez via `dist\app\*`.
+1. Compressão Inno: `lzma2/fast` **sem solid** (`SolidCompression=no`) — extract/update
+   mais rápido com muitos arquivos; Node/DLLs com `nocompression`.
+2. Schemas XSD e `node_modules` entram como **`vendor/*.zip`** (1 arquivo cada,
+   `nocompression`). Bootstrap extrai com `tar.exe` se stamp divergir.
 3. Frontend do instalador sem `*.br` e `*.gz` (política do manifest alinhada).
-4. Bootstrap empacotado (`BUILD_STAMP.json` + `node_modules` nativo): não roda `npm ci`, não regenera manifest, não roda predeploy.
+4. Bootstrap empacotado (`BUILD_STAMP.json` + natives no ZIP): não roda `npm ci`,
+   não regenera manifest, não roda predeploy.
 5. ACL na raiz de `%ProgramData%\MarginEngine` com herança `(OI)(CI)` — `/T` só no modo **reparar**.
-6. Espera do serviço/health: 60 s + retry 30 s (sucesso retorna antes). Teto 100 s.
+6. Espera do serviço/health: **45 s + retry 20 s** (sucesso retorna antes). Teto **75 s**.
    Wait-online exige `ui.ok`. `install-service --no-open` poll SCM ~200 ms.
+   Update/repair: **skip reinstall** do serviço se já no SCM + natives OK (só `sc start`).
+   Schemas→ProgramData + firewall **em paralelo** com wait-online.
+   Diagnóstico HTTP full só se health falhou (light se `ui.ok`).
    Parada pré-update: 20 s + 25 s (skip se já parado). Preinstall Inno ≤10 s.
-   Firewall: `netsh` primeiro. Schemas ProgramData em install/update/repair.
+   Firewall: `netsh` primeiro.
    `validatePostUpdate` falha o bootstrap se manifest/UI inválidos.
-   **Sleep SCM:** `Atomics.wait` no **global** `Atomics` (nunca `require("worker_threads")` —
-   esse import deixava `Atomics` undefined → `reading 'wait'` e stop/start quebravam).
+   **Sleep SCM:** `Atomics.wait` no **global** `Atomics` (nunca `require("worker_threads")`).
    Falha de wait-online grava `install-bootstrap-error.txt` com serviceResult/startResult.
-7. Skip de SHA-256 só se o `manifest.json` listar arquivos **existentes** e sem `.br`/`.gz`. Caso contrário o bootstrap regenera.
-8. `prepare-build.ps1` sempre regenera o manifest, remove `.br`/`.gz` e roda `assert-installer-payload.js` antes do ISCC.
+7. Skip de SHA-256 só se o `manifest.json` listar arquivos **existentes** e sem `.br`/`.gz`.
+8. `prepare-build.ps1` regenera manifest, remove `.br`/`.gz`, assert-payload, **pack ZIPs**, ISCC.
 
 ## Consequências
 

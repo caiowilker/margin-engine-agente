@@ -21,6 +21,7 @@ mustExist("scripts/installerSpeed.js", "bootstrap velocidade");
 mustExist("scripts/installer-bootstrap.js", "bootstrap");
 mustExist("scripts/installer-wait-online.js", "wait online");
 mustExist("scripts/installer-service-control.js", "controle SCM");
+mustExist("scripts/installer-payload-bundle.js", "bundles ZIP");
 mustExist("scripts/open-pdv.cmd", "atalho PDV");
 mustExist("install-service.js", "serviço Windows");
 mustExist("manifest.json", "manifest");
@@ -34,6 +35,13 @@ mustExist("posprinter/lib/ACBrPosPrinter64.dll", "DLL PosPrinter");
 mustExist("node_modules/better-sqlite3/build/Release/better_sqlite3.node", "sqlite nativo");
 mustExist("node_modules/koffi/build/koffi/win32_x64/koffi.node", "koffi win32");
 
+// Bundles são gerados DEPOIS deste assert no prepare-build; se já existirem, validar tamanho.
+for (const rel of ["vendor/node_modules.zip", "vendor/schemas.zip"]) {
+  const fp = path.join(root, rel);
+  if (fs.existsSync(fp) && fs.statSync(fp).size < 1000) {
+    fail.push(`${rel} suspeito (muito pequeno)`);
+  }
+}
 const { assertBundledSchemas } = require("./installer-ensure-schemas");
 const schemasCheck = assertBundledSchemas(root, { requireNfse: true });
 if (!schemasCheck.ok) {

@@ -65,11 +65,14 @@ function icaclsGrantCommand(root, { recurse = false } = {}) {
   return `icacls "${root}" /grant *S-1-5-32-545:(OI)(CI)M${tree} /C`;
 }
 
-/** 1º boot: sucesso retorna antes; teto folgado só se Defender/ACBr atrasarem. */
-const INSTALL_WAIT_ONLINE_MS = 60_000;
-const INSTALL_WAIT_RETRY_MS = 30_000;
+/**
+ * 1º boot: listen-first + bundle extract → health sobe em segundos.
+ * Sucesso retorna antes; teto só se Defender/ACBr atrasarem.
+ */
+const INSTALL_WAIT_ONLINE_MS = 45_000;
+const INSTALL_WAIT_RETRY_MS = 20_000;
 /** Teto da 1ª passagem (start + wait + retry) antes do auto-reparo. */
-const INSTALL_BOOTSTRAP_MAX_MS = 100_000;
+const INSTALL_BOOTSTRAP_MAX_MS = 75_000;
 
 function remainingBootstrapBudgetMs(startedAtMs, nowMs = Date.now()) {
   return Math.max(5_000, INSTALL_BOOTSTRAP_MAX_MS - (nowMs - startedAtMs));

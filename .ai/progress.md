@@ -3,6 +3,14 @@
 **Última atualização:** 2026-09-08  
 **Versão:** `1.0.17`
 
+## Perf — instalador appliance rápido+sólido (2026-09-08)
+
+- `vendor/node_modules.zip` + `vendor/schemas.zip` (Inno copia 2 arquivos, não ~4k).
+- `SolidCompression=no`; extract via `tar.exe` + stamp skip em update.
+- Bootstrap: bundles → serviço cedo; schemas/firewall // wait-online.
+- Update: skip reinstall SCM se presente + natives; wait 45+20 (teto 75).
+- Diagnóstico light se `ui.ok` já OK; Atomics SCM fix mantido.
+
 ## Fix — bootstrap SCM Atomics (2026-09-08)
 
 - Causa: `const { Atomics } = require("worker_threads")` → undefined →

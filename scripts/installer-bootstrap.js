@@ -556,8 +556,42 @@ function runPredeploy() {
   }
 }
 
+function ensurePayloadBundles() {
+  const {
+    ensureAllBundles,
+  } = require(path.join(appDir, "scripts", "installer-payload-bundle"));
+  const r = ensureAllBundles(appDir, {
+    log: (fields, msg) => initBootstrapLog().info(fields, msg),
+  });
+  initBootstrapLog().info({ acao: "payload_bundles", ...r }, "Bundles de payload verificados");
+  return r;
+}
+
 function registerService() {
   if (!withService) return { ok: true, skipped: true };
+  // Update/repair: se SCM já tem o serviço e natives OK → só start (sem node-windows reinstall).
+  if ((mode === "update" || mode === "repair") && process.platform === "win32") {
+    const scm = verifyServiceRegistered();
+    if (scm.present && nativeDepsReady()) {
+      initBootstrapLog().info(
+        { acao: "skip_service_reinstall", state: scm.state, mode },
+        "Serviço já registrado — start sem reinstall",
+      );
+      const started = tryStartService(20_000);
+      if (started.ok || scm.state === "running") {
+        return {
+          ok: true,
+          skippedReinstall: true,
+          state: started.state || scm.state,
+          ...started,
+        };
+      }
+      initBootstrapLog().warn(
+        { acao: "skip_reinstall_start_failed", ...started },
+        "Start falhou após skip — caindo para reinstall",
+      );
+    }
+  }
   try {
     run(
       `node "${path.join(appDir, "install-service.js")}" --no-open --from-installer`,
@@ -616,6 +650,12 @@ async function runAutoRepairIfOffline(online, startResult, dm, serviceResult) {
   }
 
   npmRepairSteps();
+
+  try {
+    ensurePayloadBundles();
+  } catch (err) {
+    initBootstrapLog().warn({ err: err.message }, "Auto-reparo: bundles");
+  }
 
   let nextServiceResult = serviceResult;
   const scm = verifyServiceRegistered();
@@ -762,6 +802,47 @@ async function runDiagnostic() {
   return report;
 }
 
+async function runDiagnosticLight(online) {
+  // Se health+ui.ok já passaram, não re-probe HTTP — só relatório curto.
+  if (online && online.ok) {
+    const version = (() => {
+      try {
+        return JSON.parse(fs.readFileSync(path.join(appDir, "package.json"), "utf8")).version;
+      } catch {
+        return "?";
+      }
+    })();
+    const report = {
+      ok: true,
+      version,
+      issues: [],
+      light: true,
+    };
+    try {
+      const localReport = path.join(appDir, "data", "install-last-report.txt");
+      fs.mkdirSync(path.dirname(localReport), { recursive: true });
+      fs.writeFileSync(
+        localReport,
+        [
+          "Margin Engine — diagnóstico OK (light)",
+          `Versão: ${version}`,
+          "Problemas: 0",
+          "Health + ui.ok confirmados no wait-online.",
+        ].join("\n"),
+        "utf8",
+      );
+      const { getDirectoryManager } = require(path.join(appDir, "runtime", "directoryManager"));
+      const diag = getDirectoryManager().PATHS.diagnostics;
+      fs.mkdirSync(diag, { recursive: true });
+      fs.writeFileSync(path.join(diag, "install-last-report.txt"), fs.readFileSync(localReport));
+    } catch {
+      /* ignore */
+    }
+    return report;
+  }
+  return runDiagnostic();
+}
+
 async function main() {
   initBootstrapLog().info({ acao: "bootstrap_start", modo: mode }, "Margin Engine — bootstrap do instalador");
   clearBootstrapMarkers();
@@ -792,28 +873,44 @@ async function main() {
   migrateEnvLanBind();
   ensureWindowsPermissions(dm);
 
+  // Extrai ZIPs ANTES de npm/serviço — caminho crítico do payload rápido.
+  ensurePayloadBundles();
+
   if (mode === "install" || mode === "update") {
     writeDefaultConfigs();
-    ensureProgramDataSchemas();
     npmInstallIfNeeded();
     generateManifest();
     runPredeploy();
-    ensureFirewall();
     if (mode === "update") validatePostUpdate();
   }
 
   if (mode === "repair") {
     writeDefaultConfigs();
-    ensureProgramDataSchemas();
     npmRepairSteps();
     generateManifest();
-    ensureFirewall();
   }
+
+  // Serviço sobe cedo; schemas + firewall em paralelo com wait-online.
+  const sideJobs = Promise.all([
+    Promise.resolve().then(() => {
+      ensureProgramDataSchemas();
+    }),
+    Promise.resolve().then(() => {
+      ensureFirewall();
+    }),
+  ]);
 
   let serviceResult = registerService();
   const brought = await bringAgentOnline();
   let online = brought.online;
   let startResult = brought.startResult;
+
+  try {
+    await sideJobs;
+  } catch (err) {
+    initBootstrapLog().error({ err: err.message }, "Schemas/firewall falharam");
+    throw err;
+  }
 
   const repaired = await runAutoRepairIfOffline(online, startResult, dm, serviceResult);
   online = repaired.online;
@@ -834,7 +931,7 @@ async function main() {
 
   let report = { ok: true, issues: [] };
   try {
-    report = await runDiagnostic();
+    report = await runDiagnosticLight(online);
   } catch (err) {
     initBootstrapLog().warn({ err: err.message }, "Diagnóstico pós-instalação falhou");
     writeBootstrapFailure(err);
@@ -850,6 +947,7 @@ async function main() {
       serviceOk: serviceResult.ok,
       serviceRunning: startResult.ok,
       autoRepaired: repaired.repaired,
+      diagnosticLight: Boolean(report.light),
     },
     "Bootstrap concluído",
   );

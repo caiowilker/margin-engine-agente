@@ -95,10 +95,10 @@ describe("installerSpeed — instalação rápida e sólida no caixa", () => {
     assert.match(repair, /(^|\s)\/T(\s|$)/);
   });
 
-  it("espera o agente 60s + retry 30s (sucesso retorna antes; teto folgado)", () => {
-    assert.equal(INSTALL_WAIT_ONLINE_MS, 60_000);
-    assert.equal(INSTALL_WAIT_RETRY_MS, 30_000);
-    assert.equal(INSTALL_BOOTSTRAP_MAX_MS, 100_000);
+  it("espera o agente 45s + retry 20s (sucesso retorna antes; teto 75s)", () => {
+    assert.equal(INSTALL_WAIT_ONLINE_MS, 45_000);
+    assert.equal(INSTALL_WAIT_RETRY_MS, 20_000);
+    assert.equal(INSTALL_BOOTSTRAP_MAX_MS, 75_000);
     assert.ok(INSTALL_WAIT_ONLINE_MS + INSTALL_WAIT_RETRY_MS <= INSTALL_BOOTSTRAP_MAX_MS);
   });
 
@@ -119,6 +119,9 @@ describe("installerSpeed — instalação rápida e sólida no caixa", () => {
     );
     assert.match(bootstrap, /function ensureProgramDataSchemas\(/);
     assert.match(bootstrap, /ensureProgramDataSchemas\(\)/);
+    assert.match(bootstrap, /ensurePayloadBundles\(/);
+    assert.match(bootstrap, /skip_service_reinstall/);
+    assert.match(bootstrap, /runDiagnosticLight/);
     assert.match(bootstrap, /throw new Error\(check\.motivo/);
     assert.doesNotMatch(
       bootstrap,
@@ -155,14 +158,23 @@ describe("pdv-agente-installer.iss — extração rápida e fail-fast", () => {
     "utf8",
   );
 
-  it("usa lzma2/fast, não max", () => {
+  it("usa lzma2/fast sem solid (extract/update rápido)", () => {
     assert.match(iss, /Compression=lzma2\/fast/);
+    assert.match(iss, /SolidCompression=no/);
     assert.doesNotMatch(iss, /Compression=lzma2\/max/);
+    assert.doesNotMatch(iss, /SolidCompression=yes/);
   });
 
-  it("não duplica Schemas XSD no [Files]", () => {
-    const hits = iss.match(/^Source:.*acbrlib\\data\\Schemas/gm) || [];
-    assert.equal(hits.length, 0, "Schemas devem entrar só via dist\\app\\*");
+  it("não duplica Schemas XSD no [Files] (vão no vendor ZIP)", () => {
+    const sources = iss.match(/^Source:.*$/gm) || [];
+    const schemaTrees = sources.filter(
+      (l) =>
+        /acbrlib\\data\\Schemas/i.test(l) &&
+        !/Excludes:/i.test(l),
+    );
+    assert.equal(schemaTrees.length, 0, "árvore Schemas não deve ser Source — só vendor ZIP");
+    assert.match(iss, /vendor\\schemas\.zip/);
+    assert.match(iss, /vendor\\node_modules\.zip/);
   });
 
   it("exclui .br/.gz do frontend e não comprime Node/DLLs", () => {
@@ -179,12 +191,15 @@ describe("pdv-agente-installer.iss — extração rápida e fail-fast", () => {
     assert.doesNotMatch(iss, /(?<!Wizard)IsTaskSelected\(/);
   });
 
-  it("não engole node_modules ou PosPrinter ausentes", () => {
-    assert.match(iss, /dist\\app\\node_modules\\\*/);
-    assert.doesNotMatch(
-      iss,
-      /dist\\app\\node_modules\\\*".*skipifsourcedoesntexist/,
-    );
+  it("empacota node_modules e schemas como ZIP nocompression", () => {
+    assert.match(iss, /vendor\\node_modules\.zip/);
+    assert.match(iss, /vendor\\schemas\.zip/);
+    assert.match(iss, /node_modules\.zip".*nocompression/);
+    assert.match(iss, /schemas\.zip".*nocompression/);
+    assert.doesNotMatch(iss, /dist\\app\\node_modules\\\*/);
+  });
+
+  it("não engole PosPrinter ausente", () => {
     assert.doesNotMatch(
       iss,
       /posprinter\\lib\\\*".*skipifsourcedoesntexist/,

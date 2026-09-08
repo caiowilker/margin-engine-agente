@@ -75,4 +75,11 @@ describe("installer-bootstrap.js — contratos de solidez", () => {
     assert.match(bootstrap, /Agente não respondeu em http:\/\/localhost:9100\/health/);
     assert.match(bootstrap, /writeBootstrapFailure\(new Error\(detail\)\)/);
   });
+
+  it("extrai bundles e sobe serviço cedo (paralelo schemas/firewall)", () => {
+    assert.match(bootstrap, /ensurePayloadBundles\(/);
+    assert.match(bootstrap, /skip_service_reinstall/);
+    assert.match(bootstrap, /runDiagnosticLight/);
+    assert.match(bootstrap, /sideJobs/);
+  });
 });

@@ -127,6 +127,13 @@ Write-Host "==> assert-installer-payload"
 & (Join-Path $Node "node.exe") (Join-Path $App "scripts\assert-installer-payload.js") $App
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+Write-Host "==> pack vendor bundles (node_modules + schemas → ZIP)"
+& (Join-Path $Node "node.exe") (Join-Path $App "scripts\installer-payload-bundle.js") pack $App
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Assert-Path (Join-Path $App "vendor\node_modules.zip") "vendor\node_modules.zip apos pack"
+Assert-Path (Join-Path $App "vendor\schemas.zip") "vendor\schemas.zip apos pack"
+Write-Host "[OK] vendor bundles prontos (Inno copia 2 ZIPs, nao milhares de arquivos)"
+
 if (-not $SkipNpm) {
     Write-Host "==> npm run predeploy"
     & (Join-Path $Node "npm.cmd") run predeploy
