@@ -141,9 +141,17 @@ Write-Host ("[OK] vendor bundles: nm={0:N1} MB schemas={1:N1} MB" -f ($nmZip.Len
 # Round-trip: extract em pasta temp e assert natives (qualidade extrema do payload).
 $probe = Join-Path $env:TEMP ("me-bundle-probe-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force -Path $probe | Out-Null
+$probeVendor = Join-Path $probe "vendor"
+New-Item -ItemType Directory -Force -Path $probeVendor | Out-Null
 try {
-    Copy-Item (Join-Path $App "vendor\*") (Join-Path $probe "vendor") -Recurse -Force
+    Copy-Item -Path (Join-Path $App "vendor\*") -Destination $probeVendor -Force
     Copy-Item (Join-Path $App "package.json") $probe -Force
+    if (-not (Test-Path (Join-Path $probeVendor "node_modules.zip"))) {
+        Write-Error "probe: vendor/node_modules.zip nao copiado"
+    }
+    if (-not (Test-Path (Join-Path $probeVendor "schemas.zip"))) {
+        Write-Error "probe: vendor/schemas.zip nao copiado"
+    }
     & (Join-Path $Node "node.exe") (Join-Path $App "scripts\installer-payload-bundle.js") ensure $probe
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     $sqlite = Join-Path $probe "node_modules\better-sqlite3\build\Release\better_sqlite3.node"
