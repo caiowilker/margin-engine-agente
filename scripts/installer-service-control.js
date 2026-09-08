@@ -18,7 +18,8 @@ const SERVICE_SCM_NAME = nodeWindowsServiceScmName(SERVICE_DISPLAY_NAME);
 const LEGACY_SCM_NAMES = LEGACY_DISPLAY_NAMES.map(nodeWindowsServiceScmName);
 
 const STOP_WAIT_MS = parseInt(process.env.INSTALLER_STOP_WAIT_MS || "45000", 10);
-const PREINSTALL_STOP_WAIT_MS = parseInt(process.env.INSTALLER_PREINSTALL_STOP_MS || "90000", 10);
+/** PrepareToInstall: cap curto — bootstrap completa a parada sem congelar o wizard. */
+const PREINSTALL_STOP_WAIT_MS = parseInt(process.env.INSTALLER_PREINSTALL_STOP_MS || "10000", 10);
 const FORCE_STOP_POLL_MS = 15_000;
 const POLL_MS = 500;
 

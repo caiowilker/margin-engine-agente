@@ -58,6 +58,9 @@ PrivilegesRequired=admin
 CloseApplications=yes
 CloseApplicationsFilter=*.exe,node.exe
 RestartApplications=no
+; Nunca pedir reboot do Windows — o serviço SCM sobe sozinho (start=auto + recovery).
+RestartIfNeededByRun=no
+AlwaysRestart=no
 WizardStyle=modern
 LicenseFile=LICENSE.txt
 UninstallDisplayName={#MyAppName}
@@ -79,16 +82,14 @@ Name: "repairmode"; Description: "Reparar instalação (serviço, atalhos, firew
 [Files]
 ; nocompression em binários já compactados (node.exe, DLLs) — extract sem LZMA.
 ; frontend .br/.gz são para CDN; o agente serve o arquivo original.
-; Schemas: dist\app\* + linha explícita acbrlib\data\Schemas (NFe/NFSe).
+; Schemas XSD (NFe/NFSe) entram uma vez via dist\app\* — Excludes data\* = só app\data.
 ; node_modules e PosPrinter: sem skipifsourcedoesntexist — compile falha se o prepare-build não rodou.
 Source: "dist\node\*"; DestDir: "{app}\node"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression; Excludes: "CHANGELOG.md,README.md,install_tools.bat,node_modules\npm\docs\*,node_modules\npm\man\*"
 Source: "dist\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "node_modules\*,data\*,daemon\*,frontend-dist\*,templates\*,.env,homolog-acbrlib\*,test\*,.git\*,RESULTADO-*.md,*.log,*.db,*.db-shm,*.db-wal,acbrlib\lib\*,posprinter\lib\*"
 Source: "dist\app\node_modules\*"; DestDir: "{app}\app\node_modules"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "dist\app\acbrlib\lib\*"; DestDir: "{app}\app\acbrlib\lib"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression
 Source: "dist\app\posprinter\lib\*"; DestDir: "{app}\app\posprinter\lib"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression
-; Schemas XSD: linha explícita (além de dist\app\*) — payload fiscal nunca sai sem NFe/NFSe.
-; Excludes data\* do Source principal afeta só app\data, não acbrlib\data.
-Source: "dist\app\acbrlib\data\Schemas\*"; DestDir: "{app}\app\acbrlib\data\Schemas"; Flags: ignoreversion recursesubdirs createallsubdirs
+; INI padrão só se ainda não existir (não sobrescreve config do caixa):
 Source: "dist\app\acbrlib\data\config\ACBrNFeServicos.ini"; DestDir: "{app}\app\acbrlib\data\config"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist
 Source: "dist\app\acbrlib\data\config\acbrlib.ini"; DestDir: "{app}\app\acbrlib\data\config"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist
 Source: "dist\app\data\acbrlib.ini"; DestDir: "{app}\app\data"; Flags: ignoreversion onlyifdoesntexist skipifsourcedoesntexist
@@ -141,7 +142,8 @@ Type: filesandordirs; Name: "{app}\app\daemon"
 
 [Messages]
 brazilianportuguese.WelcomeLabel2=Este assistente instala o **Margin Engine** no ponto de venda.%n%nO sistema conecta impressão, documentos fiscais e operação offline ao navegador do PDV.%n%nSe já existe uma instalação, seus dados (configurações, certificados, vendas e logs) serão preservados automaticamente.%n%nAo concluir, o serviço será instalado e iniciado — não é necessário abrir o Gerenciador de Serviços do Windows.
-brazilianportuguese.FinishedLabel=O Margin Engine foi instalado neste computador.%n%nO serviço local foi configurado, o firewall atualizado e o sistema deve abrir automaticamente em http://localhost:9100/%n%nUse o atalho **Margin Engine** (sempre localhost) para acessar o painel e ativar o terminal de caixa.
+brazilianportuguese.FinishedLabel=O Margin Engine foi instalado neste computador.%n%nO serviço local foi configurado para iniciar automaticamente com o Windows (não é necessário reiniciar o PC).%n%nO sistema deve abrir em http://localhost:9100/%n%nUse o atalho **Margin Engine** (sempre localhost) para acessar o painel e ativar o terminal de caixa.
+brazilianportuguese.FinishedRestartLabel=O Margin Engine foi atualizado. O serviço reinicia sozinho — não é necessário reiniciar o Windows. Se a porta 9100 não abrir, use Reparar no instalador.
 
 [Code]
 var
@@ -356,8 +358,10 @@ var
   ReportPath: String;
   Lines: TArrayOfString;
   I: Integer;
+  ExitFailed: Boolean;
 begin
   Result := '';
+  ExitFailed := False;
   { Código de saída do bootstrap desta execução }
   ReportPath := ExpandConstant('{app}\app\data\install-bootstrap-exit.txt');
   if FileExists(ReportPath) then
@@ -366,11 +370,12 @@ begin
     begin
       if (GetArrayLength(Lines) > 0) and (Trim(Lines[0]) <> '0') then
       begin
+        ExitFailed := True;
         Result := 'A configuração pós-instalação falhou (código ' + Trim(Lines[0]) + ').' + #13#10;
       end;
     end;
   end;
-  { Falha desta execução primeiro — não reaproveitar relatório antigo do ProgramData. }
+  { Falha desta execução — nunca misturar com relatório OK antigo do ProgramData. }
   ReportPath := ExpandConstant('{app}\app\data\install-bootstrap-error.txt');
   if FileExists(ReportPath) then
   begin
@@ -386,6 +391,8 @@ begin
       Exit;
     end;
   end;
+  if ExitFailed then
+    Exit;
   ReportPath := ExpandConstant('{#MarginDataRoot}\Diagnostics\install-last-report.txt');
   if FileExists(ReportPath) then
   begin

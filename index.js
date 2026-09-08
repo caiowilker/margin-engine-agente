@@ -174,12 +174,20 @@ function pararRuntimeTimers() {
 async function encerrarGracefully(signal, code = 0) {
   if (encerrando) return;
   encerrando = true;
+  const restartRapido =
+    signal === "AUTO_UPDATE" ||
+    signal === "LAN_BIND_RESTART" ||
+    signal === "UPDATER_ROLLBACK" ||
+    String(signal || "").startsWith("ACBR_LIB_RECYCLE");
   const paradaServico =
     signal === "SIGTERM" ||
     signal === "SIGINT" ||
     signal === "AUTO_UPDATE" ||
     signal === "LAN_BIND_RESTART" ||
-    signal === "UPDATER_ROLLBACK";
+    signal === "UPDATER_ROLLBACK" ||
+    String(signal || "").startsWith("ACBR_LIB_RECYCLE");
+  /** Update/restart: não segurar 8s — caixa fica em “iniciando”. */
+  const jobWaitMs = restartRapido ? 1500 : paradaServico ? 8000 : 30000;
   console.log(`[Agente] Encerrando (${signal})...`);
   auditLog.registrar("AGENTE_SHUTDOWN", { signal });
   configSync.parar();
@@ -187,13 +195,15 @@ async function encerrarGracefully(signal, code = 0) {
 
   await new Promise((resolve) => {
     if (!httpServer) return resolve();
+    const t = setTimeout(resolve, restartRapido ? 800 : 5000);
     httpServer.close(() => {
+      clearTimeout(t);
       console.log("[Agente] HTTP server fechado — novas conexões recusadas");
       resolve();
     });
   });
 
-  const waitJobs = await filaFiscal.aguardarJobsAtivos(paradaServico ? 8000 : 30000);
+  const waitJobs = await filaFiscal.aguardarJobsAtivos(jobWaitMs);
   if (!waitJobs.ok) {
     console.error(
       "[Agente] Timeout aguardando jobs fiscais:",
@@ -222,7 +232,16 @@ async function encerrarGracefully(signal, code = 0) {
     try {
       const libDriver = require("./fiscal/drivers/acbrLibDriver");
       if (typeof libDriver.invalidateNativeSession === "function") {
-        await libDriver.invalidateNativeSession("shutdown");
+        // Update: não esperar FFI lento — timeout curto
+        const inv = libDriver.invalidateNativeSession("shutdown");
+        if (restartRapido && inv && typeof inv.then === "function") {
+          await Promise.race([
+            inv,
+            new Promise((r) => setTimeout(r, 800)),
+          ]);
+        } else if (inv && typeof inv.then === "function") {
+          await inv;
+        }
       }
     } catch (_) {}
     try {
@@ -429,7 +448,7 @@ let config = {};
 
 async function boot() {
   config = await lerConfig();
-  config = await recuperarCredenciaisSeNecessario(config);
+  // Credenciais (até 15s de rede) DEPOIS do listen — senão :9100 fica morto no install/update.
   sincronizarContextoLog(config);
 
   // Self-heal: IP LAN/WSL morto quebra /api-proxy (502) e print station.
@@ -489,20 +508,72 @@ async function boot() {
     console.warn("[Boot] Reconciliação EMISSAO_FISCAL:", err.message);
   }
 
-  // HTTP na porta 9100 ANTES de integrity/recovery pesado — serviço Windows
-  // precisa responder /health logo após restart (evita ME-012 e crash-loop).
-  iniciarServidor();
-
+  // HTTP na porta 9100 ANTES de sc.exe / heal pesado — “iniciando” some em <1s.
+  // UI quebrada: sempre tenta heal (com ou sem marcador — crash mid-apply não marca).
   try {
-    const strictDefault =
-      (process.env.FISCAL_INTEGRITY_STRICT || "false").toLowerCase() === "true";
-    fiscalStorage.recoverCorruptedBootDbs(strictDefault);
+    const resilience = require("./runtime/serviceResilience");
+    const fi = require("./runtime/frontendIntegrity");
+    const ui = fi.verificarFrontendDist(path.join(__dirname, "frontend-dist"), {
+      skipCache: true,
+    });
+    if (!ui.ok) {
+      const heal = resilience.healFrontendOnBoot(__dirname);
+      if (heal.healed) console.warn(`[UI] Self-heal pré-HTTP: ${heal.detail}`);
+      else if (heal.action === "failed") {
+        console.error(`[UI] CRÍTICO — frontend-dist quebrado: ${heal.detail}`);
+      } else {
+        console.warn(`[UI] frontend-dist: ${ui.motivo} (servindo recuperação)`);
+      }
+    } else {
+      resilience.limparMarcadorPosUpdate();
+    }
   } catch (err) {
-    console.error("[Boot] Falha integrity_check:", err.message);
-    console.warn(
-      "[Boot] Agente permanece ONLINE — fiscal pode operar em modo degradado até reparo.",
-    );
+    console.warn("[UI] heal boot:", err.message);
   }
+  iniciarServidor();
+  setImmediate(() => {
+    try {
+      const scm = require("./runtime/serviceResilience").hardenScm();
+      if (scm.ok) console.log(`[SCM] Autostart ${scm.autostart?.start || "auto"} + recovery OK`);
+      else if (process.platform === "win32") {
+        console.warn(
+          "[SCM] harden parcial — rode instalador como Admin se :9100 sumir após reboot",
+        );
+      }
+    } catch (err) {
+      console.warn("[SCM] harden:", err.message);
+    }
+  });
+  // Rede/cofre após porta aberta — não atrasa /health do instalador.
+  setImmediate(() => {
+    recuperarCredenciaisSeNecessario(config)
+      .then((cfg) => {
+        config = cfg;
+        sincronizarContextoLog(config);
+        if (config.backendUrl) process.env.BACKEND_URL = config.backendUrl;
+        if (config.backendToken) process.env.BACKEND_TOKEN = config.backendToken;
+        if (config.backendUrl && config.backendToken) {
+          try {
+            fila.atualizarConfig(config.backendUrl, config.backendToken);
+            mesaFila.atualizarConfig(config.backendUrl, config.backendToken);
+          } catch (_) {}
+        }
+      })
+      .catch((err) => console.warn("[Boot] credenciais deferidas:", err.message));
+  });
+
+  setImmediate(() => {
+    try {
+      const strictDefault =
+        (process.env.FISCAL_INTEGRITY_STRICT || "false").toLowerCase() === "true";
+      fiscalStorage.recoverCorruptedBootDbs(strictDefault);
+    } catch (err) {
+      console.error("[Boot] Falha integrity_check:", err.message);
+      console.warn(
+        "[Boot] Agente permanece ONLINE — fiscal pode operar em modo degradado até reparo.",
+      );
+    }
+  });
   const disco = fiscalStorage.verificarEspacoDisco();
   if (disco.degradado) {
     console.warn(`[Boot] Modo degradado — disco: ${disco.livreMb}MB livres`);
@@ -1019,13 +1090,18 @@ async function aplicarAtualizacao(urlDownload, novaVersao, shaEsperado, opts = {
     console.log(`[Updater] ✓ SHA-256 do pacote verificado.`);
 
     const { execSync } = require("child_process");
-    try {
-      execSync(`unzip -q "${tmpZip}" -d "${tmpDir}"`, { timeout: 30000 });
-    } catch {
+    // Windows: Expand-Archive direto (unzip raramente existe e só gasta timeout).
+    if (process.platform === "win32") {
       execSync(
-        `powershell -Command "Expand-Archive -Path '${tmpZip}' -DestinationPath '${tmpDir}' -Force"`,
+        `powershell -NoProfile -NonInteractive -Command "Expand-Archive -Path '${tmpZip.replace(/'/g, "''")}' -DestinationPath '${tmpDir.replace(/'/g, "''")}' -Force"`,
         { timeout: 30000 },
       );
+    } else {
+      try {
+        execSync(`unzip -q "${tmpZip}" -d "${tmpDir}"`, { timeout: 30000 });
+      } catch {
+        execSync(`tar -xf "${tmpZip}" -C "${tmpDir}"`, { timeout: 30000 });
+      }
     }
 
     const manifestNoPacote = path.join(tmpDir, "manifest.json");
@@ -1056,8 +1132,18 @@ async function aplicarAtualizacao(urlDownload, novaVersao, shaEsperado, opts = {
     }
 
     setTimeout(() => {
-      encerrarGracefully("AUTO_UPDATE", 0).catch(() => process.exit(0));
-    }, 1500);
+      // Exit 1: SCM recovery reinicia o serviço. Exit 0 deixava STOPPED até
+      // reboot — e se o start falhasse no boot, :9100 ficava morto.
+      const code = require("./runtime/serviceResilience").exitCodeParaScmRestart();
+      try {
+        require("./runtime/serviceResilience").marcarPosUpdate({
+          versao: novaVersao,
+          origem,
+        });
+      } catch (_) {}
+      // 400ms basta para flush do log; 1.5s alongava “iniciando” sem ganho.
+      encerrarGracefully("AUTO_UPDATE", code).catch(() => process.exit(code));
+    }, 400);
   } catch (err) {
     updaterState.atualizando = false;
     updaterState.ultimoErro = err.message;
@@ -1646,8 +1732,9 @@ function iniciarServidor() {
         updaterCloudPending.limparPending();
         // Disco restaurado — processo ainda roda código antigo em memória.
         setTimeout(() => {
-          encerrarGracefully("UPDATER_ROLLBACK", 0).catch(() => process.exit(0));
-        }, 1500);
+          const code = require("./runtime/serviceResilience").exitCodeParaScmRestart();
+          encerrarGracefully("UPDATER_ROLLBACK", code).catch(() => process.exit(code));
+        }, 400);
         res.json({
           ok: true,
           backup: dir,
@@ -1674,12 +1761,21 @@ function iniciarServidor() {
   // ── Rotas básicas ────────────────────────────────────────────────────────────
   app.get("/health", privateNetworkHeaders, (req, res) => {
     const fiscal = resumoEstadoFiscal();
+    const frontendIntegrity = require("./runtime/frontendIntegrity");
+    const ui = frontendIntegrity.verificarFrontendDist(
+      path.join(__dirname, "frontend-dist"),
+    );
     // Compatível: ok continua significando HTTP vivo. O consumidor que precisa
     // prontidão fiscal usa fiscal.pronto, sem confundir porta aberta com SEFAZ.
     res.json({
       ok: true,
       versao: VERSAO_ATUAL,
       uptime: process.uptime(),
+      ui: {
+        ok: ui.ok === true,
+        motivo: ui.ok ? undefined : ui.motivo,
+        faltando: ui.faltando,
+      },
       fiscal: {
         ...fiscal,
         pronto:
@@ -1856,6 +1952,15 @@ function iniciarServidor() {
       uptimeHuman: formatUptime(uptime),
       ativado: config.ativado === true,
       pdvNome: config.pdvNome || "PDV",
+      ui: (() => {
+        const check = require("./runtime/frontendIntegrity").verificarFrontendDist(
+          path.join(__dirname, "frontend-dist"),
+        );
+        return {
+          ok: check.ok === true,
+          motivo: check.ok ? undefined : check.motivo,
+        };
+      })(),
 
       impressora: (() => {
         const printerBootstrap = require("./print/printerBootstrap");
@@ -2503,7 +2608,8 @@ function iniciarServidor() {
           "[LAN] Ativação exige bind 0.0.0.0 — reiniciando o serviço em 1.5s…",
         );
         setTimeout(() => {
-          encerrarGracefully("LAN_BIND_RESTART", 0).catch(() => process.exit(0));
+          const code = require("./runtime/serviceResilience").exitCodeParaScmRestart();
+          encerrarGracefully("LAN_BIND_RESTART", code).catch(() => process.exit(code));
         }, 1500);
       }
     } catch (err) {
@@ -4366,6 +4472,18 @@ function iniciarServidor() {
   // ── Página raiz (sem frontend-dist) ─────────────────────────────────────────
   const FRONTEND_INDEX = path.join(__dirname, "frontend-dist", "index.html");
   const STATUS_HTML = path.join(__dirname, "status.html");
+  const frontendIntegrity = require("./runtime/frontendIntegrity");
+  const uiCheckBoot = frontendIntegrity.verificarFrontendDist(
+    path.join(__dirname, "frontend-dist"),
+  );
+  if (!uiCheckBoot.ok) {
+    console.warn(
+      `[UI] frontend-dist: ${uiCheckBoot.motivo}` +
+        (uiCheckBoot.faltando?.length
+          ? ` faltando=${uiCheckBoot.faltando.slice(0, 5).join(",")}`
+          : ""),
+    );
+  }
   if (!fs.existsSync(FRONTEND_INDEX)) {
     app.get("/", (req, res) => {
       if (fs.existsSync(STATUS_HTML)) {
@@ -4388,6 +4506,32 @@ function iniciarServidor() {
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       res.setHeader("Pragma", "no-cache");
     };
+    const servirShellOuRecuperacao = (req, res) => {
+      noStoreShell(res);
+      const check = frontendIntegrity.verificarFrontendDist(FRONTEND_DIST);
+      if (!check.ok) {
+        res
+          .status(503)
+          .type("html")
+          .send(frontendIntegrity.htmlRecuperacaoUi(check, VERSAO_ATUAL));
+        return;
+      }
+      try {
+        let html = fs.readFileSync(FRONTEND_INDEX, "utf8");
+        html = frontendIntegrity.injetarWatchdogRootVazio(html);
+        res.type("html").send(html);
+      } catch (err) {
+        res
+          .status(503)
+          .type("html")
+          .send(
+            frontendIntegrity.htmlRecuperacaoUi(
+              { ok: false, motivo: err.message },
+              VERSAO_ATUAL,
+            ),
+          );
+      }
+    };
     app.use(express.static(FRONTEND_DIST, {
       setHeaders(res, filePath) {
         const base = path.basename(filePath);
@@ -4401,13 +4545,13 @@ function iniciarServidor() {
           noStoreShell(res);
         }
       },
+      // index.html: usa o handler abaixo (watchdog + integridade), não o static cru.
+      index: false,
     }));
+    app.get("/", servirShellOuRecuperacao);
     app.get(
       /^(?!\/api|\/api-proxy|\/status|\/health|\/venda|\/fila|\/mesa|\/impressora|\/acbr|\/ativar|\/auth|\/config|\/contingencia|\/diagnostico|\/updater|\/fiscal|\/lan|\/garcom).*$/,
-      (req, res) => {
-        noStoreShell(res);
-        res.sendFile(FRONTEND_INDEX);
-      },
+      servirShellOuRecuperacao,
     );
   }
 
@@ -4654,6 +4798,16 @@ function iniciarServidor() {
           AGENT_PUBLIC_BASE +
           " para ativar.",
       );
+  });
+  httpServer.on("error", (err) => {
+    console.error(`[HTTP] Falha ao escutar ${BIND_HOST}:${PORT}:`, err.message);
+    if (err && err.code === "EADDRINUSE") {
+      console.error(
+        `[HTTP] Porta ${PORT} ocupada — outro processo do agente/impressora? ` +
+          "Encerre o serviço duplicado ou altere AGENT_PORT. Sem isso :9100 fica indisponível.",
+      );
+    }
+    process.exit(1);
   });
 
   // Túnel WS /api-proxy/ws/* → backend (print-station, kitchen, etc.)

@@ -65,11 +65,11 @@ function icaclsGrantCommand(root, { recurse = false } = {}) {
   return `icacls "${root}" /grant *S-1-5-32-545:(OI)(CI)M${tree} /C`;
 }
 
-/** 1º boot: Defender + ACBr grace podem passar de 90s; sucesso retorna antes. */
-const INSTALL_WAIT_ONLINE_MS = 120_000;
-const INSTALL_WAIT_RETRY_MS = 60_000;
-/** Teto de espera ativa do agente no bootstrap (1ª passagem + retry; auto-reparo é extra). */
-const INSTALL_BOOTSTRAP_MAX_MS = 180_000;
+/** 1º boot: sucesso retorna antes; teto folgado só se Defender/ACBr atrasarem. */
+const INSTALL_WAIT_ONLINE_MS = 60_000;
+const INSTALL_WAIT_RETRY_MS = 30_000;
+/** Teto da 1ª passagem (start + wait + retry) antes do auto-reparo. */
+const INSTALL_BOOTSTRAP_MAX_MS = 100_000;
 
 function remainingBootstrapBudgetMs(startedAtMs, nowMs = Date.now()) {
   return Math.max(5_000, INSTALL_BOOTSTRAP_MAX_MS - (nowMs - startedAtMs));

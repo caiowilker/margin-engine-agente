@@ -47,7 +47,7 @@ const REGRAS = [
     teste: /agente|offline|inacess|econn/i,
     problema: "Serviço local indisponível.",
     causa: "Margin Engine pode estar parado.",
-    comoResolver: "Reinicie o serviço ou o computador do caixa.",
+    comoResolver: "Reinicie o serviço Margin Engine (não precisa reiniciar o PC). Se persistir, use Reparar no instalador.",
   },
 ];
 

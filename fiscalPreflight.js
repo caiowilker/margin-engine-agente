@@ -133,7 +133,7 @@ async function validarSefazOperacional() {
       `Emissor fiscal não retornou status do serviço NFC-e. Resposta: ${JSON.stringify(resposta)}`,
     );
   }
-  if (cStat !== "107" && cStat !== "108") {
+  if (cStat !== "107") {
     throw new Error(
       `SEFAZ indisponível (cStat ${cStat}): ${xMotivo || formatarRespostaFiscal(resposta)}`,
     );

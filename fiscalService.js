@@ -645,7 +645,7 @@ async function finalizarEmissaoRecuperada(cfg, numeroVenda, correlationId, resul
   });
 }
 
-const MAX_BUMP_539 = parseInt(process.env.FISCAL_MAX_BUMP_539 || "10", 10);
+const MAX_BUMP_539 = parseInt(process.env.FISCAL_MAX_BUMP_539 || "3", 10);
 
 function enriquecerChaveConsulta539(err) {
   if (!err.chaveConsulta) {

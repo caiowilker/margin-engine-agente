@@ -205,6 +205,10 @@ async function call(method, args = [], opts = {}) {
         `Timeout no worker fiscal (${timeout}ms): ${method}`,
         "ACBR_LIB_WORKER_TIMEOUT",
       );
+      // Emitir/cancelar/inutilizar: SEFAZ pode ter processado — INCERTO, não reemitir.
+      if (/^(emitir|cancelar|inutilizar|enviarEvento)/i.test(String(method || ""))) {
+        error.incerto = true;
+      }
       reject(error);
       void terminate("timeout");
     }, timeout);

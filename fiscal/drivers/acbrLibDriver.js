@@ -451,22 +451,38 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
             contingenciaOffline.isEnabled() &&
             contingenciaOffline.isModeloNfce(modelo)
           ) {
-            const probe = await contingenciaOffline.probeStatusServicoComRetry(
-              inst,
-              acbrLibResposta,
-              log,
-            );
-            if (probe.ok) {
+            // Reusa StatusServico quente (preflight) — evita 2ª ida à SEFAZ sob lock.
+            const warm = peekStatusServicoCache();
+            const warmOk =
+              warm &&
+              warm.operacional === true &&
+              String(warm.cStat) === "107" &&
+              Date.now() - (warm.cachedAt || 0) <
+                Math.min(30_000, Math.max(5_000, STATUS_SERVICO_TTL_MS));
+            if (warmOk) {
               contingenciaOfflineQueue.fecharJanelaDhCont();
-            } else {
-              return emitirNfceContingenciaOffline(
-                inst,
-                runtime,
-                nativeIniPath,
-                modelo,
-                numeracao,
-                probe,
+              log.info(
+                { cStat: warm.cStat, ageMs: Date.now() - warm.cachedAt },
+                "[ACBrLib] Probe StatusServico skip — cache 107 quente",
               );
+            } else {
+              const probe = await contingenciaOffline.probeStatusServicoComRetry(
+                inst,
+                acbrLibResposta,
+                log,
+              );
+              if (probe.ok) {
+                contingenciaOfflineQueue.fecharJanelaDhCont();
+              } else {
+                return emitirNfceContingenciaOffline(
+                  inst,
+                  runtime,
+                  nativeIniPath,
+                  modelo,
+                  numeracao,
+                  probe,
+                );
+              }
             }
           }
 
@@ -487,20 +503,33 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
           log.info("[ACBrLib] NFE_Validar OK");
 
           const emissaoTimeoutMs = resolveEmissaoTimeoutMs();
-          const resposta = await Promise.race([
-            Promise.resolve().then(() => inst.enviar(1, false, true, false)),
-            new Promise((_, reject) =>
-              setTimeout(
-                () =>
-                  reject(
-                    new Error(
-                      `[ACBrLib] NFE_Enviar timeout após ${emissaoTimeoutMs}ms — verifique certificado, SEFAZ e logs do agente`,
-                    ),
-                  ),
-                emissaoTimeoutMs,
+          let resposta;
+          try {
+            resposta = await Promise.race([
+              Promise.resolve().then(() => inst.enviar(1, false, true, false)),
+              new Promise((_, reject) =>
+                setTimeout(() => {
+                  const err = new Error(
+                    `[ACBrLib] NFE_Enviar timeout após ${emissaoTimeoutMs}ms — verifique certificado, SEFAZ e logs do agente`,
+                  );
+                  // INCERTO: SEFAZ pode ter autorizado — nunca reemitir o mesmo nNF.
+                  err.incerto = true;
+                  if (numeracao?.chave) err.chaveConsulta = String(numeracao.chave).replace(/\D/g, "");
+                  try {
+                    require("./acbrLibProcessRecycle").scheduleRecycle("nfe_enviar_timeout");
+                  } catch (_) {
+                    /* best-effort — mata sessão órfã do enviar sync */
+                  }
+                  reject(err);
+                }, emissaoTimeoutMs),
               ),
-            ),
-          ]);
+            ]);
+          } catch (sendErr) {
+            if (sendErr && !sendErr.incerto && /timeout/i.test(String(sendErr.message || ""))) {
+              sendErr.incerto = true;
+            }
+            throw sendErr;
+          }
           log.info(
             { respostaLen: String(resposta || "").length, preview: String(resposta || "").slice(0, 300) },
             "[ACBrLib] NFE_Enviar retorno",
@@ -1100,6 +1129,15 @@ function invalidateStatusServicoCache() {
   statusServicoCache = { at: 0, value: null };
 }
 
+/** Peek do cache StatusServico (sem I/O) — emit hot path decide skip de probe. */
+function peekStatusServicoCache() {
+  const ttl = Math.max(5000, STATUS_SERVICO_TTL_MS);
+  if (!statusServicoCache.value || Date.now() - statusServicoCache.at >= ttl) {
+    return null;
+  }
+  return { ...statusServicoCache.value, cachedAt: statusServicoCache.at };
+}
+
 /**
  * ACBrLib (TipoResposta=JSON) às vezes devolve Status CStat=0 vazio enquanto
  * SalvarWS=1 grava *-sta.xml com cStat real da SEFAZ (ex.: 107).
@@ -1229,12 +1267,7 @@ async function statusServicoLib() {
           }
         }
       }
-      const operacional =
-        p.cStat === "107" ||
-        p.cStat === "108" ||
-        String(p.xMotivo || resposta || "")
-          .toUpperCase()
-          .includes("SERVICO EM OPERACAO");
+      const operacional = p.cStat === "107";
       const xMotivo =
         p.xMotivo ||
         (!operacional && ultimoRetorno ? String(ultimoRetorno).slice(0, 280) : null);
@@ -1382,7 +1415,19 @@ function destinoPdfCanonico(chave, modeloDocumento, formatoPdf = "termico") {
   return destFmt(chave, modeloDocumento, formatoPdf);
 }
 
-/** Persiste XML/PDF do staging nativo para PATHS do agente e gera DANFC-e via NFE_ImprimirPDF. */
+/** Persiste XML (e PDF opcional) do staging nativo. PDF NÃO fica no caminho crítico PDV. */
+function deveGerarPdfNaPersistenciaEmit(modelo) {
+  const onEmit =
+    (process.env.FISCAL_GERAR_PDF_ON_EMIT || "false").toLowerCase() === "true";
+  if (onEmit) return true;
+  // NF-e 55: PDF A4 só se FISCAL_GERAR_PDF=true (ainda assim preferir fila GERAR_PDF).
+  if (String(modelo || "65") === "55") {
+    return (process.env.FISCAL_GERAR_PDF || "false").toLowerCase() === "true";
+  }
+  // NFC-e 65: cupom térmico — nunca PDF sob lock de emissão.
+  return false;
+}
+
 function persistNativeEmissaoOutputs(inst, runtime, chave, modelo, opts = {}) {
   const docs = require("../../documentosFiscais");
   const { ensureDirs } = require("../../marginPaths");
@@ -1416,6 +1461,23 @@ function persistNativeEmissaoOutputs(inst, runtime, chave, modelo, opts = {}) {
       stagedXml,
       notasDir: runtime.notas,
     });
+  }
+
+  if (!deveGerarPdfNaPersistenciaEmit(modelo)) {
+    if (!xmlPathCanon) {
+      fiscalTrace.error("Persist", "Emissão sem XML em ProgramData", {
+        chave: k,
+        xmlDir: PATHS.xml,
+        logsDir: PATHS.logs,
+      });
+      const err = new Error(
+        `[ACBrLib] XML autorizado não persistido — chave ${k}. Verifique logs em ${PATHS.logs}`,
+      );
+      err.incerto = true;
+      err.chaveConsulta = k;
+      throw err;
+    }
+    return { xmlPath: xmlPathCanon, pdfPath: null, pdfSkipped: true };
   }
 
   const {

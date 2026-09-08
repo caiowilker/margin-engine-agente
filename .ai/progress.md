@@ -1,7 +1,64 @@
 # PROGRESS — Agente Local
 
-**Última atualização:** 2026-08-18  
-**Versão:** `1.0.12`
+**Última atualização:** 2026-09-08  
+**Versão:** `1.0.17`
+
+## Produção — fechamento P0 fila/callback (2026-09-08)
+
+- CALLBACK roda com fila pausada; contingência não rouba CALLBACK no mutex SEFAZ.
+- `liberarJobsTravados` ignora job em voo; CALLBACK/PDF stale → PENDENTE (não INCERTO).
+- Timeout Enviar agenda recycle; cancel PROCESSANDO sync `emissao_resultados`.
+- Auto-repair: start se stopped, re-registro só se ausente.
+- Env/catalog: CALLBACK/PDF worker + JOB_STALE; WORKER_MS default 1000.
+
+## Fechamento extremo — qualidade total (2026-09-08)
+
+- CALLBACK_BACKEND em worker próprio (não bloqueia SEFAZ).
+- Cancel PROCESSANDO → INCERTO (recovery), não falha permanente.
+- Instalador: limpa relatório ProgramData stale; Inno exit≠0 sem misturar OK antigo;
+  registerService só recupera se RUNNING; install-service não mente exit 0.
+- ADRs: solidez :9100, instalador rápido, emissão extrema.
+
+## Fix — emissão fiscal extrema (solidez + velocidade) (2026-09-08)
+
+- PDF fora do lock NFC-e (só com `FISCAL_GERAR_PDF_ON_EMIT`).
+- Timeout Enviar/worker → INCERTO (consulta, não reemitir).
+- Online = cStat 107; skip probe se cache quente; dedup + RECUPERANDO.
+- Bump 539 ≤3; backoff transient 8s→…
+- ADR: `.ai/decisions/ADR-emissao-fiscal-extrema-20260908.md`
+
+## Fix — auditoria extrema solidez+velocidade (2026-09-08)
+
+- Heal sem exigir marcador; marcador antes de mutar SPA; swap staging→rename.
+- Listen-first: credenciais + integrity_check deferidos; cache UI no `/health`.
+- SCM `auto` (não delayed); recycle ACBr no shutdown rápido; unzip Win direto.
+- Instalador: schemas ProgramData sempre; validatePostUpdate fail-hard; `ui.ok`
+  no wait-online; netsh-first; preinstall stop 10s; SCM poll 200ms.
+- ADR: `.ai/decisions/ADR-solidez-update-reboot-9100-20260908.md`
+
+## Fix — update/boot rápido + solidez (2026-09-08)
+
+- Campo: update demorava / “iniciando” longo; tela preta; morto pós-reboot.
+- Velocidade: HTTP sobe **antes** de `sc.exe`; backup/apply `frontend-dist` via
+  `fs.cpSync` (árvore); shutdown update ≤1,5s jobs + 400ms; SCM restart/1s;
+  poll /health 150ms nos primeiros 5s; node-windows wait 1s.
+- Instalação: wait-online 60s+30s (teto 100s); `install-service` poll SCM ~200ms;
+  stop 20s+25s; start SCM 20s vs HTTP.
+- Solidez: exit 1 pós-update; auto+recovery; self-heal UI; Inno sem reboot.
+- ADR: `.ai/decisions/ADR-solidez-update-reboot-9100-20260908.md`,
+  `.ai/decisions/ADR-instalador-windows-rapido-20260818.md`
+
+## Fix — solidez extrema :9100 (tela preta + morto pós-reboot) (2026-09-08)
+
+- Campo: tela preta; update pediu reiniciar PC e depois serviço não subiu.
+- Causa A: SPA com assets hashed ausentes + shell dark vazio.
+- Causa B: `AUTO_UPDATE` com **exit 0** — Windows SCM não reinicia serviço
+  em saída limpa; reboot mascarava/falhava o start.
+- Fix: `frontendIntegrity` + recuperação 503 + watchdog `#root`; exit **1**
+  pós-update; `delayed-auto` + recovery SCM; self-heal rollback no boot;
+  Inno sem pedir reboot; mensagem operador sem “reinicie o PC”.
+- ADR: `.ai/decisions/ADR-solidez-update-reboot-9100-20260908.md`
+- Testes: `test/frontend-integrity.test.js`
 
 ## Comanda/mesa — horário no fuso da loja (2026-08-18)
 

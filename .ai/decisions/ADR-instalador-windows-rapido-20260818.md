@@ -14,7 +14,11 @@ O `Margin-Engine-Setup-*.exe` levava vários minutos no ponto de venda. O payloa
 3. Frontend do instalador sem `*.br` e `*.gz` (política do manifest alinhada).
 4. Bootstrap empacotado (`BUILD_STAMP.json` + `node_modules` nativo): não roda `npm ci`, não regenera manifest, não roda predeploy.
 5. ACL na raiz de `%ProgramData%\MarginEngine` com herança `(OI)(CI)` — `/T` só no modo **reparar**.
-6. Espera do serviço/health: 120 s + retry 60 s (sucesso retorna antes; folga para Defender/ACBr no 1º boot). Teto da 1ª passagem: 180 s antes do auto-reparo.
+6. Espera do serviço/health: 60 s + retry 30 s (sucesso retorna antes). Teto 100 s.
+   Wait-online exige `ui.ok`. `install-service --no-open` poll SCM ~200 ms.
+   Parada pré-update: 20 s + 25 s (skip se já parado). Preinstall Inno ≤10 s.
+   Firewall: `netsh` primeiro. Schemas ProgramData em install/update/repair.
+   `validatePostUpdate` falha o bootstrap se manifest/UI inválidos.
 7. Skip de SHA-256 só se o `manifest.json` listar arquivos **existentes** e sem `.br`/`.gz`. Caso contrário o bootstrap regenera.
 8. `prepare-build.ps1` sempre regenera o manifest, remove `.br`/`.gz` e roda `assert-installer-payload.js` antes do ISCC.
 

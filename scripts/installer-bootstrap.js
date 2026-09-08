@@ -122,6 +122,24 @@ function clearBootstrapMarkers() {
       /* ignore */
     }
   }
+  // ProgramData: evita Inno mostrar relatório OK antigo após falha nova.
+  try {
+    const { getDirectoryManager } = require(path.join(appDir, "runtime", "directoryManager"));
+    const diag = getDirectoryManager().PATHS.diagnostics;
+    for (const name of [
+      "install-bootstrap-exit.txt",
+      "install-bootstrap-error.txt",
+      "install-last-report.txt",
+    ]) {
+      try {
+        fs.unlinkSync(path.join(diag, name));
+      } catch {
+        /* ignore */
+      }
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 function writeBootstrapFailure(err) {
@@ -331,18 +349,30 @@ function ensureFirewall() {
   if (process.platform !== "win32" || !withFirewall) return;
   const port = process.env.AGENT_PORT || process.env.PORT || "9100";
   const ruleName = `PDV Agente ${port}`;
+  // netsh primeiro (rápido); PowerShell só se falhar.
   try {
-    // Profile Any: rede Wi‑Fi marcada como "Pública" no Windows ainda libera a porta.
+    try {
+      run(`netsh advfirewall firewall delete rule name="${ruleName}"`, { stdio: "pipe" });
+    } catch (_) {}
+    run(
+      `netsh advfirewall firewall add rule name="${ruleName}" dir=in action=allow protocol=TCP localport=${port} profile=any`,
+      { stdio: "pipe" },
+    );
+    initBootstrapLog().info(
+      { acao: "firewall", porta: port, via: "netsh", profile: "Any" },
+      "Regra de firewall registrada via netsh",
+    );
+    return;
+  } catch {
+    /* fallback PowerShell */
+  }
+  try {
     const ps = `
 $ErrorActionPreference = 'Stop'
 $port = ${Number(port) || 9100}
 $ruleName = '${ruleName.replace(/'/g, "''")}'
 Remove-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
 New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow -Profile Any | Out-Null
-$legacy = Get-NetFirewallRule -DisplayName 'Margin Engine Agente' -ErrorAction SilentlyContinue
-if ($legacy) {
-  Set-NetFirewallRule -DisplayName 'Margin Engine Agente' -Direction Inbound -Action Allow -Enabled True -Profile Any -ErrorAction SilentlyContinue
-}
 `.trim();
     execFileSync(
       "powershell.exe",
@@ -350,31 +380,14 @@ if ($legacy) {
       { stdio: "pipe", windowsHide: true },
     );
     initBootstrapLog().info(
-      { acao: "firewall", porta: port, regra: ruleName, profile: "Any" },
-      "Regra de firewall registrada (Profile Any)",
+      { acao: "firewall", porta: port, via: "powershell", profile: "Any" },
+      "Regra de firewall registrada (PowerShell)",
     );
   } catch {
-    try {
-      run(
-        `netsh advfirewall firewall delete rule name="${ruleName}"`,
-        { stdio: "pipe" },
-      );
-    } catch (_) {}
-    try {
-      run(
-        `netsh advfirewall firewall add rule name="${ruleName}" dir=in action=allow protocol=TCP localport=${port} profile=any`,
-        { stdio: "pipe" },
-      );
-      initBootstrapLog().info(
-        { acao: "firewall", porta: port, via: "netsh" },
-        "Regra de firewall registrada via netsh profile=any",
-      );
-    } catch {
-      initBootstrapLog().warn(
-        { porta: port },
-        "Firewall não configurado (pode já existir ou política bloqueou)",
-      );
-    }
+    initBootstrapLog().warn(
+      { porta: port },
+      "Firewall não configurado (pode já existir ou política bloqueou)",
+    );
   }
 }
 
@@ -420,10 +433,18 @@ function npmInstallIfNeeded() {
 function stopAgentService() {
   try {
     const ctl = require(path.join(appDir, "scripts", "installer-service-control"));
-    let r = ctl.stopService({ force: false, waitMs: 45_000 });
+    const state = typeof ctl.queryState === "function" ? ctl.queryState() : null;
+    if (state === "stopped" || state === "missing") {
+      initBootstrapLog().info(
+        { acao: "service_stop_skip", state },
+        "Serviço já parado — skip stop",
+      );
+      return { ok: true, skipped: true, state };
+    }
+    let r = ctl.stopService({ force: false, waitMs: 20_000 });
     if (!r.ok && !r.skipped) {
       initBootstrapLog().warn({ acao: "service_stop_force", ...r }, "Parada suave falhou — forçando");
-      r = ctl.stopService({ force: true, waitMs: 90_000 });
+      r = ctl.stopService({ force: true, waitMs: 25_000 });
     }
     if (!r.ok && !r.skipped) {
       throw new Error(r.error || `Serviço não parou (estado: ${r.state})`);
@@ -468,18 +489,41 @@ function validatePostUpdate() {
   if (!fs.existsSync(manifestPath)) {
     throw new Error("manifest.json ausente após atualização");
   }
-  try {
-    const { verificarManifestBoot } = require(path.join(appDir, "manifestUpdater"));
-    if (typeof verificarManifestBoot === "function") {
-      const check = verificarManifestBoot();
-      if (check && check.ok === false) {
-        throw new Error(check.motivo || "Integridade do manifest falhou");
-      }
+  const { verificarManifestBoot } = require(path.join(appDir, "manifestUpdater"));
+  if (typeof verificarManifestBoot === "function") {
+    const check = verificarManifestBoot();
+    if (check && check.ok === false) {
+      throw new Error(check.motivo || "Integridade do manifest falhou");
     }
-  } catch (err) {
-    initBootstrapLog().warn({ err: err.message }, "Verificação de manifest reportou aviso");
+  }
+  const frontDist = path.join(appDir, "frontend-dist");
+  if (fs.existsSync(path.join(frontDist, "index.html"))) {
+    const fi = require(path.join(appDir, "runtime", "frontendIntegrity"));
+    const ui = fi.verificarFrontendDist(frontDist, { skipCache: true });
+    if (!ui.ok) {
+      throw new Error(`frontend-dist inválido após update: ${ui.motivo}`);
+    }
   }
   return true;
+}
+
+/** XSDs NFe/NFSe → ProgramData em todo install/update/repair (PathSchemas do ACBr). */
+function ensureProgramDataSchemas() {
+  try {
+    const { getDirectoryManager } = require(path.join(appDir, "runtime", "directoryManager"));
+    const dm = getDirectoryManager();
+    const { ensureInstallerSchemas } = require(path.join(appDir, "scripts", "installer-ensure-schemas"));
+    const r = ensureInstallerSchemas(appDir, dm.ROOT, { requireNfse: true });
+    if (r && r.ok === false) {
+      throw new Error(r.error || "schemas fiscais insuficientes no payload");
+    }
+    initBootstrapLog().info(
+      { acao: "ensure_schemas", ...r },
+      "Schemas fiscais sincronizados com ProgramData",
+    );
+  } catch (err) {
+    throw new Error(`Falha ao sincronizar schemas fiscais: ${err.message}`);
+  }
 }
 
 function generateManifest() {
@@ -522,27 +566,33 @@ function registerService() {
     return { ok: true };
   } catch (err) {
     const recovered = verifyServiceRegistered();
-    if (recovered.ok) {
+    // Só recupera se SCM está RUNNING — stopped/missing não é sucesso.
+    if (recovered.ok && recovered.state === "running") {
       initBootstrapLog().warn(
         { err: err.message, state: recovered.state },
-        "Registro reportou erro mas serviço presente no SCM — continuando",
+        "Registro reportou erro mas serviço RUNNING — continuando",
       );
       return recovered;
     }
     initBootstrapLog().warn({ err: err.message }, "Registro do serviço falhou — tentará auto-reparo");
-    return { ok: false, error: err.message };
+    return { ok: false, error: err.message, state: recovered.state };
   }
 }
 
 function verifyServiceRegistered() {
-  if (process.platform !== "win32") return { ok: false, state: "skipped" };
+  if (process.platform !== "win32") return { ok: false, state: "skipped", present: false };
   try {
     const ctl = require(path.join(appDir, "scripts", "installer-service-control"));
     const st = ctl.queryState();
-    if (st === "missing") return { ok: false, state: st };
-    return { ok: true, recovered: true, state: st };
+    if (st === "missing") return { ok: false, state: st, present: false };
+    return {
+      ok: st === "running",
+      recovered: st === "running",
+      state: st,
+      present: true,
+    };
   } catch {
-    return { ok: false, state: "unknown" };
+    return { ok: false, state: "unknown", present: false };
   }
 }
 
@@ -568,13 +618,19 @@ async function runAutoRepairIfOffline(online, startResult, dm, serviceResult) {
   npmRepairSteps();
 
   let nextServiceResult = serviceResult;
-  if (!verifyServiceRegistered().ok) {
+  const scm = verifyServiceRegistered();
+  if (!scm.present) {
     initBootstrapLog().warn({ acao: "auto_repair_register" }, "Serviço ausente no SCM — re-registro");
     nextServiceResult = registerService();
+  } else if (!scm.ok) {
+    initBootstrapLog().info(
+      { acao: "auto_repair_start_only", state: scm.state },
+      "Serviço presente mas parado — start sem re-registro",
+    );
   }
 
   const repairBudget = Date.now();
-  let nextStart = tryStartService(clampWaitMs(INSTALL_WAIT_ONLINE_MS, repairBudget));
+  let nextStart = tryStartService(clampWaitMs(20_000, repairBudget));
   let nextOnline = await waitForOnlineAsync(clampWaitMs(INSTALL_WAIT_ONLINE_MS, repairBudget));
 
   if (!nextOnline.ok) {
@@ -615,7 +671,8 @@ async function bringAgentOnline() {
 
   const budgetStarted = Date.now();
   const firstWait = clampWaitMs(INSTALL_WAIT_ONLINE_MS, budgetStarted);
-  let startResult = tryStartService(firstWait);
+  // SCM “running” ≠ HTTP up — start curto; o teto fica no /health
+  let startResult = tryStartService(clampWaitMs(20_000, budgetStarted));
   initBootstrapLog().info({ acao: "service_start", ...startResult }, "Start do serviço pós-registro");
 
   let online = await waitForOnlineAsync(firstWait);
@@ -737,6 +794,7 @@ async function main() {
 
   if (mode === "install" || mode === "update") {
     writeDefaultConfigs();
+    ensureProgramDataSchemas();
     npmInstallIfNeeded();
     generateManifest();
     runPredeploy();
@@ -746,6 +804,7 @@ async function main() {
 
   if (mode === "repair") {
     writeDefaultConfigs();
+    ensureProgramDataSchemas();
     npmRepairSteps();
     generateManifest();
     ensureFirewall();

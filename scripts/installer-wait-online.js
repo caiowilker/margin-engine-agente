@@ -26,9 +26,10 @@ function readPort() {
   return 9100;
 }
 
-/** Intervalo adaptativo: sondagem rápida no início, 2s após 30s (sucesso retorna antes). */
+/** Intervalo adaptativo: 150ms no início (update rápido), depois 300/750/2s. */
 function pollDelayMs(elapsedMs) {
-  if (elapsedMs < 10_000) return 300;
+  if (elapsedMs < 5_000) return 150;
+  if (elapsedMs < 15_000) return 300;
   if (elapsedMs < 30_000) return 750;
   return 2000;
 }
@@ -55,7 +56,21 @@ function healthOk(port) {
         body += c;
       });
       res.on("end", () => {
-        resolve(res.statusCode === 200);
+        if (res.statusCode !== 200) {
+          resolve(false);
+          return;
+        }
+        try {
+          const json = JSON.parse(body);
+          // ui.ok false = tela preta — instalador não deve declarar sucesso.
+          if (json && json.ui && json.ui.ok === false) {
+            resolve(false);
+            return;
+          }
+          resolve(json && json.ok === true);
+        } catch {
+          resolve(true);
+        }
       });
     });
     req.on("error", () => resolve(false));

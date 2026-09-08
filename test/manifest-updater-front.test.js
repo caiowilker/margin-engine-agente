@@ -92,13 +92,18 @@ async function run() {
     "frontend-dist/version.json",
     JSON.stringify({ version: "1.0.0", buildId: "front-v1" }),
   );
-  write("frontend-dist/index.html", "<html>v1</html>\n");
+  write("frontend-dist/assets/app.js", "// front v1\n");
+  write(
+    "frontend-dist/index.html",
+    '<html><body><div id="root"></div><script src="/assets/app.js"></script></body></html>\n',
+  );
 
   const manifestV1 = buildManifest([
     "marker-agent.js",
     "package.json",
     "frontend-dist/version.json",
     "frontend-dist/index.html",
+    "frontend-dist/assets/app.js",
   ]);
   write("manifest.json", JSON.stringify(manifestV1, null, 2));
 
@@ -109,6 +114,10 @@ async function run() {
 
   await testAsync("aplica pacote com agente e front atualizados", async () => {
     const pkgV2 = JSON.stringify({ name: "agente", version: "9.9.10" });
+    const indexV2 =
+      '<html><body><div id="root"></div><script src="/assets/app.js"></script></body></html>\n';
+    const assetV2 = "// front v2\n";
+    const versionV2 = JSON.stringify({ version: "2.0.0", buildId: "front-v2" });
     const manifestV2 = {
       versao: "9.9.10",
       geradoEm: new Date().toISOString(),
@@ -123,29 +132,32 @@ async function run() {
         },
         {
           arquivo: "frontend-dist/version.json",
-          sha256: sha256(JSON.stringify({ version: "2.0.0", buildId: "front-v2" })),
+          sha256: sha256(versionV2),
         },
         {
           arquivo: "frontend-dist/index.html",
-          sha256: sha256("<html>v2</html>\n"),
+          sha256: sha256(indexV2),
+        },
+        {
+          arquivo: "frontend-dist/assets/app.js",
+          sha256: sha256(assetV2),
         },
       ],
     };
     const pkgDir = stagePackage(manifestV2, {
       "marker-agent.js": "// agent v2\n",
       "package.json": pkgV2,
-      "frontend-dist/version.json": JSON.stringify({
-        version: "2.0.0",
-        buildId: "front-v2",
-      }),
-      "frontend-dist/index.html": "<html>v2</html>\n",
+      "frontend-dist/version.json": versionV2,
+      "frontend-dist/index.html": indexV2,
+      "frontend-dist/assets/app.js": assetV2,
     });
 
     const result = await manifestUpdater.aplicarPacote(pkgDir, null, "9.9.10");
-    assert.strictEqual(result.arquivos, 4);
+    assert.strictEqual(result.arquivos, 5);
     assert.strictEqual(read("marker-agent.js"), "// agent v2\n");
     assert.strictEqual(JSON.parse(read("package.json")).version, "9.9.10");
-    assert.strictEqual(read("frontend-dist/index.html"), "<html>v2</html>\n");
+    assert.strictEqual(read("frontend-dist/index.html"), indexV2);
+    assert.strictEqual(read("frontend-dist/assets/app.js"), assetV2);
     const version = JSON.parse(read("frontend-dist/version.json"));
     assert.strictEqual(version.buildId, "front-v2");
 
@@ -162,7 +174,8 @@ async function run() {
     manifestUpdater.rollbackUltimo();
     assert.strictEqual(read("marker-agent.js"), "// agent v1\n");
     assert.strictEqual(JSON.parse(read("package.json")).version, "9.9.9");
-    assert.strictEqual(read("frontend-dist/index.html"), "<html>v1</html>\n");
+    assert.match(read("frontend-dist/index.html"), /id="root"/);
+    assert.strictEqual(read("frontend-dist/assets/app.js"), "// front v1\n");
     const version = JSON.parse(read("frontend-dist/version.json"));
     assert.strictEqual(version.buildId, "front-v1");
     assert.strictEqual(JSON.parse(read("manifest.json")).versao, "9.9.9");

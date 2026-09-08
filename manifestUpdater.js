@@ -94,8 +94,25 @@ function backupArquivos(arquivos) {
   fs.mkdirSync(dir, { recursive: true });
 
   const lista = [...new Set(arquivos.filter(Boolean))];
+  const t0 = Date.now();
+
+  // frontend-dist tem centenas/milhares de arquivos — cópia em árvore é bem mais
+  // rápida no Windows do que file-a-file (update “travado em iniciando”).
+  const temFront = lista.some(
+    (n) => n === "frontend-dist" || n.startsWith("frontend-dist/"),
+  );
+  if (temFront) {
+    const srcFront = path.join(agentRoot(), "frontend-dist");
+    if (fs.existsSync(srcFront)) {
+      fs.cpSync(srcFront, path.join(dir, "frontend-dist"), { recursive: true });
+    }
+  }
+
   for (const nome of lista) {
     if (nome === "manifest.json") continue;
+    if (temFront && (nome === "frontend-dist" || nome.startsWith("frontend-dist/"))) {
+      continue;
+    }
     const src = path.join(agentRoot(), nome);
     if (fs.existsSync(src)) {
       copiarArquivoPara(path.join(dir, nome), src);
@@ -120,6 +137,9 @@ function backupArquivos(arquivos) {
     fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify(index, null, 2));
   }
 
+  console.log(
+    `[Updater] Backup ${lista.length} path(s) em ${Date.now() - t0}ms → ${dir}`,
+  );
   return dir;
 }
 
@@ -176,8 +196,21 @@ function rollbackUltimo() {
   const dir = dirs[0];
   const { formato, index } = lerIndiceBackup(dir);
   const nomes = index.arquivos || [];
+  const t0 = Date.now();
+  const temFront = nomes.some(
+    (n) => n === "frontend-dist" || n.startsWith("frontend-dist/"),
+  );
+  const bakFront = path.join(dir, "frontend-dist");
+  if (temFront && fs.existsSync(bakFront)) {
+    const destFront = path.join(agentRoot(), "frontend-dist");
+    fs.rmSync(destFront, { recursive: true, force: true });
+    fs.cpSync(bakFront, destFront, { recursive: true });
+  }
   for (const nome of nomes) {
     if (nome === "manifest.json") continue;
+    if (temFront && (nome === "frontend-dist" || nome.startsWith("frontend-dist/"))) {
+      continue;
+    }
     const src = path.join(dir, nome);
     if (fs.existsSync(src)) {
       copiarArquivoPara(path.join(agentRoot(), nome), src);
@@ -190,6 +223,7 @@ function rollbackUltimo() {
       copiarArquivoPara(path.join(agentRoot(), "manifest.json"), bakManifest);
     }
   }
+  console.log(`[Updater] Rollback em ${Date.now() - t0}ms ← ${dir}`);
   return dir;
 }
 
@@ -241,9 +275,59 @@ async function aplicarPacote(tmpDir, shaEsperado, novaVersao) {
 
   const nomes = manifest.arquivos.map((a) => a.arquivo);
   // backupArquivos sempre preserva o manifest.json atual do agente (formato 2)
+  const tBackup = Date.now();
   backupArquivos(nomes);
+  const tApply = Date.now();
+
+  // Marcador ANTES de mutar disco — crash mid-apply ainda dispara self-heal no boot.
+  try {
+    require("./runtime/serviceResilience").marcarPosUpdate({
+      versao: versaoPacote || manifest.versao,
+      fase: "apply-in-progress",
+    });
+  } catch {
+    /* best-effort */
+  }
+
+  const temFront = nomes.some(
+    (n) => n === "frontend-dist" || n.startsWith("frontend-dist/"),
+  );
+  const srcFront = path.join(tmpDir, "frontend-dist");
+  if (temFront && fs.existsSync(srcFront)) {
+    const destFront = path.join(agentRoot(), "frontend-dist");
+    const staging = `${destFront}.next`;
+    const prev = `${destFront}.prev`;
+    fs.rmSync(staging, { recursive: true, force: true });
+    fs.cpSync(srcFront, staging, { recursive: true });
+    const fi = require("./runtime/frontendIntegrity");
+    const checkStaging = fi.verificarFrontendDist(staging, { skipCache: true });
+    if (!checkStaging.ok) {
+      fs.rmSync(staging, { recursive: true, force: true });
+      throw new Error(`frontend-dist inválido no pacote: ${checkStaging.motivo}`);
+    }
+    // Swap quase-atômico: valida staging → rename → limpa prev (evita rmSync ao vivo).
+    fs.rmSync(prev, { recursive: true, force: true });
+    if (fs.existsSync(destFront)) {
+      try {
+        fs.renameSync(destFront, prev);
+      } catch {
+        fs.rmSync(destFront, { recursive: true, force: true });
+      }
+    }
+    try {
+      fs.renameSync(staging, destFront);
+    } catch {
+      fs.cpSync(staging, destFront, { recursive: true });
+      fs.rmSync(staging, { recursive: true, force: true });
+    }
+    fs.rmSync(prev, { recursive: true, force: true });
+    fi.invalidateFrontendIntegrityCache();
+  }
 
   for (const item of manifest.arquivos) {
+    if (temFront && (item.arquivo === "frontend-dist" || item.arquivo.startsWith("frontend-dist/"))) {
+      continue;
+    }
     const src = path.join(tmpDir, item.arquivo);
     if (fs.existsSync(src)) {
       copiarArquivoPara(path.join(agentRoot(), item.arquivo), src);
@@ -257,6 +341,21 @@ async function aplicarPacote(tmpDir, shaEsperado, novaVersao) {
   );
 
   validarManifest(manifest, agentRoot());
+
+  // SPA: index.html e assets hashed devem existir juntos (evita tela preta :9100).
+  const frontDist = path.join(agentRoot(), "frontend-dist");
+  if (fs.existsSync(path.join(frontDist, "index.html"))) {
+    const fi = require("./runtime/frontendIntegrity");
+    fi.invalidateFrontendIntegrityCache();
+    const check = fi.verificarFrontendDist(frontDist, { skipCache: true });
+    if (!check.ok) {
+      throw new Error(`frontend-dist inválido após update: ${check.motivo}`);
+    }
+  }
+
+  console.log(
+    `[Updater] Apply ${nomes.length} path(s): backup ${tApply - tBackup}ms + cópia ${Date.now() - tApply}ms`,
+  );
 
   return { versao: versaoPacote || manifest.versao, arquivos: nomes.length };
 }

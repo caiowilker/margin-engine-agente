@@ -159,8 +159,8 @@ const svc = new Service({
       value: __dirname,
     },
   ],
-  wait: 2,
-  grow: 0.5,
+  wait: 1,
+  grow: 0.25,
   maxRestarts: 40,
   abortOnError: false,
 });
@@ -168,12 +168,13 @@ const svc = new Service({
 function configureWindowsServiceRecovery(scmName) {
   if (process.platform !== "win32") return;
   try {
-    execSync(
-      `sc.exe failure "${scmName}" reset=86400 actions=restart/60000/restart/60000/restart/120000`,
-      { stdio: "pipe", encoding: "utf8" },
-    );
-    execSync(`sc.exe failureflag "${scmName}" 1`, { stdio: "pipe", encoding: "utf8" });
-    console.log(`✓ Recuperação automática SCM configurada (${scmName})`);
+    const { hardenScm } = require("./runtime/serviceResilience");
+    const r = hardenScm(scmName);
+    if (r.ok) {
+      console.log(`✓ Autostart auto + recuperação SCM (${scmName})`);
+    } else {
+      console.warn(`⚠ SCM harden parcial: ${r.autostart?.error || r.recovery?.error || "?"}`);
+    }
   } catch (err) {
     console.warn(`⚠ Não foi possível configurar recovery SCM: ${err.message}`);
   }
@@ -190,13 +191,9 @@ svc.on("install", () => {
   } catch (e) {
     console.error("✗ Falha ao solicitar start:", e.message || e);
   }
-  // Com --no-open (Inno): não depender só do evento 'start' do node-windows
+  // Com --no-open (Inno): poll SCM rápido — sem sleep fixo de 12s
   if (noOpen) {
-    setTimeout(() => {
-      if (finished) return;
-      const r = tryStartViaScm();
-      finishInstall(r?.ok ? 0 : 1);
-    }, NO_OPEN_SCM_DELAY_MS);
+    pollScmUntilRunning(fromInstaller ? 35_000 : 20_000);
   }
 });
 
@@ -209,11 +206,7 @@ svc.on("alreadyinstalled", () => {
     console.error("✗ Falha ao solicitar start:", e.message || e);
   }
   if (noOpen) {
-    setTimeout(() => {
-      if (finished) return;
-      const r = tryStartViaScm();
-      finishInstall(r?.ok ? 0 : 1);
-    }, NO_OPEN_SCM_DELAY_MS);
+    pollScmUntilRunning(fromInstaller ? 35_000 : 20_000);
   }
 });
 
@@ -275,26 +268,41 @@ function openPanelIfNeeded() {
 }
 
 // ── Executar ──────────────────────────────────────────────────────────────────
-const INSTALL_TIMEOUT_MS = fromInstaller ? 150_000 : 120_000;
-const NO_OPEN_SCM_DELAY_MS = fromInstaller ? 12_000 : 4_000;
-const SCM_WAIT_MS = fromInstaller ? 120_000 : 45_000;
+const INSTALL_TIMEOUT_MS = fromInstaller ? 60_000 : 45_000;
+/** Após install: poll imediato (sem sleep morto de 1–12s). */
+const NO_OPEN_SCM_DELAY_MS = fromInstaller ? 200 : 100;
+const SCM_WAIT_MS = fromInstaller ? 45_000 : 30_000;
 let finished = false;
 
 function finishInstall(code) {
   if (finished) return;
-  if (fromInstaller && code !== 0) {
+  // Não remapear falha → 0 só porque SCM diz "running" (processo antigo / bits quebrados).
+  // O bootstrap confirma com /health + ui.ok.
+  finished = true;
+  setTimeout(() => process.exit(code), 200);
+}
+
+function pollScmUntilRunning(deadlineMs) {
+  const deadline = Date.now() + deadlineMs;
+  const tick = () => {
+    if (finished) return;
     try {
       const ctl = require("./scripts/installer-service-control");
-      const st = ctl.queryState();
-      if (st === "running") {
-        code = 0;
+      if (ctl.queryState() === "running") {
+        finishInstall(0);
+        return;
       }
     } catch {
       /* ignore */
     }
-  }
-  finished = true;
-  setTimeout(() => process.exit(code), 400);
+    if (Date.now() >= deadline) {
+      const r = tryStartViaScm();
+      finishInstall(r?.ok ? 0 : 1);
+      return;
+    }
+    setTimeout(tick, 400);
+  };
+  setTimeout(tick, NO_OPEN_SCM_DELAY_MS);
 }
 
 if (uninstall) {

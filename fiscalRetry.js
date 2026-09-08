@@ -23,9 +23,6 @@ const MAX_TENTATIVAS_PADRAO = 10;
 const MAX_TENTATIVAS_999 = parseInt(process.env.FISCAL_MAX_RETRY_999 || "2", 10);
 
 const TRANSIENTE_PATTERNS = [
-  /timeout/i,
-  /timed out/i,
-  /tempo esgotado/i,
   /inacess[ií]vel/i,
   /ECONNRESET/i,
   /ECONNREFUSED/i,
@@ -36,6 +33,14 @@ const TRANSIENTE_PATTERNS = [
   /acbr.*offline|monitor.*offline/i,
   /biblioteca.*n[aã]o/i,
   /invalid handle|access violation/i,
+];
+
+/** Timeout pós-Enviar / worker kill = INCERTO (consulta, nunca reemitir). */
+const INCERTO_PATTERNS = [
+  /NFE_Enviar timeout/i,
+  /ACBR_LIB_WORKER_TIMEOUT/i,
+  /Timeout no worker fiscal/i,
+  /timeout após \d+\s*ms/i,
 ];
 
 function extrairCStat(err) {
@@ -123,16 +128,22 @@ function isPermanente(err) {
 
 function isIncerto(err) {
   if (err?.incerto) return true;
+  if (err?.code === "ACBR_LIB_WORKER_TIMEOUT") return true;
   const cStat = extrairCStat(err);
   if (cStat && CSTAT_LOTE_OK.has(cStat)) return true;
-  return false;
+  const msg = err?.message || String(err || "");
+  return INCERTO_PATTERNS.some((re) => re.test(msg));
 }
 
 function isTransient(err) {
-  if (isIncerto(err)) return true;
+  if (isIncerto(err)) return false; // incerto ≠ reemitir
   const cStat = extrairCStat(err);
   if (cStat && REJEICAO_TRANSIENTE_CSTAT.has(cStat)) return true;
   const msg = err?.message || String(err || "");
+  // Rede genérica ainda pode ser transient (sem timeout de emissão).
+  if (/timeout|timed out|tempo esgotado/i.test(msg) && !INCERTO_PATTERNS.some((re) => re.test(msg))) {
+    return true;
+  }
   return TRANSIENTE_PATTERNS.some((re) => re.test(msg));
 }
 

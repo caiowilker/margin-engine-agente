@@ -43,8 +43,8 @@ const PRIORIDADE = {
   EVENTO_FISCAL: 7,
 };
 
-const BACKOFF_MS = [60000, 120000, 300000, 900000, 1800000];
-const WORKER_MS = parseInt(process.env.FISCAL_WORKER_MS || "500", 10);
+const BACKOFF_MS = [8_000, 20_000, 60_000, 180_000, 600_000];
+const WORKER_MS = parseInt(process.env.FISCAL_WORKER_MS || "1000", 10);
 const PDF_WORKER_MS = parseInt(process.env.FISCAL_PDF_WORKER_MS || "2000", 10);
 const FISCAL_QUEUE_WARN_MAX = parseInt(process.env.FISCAL_QUEUE_WARN_MAX || "100", 10);
 const FISCAL_QUEUE_CRITICAL_MAX = parseInt(
@@ -55,10 +55,43 @@ const FISCAL_QUEUE_CRITICAL_MAX = parseInt(
 let db = null;
 let workerTimer = null;
 let pdfWorkerTimer = null;
+let callbackWorkerTimer = null;
 let processandoFiscal = false;
 let processandoPdf = false;
+/** CALLBACK_BACKEND não segura o mutex de emissão SEFAZ. */
+let processandoCallback = false;
+/** Job ids em voo — liberarJobsTravados não marca INCERTO o job vivo. */
+let jobEmVooFiscal = null;
+let jobEmVooPdf = null;
+let jobEmVooCallback = null;
 let filaPausada = false;
 let handlers = {};
+
+const CALLBACK_WORKER_MS = parseInt(process.env.FISCAL_CALLBACK_WORKER_MS || "800", 10);
+
+function workerBusy(flag) {
+  if (flag === "processandoPdf") return processandoPdf;
+  if (flag === "processandoCallback") return processandoCallback;
+  return processandoFiscal;
+}
+
+function setWorkerBusy(flag, value) {
+  if (flag === "processandoPdf") processandoPdf = value;
+  else if (flag === "processandoCallback") processandoCallback = value;
+  else processandoFiscal = value;
+}
+
+function setJobEmVoo(flag, jobId) {
+  if (flag === "processandoPdf") jobEmVooPdf = jobId;
+  else if (flag === "processandoCallback") jobEmVooCallback = jobId;
+  else jobEmVooFiscal = jobId;
+}
+
+function jobsEmVooIds() {
+  return new Set(
+    [jobEmVooFiscal, jobEmVooPdf, jobEmVooCallback].filter((id) => id != null),
+  );
+}
 
 function dbPath() {
   if (process.env.FISCAL_DB_PATH) return process.env.FISCAL_DB_PATH;
@@ -280,7 +313,7 @@ function enfileirar(tipo, payload, correlationId = null, numeroVenda = null) {
     const dup = db
       .prepare(
         `SELECT id, correlation_id FROM fila_fiscal WHERE tipo = 'EMISSAO' AND correlation_id = ?
-         AND status IN ('PENDENTE','PROCESSANDO','INCERTO','FALHA_TEMPORARIA') LIMIT 1`,
+         AND status IN ('PENDENTE','PROCESSANDO','INCERTO','FALHA_TEMPORARIA','RECUPERANDO') LIMIT 1`,
       )
       .get(correlationId);
     if (dup) return { id: dup.id, deduplicado: true, correlationId: dup.correlation_id };
@@ -428,18 +461,19 @@ function proximoJob(tiposPermitidos = null) {
     : db.prepare(sql).get();
 }
 
+/** Só NFC-e 65 sob contingência — CALLBACK fica no worker dedicado. */
 function proximoJobNfceContingencia() {
   init();
   const rows = db
     .prepare(
       `SELECT * FROM fila_fiscal
        WHERE status IN ('PENDENTE','FALHA_TEMPORARIA')
-         AND tipo IN ('EMISSAO','CALLBACK_BACKEND')
+         AND tipo = 'EMISSAO'
          AND datetime(proxima_tentativa) <= datetime('now')
        ORDER BY prioridade ASC, id ASC LIMIT 20`,
     )
     .all();
-  return rows.find(jobPermitidoComFilaPausada) || null;
+  return rows.find(jobEhEmissaoNfce65) || null;
 }
 
 function marcarJob(id, status, erro = null) {
@@ -507,16 +541,15 @@ function marcarIncerto(id, erro, correlationId, numeroVenda, meta = {}) {
 
 async function processarUm(opcoes = {}) {
   const { apenasTipos = null, flag = "processandoFiscal", somenteContingenciaNfce = false } = opcoes;
-  if (flag === "processandoFiscal" ? processandoFiscal : processandoPdf)
-    return false;
+  if (workerBusy(flag)) return false;
 
   const job = somenteContingenciaNfce
     ? proximoJobNfceContingencia()
     : proximoJob(apenasTipos);
   if (!job) return false;
 
-  if (flag === "processandoFiscal") processandoFiscal = true;
-  else processandoPdf = true;
+  setWorkerBusy(flag, true);
+  setJobEmVoo(flag, job.id);
 
   db.prepare(`UPDATE fila_fiscal SET status = 'PROCESSANDO', processando_desde = datetime('now') WHERE id = ?`).run(job.id);
   const handler = handlers[job.tipo];
@@ -525,15 +558,15 @@ async function processarUm(opcoes = {}) {
     payload = JSON.parse(job.payload);
   } catch (e) {
     marcar(job.id, STATUS.FALHA_PERMANENTE, "Dados do pedido fiscal inválidos");
-    if (flag === "processandoFiscal") processandoFiscal = false;
-    else processandoPdf = false;
+    setJobEmVoo(flag, null);
+    setWorkerBusy(flag, false);
     return true;
   }
 
   if (!handler) {
     marcar(job.id, STATUS.FALHA_PERMANENTE, "Handler ausente: " + job.tipo);
-    if (flag === "processandoFiscal") processandoFiscal = false;
-    else processandoPdf = false;
+    setJobEmVoo(flag, null);
+    setWorkerBusy(flag, false);
     return true;
   }
 
@@ -554,8 +587,8 @@ async function processarUm(opcoes = {}) {
         },
         "Job adiado por rate-limit de UF SEFAZ — sem penalidade de tentativa",
       );
-      if (flag === "processandoFiscal") processandoFiscal = false;
-      else processandoPdf = false;
+      setWorkerBusy(flag, false);
+      setJobEmVoo(flag, null);
       avaliarLimitesFilaFiscal();
       return true;
     }
@@ -657,8 +690,8 @@ async function processarUm(opcoes = {}) {
     }
   }
 
-  if (flag === "processandoFiscal") processandoFiscal = false;
-  else processandoPdf = false;
+  setJobEmVoo(flag, null);
+  setWorkerBusy(flag, false);
   avaliarLimitesFilaFiscal();
   return true;
 }
@@ -670,6 +703,7 @@ function registrarHandler(tipo, fn) {
 function liberarJobsTravados(minutos = null) {
   init();
   const min = minutos ?? parseInt(process.env.FISCAL_JOB_STALE_MIN || "15", 10);
+  const vivos = jobsEmVooIds();
   const jobs = db
     .prepare(
       `SELECT id, correlation_id, numero_venda, tipo FROM fila_fiscal
@@ -682,22 +716,39 @@ function liberarJobsTravados(minutos = null) {
     )
     .all(`-${min} minutes`, `-${min} minutes`);
   if (!jobs.length) return 0;
+  let liberados = 0;
   for (const job of jobs) {
+    if (vivos.has(job.id)) continue; // ainda em execução neste processo
+    const tipo = String(job.tipo || "");
+    if (
+      tipo === "CALLBACK_BACKEND" ||
+      tipo === "GERAR_PDF"
+    ) {
+      // Sem recovery SEFAZ — reabre como PENDENTE (INCERTO dead-letteria o job).
+      const msg = `Job ${tipo} travado em PROCESSANDO — reaberto`;
+      db.prepare(
+        `UPDATE fila_fiscal SET status = 'PENDENTE', erro = ?, proxima_tentativa = datetime('now'),
+                processando_desde = NULL WHERE id = ?`,
+      ).run(msg, job.id);
+      liberados += 1;
+      continue;
+    }
     const msg = `Job travado em PROCESSANDO há mais de ${min} min — aguardando recovery`;
-    db.prepare(`UPDATE fila_fiscal SET status = 'INCERTO', erro = ?, proximo_retry_at = datetime('now') WHERE id = ?`).run(
-      msg,
-      job.id,
-    );
+    db.prepare(
+      `UPDATE fila_fiscal SET status = 'INCERTO', erro = ?, proximo_retry_at = datetime('now') WHERE id = ?`,
+    ).run(msg, job.id);
     if (job.correlation_id) {
       salvarResultadoEmissao(job.correlation_id, job.numero_venda, "INCERTO", null, msg);
     }
+    liberados += 1;
   }
-  return jobs.length;
+  return liberados;
 }
 
 function iniciarWorker(intervalMs = WORKER_MS) {
   if (workerTimer) return;
-  const tiposFiscal = ["EMISSAO", "CANCELAMENTO", "CALLBACK_BACKEND", "INUTILIZACAO", "EPEC", "EVENTO_FISCAL"];
+  // CALLBACK_BACKEND tem worker próprio — não bloqueia SEFAZ.
+  const tiposFiscal = ["EMISSAO", "CANCELAMENTO", "INUTILIZACAO", "EPEC", "EVENTO_FISCAL"];
   workerTimer = setInterval(async () => {
     try {
       liberarJobsTravados();
@@ -706,7 +757,7 @@ function iniciarWorker(intervalMs = WORKER_MS) {
     while (again) {
       if (filaPausada) {
         again = await processarUm({
-          apenasTipos: ["EMISSAO", "CALLBACK_BACKEND"],
+          apenasTipos: ["EMISSAO"],
           flag: "processandoFiscal",
           somenteContingenciaNfce: true,
         });
@@ -715,6 +766,19 @@ function iniciarWorker(intervalMs = WORKER_MS) {
       }
     }
   }, intervalMs);
+
+  if (!callbackWorkerTimer) {
+    callbackWorkerTimer = setInterval(async () => {
+      // CALLBACK continua sob fila pausada (só SEFAZ/emissão normal para).
+      let again = true;
+      while (again) {
+        again = await processarUm({
+          apenasTipos: ["CALLBACK_BACKEND"],
+          flag: "processandoCallback",
+        });
+      }
+    }, CALLBACK_WORKER_MS);
+  }
 
   // Worker GERAR_PDF sempre ativo — handler ignora NFC-e 65 quando FISCAL_GERAR_PDF=false, mas processa NF-e 55.
   if (!pdfWorkerTimer) {
@@ -731,8 +795,10 @@ function iniciarWorker(intervalMs = WORKER_MS) {
 function pararWorkers() {
   if (workerTimer) clearInterval(workerTimer);
   if (pdfWorkerTimer) clearInterval(pdfWorkerTimer);
+  if (callbackWorkerTimer) clearInterval(callbackWorkerTimer);
   workerTimer = null;
   pdfWorkerTimer = null;
+  callbackWorkerTimer = null;
 }
 
 function pausarFila() {
@@ -788,7 +854,7 @@ async function aguardarJobsAtivos(timeoutMs = 30000) {
   return {
     ok: false,
     pendentes: listarJobsAtivos(),
-    workerBusy: { processandoFiscal, processandoPdf },
+    workerBusy: { processandoFiscal, processandoPdf, processandoCallback },
   };
 }
 
@@ -1131,16 +1197,26 @@ function dispararProcessamento() {
     while (again) {
       if (filaPausada) {
         again = await processarUm({
-          apenasTipos: ["EMISSAO", "CALLBACK_BACKEND"],
+          apenasTipos: ["EMISSAO"],
           flag: "processandoFiscal",
           somenteContingenciaNfce: true,
         });
       } else {
         again = await processarUm({
-          apenasTipos: ["EMISSAO", "CANCELAMENTO", "CALLBACK_BACKEND", "INUTILIZACAO", "EPEC", "EVENTO_FISCAL"],
+          apenasTipos: ["EMISSAO", "CANCELAMENTO", "INUTILIZACAO", "EPEC", "EVENTO_FISCAL"],
           flag: "processandoFiscal",
         });
       }
+    }
+  });
+  setImmediate(async () => {
+    // CALLBACK sempre — inclusive com fila pausada (contingência).
+    let again = true;
+    while (again) {
+      again = await processarUm({
+        apenasTipos: ["CALLBACK_BACKEND"],
+        flag: "processandoCallback",
+      });
     }
   });
   setImmediate(async () => {
@@ -1390,13 +1466,30 @@ function descartarJobsGerarPdfPendentes(
 
 function cancelarEmissaoPendente(motivo = "Cancelado manualmente") {
   init();
+  // PROCESSANDO: SEFAZ pode já ter autorizado — INCERTO + recovery, não FALHA_PERMANENTE.
+  const emVoo = db
+    .prepare(
+      `SELECT id, correlation_id, numero_venda FROM fila_fiscal
+       WHERE tipo = 'EMISSAO' AND status = 'PROCESSANDO'`,
+    )
+    .all();
+  const msgVoo = `${motivo} (emissão em voo — recovery consultará SEFAZ)`;
+  for (const row of emVoo) {
+    db.prepare(
+      `UPDATE fila_fiscal SET status = 'INCERTO', erro = ?, proximo_retry_at = datetime('now')
+       WHERE id = ?`,
+    ).run(msgVoo, row.id);
+    if (row.correlation_id) {
+      salvarResultadoEmissao(row.correlation_id, row.numero_venda, "INCERTO", null, msgVoo);
+    }
+  }
   const r = db
     .prepare(
       `UPDATE fila_fiscal SET status = 'FALHA_PERMANENTE', erro = ?
-       WHERE tipo = 'EMISSAO' AND status IN ('PENDENTE', 'INCERTO', 'PROCESSANDO','FALHA_TEMPORARIA')`,
+       WHERE tipo = 'EMISSAO' AND status IN ('PENDENTE', 'FALHA_TEMPORARIA')`,
     )
     .run(motivo);
-  return r.changes;
+  return r.changes + emVoo.length;
 }
 
 /** Reabre emissões FALHA_PERMANENTE por duplicidade (539) para nova tentativa com numeração fresca. */
@@ -1464,7 +1557,7 @@ function estaEmEmissao() {
 }
 
 function estaProcessando() {
-  return processandoFiscal || processandoPdf;
+  return processandoFiscal || processandoPdf || processandoCallback;
 }
 
 module.exports = {

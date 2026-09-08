@@ -60,9 +60,11 @@ describe("installer-bootstrap.js — contratos de solidez", () => {
     assert.doesNotMatch(bootstrap, /installer-wait-online\.js.*execSync/);
   });
 
-  it("auto-reparo re-registra serviço se ausente no SCM", () => {
+  it("auto-reparo re-registra se ausente; start-only se parado", () => {
     assert.match(bootstrap, /auto_repair_register/);
-    assert.match(bootstrap, /verifyServiceRegistered\(\)\.ok/);
+    assert.match(bootstrap, /auto_repair_start_only/);
+    assert.match(bootstrap, /!scm\.present/);
+    assert.match(bootstrap, /present: true/);
   });
 
   it("sucesso exige agentOnline via health", () => {

@@ -95,11 +95,46 @@ describe("installerSpeed — instalação rápida e sólida no caixa", () => {
     assert.match(repair, /(^|\s)\/T(\s|$)/);
   });
 
-  it("espera o agente 120s + retry 60s (Defender/ACBr no 1º boot)", () => {
-    assert.equal(INSTALL_WAIT_ONLINE_MS, 120_000);
-    assert.equal(INSTALL_WAIT_RETRY_MS, 60_000);
-    assert.equal(INSTALL_BOOTSTRAP_MAX_MS, 180_000);
+  it("espera o agente 60s + retry 30s (sucesso retorna antes; teto folgado)", () => {
+    assert.equal(INSTALL_WAIT_ONLINE_MS, 60_000);
+    assert.equal(INSTALL_WAIT_RETRY_MS, 30_000);
+    assert.equal(INSTALL_BOOTSTRAP_MAX_MS, 100_000);
     assert.ok(INSTALL_WAIT_ONLINE_MS + INSTALL_WAIT_RETRY_MS <= INSTALL_BOOTSTRAP_MAX_MS);
+  });
+
+  it("install-service polla SCM em ~200ms com --no-open", () => {
+    const src = fs.readFileSync(
+      path.join(__dirname, "..", "install-service.js"),
+      "utf8",
+    );
+    assert.match(src, /NO_OPEN_SCM_DELAY_MS = fromInstaller \? 200/);
+    assert.match(src, /function pollScmUntilRunning/);
+    assert.doesNotMatch(src, /12_000/);
+  });
+
+  it("bootstrap sincroniza schemas e falha em validatePostUpdate", () => {
+    const bootstrap = fs.readFileSync(
+      path.join(__dirname, "..", "scripts", "installer-bootstrap.js"),
+      "utf8",
+    );
+    assert.match(bootstrap, /function ensureProgramDataSchemas\(/);
+    assert.match(bootstrap, /ensureProgramDataSchemas\(\)/);
+    assert.match(bootstrap, /throw new Error\(check\.motivo/);
+    assert.doesNotMatch(
+      bootstrap,
+      /Verificação de manifest reportou aviso/,
+    );
+    assert.match(bootstrap, /st === "running"/);
+    assert.match(bootstrap, /install-last-report\.txt/);
+  });
+
+  it("Inno não mistura exit≠0 com relatório ProgramData antigo", () => {
+    const iss = fs.readFileSync(
+      path.join(__dirname, "..", "pdv-agente-installer.iss"),
+      "utf8",
+    );
+    assert.match(iss, /ExitFailed/);
+    assert.match(iss, /if ExitFailed then/);
   });
 
   it("bootstrap usa um único caminho de start (sem startAgentService duplicado)", () => {
@@ -126,7 +161,7 @@ describe("pdv-agente-installer.iss — extração rápida e fail-fast", () => {
   });
 
   it("não duplica Schemas XSD no [Files]", () => {
-    const hits = iss.match(/acbrlib\\data\\Schemas/g) || [];
+    const hits = iss.match(/^Source:.*acbrlib\\data\\Schemas/gm) || [];
     assert.equal(hits.length, 0, "Schemas devem entrar só via dist\\app\\*");
   });
 
@@ -166,10 +201,21 @@ describe("pdv-agente-installer.iss — extração rápida e fail-fast", () => {
     );
   });
 
-  it("PrepareToInstall não bloqueia o wizard se o serviço demorar a parar", () => {
+  it("PrepareToInstall cap ≤10s no stop-preinstall", () => {
     assert.match(iss, /StopMarginEngineService;/);
     assert.doesNotMatch(iss, /if not StopMarginEngineService then/);
-    assert.doesNotMatch(iss, /O serviço Margin Engine precisa estar parado/);
-    assert.doesNotMatch(iss, /não parou dentro do tempo esperado/);
+    const ctl = fs.readFileSync(
+      path.join(__dirname, "..", "scripts", "installer-service-control.js"),
+      "utf8",
+    );
+    assert.match(ctl, /INSTALLER_PREINSTALL_STOP_MS \|\| "10000"/);
+  });
+
+  it("wait-online exige ui.ok no /health", () => {
+    const src = fs.readFileSync(
+      path.join(__dirname, "..", "scripts", "installer-wait-online.js"),
+      "utf8",
+    );
+    assert.match(src, /json\.ui\.ok === false/);
   });
 });

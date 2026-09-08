@@ -3,7 +3,7 @@ const test = require("node:test");
 
 /** Espelha o regex em index.js — rotas API não podem cair no SPA. */
 const SPA_FALLBACK =
-  /^(?!\/api|\/api-proxy|\/status|\/health|\/venda|\/fila|\/impressora|\/acbr|\/ativar|\/auth|\/config|\/contingencia|\/diagnostico|\/updater|\/fiscal).*$/;
+  /^(?!\/api|\/api-proxy|\/status|\/health|\/venda|\/fila|\/mesa|\/impressora|\/acbr|\/ativar|\/auth|\/config|\/contingencia|\/diagnostico|\/updater|\/fiscal|\/lan|\/garcom).*$/;
 
 test("SPA fallback não intercepta rotas API do agente", () => {
   const apiPaths = [
