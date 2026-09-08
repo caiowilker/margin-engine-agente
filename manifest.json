@@ -1,6 +1,6 @@
 {
   "versao": "1.0.17",
-  "geradoEm": "2026-09-07T22:20:06.863Z",
+  "geradoEm": "2026-09-08T19:14:40.856Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -20,7 +20,7 @@
     },
     {
       "arquivo": "agentConfigCatalog.js",
-      "sha256": "df7f9c1ebf5cf3d2a2ce725b3f4a78e2b58a609c42048c13dc4b4bd2d66dc979"
+      "sha256": "e7d2358f9d7ce9249aa9e07df58069d6e0425fd6735cbb1fc519234e281a5036"
     },
     {
       "arquivo": "apiContract.js",
@@ -84,7 +84,7 @@
     },
     {
       "arquivo": "filaFiscal.js",
-      "sha256": "9de225ac7b2808f8048a26ff3d07227ce0e27bcded3042ecb38da93ed3c186da"
+      "sha256": "ac2241fe7e96226d87ca659ce933271706579527dbf6b8f06ea002b202f81beb"
     },
     {
       "arquivo": "fiscal/acbrLibCrypt.js",
@@ -92,7 +92,7 @@
     },
     {
       "arquivo": "fiscal/acbrLibWorkerPool.js",
-      "sha256": "af2feb369b262787e3b9a61f4602a462d48d2a602aa30eec0d79a4c3043dd762"
+      "sha256": "0fe2d8d8e6232b1072cdd2e8c713a449e433a32196d4899580d2009cae357092"
     },
     {
       "arquivo": "fiscal/certProof.js",
@@ -112,7 +112,7 @@
     },
     {
       "arquivo": "fiscal/drivers/acbrLibDriver.js",
-      "sha256": "d297e14c8b34b98e2fc0f178dbb54319659f469c88fa164b3a8a694e6d5b9e62"
+      "sha256": "ae16a2292bbef7b6a8ede7d944c3d23b7431a8d3b493ddebc500f28a42ace879"
     },
     {
       "arquivo": "fiscal/drivers/acbrLibProcessRecycle.js",
@@ -228,7 +228,7 @@
     },
     {
       "arquivo": "fiscalPreflight.js",
-      "sha256": "2a15375de4ab15a0f5bad348fbb8c8633958ddd9f79c44df51a7865da9a0cf7e"
+      "sha256": "932476cc648dd7fb88f21c174363442b49dde127afb11918d106b5be61551c4c"
     },
     {
       "arquivo": "fiscalPurge.js",
@@ -248,7 +248,7 @@
     },
     {
       "arquivo": "fiscalRetry.js",
-      "sha256": "e412adeeee14438b3398c5115904fd8db47dc612ca0c850e0aa366d908dedbda"
+      "sha256": "a12e5ab5b622b3a73475386a540b15b1a78c6d3a9f38fc45a72987f4af91d75d"
     },
     {
       "arquivo": "fiscalSecrets.js",
@@ -256,7 +256,7 @@
     },
     {
       "arquivo": "fiscalService.js",
-      "sha256": "39ea827461fa63d2c42f9704e52311d0abee0f4e697f21e7d202e918e3c8bac3"
+      "sha256": "b92992f35ecf2206e09302f84325391deb2b171e469d51ddfe34174c137839d3"
     },
     {
       "arquivo": "fiscalStorage.js",
@@ -280,7 +280,7 @@
     },
     {
       "arquivo": "frontend-dist/api-backend.json",
-      "sha256": "01e7db3509950521e8a791631eab916966e05c3070b4db55890eb2e770c25480"
+      "sha256": "3453d44f63c773d301b1979f1b5f66a632bf052b16c78eefd2239f00c864d636"
     },
     {
       "arquivo": "frontend-dist/apple-touch-icon.png",
@@ -2400,7 +2400,7 @@
     },
     {
       "arquivo": "frontend-dist/version.json",
-      "sha256": "6a607c1c751e10b6bf27fcbec869ec4ee9d2a9f1ebe426a5fa9c614272367d2d"
+      "sha256": "9ba64bc694f00dbfc5545bba6f0a658c331273cf94e9967625804d7fde0b1533"
     },
     {
       "arquivo": "frontend-dist/workbox-3147e214.js",
@@ -2432,11 +2432,11 @@
     },
     {
       "arquivo": "index.js",
-      "sha256": "09cbaf131b601b08707d6808eab57c1ad306bce304d6e57783a7dc9d32dd07e3"
+      "sha256": "4ba5f7f12fbe64711463206379dc94d04789e48550e9aa38c9901c1bae2db5b2"
     },
     {
       "arquivo": "install-service.js",
-      "sha256": "c93e48dc618fe0911899a8598cca540dee270e8b24dbdc4c08b8b2f194d76433"
+      "sha256": "c620339bc5daecc38094a9e909e4d9ff718e9a85e3649df244b4fcf77dca5608"
     },
     {
       "arquivo": "lanDiagnostics.js",
@@ -2456,7 +2456,7 @@
     },
     {
       "arquivo": "manifestUpdater.js",
-      "sha256": "3caae460907080bbf14f3d8dc1a7e6e2b1c5c7684302bb120816b2486c39994c"
+      "sha256": "22818f13ec57e26fdf8872c2e68081971ca3a589717def7e9b1fab82425cf923"
     },
     {
       "arquivo": "marginPaths.js",
@@ -2468,7 +2468,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "b047f7a3c6ef4235b7915fad87a8d2cf69e3036156e9b1364a8e004ac97d463f"
+      "sha256": "242f030cfebf796c9d1fbc22690042846719fe0beb6d63574b5fc562bfb49a45"
     },
     {
       "arquivo": "print/acbrPosExports.js",
@@ -2723,6 +2723,10 @@
       "sha256": "3056f186973a2e2ef311ec228b6621c88062484471918d06b271a850d9c29f80"
     },
     {
+      "arquivo": "runtime/frontendIntegrity.js",
+      "sha256": "36c3d5dfb42704e5f6f0d8bad786906e82f512363b973f71432ce36b57d69c97"
+    },
+    {
       "arquivo": "runtime/logEnterprise.js",
       "sha256": "3968f783b5be75fc2d2f87ec6c541495659810d9bb613ea4de60ef84fc803db5"
     },
@@ -2744,7 +2748,7 @@
     },
     {
       "arquivo": "runtime/mensagensOperador.js",
-      "sha256": "7c57d387eb4598c2153d01a95450ac969f79a59df05b8d399219237fcbaf343f"
+      "sha256": "9e60983381bfcea175e38be5f76de07640f2cb12520bb2dfadc0bf5b788ccea7"
     },
     {
       "arquivo": "runtime/physicalResourceLock.js",
@@ -2757,6 +2761,10 @@
     {
       "arquivo": "runtime/runtimeErrors.js",
       "sha256": "6ca87f4bac2ad50bea27ef51968314ca01b9eb14ef14bc7189a425e28abb6bbc"
+    },
+    {
+      "arquivo": "runtime/serviceResilience.js",
+      "sha256": "0d2597bb1f808f6f16285987d67e8b2d2f7553c22f9a768655e56e36e09d9989"
     },
     {
       "arquivo": "runtime/shellUtils.js",
