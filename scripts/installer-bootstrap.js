@@ -859,6 +859,13 @@ async function main() {
     process.exit(1);
   }
   if (withService && process.platform === "win32" && !online.ok) {
+    const detail = [
+      "Agente não respondeu em http://localhost:9100/health (ui.ok).",
+      `serviceResult=${JSON.stringify(serviceResult)}`,
+      `startResult=${JSON.stringify(startResult)}`,
+      "Verifique services.msc (Margin Engine) e %ProgramData%\\MarginEngine\\Logs\\application.log",
+    ].join("\n");
+    writeBootstrapFailure(new Error(detail));
     writeBootstrapExit(1);
     process.exit(1);
   }

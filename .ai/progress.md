@@ -3,6 +3,13 @@
 **Última atualização:** 2026-09-08  
 **Versão:** `1.0.17`
 
+## Fix — bootstrap SCM Atomics (2026-09-08)
+
+- Causa: `const { Atomics } = require("worker_threads")` → undefined →
+  `Cannot read properties of undefined (reading 'wait')` no stop/start.
+- Fix: Atomics global + fallback; POLL_MS 200; parser sc tolerante;
+  wait-online fail grava motivo em `install-bootstrap-error.txt`.
+
 ## Produção — fechamento P0 fila/callback (2026-09-08)
 
 - CALLBACK roda com fila pausada; contingência não rouba CALLBACK no mutex SEFAZ.

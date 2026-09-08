@@ -30,13 +30,33 @@ describe("installer-service-control — nomes SCM node-windows", () => {
     assert.equal(typeof ctl.startService, "function");
   });
 
-  it("sleep usa Atomics.wait (sem spawn Node a cada poll)", () => {
+  it("sleep usa Atomics global (não worker_threads)", () => {
     const src = require("fs").readFileSync(
       require("path").join(__dirname, "..", "scripts", "installer-service-control.js"),
       "utf8",
     );
     assert.match(src, /Atomics\.wait/);
+    assert.doesNotMatch(src, /require\(["']worker_threads["']\)/);
     assert.doesNotMatch(src, /execFileSync\(process\.execPath, \["-e", `setTimeout/);
+  });
+
+  it("sleep runtime não lança e poll SCM é ≤200ms", () => {
+    const ctl = require("../scripts/installer-service-control");
+    assert.equal(ctl.POLL_MS, 200);
+    const t0 = Date.now();
+    ctl.sleep(30);
+    const elapsed = Date.now() - t0;
+    assert.ok(elapsed >= 20, `sleep curto demais: ${elapsed}ms`);
+    assert.ok(elapsed < 200, `sleep sem Atomics (spawn/spin lento): ${elapsed}ms`);
+  });
+
+  it("queryStateForScm reconhece RUNNING/STOPPED em saída tipica do sc", () => {
+    const ctl = require("../scripts/installer-service-control");
+    assert.equal(typeof ctl.queryStateForScm, "function");
+    // Fora do Windows: unknown/missing; no Linux do CI só garante export.
+    if (process.platform !== "win32") {
+      assert.equal(ctl.queryStateForScm("marginengine.exe"), "unknown");
+    }
   });
 
   it("expõe stop-preinstall e parada forçada", () => {

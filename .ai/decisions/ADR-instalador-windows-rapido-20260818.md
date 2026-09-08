@@ -19,6 +19,9 @@ O `Margin-Engine-Setup-*.exe` levava vários minutos no ponto de venda. O payloa
    Parada pré-update: 20 s + 25 s (skip se já parado). Preinstall Inno ≤10 s.
    Firewall: `netsh` primeiro. Schemas ProgramData em install/update/repair.
    `validatePostUpdate` falha o bootstrap se manifest/UI inválidos.
+   **Sleep SCM:** `Atomics.wait` no **global** `Atomics` (nunca `require("worker_threads")` —
+   esse import deixava `Atomics` undefined → `reading 'wait'` e stop/start quebravam).
+   Falha de wait-online grava `install-bootstrap-error.txt` com serviceResult/startResult.
 7. Skip de SHA-256 só se o `manifest.json` listar arquivos **existentes** e sem `.br`/`.gz`. Caso contrário o bootstrap regenera.
 8. `prepare-build.ps1` sempre regenera o manifest, remove `.br`/`.gz` e roda `assert-installer-payload.js` antes do ISCC.
 

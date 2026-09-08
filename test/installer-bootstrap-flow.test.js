@@ -70,4 +70,9 @@ describe("installer-bootstrap.js — contratos de solidez", () => {
   it("sucesso exige agentOnline via health", () => {
     assert.match(bootstrap, /!online\.ok\)[\s\S]*writeBootstrapExit\(1\)/);
   });
+
+  it("falha wait-online grava install-bootstrap-error com detalhe", () => {
+    assert.match(bootstrap, /Agente não respondeu em http:\/\/localhost:9100\/health/);
+    assert.match(bootstrap, /writeBootstrapFailure\(new Error\(detail\)\)/);
+  });
 });

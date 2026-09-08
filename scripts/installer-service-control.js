@@ -9,7 +9,8 @@
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
-const { Atomics } = require("worker_threads");
+// Atomics é global do Node — NÃO vem de worker_threads (import errado →
+// "Cannot read properties of undefined (reading 'wait')" e SCM start/stop quebra).
 
 const SERVICE_DISPLAY_NAME = "Margin Engine";
 const LEGACY_DISPLAY_NAMES = ["PDV Margin Engine"];
@@ -21,7 +22,8 @@ const STOP_WAIT_MS = parseInt(process.env.INSTALLER_STOP_WAIT_MS || "45000", 10)
 /** PrepareToInstall: cap curto — bootstrap completa a parada sem congelar o wizard. */
 const PREINSTALL_STOP_WAIT_MS = parseInt(process.env.INSTALLER_PREINSTALL_STOP_MS || "10000", 10);
 const FORCE_STOP_POLL_MS = 15_000;
-const POLL_MS = 500;
+/** Poll SCM rápido — Atomics.wait global (nunca worker_threads). */
+const POLL_MS = 200;
 
 function nodeWindowsServiceId(displayName) {
   return String(displayName).replace(/[^\w]/gi, "").toLowerCase();
@@ -116,10 +118,14 @@ function queryStateForScm(scmName) {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
+    // Aceita STATE em EN (RUNNING/STOPPED) e variações com espaços extras.
     if (/STATE\s*:\s*\d+\s+STOPPED/i.test(out)) return "stopped";
     if (/STATE\s*:\s*\d+\s+RUNNING/i.test(out)) return "running";
     if (/STATE\s*:\s*\d+\s+START_PENDING/i.test(out)) return "starting";
     if (/STATE\s*:\s*\d+\s+STOP_PENDING/i.test(out)) return "stopping";
+    // Fallback: palavra isolada no bloco STATE
+    if (/\bRUNNING\b/i.test(out) && /\bSTATE\b/i.test(out)) return "running";
+    if (/\bSTOPPED\b/i.test(out) && /\bSTATE\b/i.test(out)) return "stopped";
     return "unknown";
   } catch {
     return "missing";
@@ -139,8 +145,20 @@ function queryState() {
 
 function sleep(ms) {
   if (ms <= 0) return;
-  const sab = new SharedArrayBuffer(4);
-  Atomics.wait(new Int32Array(sab), 0, 0, ms);
+  // Atomics é global do V8/Node — não importar de worker_threads.
+  if (typeof Atomics !== "undefined" && typeof SharedArrayBuffer !== "undefined") {
+    try {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+      return;
+    } catch {
+      /* fall through */
+    }
+  }
+  // Fallback raro (SAB off) — spin só para polls curtos; sem spawn Node.
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    /* busy-wait */
+  }
 }
 
 function allKnownScmNames() {
@@ -369,6 +387,9 @@ module.exports = {
   stopService,
   startService,
   queryState,
+  queryStateForScm,
+  sleep,
+  POLL_MS,
   removeLegacyServices,
   forceStopScm,
   forceStopAllMarginServices,
