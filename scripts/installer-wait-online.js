@@ -2,6 +2,8 @@
 /**
  * Aguarda o agente Margin Engine ficar online (porta + /health).
  * Uso: node scripts/installer-wait-online.js [appDir] [--timeout=120000]
+ *
+ * Sucesso exige JSON com ok===true e ui.ok===true (não aceita body não-JSON).
  */
 const http = require("http");
 const net = require("net");
@@ -48,7 +50,11 @@ function portOpen(port) {
   });
 }
 
-function healthOk(port) {
+/**
+ * Probe /health — fail-closed.
+ * @returns {Promise<null|{ versao: string|null }>}
+ */
+function healthProbe(port) {
   return new Promise((resolve) => {
     const req = http.get(`http://127.0.0.1:${port}/health`, { timeout: 3000 }, (res) => {
       let body = "";
@@ -57,47 +63,62 @@ function healthOk(port) {
       });
       res.on("end", () => {
         if (res.statusCode !== 200) {
-          resolve(false);
+          resolve(null);
           return;
         }
         try {
           const json = JSON.parse(body);
-          // ui.ok false = tela preta — instalador não deve declarar sucesso.
-          if (json && json.ui && json.ui.ok === false) {
-            resolve(false);
+          if (!json || json.ok !== true) {
+            resolve(null);
             return;
           }
-          resolve(json && json.ok === true);
+          // ui.ok obrigatório true — missing/false = tela preta / SPA quebrada.
+          if (!json.ui || json.ui.ok !== true) {
+            resolve(null);
+            return;
+          }
+          resolve({ versao: json.versao != null ? String(json.versao) : null });
         } catch {
-          resolve(true);
+          resolve(null);
         }
       });
     });
-    req.on("error", () => resolve(false));
+    req.on("error", () => resolve(null));
     req.on("timeout", () => {
       req.destroy();
-      resolve(false);
+      resolve(null);
     });
   });
+}
+
+/** Compat: boolean — preferir healthProbe. */
+async function healthOk(port) {
+  const h = await healthProbe(port);
+  return Boolean(h);
 }
 
 async function waitOnline(customTimeoutMs = timeoutMs) {
   const port = readPort();
   const started = Date.now();
   while (Date.now() - started < customTimeoutMs) {
-    if ((await portOpen(port)) && (await healthOk(port))) {
-      return { ok: true, port, waitedMs: Date.now() - started };
+    if (await portOpen(port)) {
+      const h = await healthProbe(port);
+      if (h) {
+        return { ok: true, port, waitedMs: Date.now() - started, versao: h.versao };
+      }
     }
     await new Promise((r) => setTimeout(r, pollDelayMs(Date.now() - started)));
   }
-  return { ok: false, port, waitedMs: Date.now() - started };
+  return { ok: false, port, waitedMs: Date.now() - started, versao: null };
 }
 
 if (require.main === module) {
   waitOnline()
     .then((r) => {
       if (r.ok) {
-        console.log(`[installer] Agente online na porta ${r.port} (${r.waitedMs} ms)`);
+        console.log(
+          `[installer] Agente online na porta ${r.port} (${r.waitedMs} ms) v${r.versao || "?"}`,
+        );
         process.exit(0);
       }
       console.error(`[installer] Agente não respondeu em ${timeoutMs} ms (porta ${r.port})`);
@@ -109,4 +130,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { waitOnline, pollDelayMs, readPort, portOpen, healthOk };
+module.exports = { waitOnline, pollDelayMs, readPort, portOpen, healthOk, healthProbe };

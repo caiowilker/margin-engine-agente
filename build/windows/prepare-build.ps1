@@ -150,7 +150,11 @@ try {
     $koffi = Join-Path $probe "node_modules\koffi\build\koffi\win32_x64\koffi.node"
     if (-not (Test-Path $sqlite)) { Write-Error "probe extract: better_sqlite3.node ausente" }
     if (-not (Test-Path $koffi)) { Write-Error "probe extract: koffi.node ausente" }
-    Write-Host "[OK] round-trip extract do bundle (sqlite+koffi)"
+    $schemaNfe = Join-Path $probe "acbrlib\data\Schemas\NFe"
+    if (-not (Test-Path $schemaNfe)) { Write-Error "probe extract: Schemas/NFe ausente" }
+    $xsdCount = @(Get-ChildItem -Path (Join-Path $probe "acbrlib\data\Schemas") -Filter "*.xsd" -Recurse -File -ErrorAction SilentlyContinue).Count
+    if ($xsdCount -lt 60) { Write-Error "probe extract: poucos XSD ($xsdCount)" }
+    Write-Host "[OK] round-trip extract do bundle (sqlite+koffi+schemas=$xsdCount)"
 } finally {
     Remove-Item -Recurse -Force $probe -ErrorAction SilentlyContinue
 }

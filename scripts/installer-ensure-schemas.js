@@ -183,6 +183,31 @@ function programDataSchemasReady(marginRoot, opts = {}) {
   return true;
 }
 
+const PROGRAMDATA_SCHEMAS_STAMP = path.join("acbr", "schemas", ".bundle-stamp");
+
+function programDataSchemasStampPath(marginRoot) {
+  return path.join(marginRoot, PROGRAMDATA_SCHEMAS_STAMP);
+}
+
+/** Skip só se contagem OK **e** stamp do vendor bate com o gravado no ProgramData. */
+function programDataSchemasUpToDate(marginRoot, vendorStamp, opts = {}) {
+  if (!vendorStamp || !programDataSchemasReady(marginRoot, opts)) return false;
+  const fp = programDataSchemasStampPath(marginRoot);
+  if (!fs.existsSync(fp)) return false;
+  try {
+    return fs.readFileSync(fp, "utf8").trim() === String(vendorStamp).trim();
+  } catch {
+    return false;
+  }
+}
+
+function writeProgramDataSchemasStamp(marginRoot, vendorStamp) {
+  if (!marginRoot || !vendorStamp) return;
+  const fp = programDataSchemasStampPath(marginRoot);
+  fs.mkdirSync(path.dirname(fp), { recursive: true });
+  fs.writeFileSync(fp, String(vendorStamp).trim(), "utf8");
+}
+
 module.exports = {
   MIN_NFE_XSD,
   MIN_NFSE_XSD,
@@ -192,4 +217,7 @@ module.exports = {
   ensureInstallerSchemas,
   assertBundledSchemas,
   programDataSchemasReady,
+  programDataSchemasUpToDate,
+  writeProgramDataSchemasStamp,
+  programDataSchemasStampPath,
 };

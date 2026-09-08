@@ -95,21 +95,24 @@ describe("installerSpeed — instalação rápida e sólida no caixa", () => {
     assert.match(repair, /(^|\s)\/T(\s|$)/);
   });
 
-  it("programDataSchemasReady detecta PD suficiente", () => {
-    const { programDataSchemasReady, MIN_NFE_XSD, MIN_NFSE_XSD } = require("../scripts/installer-ensure-schemas");
-    const margin = fs.mkdtempSync(path.join(os.tmpdir(), "me-pd-ready-"));
-    assert.equal(programDataSchemasReady(margin), false);
+  it("programDataSchemasUpToDate exige stamp do vendor", () => {
+    const {
+      programDataSchemasUpToDate,
+      writeProgramDataSchemasStamp,
+      MIN_NFE_XSD,
+      MIN_NFSE_XSD,
+    } = require("../scripts/installer-ensure-schemas");
+    const margin = fs.mkdtempSync(path.join(os.tmpdir(), "me-pd-stamp-"));
     const nfe = path.join(margin, "acbr", "schemas", "NFe");
     const nfse = path.join(margin, "acbr", "schemas", "NFSe");
     fs.mkdirSync(nfe, { recursive: true });
     fs.mkdirSync(nfse, { recursive: true });
-    for (let i = 0; i < MIN_NFE_XSD; i++) {
-      fs.writeFileSync(path.join(nfe, `a${i}.xsd`), "<x/>");
-    }
-    for (let i = 0; i < MIN_NFSE_XSD; i++) {
-      fs.writeFileSync(path.join(nfse, `b${i}.xsd`), "<x/>");
-    }
-    assert.equal(programDataSchemasReady(margin, { requireNfse: true }), true);
+    for (let i = 0; i < MIN_NFE_XSD; i++) fs.writeFileSync(path.join(nfe, `a${i}.xsd`), "<x/>");
+    for (let i = 0; i < MIN_NFSE_XSD; i++) fs.writeFileSync(path.join(nfse, `b${i}.xsd`), "<x/>");
+    assert.equal(programDataSchemasUpToDate(margin, "v1|1|1"), false);
+    writeProgramDataSchemasStamp(margin, "v1|1|1");
+    assert.equal(programDataSchemasUpToDate(margin, "v1|1|1"), true);
+    assert.equal(programDataSchemasUpToDate(margin, "v2|2|2"), false);
     fs.rmSync(margin, { recursive: true, force: true });
   });
 
@@ -148,7 +151,7 @@ describe("installerSpeed — instalação rápida e sólida no caixa", () => {
       "utf8",
     );
     assert.match(bootstrap, /function ensureProgramDataSchemas\(/);
-    assert.match(bootstrap, /ensureProgramDataSchemas\(\)/);
+    assert.match(bootstrap, /ensureProgramDataSchemas\(\{/);
     assert.match(bootstrap, /ensureNodeModulesBundle\(/);
     assert.match(bootstrap, /ensureSchemasBundleLocal\(/);
     assert.match(bootstrap, /ensure_schemas_skip/);
@@ -157,6 +160,7 @@ describe("installerSpeed — instalação rápida e sólida no caixa", () => {
     assert.match(bootstrap, /createBootstrapTiming/);
     assert.match(bootstrap, /writeBootstrapTiming/);
     assert.match(bootstrap, /firewall_skip/);
+    assert.match(bootstrap, /healthVersionMatches/);
     assert.match(bootstrap, /throw new Error\(check\.motivo/);
     assert.doesNotMatch(
       bootstrap,
@@ -268,11 +272,14 @@ describe("pdv-agente-installer.iss — extração rápida e fail-fast", () => {
     assert.match(iss, /if not WizardSilent then/);
   });
 
-  it("wait-online exige ui.ok no /health", () => {
+  it("wait-online exige ui.ok===true e rejeita JSON inválido", () => {
     const src = fs.readFileSync(
       path.join(__dirname, "..", "scripts", "installer-wait-online.js"),
       "utf8",
     );
-    assert.match(src, /json\.ui\.ok === false/);
+    assert.match(src, /json\.ui\.ok !== true/);
+    assert.match(src, /json\.ok !== true/);
+    assert.match(src, /function healthProbe/);
+    assert.doesNotMatch(src, /catch \{\s*resolve\(true\)/);
   });
 });

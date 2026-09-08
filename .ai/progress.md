@@ -3,6 +3,14 @@
 **Última atualização:** 2026-09-08  
 **Versão:** `1.0.17`
 
+## Solidity — fail-closed instalador (2026-09-08)
+
+- `/health`: exige JSON `ok` + `ui.ok===true` (rejeita HTML/parse).
+- Exit 0 só com health + SCM running + `versao` == package.json.
+- Schemas PD: skip só com stamp vendor; auto-reparo antes de schemas.
+- skip-reinstall: só OK se RUNNING após start; forceStop se stop falhar.
+- Diagnóstico não grava bootstrap-error; timing também no catch.
+
 ## Perf P2 — qualidade extrema install/update (2026-09-08)
 
 - `/VERYSILENT`: sem `--open` (WizardSilent); docs atualizados.

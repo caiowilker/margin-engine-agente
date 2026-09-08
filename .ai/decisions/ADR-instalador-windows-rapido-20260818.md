@@ -27,14 +27,9 @@ O `Margin-Engine-Setup-*.exe` levava vários minutos no ponto de venda. O payloa
    Timing: `install-bootstrap-timing.json` (fases + totalMs).
    Wizard: `DisableReadyPage=yes`; caixa pode usar `/VERYSILENT /MODE=update`
    (WizardSilent → sem `--open`).
-   Pós-extract ZIP: fail-hard se natives/schemas inválidos; prepare-build faz
-   round-trip probe antes do ISCC.
-   Se SCM já RUNNING e `/health` OK → skip start longo (`wait_online_already`).
-   Timing: `install-bootstrap-timing.json` (fases + totalMs).
-   Parada pré-update: 20 s + 25 s (skip se já parado). Preinstall Inno ≤10 s.
-   `validatePostUpdate` falha o bootstrap se manifest/UI inválidos.
-   **Sleep SCM:** `Atomics.wait` no **global** `Atomics` (nunca `require("worker_threads")`).
-   Falha de wait-online grava `install-bootstrap-error.txt` com serviceResult/startResult.
+   **Fail-closed (2026-09-08):** `/health` exige JSON `ok`+`ui.ok===true`;
+   exit 0 só com SCM running + `versao` == package.json; schemas PD por stamp;
+   auto-reparo antes de schemas; forceStop se stop falhar; skip-reinstall só se RUNNING.
 7. Skip de SHA-256 só se o `manifest.json` listar arquivos **existentes** e sem `.br`/`.gz`.
 8. `prepare-build.ps1` regenera manifest, remove `.br`/`.gz`, assert-payload, **pack ZIPs**, ISCC.
 

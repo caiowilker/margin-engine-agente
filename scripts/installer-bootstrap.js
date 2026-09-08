@@ -525,33 +525,49 @@ function validatePostUpdate() {
   return true;
 }
 
-/** XSDs NFe/NFSe → ProgramData. Update com PD já OK → skip. */
-function ensureProgramDataSchemas() {
+/** XSDs NFe/NFSe → ProgramData. Skip só com stamp vendor == stamp PD + contagem OK. */
+function ensureProgramDataSchemas(opts = {}) {
+  const force = opts.force === true;
   try {
     const { getDirectoryManager } = require(path.join(appDir, "runtime", "directoryManager"));
     const dm = getDirectoryManager();
     const {
       ensureInstallerSchemas,
-      programDataSchemasReady,
+      programDataSchemasUpToDate,
+      writeProgramDataSchemasStamp,
     } = require(path.join(appDir, "scripts", "installer-ensure-schemas"));
 
-    if (mode === "update" && programDataSchemasReady(dm.ROOT, { requireNfse: true })) {
+    const stampPath = path.join(appDir, "vendor", "schemas.stamp");
+    const vendorStamp = fs.existsSync(stampPath)
+      ? fs.readFileSync(stampPath, "utf8").trim()
+      : null;
+
+    if (
+      !force &&
+      mode === "update" &&
+      vendorStamp &&
+      programDataSchemasUpToDate(dm.ROOT, vendorStamp, { requireNfse: true })
+    ) {
       initBootstrapLog().info(
-        { acao: "ensure_schemas_skip", reason: "programdata_ready" },
-        "Schemas ProgramData já suficientes — skip cópia",
+        { acao: "ensure_schemas_skip", reason: "stamp_match" },
+        "Schemas ProgramData no stamp do vendor — skip cópia",
       );
       return { ok: true, skipped: true };
     }
 
     const r = ensureInstallerSchemas(appDir, dm.ROOT, {
       requireNfse: true,
-      onlyIfMissing: mode === "update",
+      // Update com stamp novo: compara tamanho (não onlyIfMissing cego).
+      onlyIfMissing: false,
     });
     if (r && r.ok === false) {
       throw new Error(r.error || "schemas fiscais insuficientes no payload");
     }
+    if (vendorStamp) {
+      writeProgramDataSchemasStamp(dm.ROOT, vendorStamp);
+    }
     initBootstrapLog().info(
-      { acao: "ensure_schemas", ...r },
+      { acao: "ensure_schemas", ...r, forced: force },
       "Schemas fiscais sincronizados com ProgramData",
     );
     return r;
@@ -580,11 +596,46 @@ function ensureSchemasBundleLocal() {
   const {
     ensureSchemasFromBundle,
   } = require(path.join(appDir, "scripts", "installer-payload-bundle"));
+  const { assertBundledSchemas } = require(path.join(appDir, "scripts", "installer-ensure-schemas"));
   const r = ensureSchemasFromBundle(appDir, {
     log: (fields, msg) => initBootstrapLog().info(fields, msg),
   });
   initBootstrapLog().info({ acao: "schemas_bundle", ...r }, "Bundle schemas local verificado");
+  if (r.reason === "missing") {
+    const check = assertBundledSchemas(appDir, { requireNfse: true });
+    if (!check.ok) {
+      throw new Error(
+        check.errors.join("; ") ||
+          "vendor/schemas.zip ausente e schemas locais incompletos",
+      );
+    }
+  } else if (r.extracted === false) {
+    // stamp_ok / exploded — ainda valida payload.
+    const check = assertBundledSchemas(appDir, { requireNfse: true });
+    if (!check.ok) {
+      throw new Error(check.errors.join("; ") || "schemas locais inválidos após skip");
+    }
+  }
   return r;
+}
+
+function expectedAppVersion() {
+  try {
+    return String(
+      JSON.parse(fs.readFileSync(path.join(appDir, "package.json"), "utf8")).version || "",
+    );
+  } catch {
+    return "";
+  }
+}
+
+/** Garante que /health é do binário desta instalação (não processo antigo). */
+function healthVersionMatches(online) {
+  if (!online || !online.ok) return false;
+  const expected = expectedAppVersion();
+  if (!expected) return false;
+  if (!online.versao) return false;
+  return String(online.versao) === expected;
 }
 
 function writeBootstrapTiming(timing) {
@@ -659,16 +710,17 @@ function registerService() {
         "Serviço já registrado — start sem reinstall",
       );
       const started = tryStartService(20_000);
-      if (started.ok || scm.state === "running") {
+      const after = verifyServiceRegistered();
+      if (after.state === "running") {
         return {
+          ...started,
           ok: true,
           skippedReinstall: true,
-          state: started.state || scm.state,
-          ...started,
+          state: "running",
         };
       }
       initBootstrapLog().warn(
-        { acao: "skip_reinstall_start_failed", ...started },
+        { acao: "skip_reinstall_start_failed", started, after },
         "Start falhou após skip — caindo para reinstall",
       );
     }
@@ -735,7 +787,8 @@ async function runAutoRepairIfOffline(online, startResult, dm, serviceResult) {
   try {
     ensurePayloadBundles();
   } catch (err) {
-    initBootstrapLog().warn({ err: err.message }, "Auto-reparo: bundles");
+    initBootstrapLog().error({ err: err.message }, "Auto-reparo: bundles falharam");
+    throw err;
   }
 
   let nextServiceResult = serviceResult;
@@ -797,15 +850,25 @@ async function bringAgentOnline() {
     try {
       const { waitOnline } = require(path.join(appDir, "scripts", "installer-wait-online"));
       const quick = await waitOnline(1_500);
-      if (quick.ok) {
+      if (quick.ok && healthVersionMatches(quick)) {
         initBootstrapLog().info(
-          { acao: "wait_online_already", porta: quick.port, waitedMs: quick.waitedMs },
-          "Agente já online — skip start longo",
+          { acao: "wait_online_already", porta: quick.port, waitedMs: quick.waitedMs, versao: quick.versao },
+          "Agente já online (versão OK) — skip start longo",
         );
         return {
           online: { ok: true, ...quick },
           startResult: { ok: true, alreadyOnline: true, state: "running" },
         };
+      }
+      if (quick.ok && !healthVersionMatches(quick)) {
+        initBootstrapLog().warn(
+          {
+            acao: "wait_online_stale_version",
+            got: quick.versao,
+            expected: expectedAppVersion(),
+          },
+          "Health de processo antigo — forçando start da versão nova",
+        );
       }
     } catch {
       /* segue start normal */
@@ -817,11 +880,21 @@ async function bringAgentOnline() {
   initBootstrapLog().info({ acao: "service_start", ...startResult }, "Start do serviço pós-registro");
 
   let online = await waitForOnlineAsync(firstWait);
+  if (online.ok && !healthVersionMatches(online)) {
+    initBootstrapLog().warn(
+      { acao: "wait_online_version_mismatch", got: online.versao, expected: expectedAppVersion() },
+      "Health respondeu com versão diferente do pacote",
+    );
+    online = { ...online, ok: false, versionMismatch: true };
+  }
   if (!online.ok && remainingBootstrapBudgetMs(budgetStarted) > 5_000) {
     initBootstrapLog().warn({ acao: "wait_online_retry" }, "Agente offline — retry start + espera");
     const retryMs = clampWaitMs(INSTALL_WAIT_RETRY_MS, budgetStarted);
     tryStartService(retryMs);
     online = await waitForOnlineAsync(retryMs);
+    if (online.ok && !healthVersionMatches(online)) {
+      online = { ...online, ok: false, versionMismatch: true };
+    }
     if (!startResult.ok) startResult = tryStartService(retryMs);
   }
 
@@ -955,8 +1028,13 @@ async function main() {
     if (!stop.ok && !stop.skipped) {
       initBootstrapLog().warn(
         { acao: "service_stop_continue", ...stop },
-        "Serviço ainda ativo após parada — instalador continua (CloseApplications/bootstrap)",
+        "Parada suave falhou — forçando kill de todos os serviços Margin",
       );
+      try {
+        getServiceCtl().forceStopAllMarginServices();
+      } catch (err) {
+        initBootstrapLog().warn({ err: err.message }, "forceStopAll parcial");
+      }
     }
     if (mode === "update") backupPreUpdate();
   }
@@ -977,7 +1055,6 @@ async function main() {
   ensureWindowsPermissions(dm);
   timing.mark("dirs_acl");
 
-  // Só node_modules no caminho crítico — schemas locais depois do :9100 (menos I/O no boot).
   ensureNodeModulesBundle();
   timing.mark("nm_bundle");
 
@@ -996,7 +1073,6 @@ async function main() {
   }
   timing.mark("deps_validate");
 
-  // Firewall // com wait; schemas (local+ProgramData) DEPOIS do online — disco livre pro boot.
   const fwJob = Promise.resolve().then(() => ensureFirewall());
 
   let serviceResult = registerService();
@@ -1013,28 +1089,20 @@ async function main() {
   }
   timing.mark("firewall");
 
-  // Schemas após health: não compete com cold start do agente; ainda fail-hard antes do Done.
-  ensureSchemasBundleLocal();
-  ensureProgramDataSchemas();
-  timing.mark("schemas");
-
+  // Auto-reparo ANTES de schemas fail-hard — offline recuperável não é bloqueado por XSD.
   const repaired = await runAutoRepairIfOffline(online, startResult, dm, serviceResult);
   online = repaired.online;
   startResult = repaired.startResult;
   serviceResult = repaired.serviceResult || serviceResult;
-  if (repaired.repaired) {
-    try {
-      ensureSchemasBundleLocal();
-      ensureProgramDataSchemas();
-    } catch (err) {
-      initBootstrapLog().warn({ err: err.message }, "Schemas pós auto-reparo");
-      throw err;
-    }
-  }
   timing.mark("auto_repair");
 
+  // Schemas após online/reparo — fail-hard; force refresh se reparou.
+  ensureSchemasBundleLocal();
+  ensureProgramDataSchemas({ force: repaired.repaired || mode === "repair" || mode === "install" });
+  timing.mark("schemas");
+
   createShortcuts();
-  if (online.ok) {
+  if (online.ok && healthVersionMatches(online)) {
     openPanel();
   }
   timing.mark("shortcuts");
@@ -1050,11 +1118,16 @@ async function main() {
   try {
     report = await runDiagnosticLight(online);
   } catch (err) {
+    // Diagnóstico não escreve install-bootstrap-error (Inno misturaria com falha real).
     initBootstrapLog().warn({ err: err.message }, "Diagnóstico pós-instalação falhou");
-    writeBootstrapFailure(err);
   }
   timing.mark("diagnostic");
   writeBootstrapTiming(timing);
+
+  const scmFinal =
+    withService && process.platform === "win32" ? verifyServiceRegistered() : { state: "skipped" };
+  const serviceUp = Boolean(startResult.ok) || scmFinal.state === "running";
+  const versionOk = !online.ok || healthVersionMatches(online);
 
   initBootstrapLog().info(
     {
@@ -1065,6 +1138,10 @@ async function main() {
       agentOnline: online.ok,
       serviceOk: serviceResult.ok,
       serviceRunning: startResult.ok,
+      scmState: scmFinal.state,
+      versionOk,
+      healthVersao: online.versao || null,
+      expectedVersao: expectedAppVersion(),
       autoRepaired: repaired.repaired,
       diagnosticLight: Boolean(report.light),
       totalMs: timing.snapshot().totalMs,
@@ -1072,18 +1149,21 @@ async function main() {
     "Bootstrap concluído",
   );
 
-  if ((!serviceResult.ok || !startResult.ok) && !nativeDepsReady()) {
-    writeBootstrapExit(1);
-    process.exit(1);
-  }
-  if (withService && process.platform === "win32" && !online.ok) {
-    const detail = [
-      "Agente não respondeu em http://localhost:9100/health (ui.ok).",
-      `serviceResult=${JSON.stringify(serviceResult)}`,
-      `startResult=${JSON.stringify(startResult)}`,
-      "Verifique services.msc (Margin Engine) e %ProgramData%\\MarginEngine\\Logs\\application.log",
-    ].join("\n");
-    writeBootstrapFailure(new Error(detail));
+  if (withService && process.platform === "win32") {
+    if (!online.ok || !serviceUp || !healthVersionMatches(online)) {
+      const detail = [
+        "Instalação não solidificada:",
+        `agentOnline=${online.ok} serviceUp=${serviceUp} versionMatch=${healthVersionMatches(online)}`,
+        `health.versao=${online.versao || "?"} expected=${expectedAppVersion()}`,
+        `scm=${scmFinal.state} startResult=${JSON.stringify(startResult)}`,
+        `serviceResult=${JSON.stringify(serviceResult)}`,
+        "Verifique services.msc (Margin Engine) e %ProgramData%\\MarginEngine\\Logs\\application.log",
+      ].join("\n");
+      writeBootstrapFailure(new Error(detail));
+      writeBootstrapExit(1);
+      process.exit(1);
+    }
+  } else if ((!serviceResult.ok || !startResult.ok) && !nativeDepsReady()) {
     writeBootstrapExit(1);
     process.exit(1);
   }
@@ -1092,6 +1172,11 @@ async function main() {
 }
 
 main().catch(async (err) => {
+  try {
+    writeBootstrapTiming(createBootstrapTiming(`${mode}:fail`));
+  } catch {
+    /* ignore */
+  }
   writeBootstrapFailure(err);
   writeBootstrapExit(1);
   try {

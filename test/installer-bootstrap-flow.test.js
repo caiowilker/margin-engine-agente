@@ -71,9 +71,11 @@ describe("installer-bootstrap.js — contratos de solidez", () => {
     assert.match(bootstrap, /!online\.ok\)[\s\S]*writeBootstrapExit\(1\)/);
   });
 
-  it("falha wait-online grava install-bootstrap-error com detalhe", () => {
-    assert.match(bootstrap, /Agente não respondeu em http:\/\/localhost:9100\/health/);
-    assert.match(bootstrap, /writeBootstrapFailure\(new Error\(detail\)\)/);
+  it("sucesso exige health + SCM + versão do pacote", () => {
+    assert.match(bootstrap, /healthVersionMatches/);
+    assert.match(bootstrap, /forceStopAllMarginServices/);
+    assert.match(bootstrap, /versionMatch=/);
+    assert.match(bootstrap, /stamp_match/);
   });
 
   it("extrai NM cedo; schemas após online; timing gravado", () => {
