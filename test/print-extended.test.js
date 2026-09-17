@@ -537,23 +537,28 @@ test("preferNativeEscPos — PRINT_FAST_NATIVE=false em RAW ainda usa native (an
 test("preferNativeEscPos — PRINT_FAST_NATIVE=false em TCP força ACBr comercial", () => {
   const { preferNativeEscPos } = require("../print/drivers/acbrPosPrinterProvider");
   const runtime = require("../print/acbrPosPrinterRuntime");
+  const localCfg = require("../print/printerLocalConfig");
   const prev = process.env.PRINT_FAST_NATIVE;
   const prevPorta = process.env.PRINTER_PORTA;
   const origOpen = runtime.isAcbrPosCircuitOpen;
   process.env.PRINT_FAST_NATIVE = "false";
-  process.env.PRINTER_PORTA = "TCP:192.168.1.50:9100";
-  runtime.isAcbrPosCircuitOpen = () => false;
-  try {
-    assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), false);
-    assert.strictEqual(preferNativeEscPos({}), false);
-  } finally {
-    runtime.isAcbrPosCircuitOpen = origOpen;
-    if (prev === undefined) delete process.env.PRINT_FAST_NATIVE;
-    else process.env.PRINT_FAST_NATIVE = prev;
-    if (prevPorta === undefined) delete process.env.PRINTER_PORTA;
-    else process.env.PRINTER_PORTA = prevPorta;
-    runtime.resetAcbrPosCircuit();
-  }
+  // Limpa SSOT local (senão RAW:POS80 do caixa faz portaEhRawWindows=true).
+  withCleanPrinterPorta(() => {
+    process.env.PRINTER_PORTA = "TCP:192.168.1.50:9100";
+    if (typeof localCfg.invalidateLerCache === "function") localCfg.invalidateLerCache();
+    runtime.isAcbrPosCircuitOpen = () => false;
+    try {
+      assert.strictEqual(preferNativeEscPos({ naoFiscal: true }), false);
+      assert.strictEqual(preferNativeEscPos({}), false);
+    } finally {
+      runtime.isAcbrPosCircuitOpen = origOpen;
+    }
+  });
+  if (prev === undefined) delete process.env.PRINT_FAST_NATIVE;
+  else process.env.PRINT_FAST_NATIVE = prev;
+  if (prevPorta === undefined) delete process.env.PRINTER_PORTA;
+  else process.env.PRINTER_PORTA = prevPorta;
+  runtime.resetAcbrPosCircuit();
 });
 
 test("preferNativeEscPos — RAW:Windows comercial usa native (default raw)", () => {

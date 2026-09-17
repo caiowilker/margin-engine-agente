@@ -52,11 +52,12 @@ test("clamp 1–4", () => {
   assert.equal(clampFator(2.6), 3);
 });
 
-test("bmp largura cresce com fator e cabe nas cols", () => {
+test("bmp largura padrão ~336 dots em 80mm (fator 2)", () => {
   const w80 = resolveLogoBmpLargura(48, 2);
   const w58 = resolveLogoBmpLargura(32, 2);
   const w80big = resolveLogoBmpLargura(48, 4);
-  assert.ok(w80 > w58);
+  assert.equal(w80, 336);
+  assert.ok(w58 < w80);
   assert.ok(w80big >= w80);
   assert.ok(w80 <= 48 * 8);
   assert.ok(w58 <= 32 * 8);

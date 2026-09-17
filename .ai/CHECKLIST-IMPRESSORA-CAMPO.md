@@ -31,7 +31,8 @@ Use em cada PC de caixa antes de liberar o turno.
 9. Timeouts no `.env` devem bater com o bloco `PRINT_ENV_SCHEMA` do `.env.example` (não usar 8000 legado).
 10. Em máquina lenta (~2 min): logs esperados `print.taskkill_attempt` + `print.child_exit` / `print.late_abandoned` com `lateMs`; `/health` e caixa devem continuar OK. Se `print.taskkill_still_alive` → processar checklist USB acima. Notepad na mesma fila é o teste decisivo.
 11. **Diagnóstico Win32 (máquina lenta):** rode `scripts/diagnose-raw-print.ps1` **nessa PC e na PC boa** e compare. No agente, o log `print.raw_win32_timing` mostra `slowest=` (`WritePrinter` / `EndDocPrinter` / `OpenPrinter`). Se a etapa lenta for WritePrinter/EndDocPrinter com fila RAW ok → problema abaixo do agente (USB/driver/spooler).
-12. **Após update / falha ACBr:** circuito abre só em falha de **sessão/Ativar** (não em timeout mid-print). Comerciais → native; fiscal/DANFE continua no ACBr. TTL half-open padrão **15 min** (`ACBR_POS_CIRCUIT_TTL_MS=900000`); `0` = só Salvar/Detectar. Confirme modelo Epson (`1`) e porta `RAW:`/`TCP:` válida.
+12. **IMPRESSO ≠ papel na bandeja:** `durationMs` / E2E medem EndDoc no spooler. Se o log está ~100 ms e o papel demora, é wake USB/firmware — use checklist USB (itens 6–7) e, em diagnóstico, `PRINT_SPOOLER_JOB_WATCH_MS=3000` para ver `print.spooler_job_drain_ms`.
+13. **Após update / falha ACBr:** circuito abre só em falha de **sessão/Ativar** (não em timeout mid-print). Comerciais → native; fiscal/DANFE continua no ACBr. TTL half-open padrão **15 min** (`ACBR_POS_CIRCUIT_TTL_MS=900000`); `0` = só Salvar/Detectar. Confirme modelo Epson (`1`) e porta `RAW:`/`TCP:` válida.
 
 ## Critérios de aceite rápidos
 
@@ -53,7 +54,7 @@ Use em cada PC de caixa antes de liberar o turno.
 | Logo térmica | Upload PNG/JPG/BMP → convertido 1-bpp; teste mostra `logoIncluded=true`; cupom com `<bmp>` no ACBr |
 | Diagnóstico | `acbr.loaded`, circuito fechado, `logo_imprimivel` ok; painel mostra modo ACBr vs Native |
 | Página de teste | &lt; ~3s com logo visível; toast com provider + durationMs |
-| Sessão ACBr idle | Padrão **5 min** (`ACBR_POS_SESSION_IDLE_MS`) — sem Ativar frio entre pré-contas do turno |
+| Sessão ACBr idle | Padrão **0** (`ACBR_POS_SESSION_IDLE_MS`) — sessão quente permanente; sem Ativar frio após pausa |
 
 ## Aceite de campo (por PC) — após update 2026-08
 

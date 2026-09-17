@@ -65,7 +65,42 @@ const PRINT_ENV_FIELDS = [
     max: 120000,
     default: 5000,
     comment:
-      "Ping OpenPrinter periódico (0=off); HANDLE RAW fica aberto entre cupons para o USB não dormir",
+      "Ping periódico (0=off); HANDLE RAW aberto + mode status/dle para USB não dormir",
+  },
+  {
+    env: "PRINT_SPOOLER_KEEPALIVE_MODE",
+    kind: "enum",
+    values: ["handle", "status", "dle"],
+    default: "status",
+    comment:
+      "Após ociosidade: status=GetPrinter (default); dle=DLE EOT; handle=só OpenPrinter. Em uso recente o ping força handle",
+  },
+  {
+    env: "PRINT_SPOOLER_DEEP_IDLE_MS",
+    kind: "int",
+    min: 0,
+    max: 600000,
+    default: 20000,
+    comment:
+      "Só após N ms sem WritePrinter o keepalive usa status/dle (0=sempre mode). Path feliz = handle",
+  },
+  {
+    env: "PRINT_SPOOLER_JOB_WATCH_MS",
+    kind: "int",
+    min: 0,
+    max: 30000,
+    default: 0,
+    comment:
+      "Pós-EndDoc: poll GetJob em background (0=off). IMPRESSO não espera — só métrica drain",
+  },
+  {
+    env: "PRINT_HOTPATH_REWARM_MS",
+    kind: "int",
+    min: 0,
+    max: 7200000,
+    default: 0,
+    comment:
+      "Rewarm periódico logo/koffi (0=off, padrão). Sem Ativar/papel; logo já retenta no cache miss",
   },
   {
     env: "PRINT_CORE_LOCK_WAIT_MS",
@@ -186,11 +221,11 @@ const PRINT_ENV_FIELDS = [
   {
     env: "ACBR_POS_SESSION_IDLE_MS",
     kind: "int",
-    min: 5000,
+    min: 0,
     max: 1800000,
-    default: 300000,
+    default: 0,
     comment:
-      "Mantém sessão PosPrinter quente após o último job (padrão 5 min — evita Ativar frio no salão)",
+      "Idle PosPrinter: 0=sessão quente permanente (padrão); >0=teardown após N ms sem job",
   },
 ];
 

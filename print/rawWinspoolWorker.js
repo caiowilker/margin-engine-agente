@@ -3,13 +3,24 @@
  * koffi.async NÃO serve aqui: o HANDLE não pode cruzar threads do libuv.
  */
 const { parentPort } = require("worker_threads");
-const { writeRawSync, pingPrinterSync } = require("./rawWinspoolNative");
+const {
+  writeRawSync,
+  pingPrinterSync,
+  watchSpoolerJobSync,
+} = require("./rawWinspoolNative");
 
 parentPort.on("message", (msg) => {
   const id = msg && msg.id;
   try {
     if (msg.op === "ping") {
-      const result = pingPrinterSync(msg.printer);
+      const result = pingPrinterSync(msg.printer, { mode: msg.mode });
+      parentPort.postMessage({ id, ok: true, result });
+      return;
+    }
+    if (msg.op === "watchJob") {
+      const result = watchSpoolerJobSync(msg.printer, msg.jobId, {
+        maxMs: msg.maxMs,
+      });
       parentPort.postMessage({ id, ok: true, result });
       return;
     }

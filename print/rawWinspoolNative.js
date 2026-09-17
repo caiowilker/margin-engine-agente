@@ -58,7 +58,15 @@ function loadApi() {
     const WritePrinter = winspool.func(
       "bool __stdcall WritePrinter(void *hPrinter, void *pBuf, uint32 cbBuf, _Out_ uint32 *pcWritten)",
     );
+    // GetPrinter/GetJob: tocam o driver sem ClosePrinter (keepalive de dispositivo / drain pós-EndDoc).
+    const GetPrinterA = winspool.func(
+      "bool __stdcall GetPrinterA(void *hPrinter, uint32 Level, void *pPrinter, uint32 cbBuf, _Out_ uint32 *pcbNeeded)",
+    );
+    const GetJobA = winspool.func(
+      "bool __stdcall GetJobA(void *hPrinter, uint32 JobId, uint32 Level, void *pJob, uint32 cbBuf, _Out_ uint32 *pcbNeeded)",
+    );
     const GetLastError = kernel32.func("uint32 __stdcall GetLastError()");
+    const Sleep = kernel32.func("void __stdcall Sleep(uint32 dwMilliseconds)");
 
     api = {
       koffi,
@@ -70,7 +78,10 @@ function loadApi() {
       StartPagePrinter,
       EndPagePrinter,
       WritePrinter,
+      GetPrinterA,
+      GetJobA,
       GetLastError,
+      Sleep,
     };
     log.info({ metric: "print.raw_koffi_loaded" }, "[RawWinspool] winspool.drv via koffi");
     return api;
@@ -128,7 +139,125 @@ function acquireHandle(a, printerName) {
   }
   heldHandle = hPtr[0];
   heldPrinterName = name;
+  if (openMs >= 100) {
+    log.warn(
+      {
+        printer: name,
+        openMs,
+        metric: "print.openprinter_cold",
+        note: "OpenPrinter frio — USB/spooler acordando (episódio raro)",
+      },
+      "[RawWinspool] OpenPrinter frio",
+    );
+  }
   return { handle: heldHandle, reused: false, openMs };
+}
+
+/** handle | status (default) | dle — dle só com env explícito (pode gerar lixo em alguns modelos). */
+function keepaliveMode(opts = {}) {
+  const raw = String(
+    opts.mode || process.env.PRINT_SPOOLER_KEEPALIVE_MODE || "status",
+  )
+    .trim()
+    .toLowerCase();
+  if (raw === "handle" || raw === "dle" || raw === "status") return raw;
+  return "status";
+}
+
+/** DLE EOT 1 — status em tempo real ESC/POS; não deve avançar papel. */
+const DLE_EOT_1 = Buffer.from([0x10, 0x04, 0x01]);
+
+function writeKeepAlivePulse(a, h) {
+  const doc = {
+    pDocName: "PDV KeepAlive",
+    pOutputFile: null,
+    pDatatype: "RAW",
+  };
+  const jobId = a.StartDocPrinterA(h, 1, doc);
+  if (!jobId) {
+    const err = new Error(`KeepAlive StartDoc falhou (GetLastError=${a.GetLastError()})`);
+    err.code = "RAW_KEEPALIVE_START";
+    throw err;
+  }
+  try {
+    if (!a.StartPagePrinter(h)) {
+      const err = new Error(`KeepAlive StartPage falhou (GetLastError=${a.GetLastError()})`);
+      err.code = "RAW_KEEPALIVE_PAGE";
+      throw err;
+    }
+    const writtenOut = [0];
+    const ok = a.WritePrinter(h, DLE_EOT_1, DLE_EOT_1.length, writtenOut);
+    if (!ok) {
+      const err = new Error(`KeepAlive Write falhou (GetLastError=${a.GetLastError()})`);
+      err.code = "RAW_KEEPALIVE_WRITE";
+      throw err;
+    }
+    a.EndPagePrinter(h);
+  } finally {
+    a.EndDocPrinter(h);
+  }
+}
+
+function probePrinterStatus(a, h) {
+  const needed = [0];
+  try {
+    a.GetPrinterA(h, 2, null, 0, needed);
+  } catch (_) {
+    /* koffi/null buffer — pcbNeeded ainda indica toque no driver */
+  }
+  return { needed: needed[0] || 0 };
+}
+
+/**
+ * Poll GetJob até o job sumir da fila ou timeout.
+ * IMPRESSO do agente NÃO espera isto — só observabilidade pós-EndDoc.
+ */
+function watchSpoolerJobSync(printerName, jobId, opts = {}) {
+  const maxMs = Math.max(
+    0,
+    parseInt(
+      opts.maxMs != null
+        ? opts.maxMs
+        : process.env.PRINT_SPOOLER_JOB_WATCH_MS || "0",
+      10,
+    ) || 0,
+  );
+  const jid = parseInt(jobId, 10) || 0;
+  if (maxMs <= 0 || jid <= 0) {
+    return { watched: false, drainMs: 0, done: false, reason: "off" };
+  }
+  const a = loadApi();
+  const acquired = acquireHandle(a, printerName);
+  const t0 = Date.now();
+  const buf = Buffer.alloc(4096);
+  let lastErr = 0;
+  let polls = 0;
+  while (Date.now() - t0 < maxMs) {
+    polls += 1;
+    const needed = [0];
+    const ok = a.GetJobA(acquired.handle, jid, 1, buf, buf.length, needed);
+    if (!ok) {
+      lastErr = a.GetLastError();
+      // Job sumiu da fila ≈ drain (papel caminho do spooler concluído ou removido).
+      return {
+        watched: true,
+        drainMs: Date.now() - t0,
+        done: true,
+        reason: "job_gone",
+        lastErr,
+        polls,
+      };
+    }
+    a.Sleep(25);
+  }
+  return {
+    watched: true,
+    drainMs: Date.now() - t0,
+    done: false,
+    reason: "timeout",
+    lastErr,
+    polls,
+  };
 }
 
 /**
@@ -165,6 +294,7 @@ function writeRawSync(printerName, buffer) {
       err.code = "RAW_START_DOC";
       throw err;
     }
+    timings.jobId = jobId;
     try {
       t = Date.now();
       if (!a.StartPagePrinter(h)) {
@@ -242,15 +372,48 @@ function writeRawSync(printerName, buffer) {
   return { ok: true, backend: "koffi", timings };
 }
 
-/** Mantém o HANDLE aberto — Open+Close a cada ping deixava o USB dormir de novo. */
-function pingPrinterSync(printerName) {
+/** Mantém o HANDLE aberto — Open+Close a cada ping deixava o USB dormir de novo.
+ * mode=status (default): GetPrinter toca o driver sem papel.
+ * mode=dle: DLE EOT (opt-in) — acorda firmware; não deve avançar papel.
+ * mode=handle: só OpenPrinter (legado).
+ */
+function pingPrinterSync(printerName, opts = {}) {
+  const mode = keepaliveMode(opts);
   const a = loadApi();
   const t0 = Date.now();
-  const acquired = acquireHandle(a, printerName);
+  let acquired = acquireHandle(a, printerName);
+  let recovered = false;
+  try {
+    if (mode === "dle") {
+      try {
+        writeKeepAlivePulse(a, acquired.handle);
+      } catch (err) {
+        closeHeldHandle(a);
+        acquired = acquireHandle(a, printerName);
+        recovered = true;
+        writeKeepAlivePulse(a, acquired.handle);
+      }
+    } else if (mode === "status") {
+      try {
+        probePrinterStatus(a, acquired.handle);
+      } catch (_) {
+        closeHeldHandle(a);
+        acquired = acquireHandle(a, printerName);
+        recovered = true;
+        probePrinterStatus(a, acquired.handle);
+      }
+    }
+  } catch (err) {
+    closeHeldHandle(a);
+    throw err;
+  }
   return {
     ok: true,
     pingMs: Date.now() - t0,
-    handleReused: acquired.reused,
+    handleReused: acquired.reused && !recovered,
+    openMs: acquired.openMs || 0,
+    mode,
+    recovered,
   };
 }
 
@@ -306,15 +469,38 @@ function ensureWorker() {
     wrap.code = wrap.code || "RAW_KOFFI_WORKER";
     rejectAll(wrap);
     worker = null;
+    heldHandle = null;
+    heldPrinterName = "";
+    notifyWorkerReset("error");
   });
   worker.on("exit", (code) => {
     worker = null;
+    heldHandle = null;
+    heldPrinterName = "";
+    notifyWorkerReset("exit");
     if (pending.size === 0 && inflight.size === 0) return;
     const err = new Error(`WinSpool worker saiu (${code})`);
     err.code = "RAW_KOFFI_WORKER";
     rejectAll(err);
   });
   return worker;
+}
+
+/** @type {Set<Function>} */
+const workerResetListeners = new Set();
+
+function onWorkerReset(fn) {
+  if (typeof fn !== "function") return () => {};
+  workerResetListeners.add(fn);
+  return () => workerResetListeners.delete(fn);
+}
+
+function notifyWorkerReset(reason) {
+  for (const fn of workerResetListeners) {
+    try {
+      fn(reason);
+    } catch (_) {}
+  }
 }
 
 function postToWorker(payload, timeoutMs) {
@@ -386,9 +572,48 @@ async function pingPrinter(printerName, opts = {}) {
   const timeoutMs =
     opts.timeoutMs != null ? opts.timeoutMs : Math.min(2000, defaultTimeoutMs(opts));
   if (!isMainThread) {
-    return pingPrinterSync(printerName);
+    return pingPrinterSync(printerName, opts);
   }
-  return postToWorker({ op: "ping", printer: String(printerName || "") }, timeoutMs);
+  return postToWorker(
+    {
+      op: "ping",
+      printer: String(printerName || ""),
+      mode: keepaliveMode(opts),
+    },
+    timeoutMs,
+  );
+}
+
+/**
+ * Observabilidade pós-EndDoc — NÃO bloqueia IMPRESSO.
+ * Opt-in: PRINT_SPOOLER_JOB_WATCH_MS > 0.
+ */
+async function watchSpoolerJob(printerName, jobId, opts = {}) {
+  const maxMs = Math.max(
+    0,
+    parseInt(
+      opts.maxMs != null
+        ? opts.maxMs
+        : process.env.PRINT_SPOOLER_JOB_WATCH_MS || "0",
+      10,
+    ) || 0,
+  );
+  if (maxMs <= 0 || !jobId) {
+    return { watched: false, drainMs: 0, done: false, reason: "off" };
+  }
+  const timeoutMs = maxMs + 500;
+  if (!isMainThread) {
+    return watchSpoolerJobSync(printerName, jobId, { maxMs });
+  }
+  return postToWorker(
+    {
+      op: "watchJob",
+      printer: String(printerName || ""),
+      jobId: parseInt(jobId, 10) || 0,
+      maxMs,
+    },
+    timeoutMs,
+  );
 }
 
 /**
@@ -418,8 +643,12 @@ module.exports = {
   writeRawSync,
   pingPrinter,
   pingPrinterSync,
+  watchSpoolerJob,
+  watchSpoolerJobSync,
   isAvailable,
   workerBusy,
   loadApi,
+  onWorkerReset,
+  keepaliveMode,
   resetForTests,
 };

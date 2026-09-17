@@ -45,18 +45,19 @@ function resolveLogoFator(meta = {}) {
 
 /**
  * Largura alvo em dots (~8 dots por coluna fonte A).
- * 80mm ≈ 360–480; 58mm ≈ 200–280 — cabe no papel sem cortar.
+ * 80mm ≈ 300–420; 58mm ≈ 180–260 — visível no cabeçalho sem dominar o cupom.
  */
 function resolveLogoBmpLargura(cols = getThermalCols(), fator = FATOR_PADRAO) {
   const f = clampFator(fator);
-  const base = isNarrowThermal(cols) ? 228 : 384;
+  // Base um pouco menor que o papel cheio — ideal comercial (antes 384/228).
+  const base = isNarrowThermal(cols) ? 200 : 336;
   // f1≈0.78× · f2=1× · f3≈1.18× · f4≈1.35×
   const mult = 0.6 + f * 0.2;
   const maxDots = Math.max(160, cols * 8 - 16);
   // Cap para não estourar soft timeout do worker ACBr (~5s) em USB lento.
   const hardCap = Math.min(
     480,
-    Math.max(160, Number(process.env.PRINTER_LOGO_MAX_WIDTH_DOTS || 384) || 384),
+    Math.max(160, Number(process.env.PRINTER_LOGO_MAX_WIDTH_DOTS || 336) || 336),
   );
   return Math.min(hardCap, maxDots, Math.round(base * mult));
 }

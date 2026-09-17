@@ -107,6 +107,52 @@ test("keepalive USB default 5s e HANDLE persistente", () => {
   assert.strictEqual(field.default, 5000);
   const core = fs.readFileSync(CORE, "utf8");
   assert.ok(core.includes('PRINT_SPOOLER_KEEPALIVE_MS || "5000"'));
+  const mode = getPrintEnvField("PRINT_SPOOLER_KEEPALIVE_MODE");
+  assert.strictEqual(mode.default, "status");
+  assert.ok(mode.values.includes("dle"));
+  const watch = getPrintEnvField("PRINT_SPOOLER_JOB_WATCH_MS");
+  assert.strictEqual(watch.default, 0);
+  const rewarm = getPrintEnvField("PRINT_HOTPATH_REWARM_MS");
+  assert.strictEqual(rewarm.default, 0);
+  const deep = getPrintEnvField("PRINT_SPOOLER_DEEP_IDLE_MS");
+  assert.strictEqual(deep.default, 20000);
+});
+
+test("PosPrinter idle default 0 — sem teardown por ociosidade", () => {
+  const { getPrintEnvField } = require("../config/printEnvSchema");
+  const field = getPrintEnvField("ACBR_POS_SESSION_IDLE_MS");
+  assert.strictEqual(field.default, 0);
+  assert.strictEqual(field.min, 0);
+  const runtime = fs.readFileSync(
+    path.join(__dirname, "../print/acbrPosPrinterRuntime.js"),
+    "utf8",
+  );
+  assert.ok(
+    /SESSION_IDLE_MS\s*<=\s*0/.test(runtime) ||
+      /!Number\.isFinite\(SESSION_IDLE_MS\) \|\| SESSION_IDLE_MS <= 0/.test(runtime),
+    "scheduleIdle/extend devem ignorar teardown quando idle<=0",
+  );
+  assert.ok(runtime.includes('ACBR_POS_SESSION_IDLE_MS || "0"'));
+});
+
+test("keepalive dispositivo + job watch — sem Ativar no ping", () => {
+  const native = fs.readFileSync(
+    path.join(__dirname, "../print/rawWinspoolNative.js"),
+    "utf8",
+  );
+  assert.ok(native.includes("function pingPrinterSync"));
+  assert.ok(native.includes("probePrinterStatus"));
+  assert.ok(native.includes("watchSpoolerJobSync"));
+  assert.ok(native.includes("print.openprinter_cold"));
+  assert.ok(native.includes("keepaliveMode"));
+  assert.ok(native.includes("0x10, 0x04, 0x01"), "DLE EOT disponível no modo dle");
+  const core = fs.readFileSync(CORE, "utf8");
+  assert.ok(core.includes("scheduleSpoolerJobWatch"));
+  assert.ok(core.includes("print.spooler_job_drain_ms"));
+  assert.ok(core.includes("print.spooler_keepalive_recover"));
+  assert.ok(core.includes("PRINT_HOTPATH_REWARM_MS"));
+  assert.ok(core.includes("resolveKeepAlivePingMode") || core.includes("PRINT_SPOOLER_DEEP_IDLE"));
+  assert.ok(!/POS_Ativar/.test(native), "WinSpool native não chama POS_Ativar");
 });
 
 test("RAW koffi — writeRaw é awaited (não bloqueia o event loop)", () => {

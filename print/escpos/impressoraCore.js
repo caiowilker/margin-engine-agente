@@ -431,6 +431,8 @@ function logRawWin32Timing(timings, meta = {}) {
       slowest = k;
     }
   }
+  const openMs = Number(timings.OpenPrinter) || 0;
+  const totalMs = Number(timings.totalMs) || 0;
   const payload = {
     metric: "print.raw_win32_timing",
     ...timings,
@@ -438,10 +440,56 @@ function logRawWin32Timing(timings, meta = {}) {
     slowestMs,
     ...meta,
   };
-  const level = slowestMs >= 2000 ? "warn" : "info";
+  // Spike raro (≥500ms) → warn; path feliz (~50ms) permanece info.
+  const level =
+    slowestMs >= 500 || openMs >= 100 || totalMs >= 500 ? "warn" : "info";
   log[level](
     payload,
     `[ImpressoraCore] RAW Win32 timing — slowest=${slowest || "?"} ${slowestMs}ms total=${timings.totalMs || "?"}ms`,
+  );
+}
+
+/**
+ * Pós-EndDoc em background — IMPRESSO já foi/será marcado sem esperar.
+ * Opt-in: PRINT_SPOOLER_JOB_WATCH_MS > 0 (ex. 3000 em diagnóstico).
+ */
+function scheduleSpoolerJobWatch(printerName, jobId) {
+  const maxMs = Math.max(
+    0,
+    parseInt(process.env.PRINT_SPOOLER_JOB_WATCH_MS || "0", 10) || 0,
+  );
+  if (maxMs <= 0 || !jobId || process.platform !== "win32") return;
+  unrefTimer(
+    setImmediate(() => {
+      if (impressaoEmAndamentoLocal()) return;
+      let native;
+      try {
+        native = require("../rawWinspoolNative");
+      } catch (_) {
+        return;
+      }
+      if (typeof native.watchSpoolerJob !== "function") return;
+      if (typeof native.workerBusy === "function" && native.workerBusy()) return;
+      native
+        .watchSpoolerJob(printerName, jobId, { maxMs })
+        .then((r) => {
+          if (!r?.watched) return;
+          const level = r.drainMs >= 500 || !r.done ? "warn" : "info";
+          log[level](
+            {
+              metric: "print.spooler_job_drain_ms",
+              drainMs: r.drainMs,
+              done: !!r.done,
+              reason: r.reason,
+              jobId,
+              printer: printerName,
+              note: "IMPRESSO≠papel-out — tempo até job sumir da fila do spooler",
+            },
+            "[ImpressoraCore] Drain pós-EndDoc (observabilidade)",
+          );
+        })
+        .catch(() => {});
+    }),
   );
 }
 
@@ -801,6 +849,14 @@ function unrefTimer(t) {
 
 let _spoolerKeepAliveTimer = null;
 let _spoolerKeepAliveInflight = false;
+let _spoolerKeepAliveUnsub = null;
+let _hotPathRewarmTimer = null;
+/** Último WritePrinter OK — keepalive profundo só após ociosidade (path feliz = handle only). */
+let _lastRawWriteAt = 0;
+
+function noteRawWriteOk() {
+  _lastRawWriteAt = Date.now();
+}
 
 function spoolerKeepAliveMs() {
   return Math.max(
@@ -809,9 +865,96 @@ function spoolerKeepAliveMs() {
   );
 }
 
+/** Após N ms sem cupom, ping usa status/dle; antes disso = só HANDLE (igual ao comportamento antigo). */
+function spoolerDeepIdleMs() {
+  return Math.max(
+    0,
+    parseInt(process.env.PRINT_SPOOLER_DEEP_IDLE_MS || "20000", 10) || 0,
+  );
+}
+
+function hotPathRewarmMs() {
+  // Default 0 — sem carga periódica no path feliz; logo já faz retry no cache miss.
+  return Math.max(
+    0,
+    parseInt(process.env.PRINT_HOTPATH_REWARM_MS || "0", 10) || 0,
+  );
+}
+
+function resolveKeepAlivePingMode() {
+  let nativeMode = "status";
+  try {
+    nativeMode = require("../rawWinspoolNative").keepaliveMode() || "status";
+  } catch (_) {}
+  const deepMs = spoolerDeepIdleMs();
+  if (deepMs <= 0) return nativeMode;
+  const idleFor = _lastRawWriteAt > 0 ? Date.now() - _lastRawWriteAt : deepMs + 1;
+  // Uso recente: idêntico ao keepalive antigo (só OpenPrinter/HANDLE).
+  if (idleFor < deepMs) return "handle";
+  return nativeMode;
+}
+
+function runSpoolerKeepAliveTick() {
+  if (_spoolerKeepAliveInflight) return;
+  if (impressaoEmAndamentoLocal()) return;
+  let native;
+  try {
+    native = require("../rawWinspoolNative");
+  } catch (_) {
+    return;
+  }
+  if (typeof native.workerBusy === "function" && native.workerBusy()) return;
+  const nome = resolverNomeRawConfigurado();
+  if (!nome) return;
+  const mode = resolveKeepAlivePingMode();
+  _spoolerKeepAliveInflight = true;
+  Promise.resolve()
+    .then(() => native.pingPrinter(nome, { timeoutMs: 2000, mode }))
+    .then((r) => {
+      if (r?.recovered) {
+        log.info(
+          {
+            pingMs: r.pingMs,
+            openMs: r.openMs,
+            mode: r.mode,
+            printer: nome,
+            metric: "print.spooler_keepalive_recover",
+          },
+          "[ImpressoraCore] Keepalive recuperou HANDLE/driver",
+        );
+      }
+      if (r?.pingMs > 500 || (r?.openMs || 0) > 200) {
+        log.warn(
+          {
+            pingMs: r.pingMs,
+            openMs: r.openMs,
+            mode: r.mode,
+            printer: nome,
+            metric: "print.spooler_keepalive_slow",
+          },
+          "[ImpressoraCore] Keepalive do spooler lento",
+        );
+      }
+    })
+    .catch((err) => {
+      log.warn(
+        {
+          err: err?.message,
+          printer: nome,
+          metric: "print.spooler_keepalive_recover",
+          note: "falha no ping — próximo tick reabre",
+        },
+        "[ImpressoraCore] Keepalive falhou (fail-soft)",
+      );
+    })
+    .finally(() => {
+      _spoolerKeepAliveInflight = false;
+    });
+}
+
 /**
  * USB selective suspend: 1º OpenPrinter após idle atrasava 2–5s (às vezes 14–50s).
- * Ping periódico no worker: mantém HANDLE aberto (não fecha a cada cupom).
+ * Ping periódico no worker: HANDLE + status/DLE (modo) — não fecha a cada cupom.
  */
 function startSpoolerKeepAlive() {
   const ms = spoolerKeepAliveMs();
@@ -821,39 +964,18 @@ function startSpoolerKeepAlive() {
     const native = require("../rawWinspoolNative");
     if (process.platform !== "win32") return;
     if (typeof native.isAvailable === "function" && !native.isAvailable()) return;
+    if (typeof native.onWorkerReset === "function" && !_spoolerKeepAliveUnsub) {
+      _spoolerKeepAliveUnsub = native.onWorkerReset(() => {
+        // Worker morreu — HANDLE no worker sumiu; reabre em background antes do cupom.
+        unrefTimer(setTimeout(() => runSpoolerKeepAliveTick(), 200));
+      });
+    }
   } catch (_) {
     return;
   }
-  const tick = () => {
-    if (_spoolerKeepAliveInflight) return;
-    if (impressaoEmAndamentoLocal()) return;
-    let native;
-    try {
-      native = require("../rawWinspoolNative");
-    } catch (_) {
-      return;
-    }
-    if (typeof native.workerBusy === "function" && native.workerBusy()) return;
-    const nome = resolverNomeRawConfigurado();
-    if (!nome) return;
-    _spoolerKeepAliveInflight = true;
-    Promise.resolve()
-      .then(() => native.pingPrinter(nome, { timeoutMs: 2000 }))
-      .then((r) => {
-        if (r?.pingMs > 500) {
-          log.warn(
-            { pingMs: r.pingMs, printer: nome, metric: "print.spooler_keepalive_slow" },
-            "[ImpressoraCore] Keepalive do spooler lento",
-          );
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        _spoolerKeepAliveInflight = false;
-      });
-  };
-  _spoolerKeepAliveTimer = unrefTimer(setInterval(tick, ms));
-  unrefTimer(setTimeout(tick, Math.min(1500, ms)));
+  _spoolerKeepAliveTimer = unrefTimer(setInterval(runSpoolerKeepAliveTick, ms));
+  unrefTimer(setTimeout(runSpoolerKeepAliveTick, Math.min(1500, ms)));
+  startHotPathRewarm();
 }
 
 function stopSpoolerKeepAlive() {
@@ -862,6 +984,41 @@ function stopSpoolerKeepAlive() {
     _spoolerKeepAliveTimer = null;
   }
   _spoolerKeepAliveInflight = false;
+  if (_spoolerKeepAliveUnsub) {
+    try {
+      _spoolerKeepAliveUnsub();
+    } catch (_) {}
+    _spoolerKeepAliveUnsub = null;
+  }
+  stopHotPathRewarm();
+}
+
+/** Rewarm leve periódico — só caches (logo/koffi); sem Ativar, sem papel. */
+function startHotPathRewarm() {
+  const ms = hotPathRewarmMs();
+  if (ms <= 0) return;
+  if (_hotPathRewarmTimer) return;
+  _hotPathRewarmTimer = unrefTimer(
+    setInterval(() => {
+      if (impressaoEmAndamentoLocal()) return;
+      if (_warmHotPathInflight) return;
+      warmPrintHotPath()
+        .then((out) => {
+          if (out && out.logo === false) {
+            // Logo configurada mas cache frio — tenta de novo sem bloquear.
+            scheduleLogoWarmOnce();
+          }
+        })
+        .catch(() => {});
+    }, ms),
+  );
+}
+
+function stopHotPathRewarm() {
+  if (_hotPathRewarmTimer) {
+    clearInterval(_hotPathRewarmTimer);
+    _hotPathRewarmTimer = null;
+  }
 }
 
 function scheduleLogoWarmOnce() {
@@ -962,6 +1119,21 @@ async function warmPrintHotPath(opts = {}) {
     .then(() => {
       if (out.rawHelper || out.logo || out.koffi || out.persistent) {
         log.info({ ...out, metric: "print.hot_path_warm" }, "[ImpressoraCore] Hot-path aquecido");
+      }
+      if (!out.logo) {
+        try {
+          const info = require("../printerLogo").ler();
+          if (info?.ativo && info?.caminhoAbsoluto) {
+            log.info(
+              {
+                metric: "print.logo_warm_pending",
+                note: "logo configurada mas cache ainda frio — retry em background",
+              },
+              "[ImpressoraCore] Logo warm pendente",
+            );
+            scheduleLogoWarmOnce();
+          }
+        } catch (_) {}
       }
       return out;
     })
@@ -1096,6 +1268,8 @@ async function enviarRawWindowsFast(nomeImpressora, buffer) {
           err: null,
           stderr: null,
         });
+        scheduleSpoolerJobWatch(nomeImpressora, result.timings?.jobId);
+        noteRawWriteOk();
         log.info(
           {
             metric: "print.raw_phase",
@@ -1155,6 +1329,7 @@ async function enviarRawWindowsFast(nomeImpressora, buffer) {
           stderr: null,
         });
       }
+      noteRawWriteOk();
       log.info(
         {
           metric: "print.raw_phase",

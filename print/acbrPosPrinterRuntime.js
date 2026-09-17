@@ -819,7 +819,7 @@ async function withPosPrinterSession(fn, opts = {}) {
     /* coord/session opcional em testes */
   }
 
-  const SESSION_IDLE_MS = parseInt(process.env.ACBR_POS_SESSION_IDLE_MS || "300000", 10);
+  const SESSION_IDLE_MS = parseInt(process.env.ACBR_POS_SESSION_IDLE_MS || "0", 10);
   let _activeSession = withPosPrinterSession._session;
   let _refCount = withPosPrinterSession._refCount || 0;
   let _idleTimer = withPosPrinterSession._idleTimer;
@@ -851,6 +851,7 @@ async function withPosPrinterSession(fn, opts = {}) {
    * Sessão curta por job em RAW era o padrão antigo — cada cupom fazia
    * Finalizar+Inicializar+Ativar e travava o spooler. Agora: sessão quente
    * (idle timeout). Opt-in: ACBR_POS_SESSION_PER_JOB=true.
+   * ACBR_POS_SESSION_IDLE_MS<=0: nunca teardown por idle (espelha lib fiscal).
    */
   function sessaoCurtaRaw() {
     if (process.env.ACBR_POS_SESSION_PER_JOB === "true") {
@@ -861,6 +862,7 @@ async function withPosPrinterSession(fn, opts = {}) {
   }
 
   function scheduleIdle(sess) {
+    if (!Number.isFinite(SESSION_IDLE_MS) || SESSION_IDLE_MS <= 0) return;
     if (_idleTimer) clearTimeout(_idleTimer);
     _idleTimer = setTimeout(() => {
       withPosPrinterSession._idleTimer = null;
@@ -916,6 +918,10 @@ async function withPosPrinterSession(fn, opts = {}) {
     _activeSession = { bundle, configKey: key, cwdBefore, iniForLib, iniPath };
     withPosPrinterSession._session = _activeSession;
     withPosPrinterSession._dllPinned = true;
+    log.info(
+      { metric: "print.pos_session_cold_init", note: "Inicializar+Ativar (sessão nova)" },
+      "[ACBrPosPrinter] Sessão PosPrinter fria criada",
+    );
   }
 
   withPosPrinterSession._refCount = (_refCount += 1);
@@ -1518,12 +1524,20 @@ function __reloadCircuitFromDiskForTests() {
 /**
  * Estende idle da sessão quente se já houver sessão ativa (sem Ativar frio).
  * Chamado no enqueue de jobs rápidos — mantém PosPrinter aquecido no salão.
+ * ACBR_POS_SESSION_IDLE_MS<=0: sessão permanente (sem teardown por idle).
  */
 function extendPosPrinterSessionIdle() {
   const sess = withPosPrinterSession._session;
   if (!sess) return false;
   if ((withPosPrinterSession._refCount || 0) > 0) return true;
-  const SESSION_IDLE_MS = parseInt(process.env.ACBR_POS_SESSION_IDLE_MS || "300000", 10);
+  const SESSION_IDLE_MS = parseInt(process.env.ACBR_POS_SESSION_IDLE_MS || "0", 10);
+  if (!Number.isFinite(SESSION_IDLE_MS) || SESSION_IDLE_MS <= 0) {
+    if (withPosPrinterSession._idleTimer) {
+      clearTimeout(withPosPrinterSession._idleTimer);
+      withPosPrinterSession._idleTimer = null;
+    }
+    return true;
+  }
   if (withPosPrinterSession._idleTimer) {
     clearTimeout(withPosPrinterSession._idleTimer);
   }
