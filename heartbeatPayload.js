@@ -32,6 +32,9 @@ function montarPayloadHeartbeat(filaStatus = {}, opts = {}) {
   if (frontVersion) {
     payload.frontVersion = frontVersion;
   }
+  if (opts.balanca != null) {
+    payload.balanca = opts.balanca;
+  }
   return payload;
 }
 

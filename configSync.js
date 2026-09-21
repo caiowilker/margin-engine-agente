@@ -320,7 +320,15 @@ async function enviarHeartbeat(backendUrl, backendToken) {
     ? setTimeout(() => controller.abort(), timeoutMs)
     : null;
   try {
-    const payload = montarPayloadHeartbeat(filaStatus);
+    const payload = montarPayloadHeartbeat(filaStatus, {
+      balanca: (() => {
+        try {
+          return require("./src/balanca").health();
+        } catch {
+          return { enabled: false, erro: "modulo_indisponivel" };
+        }
+      })(),
+    });
     const resp = await fetch(`${backendUrl}/pdv/agente/heartbeat`, {
       method: "POST",
       headers: {

@@ -611,6 +611,12 @@ async function boot() {
   } catch (err) {
     console.warn("[PrintJob] Worker não iniciado:", err.message);
   }
+  try {
+    const balanca = require("./src/balanca");
+    balanca.boot({ lerConfig });
+  } catch (err) {
+    console.warn("[Balanca] Módulo não iniciado:", err.message);
+  }
   watchdog.iniciar(reiniciarEmissorFiscal, {
     onDegraded: (err) =>
       ativarContingencia(err?.message || "SEFAZ indisponível — fila fiscal pausada", {
@@ -2240,6 +2246,16 @@ function iniciarServidor() {
       });
     }
   });
+
+  // ── Balança (módulo isolado — Etapa 4) ──────────────────────────────────────
+  try {
+    require("./src/balanca").registerRoutes(app, {
+      privateNetworkHeaders,
+      exigirAgentToken,
+    });
+  } catch (err) {
+    console.warn("[Balanca] Rotas não registradas:", err.message);
+  }
 
   /** Rotas printType → porta (2 impressoras no mesmo PC: cozinha + bar). */
   app.get("/config/impressora/station-routes", privateNetworkHeaders, (req, res) => {
