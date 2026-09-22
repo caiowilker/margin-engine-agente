@@ -78,6 +78,15 @@ function extrairNumeroVenda(payload) {
 function isErroPermanente(erroMsg) {
   if (!erroMsg) return false;
   const msg = String(erroMsg).toLowerCase();
+  // Lock / race com checkout online — nunca permanente.
+  if (
+    msg.includes("já está em andamento") ||
+    msg.includes("ja esta em andamento") ||
+    msg.includes("idempot") ||
+    msg.includes("aguarde um instante")
+  ) {
+    return false;
+  }
   return (
     msg.includes("estoque insuficiente") ||
     msg.includes("produto não encontrado") ||
@@ -694,10 +703,26 @@ async function sincronizarInterno(url, token, opts = {}) {
         }
         marcarSincronizado.run(chave);
         sincronizadas++;
+      } else if (r.status === "retry" || r.status === "ocupado") {
+        // Lock de idempotência (race com POST /vendas online): mantém PENDENTE
+        // sem incrementar tentativas — não é falha de negócio.
+        console.info(
+          `[Fila] Venda ${chave} em retry (lock ocupado) — próximo ciclo`,
+        );
       } else {
         const erroMsg = r.erro || r.error || r.mensagem || "Erro desconhecido";
-        marcarFalha.run(erroMsg, isErroPermanente(erroMsg) ? 1 : 0, chave);
-        falhas++;
+        // Compat: backend antigo ainda devolve status=erro para lock.
+        if (
+          !isErroPermanente(erroMsg) &&
+          /andamento|aguarde um instante|idempot/i.test(String(erroMsg))
+        ) {
+          console.info(
+            `[Fila] Venda ${chave} lock (status=erro legado) — próximo ciclo`,
+          );
+        } else {
+          marcarFalha.run(erroMsg, isErroPermanente(erroMsg) ? 1 : 0, chave);
+          falhas++;
+        }
       }
     }
 

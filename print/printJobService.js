@@ -66,13 +66,15 @@ function isTipoRapido(tipo) {
 
 /**
  * Menor = mais urgente.
- * 0 gaveta · 1 pedido/comanda · 2 cupom/caixa/DANFE/vasilhame/crediário · 5 demais
+ * 0 gaveta · 1 cupom não fiscal / pedido · 2 fiscal/DANFE/caixa · 5 demais
+ *
+ * Cupom não fiscal no checkout precisa sair no clique — não pode esperar
+ * warm/Add-Type nem sync de fila de vendas (internet instável).
  */
 function prioridadeParaJob(tipo, payload) {
   if (tipo === "gaveta") return 0;
-  if (tipo === "pedido_comanda") return 1;
+  if (tipo === "cupom_nao_fiscal" || tipo === "pedido_comanda") return 1;
   if (
-    tipo === "cupom_nao_fiscal" ||
     tipo === "cupom_fiscal" ||
     tipo === "danfe_termico" ||
     tipo === "segunda_via" ||
@@ -336,8 +338,21 @@ function enfileirar(op, args, opts = {}) {
     { jobId: id, op, tipo: row.tipo, prioridade: row.prioridade, idempotencyKey },
     "[PrintJob] Enfileirado",
   );
-  agendarWarmPosSeRapido(row.tipo);
+  // Worker ANTES do warm: setImmediate(warm) ganhava de setTimeout(0) e o
+  // Add-Type/logo segurava o cupom não fiscal na fila (papel só depois).
   agendarWorker();
+  const cupomCheckoutRapido =
+    row.tipo === "cupom_nao_fiscal" || row.tipo === "gaveta";
+  if (cupomCheckoutRapido && process.env.PRINT_JOB_WORKER !== "false") {
+    // Processa na hora — warm só depois (não compete com este cupom).
+    void processarFila()
+      .catch(() => {})
+      .finally(() => {
+        setTimeout(() => agendarWarmPosSeRapido(row.tipo), 0);
+      });
+  } else {
+    setTimeout(() => agendarWarmPosSeRapido(row.tipo), 0);
+  }
   return { ...rowToJob(store.buscarJob(id)), deduplicado: false, idempotencyKey };
 }
 

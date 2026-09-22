@@ -61,7 +61,7 @@ async function run() {
   );
   assert.ok(Number(next.prioridade) <= 1, `prioridade comanda=${next.prioridade}`);
 
-  // Job fiscal também prioridade 2 (não atrás de teste)
+  // Job fiscal prioridade 2 (não atrás de teste)
   const fiscal = pjs.enfileirar(
     "imprimirCupom",
     [{ chaveNfe: "35240100000000000000550010000000011000000010", total: 10 }],
@@ -72,6 +72,20 @@ async function run() {
   assert.ok(
     Number(rowFiscal.prioridade) <= 2,
     `cupom_fiscal prioridade=${rowFiscal.prioridade}`,
+  );
+
+  // Cupom não fiscal: prioridade 1 (checkout — sai na hora, antes de fiscal)
+  const naoFiscal = pjs.enfileirar(
+    "imprimirCupom",
+    [{ numeroVenda: "NF-1", total: 10, naoFiscal: true, cupomSemFiscal: true }],
+    { motivo: "prio_nao_fiscal" },
+  );
+  assert.ok(naoFiscal.id);
+  const rowNf = store.buscarJob(naoFiscal.id);
+  assert.strictEqual(
+    Number(rowNf.prioridade),
+    1,
+    `cupom_nao_fiscal prioridade=${rowNf.prioridade}`,
   );
 
   cleanup();
