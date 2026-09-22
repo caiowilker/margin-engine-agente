@@ -3,7 +3,8 @@
  * Payload rápido do instalador Windows: poucos arquivos no Inno, árvore no disco.
  *
  * - Build: empacota node_modules (+ Schemas) em ZIP (tar -a) sob vendor/
- * - Bootstrap: extrai 1× com tar.exe (Win10+) se stamp divergir ou natives ausentes
+ * - Bootstrap: extrai 1× com tar.exe (Win10+) se stamp divergir ou natives ausentes;
+ *   fallback Expand-Archive (PowerShell) se tar.exe estiver ausente/bloqueado.
  *
  * Uso:
  *   node scripts/installer-payload-bundle.js pack [appDir]
@@ -42,23 +43,51 @@ function writeText(fp, text) {
 }
 
 function resolveTar() {
-  if (process.platform === "win32") {
-    const candidates = [
-      path.join(process.env.SystemRoot || "C:\\Windows", "System32", "tar.exe"),
-      "tar.exe",
-      "tar",
-    ];
-    for (const c of candidates) {
-      try {
-        execFileSync(c, ["--version"], { stdio: "pipe" });
-        return c;
-      } catch {
-        /* try next */
-      }
-    }
-    throw new Error("tar.exe ausente — Windows 10+ é obrigatório para o bundle do instalador");
+  if (process.platform !== "win32") {
+    return "tar";
   }
-  return "tar";
+  const root = process.env.SystemRoot || "C:\\Windows";
+  // Sysnative: processo 32-bit no Windows 64-bit enxerga System32 real (tar.exe).
+  const candidates = [
+    path.join(root, "System32", "tar.exe"),
+    path.join(root, "Sysnative", "tar.exe"),
+    "tar.exe",
+    "tar",
+  ];
+  for (const c of candidates) {
+    try {
+      execFileSync(c, ["--version"], { stdio: "pipe", windowsHide: true });
+      return c;
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
+}
+
+function resolvePowerShell() {
+  if (process.platform !== "win32") return null;
+  const root = process.env.SystemRoot || "C:\\Windows";
+  const candidates = [
+    path.join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+    path.join(root, "Sysnative", "WindowsPowerShell", "v1.0", "powershell.exe"),
+    "powershell.exe",
+  ];
+  for (const c of candidates) {
+    try {
+      if (c.includes("\\") || c.includes("/")) {
+        if (!fs.existsSync(c)) continue;
+      }
+      execFileSync(c, ["-NoProfile", "-NonInteractive", "-Command", "$PSVersionTable.PSVersion.Major"], {
+        stdio: "pipe",
+        windowsHide: true,
+      });
+      return c;
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
 }
 
 function packZip(appDir, sourceDirRel, zipRel) {
@@ -76,21 +105,34 @@ function packZip(appDir, sourceDirRel, zipRel) {
   const tar = resolveTar();
   const base = path.basename(sourceDirRel);
   const parent = path.dirname(srcAbs);
-  try {
-    execFileSync(tar, ["-a", "-cf", zipAbs, "-C", parent, base], {
-      stdio: "pipe",
-      windowsHide: true,
-    });
-  } catch (err) {
-    // GNU tar antigo / ambiente sem -a: fallback zip(1)
+  if (tar) {
+    try {
+      execFileSync(tar, ["-a", "-cf", zipAbs, "-C", parent, base], {
+        stdio: "pipe",
+        windowsHide: true,
+      });
+    } catch (err) {
+      // GNU tar antigo / ambiente sem -a: fallback zip(1)
+      try {
+        execFileSync("zip", ["-r", "-q", zipAbs, base], {
+          cwd: parent,
+          stdio: "pipe",
+        });
+      } catch (err2) {
+        throw new Error(
+          `Falha ao criar ${zipRel}: ${err.message}; zip fallback: ${err2.message}`,
+        );
+      }
+    }
+  } else {
     try {
       execFileSync("zip", ["-r", "-q", zipAbs, base], {
         cwd: parent,
         stdio: "pipe",
       });
-    } catch (err2) {
+    } catch (err) {
       throw new Error(
-        `Falha ao criar ${zipRel}: ${err.message}; zip fallback: ${err2.message}`,
+        `Falha ao criar ${zipRel}: tar.exe ausente e zip fallback falhou: ${err.message}`,
       );
     }
   }
@@ -100,15 +142,57 @@ function packZip(appDir, sourceDirRel, zipRel) {
   return zipAbs;
 }
 
+/** Extrai ZIP com PowerShell quando tar.exe não existe (Win10 sem tar / GPO / image enxuta). */
+function extractZipWithPowerShell(zipAbs, destParent) {
+  const ps = resolvePowerShell();
+  if (!ps) {
+    throw new Error(
+      "Não foi possível extrair o bundle: tar.exe e PowerShell ausentes. " +
+        "No Windows 10/11, restaure o tar.exe (C:\\Windows\\System32\\tar.exe) " +
+        "ou habilite o PowerShell. Não é exigência de upgrade de versão do Windows.",
+    );
+  }
+  const zipEsc = zipAbs.replace(/'/g, "''");
+  const destEsc = destParent.replace(/'/g, "''");
+  execFileSync(
+    ps,
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      `Expand-Archive -LiteralPath '${zipEsc}' -DestinationPath '${destEsc}' -Force`,
+    ],
+    { stdio: "pipe", windowsHide: true },
+  );
+}
+
 function extractZip(appDir, zipRel, destParentRel) {
   const zipAbs = path.join(appDir, zipRel);
   const destParent = path.join(appDir, destParentRel);
   fs.mkdirSync(destParent, { recursive: true });
   const tar = resolveTar();
-  execFileSync(tar, ["-xf", zipAbs, "-C", destParent], {
-    stdio: "pipe",
-    windowsHide: true,
-  });
+  if (tar) {
+    try {
+      execFileSync(tar, ["-xf", zipAbs, "-C", destParent], {
+        stdio: "pipe",
+        windowsHide: true,
+      });
+      return;
+    } catch (err) {
+      // Alguns builds Win10 têm tar.exe quebrado/bloqueado — tenta PowerShell.
+      try {
+        extractZipWithPowerShell(zipAbs, destParent);
+        return;
+      } catch (err2) {
+        throw new Error(
+          `Falha ao extrair ${zipRel}: tar (${err.message}); Expand-Archive (${err2.message})`,
+        );
+      }
+    }
+  }
+  extractZipWithPowerShell(zipAbs, destParent);
 }
 
 function rmrf(target) {
@@ -357,4 +441,6 @@ module.exports = {
   ensureNodeModulesFromBundle,
   ensureSchemasFromBundle,
   nativesFromBundleReady,
+  resolveTar,
+  resolvePowerShell,
 };

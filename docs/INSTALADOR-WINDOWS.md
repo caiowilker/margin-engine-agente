@@ -27,13 +27,17 @@ O `.exe` traz Node, **`vendor/node_modules.zip` + `vendor/schemas.zip`** (não m
 arquivos no Inno), manifest e frontend. Compressão `lzma2/fast` **sem solid**; binários
 (Node/DLLs) e ZIPs com `nocompression`. Bootstrap no caixa:
 
-1. Extrai NM ZIP se stamp mudou (verifica sqlite/koffi)
+1. Extrai NM ZIP se stamp mudou (verifica sqlite/koffi) — `tar.exe` ou fallback PowerShell `Expand-Archive`
 2. Sobe serviço (update: skip reinstall se já no SCM)
 3. Aguarda `/health` + `ui.ok` (45s + retry 20s; teto 75s)
-4. Extrai/sincroniza schemas **depois** do online (fail-hard)
+4. Extrai/sincroniza schemas **depois** do online (fail-hard) — mesmo extrator do passo 1
 5. Grava `install-bootstrap-timing.json`
 
 Sem `npm ci` / SHA-256 quando `BUILD_STAMP.json` + natives OK.
+
+> **Nota:** se uma máquina Windows 10/11 não tiver `C:\Windows\System32\tar.exe`
+> (imagem enxuta, GPO, etc.), o bootstrap usa PowerShell. A mensagem antiga
+> “Windows 10+ é obrigatório” era enganosa — o requisito real é conseguir extrair o ZIP.
 
 **Silencioso no caixa:** `Margin-Engine-Setup-<ver>.exe /VERYSILENT /MODE=update`  
 (não abre o browser; ainda registra serviço e valida health).
