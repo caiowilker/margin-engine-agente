@@ -32,6 +32,26 @@ function resolveMarginRoot() {
   }
 }
 
+// Garante que vendor/schemas.zip foi extraído para acbrlib/data/Schemas ANTES
+// de ensureInstallerSchemas verificar a contagem. O ISS exclui Schemas/* do
+// copy direto e os embala em schemas.zip para reduzir tamanho do instalador.
+function ensureSchemasExtracted() {
+  try {
+    const { ensureSchemasFromBundle } = require("./installer-payload-bundle");
+    const r = ensureSchemasFromBundle(appDir, {
+      log: (fields, msg) => console.log("[installer]", msg, fields),
+    });
+    if (r && (r.reason === "missing")) {
+      console.log("[installer] AVISO: vendor/schemas.zip ausente — continuando com schemas locais se existirem");
+    }
+  } catch (err) {
+    console.log("[installer] AVISO: ensureSchemasFromBundle falhou —", err.message);
+    // não-fatal: ensureInstallerSchemas vai reportar se ainda insuficiente
+  }
+}
+
+ensureSchemasExtracted();
+
 const marginRoot = resolveMarginRoot();
 const schemasResult = ensureInstallerSchemas(appDir, marginRoot, {
   logger: (m) => console.log(m),
