@@ -3553,6 +3553,45 @@ function iniciarServidor() {
     },
   );
 
+  // ── Utilitários OS ───────────────────────────────────────────────────────────
+  // Abre seletor nativo de pasta (Windows PowerShell FolderBrowserDialog).
+  // Retorna { ok: true, pasta: "C:\\caminho\\selecionado" } ou { ok: false, cancelado: true }.
+  app.get(
+    "/util/escolher-pasta",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    (req, res) => {
+      if (process.platform !== "win32") {
+        return res
+          .status(400)
+          .json({ ok: false, erro: "Seletor de pasta disponível apenas no Windows." });
+      }
+      const { execFile } = require("child_process");
+      const script = [
+        "Add-Type -AssemblyName System.Windows.Forms;",
+        "$d = New-Object System.Windows.Forms.FolderBrowserDialog;",
+        "$d.Description = 'Selecione a pasta de carga da balança';",
+        "$d.ShowNewFolderButton = $true;",
+        "if ($d.ShowDialog() -eq 'OK') { Write-Output $d.SelectedPath } else { Write-Output '' }",
+      ].join(" ");
+      execFile(
+        "powershell.exe",
+        ["-NoProfile", "-NonInteractive", "-Command", script],
+        { timeout: 60000 },
+        (err, stdout) => {
+          if (err) {
+            return res.status(500).json({ ok: false, erro: err.message });
+          }
+          const pasta = (stdout || "").trim();
+          if (!pasta) {
+            return res.json({ ok: false, cancelado: true });
+          }
+          res.json({ ok: true, pasta });
+        },
+      );
+    },
+  );
+
   // ── Contingência ──────────────────────────────────────────────────────────────
   app.post("/contingencia/epec/salvar", exigirAgentToken, async (req, res) => {
     const { numeroVenda, xmlEpec, epecId } = req.body || {};
