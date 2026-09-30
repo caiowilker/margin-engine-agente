@@ -164,6 +164,37 @@ function registerRoutes(app, { privateNetworkHeaders, exigirAgentToken }) {
       res.json({ removidos: n1 + n2 });
     },
   );
+
+  /**
+   * Testa escrita em pasta arbitrária sem alterar a config de produção.
+   * Body: { pasta: string }
+   */
+  app.post(
+    "/balanca/testar-pasta",
+    privateNetworkHeaders,
+    exigirAgentToken,
+    (req, res) => {
+      const pasta = String(req.body?.pasta || "").trim();
+      if (!pasta) {
+        return res.status(400).json({
+          ok: false,
+          erro: "pasta é obrigatória",
+          codigo: "BALANCA_PASTA_VAZIA",
+        });
+      }
+      try {
+        const diag = diagnosticarPasta(pasta);
+        return res.json({ ok: !!diag.ok && !diag.ocupada, pasta, ...diag });
+      } catch (err) {
+        return res.status(500).json({
+          ok: false,
+          pasta,
+          erro: err.message,
+          codigo: "BALANCA_ERRO_PASTA",
+        });
+      }
+    },
+  );
 }
 
 function boot(opts = {}) {
