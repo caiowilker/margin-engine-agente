@@ -20,7 +20,7 @@ function health() {
   const cfg = safeCfg();
   return {
     enabled: cfg.enabled === true,
-    modoSombra: cfg.modoSombra !== false,
+    modoSombra: cfg.modoSombra === true,
     gerenciadorId: cfg.gerenciadorId || null,
     pastaCarga: cfg.pastaCarga || null,
     encoding: cfg.encoding,

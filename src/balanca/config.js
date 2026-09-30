@@ -15,7 +15,7 @@ const DEFAULTS = Object.freeze({
   encoding: "windows-1252",
   timeoutImportacaoSeg: 120,
   intervaloPollingBakMs: 1000,
-  modoSombra: true,
+  modoSombra: false,
   pollBackendMs: 15000,
   modoEntrega: "PASTA",
   wsBaseUrl: "",
@@ -45,7 +45,8 @@ function validar(raw) {
   const cfg = { ...DEFAULTS, ...(raw && typeof raw === "object" ? raw : {}) };
   cfg.schemaVersion = SCHEMA_VERSION;
   cfg.enabled = cfg.enabled === true;
-  cfg.modoSombra = cfg.modoSombra !== false;
+  // Default produção = flat (false). Só true quando explicitamente ligado.
+  cfg.modoSombra = cfg.modoSombra === true;
   cfg.pastaCarga = cfg.pastaCarga == null ? "" : String(cfg.pastaCarga).trim();
   cfg.encoding = (cfg.encoding && String(cfg.encoding).trim()) || "windows-1252";
   cfg.gerenciadorId =
