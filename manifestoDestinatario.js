@@ -98,10 +98,10 @@ function ambienteSefazAtual() {
   }
 }
 
-async function obterUltNsuBackend(cfg) {
+async function obterConfigBackend(cfg) {
   const url = `${String(cfg.backendUrl || "").replace(/\/$/, "")}/pdv/agente/manifesto/config`;
   const token = cfg.backendToken;
-  if (!url || !token) return "0";
+  if (!url || !token) return { ultNsu: "0" };
   const resp = await fetch(url, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
   });
@@ -110,7 +110,11 @@ async function obterUltNsuBackend(cfg) {
     err.status = resp.status;
     throw err;
   }
-  const json = await resp.json();
+  return resp.json();
+}
+
+async function obterUltNsuBackend(cfg) {
+  const json = await obterConfigBackend(cfg);
   return json.ultNsu || "0";
 }
 
@@ -126,11 +130,19 @@ async function enviarSyncBackend(cfg, payload) {
     },
     body: JSON.stringify(payload),
   });
-  if (!resp.ok) {
+  // 202 Accepted = processamento assíncrono (logId EM_EXECUCAO); trata como ok.
+  if (!resp.ok && resp.status !== 202) {
     const txt = await resp.text().catch(() => "");
     throw new Error(`Backend manifesto/sync HTTP ${resp.status}: ${txt.slice(0, 200)}`);
   }
-  return resp.json();
+  const json = await resp.json();
+  if (resp.status === 202 || json?.aceitoAssincrono) {
+    log.info(
+      { logId: json?.logId, status: json?.status },
+      "Manifesto sync aceito assíncrono (202) — backend processa em fila",
+    );
+  }
+  return json;
 }
 
 /** Zera cursor DistDFe no backend (fallback se o sync de erro não corrigir). */
@@ -394,6 +406,14 @@ function mensagemMotivo(motivo) {
       return "UF da empresa não configurada — necessária para DistDFe.";
     case "consumo_indevido_cooldown":
       return "SEFAZ bloqueou DistDFe (consumo indevido). Aguarde o cooldown antes de nova consulta.";
+    case "sync_requer_acao":
+      return "Backend exige ação humana (credencial/certificado) antes de novo DistDFe.";
+    case "sync_pausado_backend":
+      return "DistDFe pausado no backend (circuit breaker).";
+    case "sync_em_andamento":
+      return "Outro sync DistDFe do tenant ainda está em execução.";
+    case "ult_nsu_indisponivel":
+      return "Não foi possível obter o cursor NSU do backend.";
     default:
       return `Sincronização ignorada: ${motivo}`;
   }
@@ -490,25 +510,9 @@ async function executarSincronizacaoCore(_forcar = false) {
     });
   }
 
-  const empresa = await resolverEmpresaFiscal(cfg);
-  const cnpj = String(empresa.cnpj || "").replace(/\D/g, "");
-  const uf = String(empresa.uf || "").trim();
-
-  if (cnpj.length !== 14) {
-    return respostaIgnorada("cnpj_empresa_nao_configurado", {
-      erro:
-        "CNPJ da empresa não configurado. Cadastre o CNPJ do tenant (GET /pdv/empresa) ou NFE_CNPJ no agente.",
-    });
-  }
-  if (!uf) {
-    return respostaIgnorada("uf_empresa_nao_configurada");
-  }
-
-  const fiscalDriver = require("./fiscalDriver");
-
-  let ultNsuInicial = null;
+  let configBackend = null;
   try {
-    ultNsuInicial = await obterUltNsuBackend(cfg);
+    configBackend = await obterConfigBackend(cfg);
   } catch (err) {
     const status = err.status || 0;
     if (status === 401 || status === 403) {
@@ -520,13 +524,74 @@ async function executarSincronizacaoCore(_forcar = false) {
         ambiente,
       };
     }
-    log.warn({ err: err.message }, "Falha ao obter ultNSU — abortando sync (não reinicia NSU em 0)");
+    log.warn({ err: err.message }, "Falha ao obter config DistDFe — abortando sync");
     return respostaIgnorada("ult_nsu_indisponivel", {
       erro:
-        `Não foi possível obter o último NSU do backend (${err.message}). ` +
+        `Não foi possível obter config DistDFe do backend (${err.message}). ` +
         "Sync DistDFe abortado para evitar reconsulta completa e cStat 656.",
     });
   }
+
+  if (configBackend?.syncRequerAcao) {
+    return respostaIgnorada("sync_requer_acao", {
+      erro:
+        configBackend.motivoPausa ||
+        "Backend marcou DistDFe como 'requer ação' (credencial/certificado). Corrija e use liberar sync.",
+      motivoPausa: configBackend.motivoPausa,
+    });
+  }
+  if (configBackend?.sincronizacaoPausadaAte) {
+    const ateMs = Date.parse(configBackend.sincronizacaoPausadaAte);
+    if (Number.isFinite(ateMs) && ateMs > Date.now()) {
+      // Alinha cooldown local ao circuito do backend (656 / SEFAZ / cert).
+      if (configBackend.motivoPausa === "CONSUMO_INDEVIDO_656" || /656/.test(String(configBackend.ultimoCStat || ""))) {
+        persistirCooldown656(ateMs);
+      }
+      return respostaIgnorada("sync_pausado_backend", {
+        erro: `DistDFe pausado no backend até ${configBackend.sincronizacaoPausadaAte} (${configBackend.motivoPausa || "—"})`,
+        motivoPausa: configBackend.motivoPausa,
+        sincronizacaoPausadaAte: configBackend.sincronizacaoPausadaAte,
+      });
+    }
+  }
+  if (configBackend?.syncEmAndamento) {
+    return respostaIgnorada("sync_em_andamento", {
+      erro: "Outro sync DistDFe do tenant ainda detém o lease no backend.",
+    });
+  }
+
+  const empresa = await resolverEmpresaFiscal(cfg);
+  const cnpj = String(empresa.cnpj || "").replace(/\D/g, "");
+  const uf = String(empresa.uf || "").trim();
+
+  if (cnpj.length !== 14) {
+    // Persiste REQUER_ACAO no backend para parar retries horários de outros nós/painel.
+    await enviarSyncBackend(cfg, {
+      ultNsuInicial: configBackend?.ultNsu || "0",
+      ultNsuFinal: configBackend?.ultNsu || "0",
+      maxNsu: configBackend?.maxNsu || null,
+      notas: [],
+      mensagem: "CNPJ da empresa não configurado — DistDFe requer ação humana",
+      erroCertificado: false,
+      timeout: false,
+      falha: true,
+      cStat: null,
+    }).catch((e) => {
+      log.debug({ err: e.message }, "Falha ao reportar credencial ausente");
+      return null;
+    });
+    return respostaIgnorada("cnpj_empresa_nao_configurado", {
+      erro:
+        "CNPJ da empresa não configurado. Cadastre o CNPJ do tenant (GET /pdv/empresa) ou NFE_CNPJ no agente.",
+    });
+  }
+  if (!uf) {
+    return respostaIgnorada("uf_empresa_nao_configurada");
+  }
+
+  const fiscalDriver = require("./fiscalDriver");
+
+  let ultNsuInicial = configBackend?.ultNsu || "0";
   if (ultNsuInicial == null || ultNsuInicial === "") {
     ultNsuInicial = "0";
   }
@@ -651,6 +716,7 @@ async function executarSincronizacaoCore(_forcar = false) {
       erroCertificado: false,
       timeout: false,
       falha: false,
+      cStat: ultimoCStat,
     });
   } catch (err) {
     log.error({ err: err.message, notas: notas.length }, "DistDFe ok mas falha ao gravar sync no backend");
@@ -668,6 +734,7 @@ async function executarSincronizacaoCore(_forcar = false) {
         erroCertificado: false,
         timeout: false,
         falha: false,
+        cStat: ultimoCStat,
       });
     } catch (errRetry) {
       // Só avança o cursor se não há notas a gravar. Com notas, avançar aqui

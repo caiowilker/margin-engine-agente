@@ -635,11 +635,23 @@ async function run() {
     const manifesto = require("../manifestoDestinatario");
     manifesto.limparCacheEmpresa();
     const originalFetch = global.fetch;
-    global.fetch = async (url) => {
-      if (String(url).includes("/pdv/empresa")) {
+    const posts = [];
+    global.fetch = async (url, init) => {
+      const u = String(url);
+      if (u.includes("/manifesto/config")) {
+        return { ok: true, json: async () => ({ ultNsu: "0" }) };
+      }
+      if (u.includes("/pdv/empresa")) {
         return {
           ok: true,
           json: async () => ({ cnpj: "", uf: "MG" }),
+        };
+      }
+      if (u.includes("/manifesto/sync")) {
+        posts.push(JSON.parse(init.body));
+        return {
+          ok: true,
+          json: async () => ({ status: "REQUER_ACAO", categoriaErro: "CREDENCIAL" }),
         };
       }
       throw new Error(`fetch inesperado: ${url}`);
@@ -655,6 +667,9 @@ async function run() {
       assert.strictEqual(r.ok, false);
       assert.strictEqual(r.motivo, "cnpj_empresa_nao_configurado");
       assert.ok(r.erro);
+      assert.strictEqual(posts.length, 1);
+      assert.strictEqual(posts[0].falha, true);
+      assert.match(posts[0].mensagem, /CNPJ/i);
     } finally {
       global.fetch = originalFetch;
       manifesto.limparCacheEmpresa();

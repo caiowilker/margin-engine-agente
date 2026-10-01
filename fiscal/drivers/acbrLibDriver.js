@@ -496,15 +496,34 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
 
           acbrLibRuntime.reloadNativeCertAfterCarregarIni(inst, runtime);
 
-          inst.assinar();
+          const stage = (name, fn) => {
+            const t0 = Date.now();
+            try {
+              const out = fn();
+              log.info(
+                { stage: name, durationMs: Date.now() - t0, channel: "agent_local" },
+                `[flow-stage] flow=fiscal_emissao stage=${name}`,
+              );
+              return out;
+            } catch (e) {
+              log.warn(
+                { stage: name, durationMs: Date.now() - t0, channel: "agent_local", err: e.message },
+                `[flow-stage] flow=fiscal_emissao stage=${name} outcome=error`,
+              );
+              throw e;
+            }
+          };
+
+          stage("assinatura", () => inst.assinar());
           log.info("[ACBrLib] NFE_Assinar OK");
 
-          inst.validar();
+          stage("validacao_xsd", () => inst.validar());
           log.info("[ACBrLib] NFE_Validar OK");
 
           const emissaoTimeoutMs = resolveEmissaoTimeoutMs();
           let resposta;
           try {
+            const sefazT0 = Date.now();
             resposta = await Promise.race([
               Promise.resolve().then(() => inst.enviar(1, false, true, false)),
               new Promise((_, reject) =>
@@ -524,6 +543,10 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
                 }, emissaoTimeoutMs),
               ),
             ]);
+            log.info(
+              { stage: "sefaz", durationMs: Date.now() - sefazT0, channel: "agent_local" },
+              "[flow-stage] flow=fiscal_emissao stage=sefaz",
+            );
           } catch (sendErr) {
             if (sendErr && !sendErr.incerto && /timeout/i.test(String(sendErr.message || ""))) {
               sendErr.incerto = true;
