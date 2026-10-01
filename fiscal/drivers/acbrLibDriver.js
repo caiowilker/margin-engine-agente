@@ -23,6 +23,7 @@ const acbrLibResposta = require("../../acbrLibResposta");
 const acbrLibRuntime = require("./acbrLibRuntime");
 const acbrLibSession = require("./acbrLibSession");
 const { validarPayloadNfe } = require("../../fiscalValidacaoNfe");
+const { validarPayloadNfce } = require("../../fiscalValidacao");
 const fiscalTrace = require("../../fiscalTraceLog");
 const fiscalEmissionLock = require("../fiscalEmissionLock");
 const fiscalDhEmiIni = require("../fiscalDhEmiIni");
@@ -188,26 +189,18 @@ function assertEmitivel() {
 }
 
 /**
- * Patch de numeração Lib — série/número da reserva; cNF da Lib (fixo em paridade).
+ * Patch de numeração Lib — série/número da reserva.
+ * cNF: numeracao.cNf (paridade explícita) > cNF do INI MFCS > gera novo.
  */
 function patchNumeracaoIniLib(ini, numeracao) {
   if (!ini || !numeracao) return ini;
-  const patched = acbr.patchNumeracaoIni(ini, numeracao);
-  if (!patched) return patched;
-  const cNf = numeracao.cNf || CNF_PARIDADE;
-  const lines = String(patched).split(/\r?\n/);
-  let inIdent = false;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (line === "[Identificacao]") {
-      inIdent = true;
-      continue;
-    }
-    if (inIdent && line.startsWith("[")) break;
-    if (!inIdent) continue;
-    if (line.startsWith("cNF=")) lines[i] = `cNF=${cNf}`;
-  }
-  return lines.join("\n");
+  const parity =
+    String(process.env.ACBR_LIB_ALLOW_PARITY || "").toLowerCase() === "true";
+  const cNfPreferido = numeracao.cNf || (parity ? CNF_PARIDADE : undefined);
+  return acbr.patchNumeracaoIni(ini, {
+    ...numeracao,
+    cNf: cNfPreferido,
+  });
 }
 
 function resolveEmissaoTimeoutMs() {
@@ -271,11 +264,14 @@ async function emitirNfeLib(payload) {
 }
 
 function resolverNumeracaoLib(payload, serie, modeloDf) {
+  const parity =
+    String(process.env.ACBR_LIB_ALLOW_PARITY || "").toLowerCase() === "true";
+  const cNf = parity ? CNF_PARIDADE : undefined;
   if (payload.numeroNfe) {
     return {
       serie: payload.serieNfe || serie,
       numero: parseInt(String(payload.numeroNfe).replace(/\D/g, ""), 10),
-      cNf: CNF_PARIDADE,
+      cNf,
       modelo: modeloDf,
     };
   }
@@ -283,18 +279,29 @@ function resolverNumeracaoLib(payload, serie, modeloDf) {
     return {
       serie: payload._fiscalMeta.serieNfe || serie,
       numero: parseInt(String(payload._fiscalMeta.numeroNfe).replace(/\D/g, ""), 10),
-      cNf: CNF_PARIDADE,
+      cNf,
       modelo: modeloDf,
     };
   }
-  return { ...fiscalNumeracao.reservarProximoNumero(serie, modeloDf), cNf: CNF_PARIDADE };
+  return { ...fiscalNumeracao.reservarProximoNumero(serie, modeloDf), cNf, modelo: modeloDf };
 }
 
 async function montarIniLib(payload, numeracao, modeloDf, empresa) {
   const fiscalIniPolicy = require("../fiscalIniPolicy");
+  const reformaUbFlush = require("../reformaUbFlushPolicy");
   if (payload.documentIni && String(payload.documentIni).trim()) {
+    const live = await reformaUbFlush.aplicarPoliticaLiveFlush(
+      null,
+      payload.documentIni,
+    );
+    if (live.sanitizado) {
+      log.warn(
+        { motivo: live.motivo },
+        "[Fiscal/KillSwitch] documentIni sanitizado no flush Lib",
+      );
+    }
     return fiscalDhEmiIni.prepararIniParaEmissao(
-      patchNumeracaoIniLib(payload.documentIni, numeracao),
+      patchNumeracaoIniLib(live.ini, numeracao),
     );
   }
   fiscalIniPolicy.requireDocumentIniOrAllowLocal(
@@ -305,6 +312,7 @@ async function montarIniLib(payload, numeracao, modeloDf, empresa) {
     const destinatario = validarPayloadNfe(payload);
     return acbr.montarIniNfe({ ...payload, empresa }, numeracao, destinatario);
   }
+  validarPayloadNfce(payload);
   return acbr.montarIniNfce({ ...payload, empresa }, numeracao);
 }
 
@@ -326,6 +334,15 @@ async function emitirDocumentoLib(payload, modeloDf) {
   };
   const prefix = modeloDf === "55" ? "nfe-lib" : "nfce-lib";
   const ini = await montarIniLib(payload, numeracao, modeloDf, empresa);
+  // Fail-closed NFC-e: não Assinar/Enviar com INI broken (totais/CNPJ/itens).
+  if (contingenciaOffline.isModeloNfce(modeloDf)) {
+    try {
+      require("../iniPreflight").assertIniNfceEstrutura(ini, { offline: false });
+    } catch (preErr) {
+      preErr.permanente = true;
+      throw preErr;
+    }
+  }
   const iniPath = path.join(
     PATHS.ini,
     `${prefix}-${payload.numeroVenda || Date.now()}-${numeracao.numero}.ini`,
@@ -491,6 +508,16 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
             contingenciaOffline.FORMA_NORMAL,
             null,
           );
+          // Contaminated contig fields with tpEmis=1 → SEFAZ 556.
+          const iniAntesOnline = fs.readFileSync(nativeIniPath, "utf8");
+          const iniOnline =
+            contingenciaOffline.sanitizarIniEmissaoOnline(iniAntesOnline);
+          if (iniOnline !== iniAntesOnline) {
+            fs.writeFileSync(nativeIniPath, iniOnline, "utf8");
+            log.info(
+              "[ContingenciaOffline] Removidos dhCont/xJust do INI online (tpEmis≠9)",
+            );
+          }
           inst.carregarINI(nativeIniPath);
           log.info({ iniPath: nativeIniPath }, "[ACBrLib] NFE_CarregarINI OK");
 
@@ -689,7 +716,13 @@ function emitirNfceContingenciaOffline(inst, runtime, nativeIniPath, modelo, num
       try {
         inst.validar();
       } catch (valErr) {
-        log.warn({ err: valErr.message }, "[ContingenciaOffline] NFE_Validar avisou — XML será gravado");
+        const msg = String(valErr?.message || valErr);
+        // Fail-closed: schema inválido não entra na fila offline.
+        const err = new Error(
+          `[ContingenciaOffline] NFE_Validar falhou — XML não será enfileirado: ${msg}`,
+        );
+        err.permanente = true;
+        throw err;
       }
 
       xmlPeek = contingenciaOffline.lerXmlAssinadoDaLista(inst);
@@ -724,6 +757,29 @@ function emitirNfceContingenciaOffline(inst, runtime, nativeIniPath, modelo, num
     const chave = String(metaPeek.chave || "").replace(/\D/g, "");
     if (chave.length !== 44) {
       throw new Error("[ContingenciaOffline] chave de 44 dígitos ausente após assinar");
+    }
+    // Reserva local vs XML — evita 539 / furo de sequência no sync.
+    if (numeracao?.numero != null) {
+      const nXml = String(metaPeek.numero || "").replace(/\D/g, "");
+      const nRes = String(numeracao.numero).replace(/\D/g, "");
+      if (nXml && nRes && nXml !== nRes) {
+        const err = new Error(
+          `[ContingenciaOffline] nNF do XML (${nXml}) ≠ reservado (${nRes}) — INI não patchado.`,
+        );
+        err.permanente = true;
+        throw err;
+      }
+    }
+    if (numeracao?.serie != null) {
+      const sXml = String(metaPeek.serie || "").replace(/\D/g, "");
+      const sRes = String(numeracao.serie).replace(/\D/g, "");
+      if (sXml && sRes && sXml !== sRes) {
+        const err = new Error(
+          `[ContingenciaOffline] serie do XML (${sXml}) ≠ reservada (${sRes}).`,
+        );
+        err.permanente = true;
+        throw err;
+      }
     }
 
     const destXml = PATHS.xml || runtime.notas;

@@ -129,11 +129,29 @@ function chaveNfeDvValido(chave) {
 }
 
 function aplicarTpEmisOffline(iniContent, opts = {}) {
+  const raw = String(iniContent || "");
+  const precheck = inspecionarIniIdentificacao(raw);
+  // Contingência off-line NFC-e (teOffLine) — nunca patchar NF-e 55.
+  if (precheck.mod === "55") {
+    const err = new Error(
+      "[ContingenciaOffline] INI modelo 55 (NF-e) não pode ir para off-line NFC-e (tpEmis=9).",
+    );
+    err.permanente = true;
+    throw err;
+  }
+  if (precheck.mod && precheck.mod !== "65") {
+    const err = new Error(
+      `[ContingenciaOffline] INI com mod=${precheck.mod} inválido para contingência off-line (esperado 65).`,
+    );
+    err.permanente = true;
+    throw err;
+  }
+
   const dhCont = fiscalDhEmiIni.formatarDhEmiAcbrIni(opts.dhCont || new Date());
   let xJust = String(opts.xJust || JUSTIFICATIVA_PADRAO).trim().slice(0, 256);
   if (xJust.length < 15) xJust = JUSTIFICATIVA_PADRAO;
 
-  const lines = String(iniContent || "").split(/\r?\n/);
+  const lines = raw.split(/\r?\n/);
   let hasTpEmis = false;
   let hasDhCont = false;
   let hasXJust = false;
@@ -174,7 +192,127 @@ function aplicarTpEmisOffline(iniContent, opts = {}) {
       out.unshift("[Identificacao]", ...extras, "");
     }
   }
-  return out.join("\n");
+  const patched = out.join("\n");
+  assertIniNfceOfflinePronto(patched);
+  return patched;
+}
+
+/**
+ * Lê chaves fiscais críticas de [Identificacao] sem alterar o INI.
+ */
+function inspecionarIniIdentificacao(iniContent) {
+  const lines = String(iniContent || "").split(/\r?\n/);
+  let inIdent = false;
+  const out = { mod: "", tpEmis: "", dhCont: "", xJust: "", nNF: "", serie: "" };
+  for (const line of lines) {
+    const sect = line.match(/^\[([^\]]+)\]\s*$/);
+    if (sect) {
+      if (inIdent) break;
+      inIdent = /^identificacao$/i.test(String(sect[1]).trim());
+      continue;
+    }
+    if (!inIdent) continue;
+    const m = line.match(/^([^=]+)=(.*)$/);
+    if (!m) continue;
+    const k = m[1].trim().toLowerCase();
+    const v = String(m[2] ?? "").trim();
+    if (k === "mod" || k === "modelo") out.mod = v;
+    else if (k === "tpemis") out.tpEmis = v;
+    else if (k === "dhcont") out.dhCont = v;
+    else if (k === "xjust") out.xJust = v;
+    else if (k === "nnf" || k === "numero") out.nNF = v;
+    else if (k === "serie") out.serie = v;
+  }
+  return out;
+}
+
+/**
+ * Garante que o INI já patchado está pronto para FormaEmissao=8 / Assinar.
+ * Falha permanente evita emitir NFC-e normal com dhCont ou contig sem justificativa.
+ */
+function assertIniNfceOfflinePronto(iniContent) {
+  const id = inspecionarIniIdentificacao(iniContent);
+  if (!id.mod) {
+    const err = new Error(
+      "[ContingenciaOffline] INI sem mod/modelo em [Identificacao] — off-line exige NFC-e 65.",
+    );
+    err.permanente = true;
+    throw err;
+  }
+  if (id.mod === "55") {
+    const err = new Error(
+      "[ContingenciaOffline] INI modelo 55 após patch — contingência off-line só NFC-e 65.",
+    );
+    err.permanente = true;
+    throw err;
+  }
+  if (id.mod !== "65") {
+    const err = new Error(
+      `[ContingenciaOffline] INI mod=${id.mod} inválido para off-line (esperado 65).`,
+    );
+    err.permanente = true;
+    throw err;
+  }
+  if (id.tpEmis !== TP_EMIS_XML_OFFLINE) {
+    const err = new Error(
+      `[ContingenciaOffline] INI tpEmis=${id.tpEmis || "ausente"} após patch (esperado ${TP_EMIS_XML_OFFLINE}).`,
+    );
+    err.permanente = true;
+    throw err;
+  }
+  if (!id.dhCont || id.dhCont === "0") {
+    const err = new Error(
+      "[ContingenciaOffline] INI sem dhCont válido após patch (SEFAZ 557).",
+    );
+    err.permanente = true;
+    throw err;
+  }
+  if (!id.xJust || id.xJust.length < 15) {
+    const err = new Error(
+      "[ContingenciaOffline] INI xJust ausente ou < 15 chars após patch (SEFAZ 557).",
+    );
+    err.permanente = true;
+    throw err;
+  }
+  return id;
+}
+
+/**
+ * Remove dhCont/xJust quando tpEmis≠9 — evita SEFAZ 556 em emissão online.
+ * Não altera tpEmis. Idempotente.
+ */
+function sanitizarIniEmissaoOnline(iniContent) {
+  const lines = String(iniContent || "").split(/\r?\n/);
+  let inIdent = false;
+  let tpEmis = "";
+  for (const line of lines) {
+    const sect = line.match(/^\[([^\]]+)\]\s*$/);
+    if (sect) {
+      if (inIdent) break;
+      inIdent = /^identificacao$/i.test(String(sect[1]).trim());
+      continue;
+    }
+    if (!inIdent) continue;
+    if (/^tpEmis=/i.test(line)) {
+      tpEmis = String(line.split("=")[1] || "").trim();
+    }
+  }
+  if (tpEmis === TP_EMIS_XML_OFFLINE) return String(iniContent || "");
+
+  let stillIdent = false;
+  return lines
+    .filter((line) => {
+      const sect = line.match(/^\[([^\]]+)\]\s*$/);
+      if (sect) {
+        stillIdent = /^identificacao$/i.test(String(sect[1]).trim());
+        return true;
+      }
+      if (!stillIdent) return true;
+      if (/^dhCont=/i.test(line)) return false;
+      if (/^xJust=/i.test(line) && !/^xJustificativa=/i.test(line)) return false;
+      return true;
+    })
+    .join("\n");
 }
 
 /**
@@ -277,6 +415,9 @@ function assertXmlNfceOffline(xml) {
 function escreverIniOffline(iniPath, opts = {}) {
   const original = fs.readFileSync(iniPath, "utf8");
   const patched = aplicarTpEmisOffline(original, opts);
+  // Fail-closed: estrutura + totais + tpEmis=9 antes de gravar o INI que será Assinado.
+  const iniPreflight = require("./iniPreflight");
+  iniPreflight.assertIniNfceEstrutura(patched, { offline: true });
   const dest = iniPath.replace(/(\.ini)?$/i, "-offline.ini");
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   writeFileAtomicSync(dest, patched, { encoding: "utf8" });
@@ -317,10 +458,11 @@ function gravarFormaEmissao(inst, valor, log) {
 /**
  * NFE_CarregarINI recarrega FormaEmissao do INI global (teNormal=0).
  * Deve ser chamado depois do CarregarINI e antes do Assinar.
+ * Fail-closed: se a sessão não ficar teOffLine, não Assinar.
  */
 function garantirFormaEmissaoOffline(inst, log) {
   gravarFormaEmissao(inst, FORMA_OFFLINE, log);
-  const lida = lerFormaEmissao(inst);
+  let lida = lerFormaEmissao(inst);
   if (lida !== FORMA_OFFLINE) {
     if (log) {
       log.warn(
@@ -329,6 +471,14 @@ function garantirFormaEmissaoOffline(inst, log) {
       );
     }
     gravarFormaEmissao(inst, FORMA_OFFLINE, log);
+    lida = lerFormaEmissao(inst);
+  }
+  if (lida !== FORMA_OFFLINE) {
+    const err = new Error(
+      `[ContingenciaOffline] FormaEmissao=${lida || "ausente"} após gravar teOffLine=${FORMA_OFFLINE} — não Assinar (chave sairia com tpEmis errado).`,
+    );
+    err.permanente = true;
+    throw err;
   }
 }
 
@@ -597,6 +747,9 @@ module.exports = {
   statusServicoOperacional,
   aplicarTpEmisOffline,
   escreverIniOffline,
+  inspecionarIniIdentificacao,
+  assertIniNfceOfflinePronto,
+  sanitizarIniEmissaoOnline,
   xmlNfceOfflineValido,
   assertXmlNfceOffline,
   assertXmlProntoParaTransmissao,

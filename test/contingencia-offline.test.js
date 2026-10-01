@@ -82,7 +82,7 @@ test("FORMA_OFFLINE da Lib é 8 (teOffLine); tpEmis XML é 9", () => {
 
 test("aplicarTpEmisOffline troca tpEmis e inclui dhCont/xJust sem alterar o restante", () => {
   const { aplicarTpEmisOffline } = require("../fiscal/contingenciaOffline");
-  const ini = "[Identificacao]\ntpEmis=1\nnNF=10\nserie=1\n";
+  const ini = "[Identificacao]\nmod=65\ntpEmis=1\nnNF=10\nserie=1\n";
   const out = aplicarTpEmisOffline(ini, {
     dhCont: new Date(2026, 7, 14, 12, 0, 0),
     xJust: "Falha de comunicacao com a SEFAZ",
@@ -92,12 +92,13 @@ test("aplicarTpEmisOffline troca tpEmis e inclui dhCont/xJust sem alterar o rest
   assert.match(out, /dhCont=14\/08\/2026 12:00:00/);
   assert.match(out, /xJust=Falha de comunicacao com a SEFAZ/);
   assert.match(out, /nNF=10/);
+  assert.match(out, /mod=65/);
 });
 
 test("aplicarTpEmisOffline injeta dhCont/xJust em [Identificacao], não no fim do INI", () => {
   const { aplicarTpEmisOffline } = require("../fiscal/contingenciaOffline");
   const ini =
-    "[Identificacao]\ntpEmis=1\nnNF=10\nserie=1\n\n[Emitente]\nCNPJCPF=14256223000155\n";
+    "[Identificacao]\nmod=65\ntpEmis=1\nnNF=10\nserie=1\n\n[Emitente]\nCNPJCPF=14256223000155\n";
   const out = aplicarTpEmisOffline(ini, {
     dhCont: new Date(2026, 7, 14, 12, 0, 0),
     xJust: "Falha de comunicacao com a SEFAZ",
@@ -114,7 +115,7 @@ test("aplicarTpEmisOffline injeta dhCont/xJust em [Identificacao], não no fim d
 
 test("aplicarTpEmisOffline substitui dhCont=0 do modelo ACBr", () => {
   const { aplicarTpEmisOffline } = require("../fiscal/contingenciaOffline");
-  const ini = "[Identificacao]\ntpEmis=1\ndhCont=0\nxJust=\n";
+  const ini = "[Identificacao]\nmod=65\ntpEmis=1\ndhCont=0\nxJust=\n";
   const out = aplicarTpEmisOffline(ini, {
     dhCont: new Date(2026, 7, 14, 12, 0, 0),
     xJust: "Falha de comunicacao com a SEFAZ",
@@ -124,6 +125,36 @@ test("aplicarTpEmisOffline substitui dhCont=0 do modelo ACBr", () => {
   assert.match(out, /xJust=Falha de comunicacao com a SEFAZ/);
   assert.equal((out.match(/^tpEmis=/gm) || []).length, 1);
   assert.equal((out.match(/^dhCont=/gm) || []).length, 1);
+});
+
+test("aplicarTpEmisOffline recusa NF-e 55 (não é contig NFC-e)", () => {
+  const { aplicarTpEmisOffline } = require("../fiscal/contingenciaOffline");
+  assert.throws(
+    () =>
+      aplicarTpEmisOffline(
+        "[Identificacao]\nmod=55\ntpEmis=1\nnNF=1\n",
+        { xJust: "Falha de comunicacao com a SEFAZ" },
+      ),
+    /modelo 55/,
+  );
+});
+
+test("assertIniNfceOfflinePronto exige tpEmis=9 + dhCont + xJust", () => {
+  const {
+    assertIniNfceOfflinePronto,
+  } = require("../fiscal/contingenciaOffline");
+  assert.throws(
+    () =>
+      assertIniNfceOfflinePronto(
+        "[Identificacao]\nmod=65\ntpEmis=1\ndhCont=14/08/2026 12:00:00\nxJust=Falha de comunicacao SEFAZ ok\n",
+      ),
+    /tpEmis/,
+  );
+  const ok = assertIniNfceOfflinePronto(
+    "[Identificacao]\nmod=65\ntpEmis=9\ndhCont=14/08/2026 12:00:00\nxJust=Falha de comunicacao SEFAZ ok\n",
+  );
+  assert.equal(ok.tpEmis, "9");
+  assert.equal(ok.mod, "65");
 });
 
 test("xmlNfceOfflineValido distingue 556, 557 e XML off-line ok", () => {
@@ -269,6 +300,53 @@ test("garantirFormaEmissaoOffline reaplica teOffLine após CarregarINI resetar s
   };
   garantirFormaEmissaoOffline(inst, null);
   assert.equal(forma, FORMA_OFFLINE);
+});
+
+test("garantirFormaEmissaoOffline lança se sessão não aceitar teOffLine", () => {
+  const { garantirFormaEmissaoOffline } = require("../fiscal/contingenciaOffline");
+  const inst = {
+    configGravarValor() {},
+    configLerValor() {
+      return "0";
+    },
+  };
+  assert.throws(() => garantirFormaEmissaoOffline(inst, null), /FormaEmissao/);
+});
+
+test("sanitizarIniEmissaoOnline remove dhCont/xJust quando tpEmis≠9", () => {
+  const { sanitizarIniEmissaoOnline } = require("../fiscal/contingenciaOffline");
+  const ini =
+    "[Identificacao]\nmod=65\ntpEmis=1\ndhCont=14/08/2026 12:00:00\nxJust=Falha de comunicacao SEFAZ\nnNF=1\n";
+  const out = sanitizarIniEmissaoOnline(ini);
+  assert.match(out, /tpEmis=1/);
+  assert.doesNotMatch(out, /dhCont=/);
+  assert.doesNotMatch(out, /xJust=/);
+  const keep = sanitizarIniEmissaoOnline(
+    "[Identificacao]\ntpEmis=9\ndhCont=14/08/2026 12:00:00\nxJust=Falha de comunicacao SEFAZ\n",
+  );
+  assert.match(keep, /dhCont=/);
+  assert.match(keep, /xJust=/);
+});
+
+test("assertIniNfceOfflinePronto exige mod=65 (não aceita ausente)", () => {
+  const { assertIniNfceOfflinePronto } = require("../fiscal/contingenciaOffline");
+  assert.throws(
+    () =>
+      assertIniNfceOfflinePronto(
+        "[Identificacao]\ntpEmis=9\ndhCont=14/08/2026 12:00:00\nxJust=Falha de comunicacao SEFAZ ok\n",
+      ),
+    /sem mod/,
+  );
+});
+
+test("patchNumeracaoIni case-insensitive preserva cNF do MFCS", () => {
+  const { patchNumeracaoIni } = require("../acbr");
+  const ini =
+    "[Identificacao]\nSerie=2\nNumero=99\ncNF=87654321\ntpAmb=2\n\n[Emitente]\nCNPJCPF=1\n";
+  const out = patchNumeracaoIni(ini, { serie: 1, numero: 10 });
+  assert.match(out, /serie=1/i);
+  assert.match(out, /nNF=10/);
+  assert.match(out, /cNF=87654321/);
 });
 
 test("lerXmlAssinadoDaLista tenta índices alternativos da ACBrLib", () => {

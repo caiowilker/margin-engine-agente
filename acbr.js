@@ -656,42 +656,58 @@ function resolverTpAmb() {
 }
 
 /** Aplica série/número reservados pelo agente em INI montado no backend (Onda B.4).
- * Também alinha tpAmb ao AMBIENTE_SEFAZ local (SSOT operacional do caixa). */
+ * Também alinha tpAmb ao AMBIENTE_SEFAZ local (SSOT operacional do caixa).
+ * Case-insensitive em [Identificacao] / serie|nNF|cNF|tpAmb (INI MFCS varia).
+ * cNF: usa numeracao.cNf se informado; senão preserva o do INI; senão gera. */
 function patchNumeracaoIni(ini, numeracao) {
   if (!ini || !numeracao) return ini;
   const serie = numeracao.serie ?? fiscalNumeracao.SERIE_PADRAO;
   const numero = numeracao.numero;
-  const cNf = gerarCodigoNumerico();
   const tpAmb = resolverTpAmb();
   const lines = String(ini).split(/\r?\n/);
   let inIdent = false;
   let tpAmbPatched = false;
+  let cNfPatched = false;
+  let cNfExistente = "";
   for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i];
-    const line = raw.trim();
-    if (line === "[Identificacao]") {
-      inIdent = true;
+    const line = lines[i].trim();
+    const sect = line.match(/^\[([^\]]+)\]\s*$/);
+    if (sect) {
+      if (inIdent) {
+        if (!tpAmbPatched) {
+          lines.splice(i, 0, `tpAmb=${tpAmb}`);
+          tpAmbPatched = true;
+          i += 1;
+        }
+        break;
+      }
+      inIdent = /^identificacao$/i.test(String(sect[1]).trim());
       continue;
     }
-    if (inIdent && line.startsWith("[")) {
-      if (!tpAmbPatched) {
-        lines.splice(i, 0, `tpAmb=${tpAmb}`);
-        tpAmbPatched = true;
-        i += 1;
-      }
-      break;
-    }
     if (!inIdent) continue;
-    if (line.startsWith("serie=")) lines[i] = `serie=${serie}`;
-    else if (line.startsWith("nNF=")) lines[i] = `nNF=${numero}`;
-    else if (line.startsWith("cNF=")) lines[i] = `cNF=${cNf}`;
-    else if (/^tpAmb=/i.test(line)) {
+    if (/^serie=/i.test(line)) lines[i] = `serie=${serie}`;
+    else if (/^nNF=/i.test(line) || /^numero=/i.test(line)) lines[i] = `nNF=${numero}`;
+    else if (/^cNF=/i.test(line)) {
+      cNfExistente = String(line.split("=")[1] || "").trim();
+      if (numeracao.cNf) {
+        lines[i] = `cNF=${numeracao.cNf}`;
+      }
+      cNfPatched = true;
+    } else if (/^tpAmb=/i.test(line)) {
       lines[i] = `tpAmb=${tpAmb}`;
       tpAmbPatched = true;
     }
   }
   if (inIdent && !tpAmbPatched) {
     lines.push(`tpAmb=${tpAmb}`);
+  }
+  if (inIdent && !cNfPatched) {
+    const cNf = numeracao.cNf || gerarCodigoNumerico();
+    const insertAt = lines.findIndex((l) => /^\[Identificacao\]/i.test(l.trim()));
+    if (insertAt >= 0) lines.splice(insertAt + 1, 0, `cNF=${cNf}`);
+    else lines.push(`cNF=${cNf}`);
+  } else if (inIdent && numeracao.cNf && !cNfExistente) {
+    /* already written above when key existed */
   }
   return fiscalDhEmiIni.prepararIniParaEmissao(lines.join("\n"));
 }
@@ -748,6 +764,81 @@ function resolverNatOpNfe(payload) {
   return "VENDA DE MERCADORIA";
 }
 
+/** tpEmis local (fallback). Contingência real injeta via aplicarTpEmisOffline. */
+function resolverTpEmisLocal(payload) {
+  const raw = payload?.tpEmis ?? payload?.tipoEmissao;
+  const n = String(raw ?? "1").replace(/\D/g, "").slice(0, 1);
+  if (n === "9") return "9";
+  if (n >= "1" && n <= "7") return n;
+  return "1";
+}
+
+function resolverFinNFeLocal(payload, nfce) {
+  if (payload?.finNFe != null && String(payload.finNFe).trim() !== "") {
+    return String(payload.finNFe).replace(/\D/g, "").slice(0, 1) || "1";
+  }
+  if (!nfce) {
+    const tipo = String(payload?.tipoEmissaoNfe || "").toUpperCase();
+    if (tipo.includes("DEVOLUCAO")) return "4";
+    if (tipo.includes("AJUSTE")) return "3";
+    if (tipo.includes("COMPLEMENTAR")) return "2";
+  }
+  return "1";
+}
+
+function resolverModFreteLocal(payload, nfce) {
+  if (payload?.modFrete != null && String(payload.modFrete).trim() !== "") {
+    return String(payload.modFrete).replace(/\D/g, "").slice(0, 1) || (nfce ? "9" : "9");
+  }
+  // NFC-e: sem frete (9). NF-e: default sem frete salvo payload.
+  return "9";
+}
+
+function montarBlocoTotalIni({
+  totalVenda,
+  vProd,
+  vDesc = 0,
+  vFrete = 0,
+  vOutro = 0,
+  vBC = 0,
+  vICMS = 0,
+  vBCST = 0,
+  vST = 0,
+  vTotTrib = 0,
+}) {
+  const vNFCalc =
+    Math.round((vProd - vDesc + vST + vFrete + vOutro) * 100) / 100;
+  let vNF = Number(totalVenda);
+  if (!Number.isFinite(vNF) || vNF <= 0) {
+    vNF = vNFCalc;
+  } else if (Math.abs(vNF - vNFCalc) > 0.05) {
+    const err = new Error(
+      `Totais inconsistentes ao montar INI: payload.total=${vNF.toFixed(2)} ≠ ` +
+        `calculado ${vNFCalc.toFixed(2)} (vProd−vDesc+vST+vFrete+vOutro). ` +
+        `Corrija o payload — não emitir com valores divergentes.`,
+    );
+    err.permanente = true;
+    throw err;
+  }
+  let bloco = `[Total]\n`;
+  bloco += `vNF=${fmtMoney(vNF)}\n`;
+  bloco += `vBC=${fmtMoney(vBC)}\n`;
+  bloco += `vICMS=${fmtMoney(vICMS)}\n`;
+  bloco += `vBCST=${fmtMoney(vBCST)}\n`;
+  bloco += `vST=${fmtMoney(vST)}\n`;
+  bloco += `vProd=${fmtMoney(vProd)}\n`;
+  bloco += `vFrete=${fmtMoney(vFrete)}\n`;
+  bloco += `vSeg=0.00\n`;
+  bloco += `vDesc=${fmtMoney(vDesc)}\n`;
+  bloco += `vII=0.00\n`;
+  bloco += `vIPI=0.00\n`;
+  bloco += `vPIS=0.00\n`;
+  bloco += `vCOFINS=0.00\n`;
+  bloco += `vOutro=${fmtMoney(vOutro)}\n`;
+  bloco += `vTotTrib=${fmtMoney(vTotTrib)}\n\n`;
+  return bloco;
+}
+
 function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
   const usaSimples = crtUsaSimples(crt);
   const nn = String(n).padStart(3, "0");
@@ -756,6 +847,11 @@ function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
   const total = Number(item.total ?? qtd * pu);
   const desc = Number(item.desconto || 0);
   const brutoLinha = desc > 0 ? total + desc : total;
+  const vFrete = Math.max(0, Number(item.vFrete || item.frete || 0));
+  const vOutro = Math.max(0, Number(item.vOutro || item.outro || 0));
+  const vBCST = Math.max(0, Number(item.vBCST || item.vBcSt || 0));
+  const pICMSST = Math.max(0, Number(item.pICMSST || item.pIcmsSt || 0));
+  const vICMSST = Math.max(0, Number(item.vICMSST || item.vIcmsSt || 0));
   const un = unidadeFiscalDoItem(item);
   const gtin = resolverGtin(item);
   const ncmDigits = String(item.ncm || "").replace(/\D/g, "");
@@ -805,6 +901,8 @@ function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
   bloco += `qTrib=${fmtQty(qTrib)}\n`;
   bloco += `vUnTrib=${fmtQty(vUnTrib)}\n`;
   if (desc > 0) bloco += `vDesc=${fmtMoney(desc)}\n`;
+  if (vFrete > 0) bloco += `vFrete=${fmtMoney(vFrete)}\n`;
+  if (vOutro > 0) bloco += `vOutro=${fmtMoney(vOutro)}\n`;
   if (Number(vTotTribItem) > 0) {
     bloco += `vTotTrib=${fmtMoney(vTotTribItem)}\n`;
   }
@@ -828,32 +926,49 @@ function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
   bloco += `orig=${String(item.origem || item.orig || "0")
     .replace(/\D/g, "")
     .slice(0, 1) || "0"}\n`;
-  if (!usaSimples) {
-    bloco += `modBC=3\n`;
-  }
-  // Simples: ICMS próprio zerado (DAS). Crédito SN só em CSOSN 101/201.
-  // XSD PL_009: CSOSN 102/103/300/400 → tag ICMSSN102 (não existe ICMSSN400).
-  // CSOSN 500 → tag ICMSSN500 (ST já retido). NT 2016.002 N33 = ICMS efetivo.
-  bloco += `vBC=0.00\n`;
-  bloco += `pICMS=${fmtMoney(usaSimples ? 0 : item.aliquotaIcms || 0)}\n`;
-  bloco += `vICMS=0.00\n`;
-  if (usaSimples && (csosn === "101" || csosn === "201")) {
-    const pCred = Math.max(0, Number(item.aliquotaIcms) || 0);
-    const liquido = Math.max(0, brutoLinha - desc);
-    const vCred = Math.round((liquido * pCred) / 100 * 100) / 100;
-    bloco += `pCredSN=${fmtMoney(pCred)}\n`;
-    bloco += `vCredICMSSN=${fmtMoney(vCred)}\n`;
-  }
-  if (usaSimples && csosn === "500") {
-    const pEfet = Math.max(0, Number(item.pICMSEfet || item.aliquotaIcms) || 0);
-    if (pEfet > 0) {
+
+  let vBC = 0;
+  let vICMS = 0;
+  if (usaSimples) {
+    // Simples: ICMS próprio zerado (DAS). Crédito SN só em CSOSN 101/201.
+    bloco += `vBC=0.00\n`;
+    bloco += `pICMS=0.00\n`;
+    bloco += `vICMS=0.00\n`;
+    if (csosn === "101" || csosn === "201") {
+      const pCred = Math.max(0, Number(item.aliquotaIcms) || 0);
       const liquido = Math.max(0, brutoLinha - desc);
-      const vEfet = Math.round((liquido * pEfet) / 100 * 100) / 100;
-      bloco += `vBCEfet=${fmtMoney(liquido)}\n`;
-      bloco += `pRedBCEfet=0.00\n`;
-      bloco += `pICMSEfet=${fmtMoney(pEfet)}\n`;
-      bloco += `vICMSEfet=${fmtMoney(vEfet)}\n`;
+      const vCred = Math.round((liquido * pCred) / 100 * 100) / 100;
+      bloco += `pCredSN=${fmtMoney(pCred)}\n`;
+      bloco += `vCredICMSSN=${fmtMoney(vCred)}\n`;
     }
+    if (csosn === "500") {
+      const pEfet = Math.max(0, Number(item.pICMSEfet || item.aliquotaIcms) || 0);
+      if (pEfet > 0) {
+        const liquido = Math.max(0, brutoLinha - desc);
+        const vEfet = Math.round((liquido * pEfet) / 100 * 100) / 100;
+        bloco += `vBCEfet=${fmtMoney(liquido)}\n`;
+        bloco += `pRedBCEfet=0.00\n`;
+        bloco += `pICMSEfet=${fmtMoney(pEfet)}\n`;
+        bloco += `vICMSEfet=${fmtMoney(vEfet)}\n`;
+      }
+    }
+  } else {
+    // Regime normal: base inclui frete da linha (paridade Java_NFe / LC 87).
+    const aliq = Math.max(0, Number(item.aliquotaIcms) || 0);
+    vBC = Math.max(0, brutoLinha - desc) + vFrete;
+    vICMS = Math.round((vBC * aliq) / 100 * 100) / 100;
+    bloco += `modBC=3\n`;
+    bloco += `vBC=${fmtMoney(vBC)}\n`;
+    bloco += `pICMS=${fmtMoney(aliq)}\n`;
+    bloco += `vICMS=${fmtMoney(vICMS)}\n`;
+  }
+
+  // ST — só quando o payload já trouxe (backend/MFCS); nunca inventar.
+  if (vBCST > 0 || vICMSST > 0) {
+    bloco += `modBCST=4\n`;
+    bloco += `vBCST=${fmtMoney(vBCST)}\n`;
+    bloco += `pICMSST=${fmtMoney(pICMSST)}\n`;
+    bloco += `vICMSST=${fmtMoney(vICMSST)}\n`;
   }
   bloco += `\n`;
 
@@ -871,7 +986,18 @@ function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
     bloco += `CST=01\nvBC=0.00\npCOFINS=3.00\nvCOFINS=0.00\n\n`;
   }
 
-  return { bloco, total: brutoLinha, desc, vTotTrib: Number(vTotTribItem) || 0 };
+  return {
+    bloco,
+    total: brutoLinha,
+    desc,
+    vTotTrib: Number(vTotTribItem) || 0,
+    vFrete,
+    vOutro,
+    vBCST,
+    vICMSST,
+    vBC,
+    vICMS,
+  };
 }
 
 function montarSecaoDestinatario(payload, tpAmb) {
@@ -1095,6 +1221,13 @@ function montarIniNfce(payload, numeracao) {
   const totalVenda = Number(payload.total);
 
   let vProd = 0;
+  let vDescItens = 0;
+  let vFrete = 0;
+  let vOutro = 0;
+  let vBC = 0;
+  let vICMS = 0;
+  let vBCST = 0;
+  let vST = 0;
   let vTotTrib = 0;
   let blocoItens = "";
   const { resolverIbptCupom } = require("./fiscalIbpt");
@@ -1116,17 +1249,34 @@ function montarIniNfce(payload, numeracao) {
         ibptAcum += vTotTribItem;
       }
     }
-    const { bloco, total, desc, vTotTrib: vTribItem } = montarSecaoTributosItem(
-      item,
-      i + 1,
-      crt,
-      vTotTribItem,
-    );
-    blocoItens += bloco;
-    vProd += total - desc;
-    vTotTrib += vTribItem;
+    const linha = montarSecaoTributosItem(item, i + 1, crt, vTotTribItem);
+    blocoItens += linha.bloco;
+    // vProd = soma dos brutos das linhas (paridade schema / Java_NFe); desconto em vDesc.
+    vProd += Number(linha.total) || 0;
+    vDescItens += Number(linha.desc) || 0;
+    vFrete += Number(linha.vFrete) || 0;
+    vOutro += Number(linha.vOutro) || 0;
+    vBC += Number(linha.vBC) || 0;
+    vICMS += Number(linha.vICMS) || 0;
+    vBCST += Number(linha.vBCST) || 0;
+    vST += Number(linha.vICMSST) || 0;
+    vTotTrib += Number(linha.vTotTrib) || 0;
   });
   vTotTrib = Math.round(vTotTrib * 100) / 100;
+  vProd = Math.round(vProd * 100) / 100;
+  vDescItens = Math.round(vDescItens * 100) / 100;
+  vFrete = Math.round(vFrete * 100) / 100;
+  vOutro = Math.round(vOutro * 100) / 100;
+  vBC = Math.round(vBC * 100) / 100;
+  vICMS = Math.round(vICMS * 100) / 100;
+  vBCST = Math.round(vBCST * 100) / 100;
+  vST = Math.round(vST * 100) / 100;
+  // Desconto de documento só entra se as linhas não trouxeram vDesc (evita double-count).
+  const vDescTotal = vDescItens > 0 ? vDescItens : descontoGeral;
+
+  const tpEmis = resolverTpEmisLocal(payload);
+  const finNFe = resolverFinNFeLocal(payload, /* nfce */ true);
+  const modFrete = resolverModFreteLocal(payload, /* nfce */ true);
 
   let ini = `[infNFe]\nversao=4.00\n\n`;
 
@@ -1143,8 +1293,20 @@ function montarIniNfce(payload, numeracao) {
   ini += `indPres=1\n`;
   ini += `tpImp=4\n`;
   ini += `tpAmb=${tpAmb}\n`;
-  ini += `finNFe=1\n`;
-  ini += `tpEmis=1\n`;
+  ini += `finNFe=${finNFe}\n`;
+  ini += `tpEmis=${tpEmis}\n`;
+  if (tpEmis === "9") {
+    ini += `dhCont=${formatarDhEmi(payload.dhCont || new Date())}\n`;
+    let xJustOff = sanitizeAcbrText(
+      payload.xJust ||
+        "Falha de comunicacao com a SEFAZ no momento da emissao",
+      256,
+    );
+    if (xJustOff.length < 15) {
+      xJustOff = "Falha de comunicacao com a SEFAZ no momento da emissao";
+    }
+    ini += `xJust=${xJustOff}\n`;
+  }
   ini += `procEmi=0\n`;
   ini += `verProc=MarginEnginePDV/5.3\n`;
   if (codMun) ini += `cMunFG=${codMun}\n`;
@@ -1176,17 +1338,20 @@ function montarIniNfce(payload, numeracao) {
 
   ini += blocoItens;
 
-  ini += `[Total]\n`;
-  ini += `vNF=${fmtMoney(totalVenda)}\n`;
-  ini += `vBC=0.00\n`;
-  ini += `vICMS=0.00\n`;
-  ini += `vProd=${fmtMoney(vProd)}\n`;
-  ini += `vDesc=${fmtMoney(descontoGeral)}\n`;
-  ini += `vPIS=0.00\n`;
-  ini += `vCOFINS=0.00\n`;
-  ini += `vTotTrib=${fmtMoney(vTotTrib)}\n\n`;
+  ini += montarBlocoTotalIni({
+    totalVenda,
+    vProd,
+    vDesc: vDescTotal,
+    vFrete,
+    vOutro,
+    vBC,
+    vICMS,
+    vBCST,
+    vST,
+    vTotTrib,
+  });
 
-  ini += `[Transportador]\nmodFrete=9\n\n`;
+  ini += `[Transportador]\nmodFrete=${modFrete}\n\n`;
 
   const formaMap = {
     dinheiro: "01",
@@ -1300,6 +1465,13 @@ function montarIniNfe(payload, numeracao, destinatario) {
     Number.isFinite(ibptTotal) && ibptTotal > 0 ? ibptTotal : 0;
 
   let vProd = 0;
+  let vDescItens = 0;
+  let vFrete = 0;
+  let vOutro = 0;
+  let vBC = 0;
+  let vICMS = 0;
+  let vBCST = 0;
+  let vST = 0;
   let vTotTrib = 0;
   let blocoItens = "";
   const ibptPorItem = distribuirIbptItens(itens, totalVenda, ibptCupom);
@@ -1315,21 +1487,45 @@ function montarIniNfe(payload, numeracao, destinatario) {
       csosn: item.csosn || item.CSOSN,
       cest: item.cest || item.CEST,
     };
-    const itemTotal = Number(item.total ?? Number(item.quantidade) * Number(item.precoUnitario));
-    const { bloco, total, desc, vTotTrib: vTribItem } = montarSecaoTributosItem(
+    const linha = montarSecaoTributosItem(
       itemComCfop,
       i + 1,
       crt,
       ibptPorItem[i] || 0,
     );
-    blocoItens += bloco;
-    vProd += total - desc;
-    vTotTrib += vTribItem;
+    blocoItens += linha.bloco;
+    vProd += Number(linha.total) || 0;
+    vDescItens += Number(linha.desc) || 0;
+    vFrete += Number(linha.vFrete) || 0;
+    vOutro += Number(linha.vOutro) || 0;
+    vBC += Number(linha.vBC) || 0;
+    vICMS += Number(linha.vICMS) || 0;
+    vBCST += Number(linha.vBCST) || 0;
+    vST += Number(linha.vICMSST) || 0;
+    vTotTrib += Number(linha.vTotTrib) || 0;
   });
   vTotTrib = Math.round(vTotTrib * 100) / 100;
+  vProd = Math.round(vProd * 100) / 100;
+  vDescItens = Math.round(vDescItens * 100) / 100;
+  vFrete = Math.round(vFrete * 100) / 100;
+  vOutro = Math.round(vOutro * 100) / 100;
+  vBC = Math.round(vBC * 100) / 100;
+  vICMS = Math.round(vICMS * 100) / 100;
+  vBCST = Math.round(vBCST * 100) / 100;
+  vST = Math.round(vST * 100) / 100;
+  const vDescTotal = vDescItens > 0 ? vDescItens : descontoGeral;
 
   const dhEmi = formatarDhEmi();
   const natOp = resolverNatOpNfe(payload);
+  const finNFe = resolverFinNFeLocal(payload, /* nfce */ false);
+  const tpNF =
+    payload.tpNF != null
+      ? String(payload.tpNF)
+      : finNFe === "4"
+        ? "0"
+        : "1";
+  const tpEmis = resolverTpEmisLocal(payload);
+  const modFrete = resolverModFreteLocal(payload, /* nfce */ false);
 
   let ini = `[infNFe]\nversao=4.00\n\n`;
   ini += `[Identificacao]\n`;
@@ -1340,14 +1536,26 @@ function montarIniNfe(payload, numeracao, destinatario) {
   ini += `nNF=${nNF}\n`;
   ini += `dhEmi=${dhEmi}\n`;
   ini += `dhSaiEnt=${dhEmi}\n`;
-  ini += `tpNF=1\n`;
+  ini += `tpNF=${tpNF}\n`;
   ini += `idDest=${idDest}\n`;
   ini += `indFinal=${payload.indFinal != null ? payload.indFinal : 0}\n`;
   ini += `indPres=${payload.indPres != null ? payload.indPres : 1}\n`;
   ini += `tpImp=1\n`;
   ini += `tpAmb=${tpAmb}\n`;
-  ini += `finNFe=1\n`;
-  ini += `tpEmis=1\n`;
+  ini += `finNFe=${finNFe}\n`;
+  ini += `tpEmis=${tpEmis}\n`;
+  if (tpEmis === "9") {
+    ini += `dhCont=${formatarDhEmi(payload.dhCont || new Date())}\n`;
+    let xJustOff = sanitizeAcbrText(
+      payload.xJust ||
+        "Falha de comunicacao com a SEFAZ no momento da emissao",
+      256,
+    );
+    if (xJustOff.length < 15) {
+      xJustOff = "Falha de comunicacao com a SEFAZ no momento da emissao";
+    }
+    ini += `xJust=${xJustOff}\n`;
+  }
   ini += `procEmi=0\n`;
   ini += `verProc=MarginEnginePDV/5.3\n`;
   if (codMun) ini += `cMunFG=${codMun}\n`;
@@ -1383,17 +1591,20 @@ function montarIniNfe(payload, numeracao, destinatario) {
   ini += montarSecaoDestinatarioNfe(destinatario, tpAmb);
   ini += blocoItens;
 
-  ini += `[Total]\n`;
-  ini += `vNF=${fmtMoney(totalVenda)}\n`;
-  ini += `vBC=0.00\n`;
-  ini += `vICMS=0.00\n`;
-  ini += `vProd=${fmtMoney(vProd)}\n`;
-  ini += `vDesc=${fmtMoney(descontoGeral)}\n`;
-  ini += `vPIS=0.00\n`;
-  ini += `vCOFINS=0.00\n`;
-  ini += `vTotTrib=${fmtMoney(vTotTrib)}\n\n`;
+  ini += montarBlocoTotalIni({
+    totalVenda,
+    vProd,
+    vDesc: vDescTotal,
+    vFrete,
+    vOutro,
+    vBC,
+    vICMS,
+    vBCST,
+    vST,
+    vTotTrib,
+  });
 
-  ini += `[Transportador]\nmodFrete=9\n\n`;
+  ini += `[Transportador]\nmodFrete=${modFrete}\n\n`;
 
   const formaMap = {
     dinheiro: "01",
@@ -1415,15 +1626,42 @@ function montarIniNfe(payload, numeracao, destinatario) {
           },
         ];
 
+  let vTrocoTotal = 0;
   pagamentosLista.forEach((pg, idx) => {
     const forma = (pg.forma || "dinheiro").toLowerCase();
     const codigoForma = formaMap[forma] || "01";
     const valorPg = Number(pg.valor || 0);
+    const trocoPg = Number(pg.troco || 0);
+    const vPagNum =
+      codigoForma === "01" && trocoPg > 0
+        ? valorPg
+        : Math.max(0, valorPg);
+    const vTrocoNum = codigoForma === "01" ? trocoPg : 0;
+    if (vTrocoNum > 0) vTrocoTotal += vTrocoNum;
+
     const seq = String(idx + 1).padStart(3, "0");
     ini += `[PAG${seq}]\n`;
     ini += `tPag=${codigoForma}\n`;
-    ini += `vPag=${fmtMoney(valorPg)}\n`;
-    ini += `indPag=0\n\n`;
+    ini += `vPag=${fmtMoney(vPagNum)}\n`;
+    ini += `indPag=0\n`;
+    if (codigoForma === "03" || codigoForma === "04" || codigoForma === "17") {
+      ini += `tpIntegra=2\n`;
+    }
+    if (idx === pagamentosLista.length - 1) {
+      ini += `vTroco=${fmtMoney(vTrocoTotal)}\n`;
+    }
+    if (codigoForma === "99") {
+      const labels = {
+        fiado: "FIADO",
+        crediario: "CREDIARIO",
+        outros: "OUTROS",
+      };
+      ini += `xPag=${sanitizeAcbrText(
+        payload.labelPagamento || labels[forma] || "OUTROS",
+        60,
+      )}\n`;
+    }
+    ini += `\n`;
   });
 
   ini += montarSecaoInfRespTec();
@@ -1696,6 +1934,20 @@ async function emitirNfceCore(payload) {
     return normalizarResultado(p, resposta);
   }
 
+  // Monitor TCP não emite off-line (tpEmis=9) — exige ACBrLib nativa.
+  try {
+    const offline = require("./fiscal/contingenciaOffline");
+    if (offline.isContingenciaOperacionalAtiva()) {
+      const err = new Error(
+        "[ContingenciaOffline] NFC-e em contingência exige ACBrLib nativa (tpEmis=9). O Monitor TCP não emite off-line.",
+      );
+      err.permanente = true;
+      throw err;
+    }
+  } catch (e) {
+    if (e?.permanente) throw e;
+  }
+
   validarPayloadNfce(payload);
   // Hot path: nunca espera ViaCEP — documentIni/backend já deve trazer emitente completo.
   const empresa = await enriquecerEmpresa(payload.empresa || {}, { permitirRede: false });
@@ -1729,6 +1981,7 @@ async function emitirNfceCore(payload) {
     fiscalIniPolicy.requireDocumentIniOrAllowLocal(payload, "NFC-e");
     iniBase = montarIniNfce({ ...payload, empresa }, numeracao);
   }
+  require("../fiscal/iniPreflight").assertIniNfceEstrutura(iniBase, { offline: false });
   const iniPath = path.join(
     PATHS.ini,
     `nfce-${payload.numeroVenda || Date.now()}-${numeracao.numero}.ini`,

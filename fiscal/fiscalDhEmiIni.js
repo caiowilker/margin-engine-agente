@@ -80,6 +80,10 @@ function normalizarCampoDhIni(linha, valorForcado) {
  * Converte dhEmi/dhSaiEnt/dhCont para formato ACBr INI.
  * @param {string} ini
  * @param {{ atualizarParaAgora?: boolean }} [opts]
+ *
+ * IMPORTANTE: atualizarParaAgora NÃO sobrescreve dhCont.
+ * dhCont é a janela legal da contingência off-line — forçar "agora"
+ * quebra notas consecutivas na mesma janela e invalida a justificativa.
  */
 function normalizarDatasIni(ini, opts = {}) {
   if (!ini) return ini;
@@ -89,8 +93,12 @@ function normalizarDatasIni(ini, opts = {}) {
     .map((line) => {
       const key = line.split("=")[0]?.trim().toLowerCase();
       if (!CAMPOS_DH.has(key)) return line;
+      // Contingência: só normaliza formato de dhCont; nunca força timestamp novo.
+      if (key === "dhcont") {
+        return normalizarCampoDhIni(line);
+      }
       if (agora) {
-        const campo = line.match(/^(dhEmi|dhSaiEnt|dhCont)=/i)?.[1] || "dhEmi";
+        const campo = line.match(/^(dhEmi|dhSaiEnt)=/i)?.[1] || "dhEmi";
         return `${campo}=${agora}`;
       }
       return normalizarCampoDhIni(line);
