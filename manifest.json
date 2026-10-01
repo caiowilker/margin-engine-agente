@@ -1,10 +1,10 @@
 {
   "versao": "1.0.17",
-  "geradoEm": "2026-09-30T17:11:50.890Z",
+  "geradoEm": "2026-10-01T03:26:22.216Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
-      "sha256": "776797bae89419db4add4c3d38cac919bc213dcfcba11603c8bdc368a4434e8c"
+      "sha256": "36c1c45ed6a0212b2d43e2caa37b74a1e99824cdad1f41389842b9f7b3424108"
     },
     {
       "arquivo": "acbrLibResposta.js",
@@ -100,7 +100,7 @@
     },
     {
       "arquivo": "fiscal/contingenciaOffline.js",
-      "sha256": "c82472c168dd7a8e1ed2ba51d891f941bef4c6a281fa9cb6d4f7bb471f92591e"
+      "sha256": "4ef2d0d4ee21bb0f447a939816038a031fa1bfafbb1339d94d25fba8a8741030"
     },
     {
       "arquivo": "fiscal/contingenciaOfflineQueue.js",
@@ -112,7 +112,7 @@
     },
     {
       "arquivo": "fiscal/drivers/acbrLibDriver.js",
-      "sha256": "ae16a2292bbef7b6a8ede7d944c3d23b7431a8d3b493ddebc500f28a42ace879"
+      "sha256": "51b80d33ba9a4c06dd296e01e5533cc02190bab2825e0849e1bfa0b2a52ed718"
     },
     {
       "arquivo": "fiscal/drivers/acbrLibProcessRecycle.js",
@@ -136,7 +136,7 @@
     },
     {
       "arquivo": "fiscal/fiscalDhEmiIni.js",
-      "sha256": "124c03c87441ad1edd0ad93ff56f6c2b317774732339e899fcb604da3772922a"
+      "sha256": "cac31c5a4ac505e4e1c0a6fa81d5314312ed68e992377f7063270045322ea6aa"
     },
     {
       "arquivo": "fiscal/fiscalEmissionLock.js",
@@ -153,6 +153,10 @@
     {
       "arquivo": "fiscal/fiscalMotivo.js",
       "sha256": "641a14e6c4678bd055385ea1c2d31a1c34790e96bc0e50f7556a5099d45a7e15"
+    },
+    {
+      "arquivo": "fiscal/iniPreflight.js",
+      "sha256": "5aaf21ac64138e0b8f28fbb273502af12533f5280d546a8b2f6711fc1f4e4872"
     },
     {
       "arquivo": "fiscal/nfse/nfseAcbr.js",
@@ -2692,7 +2696,7 @@
     },
     {
       "arquivo": "manifestoDestinatario.js",
-      "sha256": "a4dc26e096b3822706f4c31125fc61034863790057d7df4a4d3b39388a92e99e"
+      "sha256": "0f5a3a8b83f66df60eadd46c4e2784ac1a6d2a75c117f34925b833348157f46b"
     },
     {
       "arquivo": "manifestUpdater.js",
