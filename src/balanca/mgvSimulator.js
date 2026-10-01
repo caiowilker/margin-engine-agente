@@ -11,10 +11,12 @@ const ALVOS = [
   "PRECOMGV.TXT",
   "EXCLITEM.TXT",
   "ARQSOK.TXT",
+  "DEPTO.TXT",
   "Itensmgv.txt",
   "Precomgv.txt",
   "Exclitem.txt",
   "Arqsok.txt",
+  "Depto.txt",
 ];
 
 /**

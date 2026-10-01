@@ -101,10 +101,12 @@ function ordenarArquivos(arquivos) {
   const ordem = {
     "ITENSMGV.TXT": 1,
     "Itensmgv.txt": 1,
-    "EXCLITEM.TXT": 2,
-    "Exclitem.txt": 2,
-    "PRECOMGV.TXT": 3,
-    "Precomgv.txt": 3,
+    "DEPTO.TXT": 2,
+    "Depto.txt": 2,
+    "EXCLITEM.TXT": 3,
+    "Exclitem.txt": 3,
+    "PRECOMGV.TXT": 4,
+    "Precomgv.txt": 4,
     "ARQSOK.TXT": 99,
     "Arqsok.txt": 99,
   };

@@ -20,6 +20,8 @@ const NOMES_PERMITIDOS = new Set([
   "Ramuza_original.txt",
   "PRODUTOS.TXT",
   "Produtos.txt",
+  "DEPTO.TXT",
+  "Depto.txt",
 ]);
 
 const NOMES_OCUPACAO = [
@@ -36,6 +38,7 @@ const NOMES_OCUPACAO = [
   "TXITENS.TXT",
   "RAMUZA_ORIGINAL.TXT",
   "PRODUTOS.TXT",
+  "DEPTO.TXT",
 ];
 
 const TMP_PREFIX = ".me-balanca-";

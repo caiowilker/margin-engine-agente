@@ -981,7 +981,10 @@ function exigirAgentToken(req, res, next) {
     !!cfg.agentToken ||
     !!cfg.ativado;
   if (!obrigatorio) return next();
-  const recebido = req.headers["x-agent-token"];
+  const recebido =
+    req.headers["x-agent-token"] ||
+    req.query?.agentToken ||
+    req.query?.token;
   if (recebido && cfg.agentToken && recebido === cfg.agentToken) return next();
   return res.status(401).json({
     erro: "Token do agente ausente ou inválido. Reative o terminal pelo painel para sincronizar o token.",
@@ -4467,7 +4470,11 @@ function iniciarServidor() {
   app.put("/mesa/local/:mesaId", exigirAgentToken, (req, res) => {
     try {
       const body = { ...(req.body || {}), mesa_id: req.params.mesaId };
-      res.json(mesaFila.upsertLocal(body));
+      const result = mesaFila.upsertLocal(body);
+      if (result?.ok === false && result.code === "SHRINK_BLOCKED") {
+        return res.status(409).json(result);
+      }
+      res.json(result);
     } catch (err) {
       res.status(400).json({ erro: err.message });
     }
@@ -4494,6 +4501,73 @@ function iniciarServidor() {
     } catch (err) {
       res.status(400).json({ erro: err.message });
     }
+  });
+
+  /** Apply versionado (op-log). Sempre disponível; flag só muda dual-write agressivo no front. */
+  app.post("/mesa/ops/apply", exigirAgentToken, (req, res) => {
+    try {
+      const result = mesaFila.applyOp(req.body || {});
+      res.status(result.status).json(result.body);
+    } catch (err) {
+      res.status(500).json({ erro: err.message });
+    }
+  });
+
+  app.get("/mesa/features", privateNetworkHeaders, exigirAgentToken, (_req, res) => {
+    res.json(mesaFila.features());
+  });
+
+  /** SSE — push mesa.updated / mesa.freed (Last-Event-ID / lastEventId). */
+  app.get("/mesa/events", privateNetworkHeaders, exigirAgentToken, (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+
+    const send = (type, data) => {
+      try {
+        if (data?.id != null) res.write(`id: ${data.id}\n`);
+        res.write(`event: ${type}\n`);
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+      } catch {
+        /* closed */
+      }
+    };
+
+    send("hello", {
+      type: "hello",
+      revision: 0,
+      features: mesaFila.features(),
+      at: new Date().toISOString(),
+    });
+
+    // Replay missados no drop (celular/QR).
+    const lastId =
+      req.query.lastEventId ||
+      req.query.last_event_id ||
+      req.headers["last-event-id"] ||
+      0;
+    try {
+      for (const ev of mesaFila.eventsSince(lastId)) {
+        send(ev.type, ev);
+      }
+    } catch {
+      /* ignore */
+    }
+
+    const unsub = mesaFila.subscribeEvents((type, data) => send(type, data));
+    const heartbeat = setInterval(() => {
+      try {
+        res.write(`: ping\n\n`);
+      } catch {
+        /* ignore */
+      }
+    }, 15_000);
+
+    req.on("close", () => {
+      clearInterval(heartbeat);
+      unsub();
+    });
   });
 
   app.get("/mesa/ops", exigirAgentToken, (req, res) => {

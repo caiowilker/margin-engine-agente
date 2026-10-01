@@ -92,13 +92,98 @@ function inicializar(sharedDb) {
 
     CREATE INDEX IF NOT EXISTS idx_mesa_ops_status ON mesa_ops(status);
     CREATE INDEX IF NOT EXISTS idx_mesa_ops_criado ON mesa_ops(criado_em);
+
+    CREATE TABLE IF NOT EXISTS mesa_op_log (
+      op_id        TEXT PRIMARY KEY,
+      mesa_id      TEXT NOT NULL,
+      type         TEXT NOT NULL,
+      payload      TEXT NOT NULL,
+      base_rev     INTEGER NOT NULL,
+      new_rev      INTEGER NOT NULL,
+      actor_json   TEXT,
+      created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_mesa_op_log_mesa ON mesa_op_log(mesa_id, new_rev);
   `);
+
+  // revision monotônica por mesa (compat com DBs antigos)
+  try {
+    const cols = db.prepare(`PRAGMA table_info(mesa_local)`).all();
+    if (!cols.some((c) => c.name === "revision")) {
+      db.exec(`ALTER TABLE mesa_local ADD COLUMN revision INTEGER NOT NULL DEFAULT 0`);
+    }
+  } catch (err) {
+    console.warn("[MesaFila] migrate revision:", err.message);
+  }
 
   db.prepare(
     `UPDATE mesa_ops SET status = 'PENDENTE' WHERE status = 'ENVIANDO'`,
   ).run();
 
   console.log("[MesaFila] Tabelas de mesas offline prontas");
+}
+
+function isOplogEnabled() {
+  // Default ON — desliga só com MESA_OPLOG=0/false no env ou config.json
+  if (process.env.MESA_OPLOG === "0" || process.env.MESA_OPLOG === "false") return false;
+  if (process.env.MESA_OPLOG === "1" || process.env.MESA_OPLOG === "true") return true;
+  try {
+    if (fs.existsSync(CONFIG_PATH)) {
+      const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+      if (cfg.mesaOplog === false || cfg.mesaOplog === 0 || cfg.mesaOplog === "0") return false;
+      if (cfg.mesaOplog === true || cfg.mesaOplog === 1 || cfg.mesaOplog === "1") return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  return true;
+}
+
+/** Assinantes SSE: (eventName, data) => void */
+const eventListeners = new Set();
+let globalEventSeq = 0;
+/** Ring buffer para replay em reconnect (Last-Event-ID / lastEventId). */
+const EVENT_BUFFER_MAX = 200;
+const eventBuffer = [];
+
+function subscribeEvents(fn) {
+  eventListeners.add(fn);
+  return () => eventListeners.delete(fn);
+}
+
+function publishEvent(type, data) {
+  globalEventSeq += 1;
+  const payload = { id: globalEventSeq, type, ...data, at: new Date().toISOString() };
+  eventBuffer.push(payload);
+  if (eventBuffer.length > EVENT_BUFFER_MAX) {
+    eventBuffer.splice(0, eventBuffer.length - EVENT_BUFFER_MAX);
+  }
+  for (const fn of eventListeners) {
+    try {
+      fn(type, payload);
+    } catch {
+      /* ignore */
+    }
+  }
+  return payload;
+}
+
+/** Eventos com id > lastId (para SSE replay). */
+function eventsSince(lastId) {
+  const id = Number(lastId) || 0;
+  if (id <= 0) return [];
+  return eventBuffer.filter((e) => Number(e.id) > id);
+}
+
+function isSyncShrink(proposedItems, proposedTotal, knownItems, knownTotal) {
+  const pItems = Math.max(0, Number(proposedItems) || 0);
+  const kItems = Math.max(0, Number(knownItems) || 0);
+  const pTotal = Number(proposedTotal) || 0;
+  const kTotal = Number(knownTotal) || 0;
+  if (kItems <= 0 && kTotal <= 0) return false;
+  if (pItems < kItems) return true;
+  if (pItems === kItems && pTotal + 0.009 < kTotal) return true;
+  return false;
 }
 
 function salvarSnapshot(mesas) {
@@ -124,16 +209,54 @@ function obterSnapshot() {
   }
 }
 
-function upsertLocal(state) {
+function upsertLocal(state, opts = {}) {
   if (!db) throw new Error("MesaFila nao inicializada");
   if (!state?.mesa_id || !state?.order_id || !state?.client_order_number) {
     throw new Error("mesa_id, order_id e client_order_number obrigatorios");
   }
+  const prev = obterLocal(state.mesa_id);
+  const nextStatus = state.status ?? "ocupada";
+  // Sticky livre: PUT cego não reabre (só OPEN via applyOp com allowReopen).
+  if (
+    prev &&
+    prev.status === "livre" &&
+    nextStatus === "ocupada" &&
+    !opts.allowReopen
+  ) {
+    return {
+      ok: false,
+      code: "MESA_CLOSED",
+      revision: prev.revision || 0,
+      state: prev,
+    };
+  }
+  // Anti-perda: PUT cego não pode encolher ocupação viva (fallback do front).
+  // VOID_LINE explícito passa allowShrink.
+  if (
+    prev &&
+    prev.status === "ocupada" &&
+    nextStatus === "ocupada" &&
+    !opts.allowShrink &&
+    isSyncShrink(
+      Number(state.order_items_count) || 0,
+      Number(state.order_total) || 0,
+      prev.order_items_count,
+      prev.order_total,
+    )
+  ) {
+    return {
+      ok: false,
+      code: "SHRINK_BLOCKED",
+      revision: prev.revision || 0,
+      state: prev,
+    };
+  }
+  const nextRev = (prev?.revision || 0) + 1;
   db.prepare(
     `INSERT INTO mesa_local (
        mesa_id, order_id, client_order_number, mesa_codigo, status,
-       closed_for_billing, order_total, order_items_count, draft_json, server_order_id, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+       closed_for_billing, order_total, order_items_count, draft_json, server_order_id, updated_at, revision
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?)
      ON CONFLICT(mesa_id) DO UPDATE SET
        order_id = excluded.order_id,
        client_order_number = excluded.client_order_number,
@@ -147,7 +270,8 @@ function upsertLocal(state) {
          ELSE COALESCE(excluded.draft_json, mesa_local.draft_json)
        END,
        server_order_id = COALESCE(excluded.server_order_id, mesa_local.server_order_id),
-       updated_at = excluded.updated_at`,
+       updated_at = excluded.updated_at,
+       revision = excluded.revision`,
   ).run(
     state.mesa_id,
     state.order_id,
@@ -159,15 +283,30 @@ function upsertLocal(state) {
     Number(state.order_items_count) || 0,
     state.draft_json != null ? JSON.stringify(state.draft_json) : null,
     state.server_order_id ?? null,
+    nextRev,
   );
-  return { ok: true };
+  const status = state.status ?? "ocupada";
+  if (status === "livre") {
+    publishEvent("mesa.freed", { mesaId: state.mesa_id, revision: nextRev });
+  } else {
+    publishEvent("mesa.updated", {
+      mesaId: state.mesa_id,
+      revision: nextRev,
+      orderItemsCount: Number(state.order_items_count) || 0,
+      orderTotal: Number(state.order_total) || 0,
+    });
+  }
+  return { ok: true, revision: nextRev };
 }
 
 function marcarLivreNoSnapshot(mesaId) {
   const id = String(mesaId);
+  let revision = 0;
   // Limpa draft local ao liberar — evita pull reocupar com carrinho stale.
   if (db) {
     try {
+      const prev = obterLocal(id);
+      revision = (prev?.revision || 0) + 1;
       db.prepare(
         `UPDATE mesa_local SET
            status = 'livre',
@@ -176,15 +315,28 @@ function marcarLivreNoSnapshot(mesaId) {
            order_items_count = 0,
            draft_json = NULL,
            server_order_id = NULL,
+           revision = ?,
            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
          WHERE mesa_id = ?`,
-      ).run(id);
+      ).run(revision, id);
+      if (!prev) {
+        // Garante linha sticky livre para revision/SSE mesmo sem local prévio.
+        db.prepare(
+          `INSERT INTO mesa_local (
+             mesa_id, order_id, client_order_number, status, revision, updated_at
+           ) VALUES (?, '', '', 'livre', ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+           ON CONFLICT(mesa_id) DO NOTHING`,
+        ).run(id, revision);
+      }
     } catch {
       /* ignore */
     }
   }
   const snap = obterSnapshot();
-  if (!snap.some((m) => m.id === id)) return { ok: true, changed: false };
+  if (!snap.some((m) => m.id === id)) {
+    publishEvent("mesa.freed", { mesaId: id, revision });
+    return { ok: true, changed: false, revision };
+  }
   salvarSnapshot(
     snap.map((m) =>
       m.id === id
@@ -199,7 +351,8 @@ function marcarLivreNoSnapshot(mesaId) {
         : m,
     ),
   );
-  return { ok: true, changed: true };
+  publishEvent("mesa.freed", { mesaId: id, revision });
+  return { ok: true, changed: true, revision };
 }
 
 function removerLocal(mesaId) {
@@ -246,7 +399,26 @@ function rowToLocal(row) {
     draft_json: draft,
     server_order_id: row.server_order_id,
     updated_at: row.updated_at,
+    revision: Number(row.revision) || 0,
   };
+}
+
+function syncPayloadMetrics(payload) {
+  const sync = payload && typeof payload === "object" ? payload.sync || payload : {};
+  let items = 0;
+  let total = 0;
+  if (Array.isArray(sync.items)) {
+    items = sync.items.length;
+    total = sync.items.reduce(
+      (s, i) => s + (Number(i.total) || Number(i.unit_price) * Number(i.quantity) || 0),
+      0,
+    );
+    total = total - (Number(sync.discount) || 0) + (Number(sync.surcharge) || 0);
+  } else {
+    items = Number(sync.order_items_count) || 0;
+    total = Number(sync.order_total ?? sync.total) || 0;
+  }
+  return { items, total };
 }
 
 function enfileirarOp(op) {
@@ -259,7 +431,28 @@ function enfileirarOp(op) {
   if (!op.mesa_id) throw new Error("mesa_id obrigatorio");
 
   // Dedup: substitui op pendente do mesmo tipo+mesa (exceto OPEN que é único)
-  if (tipo !== "OPEN") {
+  if (tipo === "SYNC") {
+    const existing = db
+      .prepare(
+        `SELECT * FROM mesa_ops WHERE mesa_id = ? AND tipo = 'SYNC' AND status IN ('PENDENTE','FALHA')`,
+      )
+      .get(String(op.mesa_id));
+    if (existing) {
+      let oldPayload = {};
+      try {
+        oldPayload = JSON.parse(existing.payload || "{}");
+      } catch {
+        oldPayload = {};
+      }
+      const oldM = syncPayloadMetrics(oldPayload);
+      const newM = syncPayloadMetrics(op.payload || {});
+      // Não troca SYNC rico por payload menor (anti-perda na fila).
+      if (isSyncShrink(newM.items, newM.total, oldM.items, oldM.total)) {
+        return { ok: true, id: existing.id, skipped: "shrink" };
+      }
+      db.prepare(`DELETE FROM mesa_ops WHERE id = ?`).run(existing.id);
+    }
+  } else if (tipo !== "OPEN") {
     db.prepare(
       `DELETE FROM mesa_ops WHERE mesa_id = ? AND tipo = ? AND status IN ('PENDENTE','FALHA')`,
     ).run(String(op.mesa_id), tipo);
@@ -415,7 +608,14 @@ function mesclarSnapshotComLocal() {
         !local.closed_for_billing &&
         ((Number(local.order_items_count) || 0) > 0 ||
           (Number(local.order_total) || 0) > 0);
-      if (!liveConsumo) {
+      // Open recente sem itens ainda (race pós-abrir QR) — 120s de graça.
+      const updatedMs = Date.parse(local.updated_at || "") || 0;
+      const openRecenteVazio =
+        local.status === "ocupada" &&
+        !local.closed_for_billing &&
+        Boolean(local.server_order_id || local.order_id) &&
+        Date.now() - updatedMs < 120_000;
+      if (!liveConsumo && !openRecenteVazio) {
         return {
           ...m,
           status: "livre",
@@ -522,6 +722,29 @@ async function processarOp(op) {
     }
     case "SYNC": {
       const syncBody = payload.sync || payload;
+      const items = Array.isArray(syncBody.items) ? syncBody.items : [];
+      const proposedItems = items.length;
+      const proposedTotal = items.reduce(
+        (s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price ?? it.unitPrice) || 0),
+        0,
+      );
+      if (
+        local &&
+        local.status === "ocupada" &&
+        isSyncShrink(
+          proposedItems,
+          proposedTotal,
+          local.order_items_count,
+          local.order_total,
+        )
+      ) {
+        const err = new Error(
+          `mesa_sync_shrink_blocked: local=${local.order_items_count} proposed=${proposedItems}`,
+        );
+        err.code = "SHRINK_BLOCKED";
+        console.warn("[MesaFila]", err.message, { mesaId: op.mesa_id });
+        throw err;
+      }
       return fetchBackend("POST", `/order-engine/tables/${op.mesa_id}/sync`, syncBody);
     }
     case "CLOSE": {
@@ -589,7 +812,22 @@ async function sincronizar() {
           ok += 1;
           continue;
         }
+        const isShrink =
+          err?.code === "SHRINK_BLOCKED" ||
+          /mesa_sync_shrink_blocked|SHRINK_BLOCKED/i.test(msg);
+        // Shrink recorrente: cancela (não ocupa budget da fila pra sempre).
+        if (isShrink && Number(op.tentativas || 0) >= 2) {
+          db.prepare(
+            `UPDATE mesa_ops SET status = 'CANCELADO',
+               tentativas = tentativas + 1,
+               ultimo_erro = ?
+             WHERE id = ?`,
+          ).run(msg.slice(0, 500), op.id);
+          falhas += 1;
+          continue;
+        }
         const permanente =
+          !isShrink &&
           /já vinculado a outra mesa|não encontrada|nao encontrada|PEDIDO_OFFLINE/i.test(
             msg,
           );
@@ -607,6 +845,237 @@ async function sincronizar() {
   } finally {
     syncEmAndamento = false;
   }
+}
+
+/**
+ * Apply path versionado (flag MESA_OPLOG). Dual-write: atualiza mesa_local materializado.
+ * @returns {{ status: number, body: object }}
+ */
+function applyOp(body) {
+  if (!db) throw new Error("MesaFila nao inicializada");
+  const opId = String(body?.opId || body?.op_id || "").trim();
+  const mesaId = String(body?.mesaId || body?.mesa_id || "").trim();
+  const type = String(body?.type || body?.tipo || "").toUpperCase();
+  const baseRevision = Number(body?.baseRevision ?? body?.base_rev ?? 0);
+  const payload = body?.payload && typeof body.payload === "object" ? body.payload : {};
+  const actor = body?.actor || null;
+
+  if (!opId || !mesaId || !type) {
+    return { status: 400, body: { erro: "opId, mesaId e type obrigatorios" } };
+  }
+
+  const existingLog = db.prepare(`SELECT * FROM mesa_op_log WHERE op_id = ?`).get(opId);
+  if (existingLog) {
+    const state = obterLocal(mesaId);
+    return {
+      status: 200,
+      body: {
+        revision: existingLog.new_rev,
+        state: state || null,
+        duplicate: true,
+      },
+    };
+  }
+
+  const current = obterLocal(mesaId);
+  const currentRev = current?.revision || 0;
+
+  if (
+    (type === "ADD_LINES" || type === "VOID_LINE" || type === "SET_NOTES" || type === "SYNC") &&
+    current &&
+    current.status === "livre" &&
+    !current.closed_for_billing
+  ) {
+    return {
+      status: 409,
+      body: { code: "MESA_CLOSED", revision: currentRev, state: current },
+    };
+  }
+
+  if (baseRevision !== currentRev && type !== "OPEN" && type !== "CLOSE_BILL" && type !== "RELEASE") {
+    return {
+      status: 409,
+      body: {
+        code: "STALE_REVISION",
+        revision: currentRev,
+        state: current || null,
+      },
+    };
+  }
+
+  let nextState;
+  if (type === "CLOSE_BILL" || type === "RELEASE") {
+    const r = marcarLivreNoSnapshot(mesaId);
+    nextState = obterLocal(mesaId);
+    db.prepare(
+      `INSERT INTO mesa_op_log (op_id, mesa_id, type, payload, base_rev, new_rev, actor_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      opId,
+      mesaId,
+      type,
+      JSON.stringify(payload),
+      baseRevision,
+      r.revision || (currentRev + 1),
+      actor ? JSON.stringify(actor) : null,
+    );
+    // Enfileira RELEASE/CLOSE legado para dreno nuvem
+    try {
+      enfileirarOp({
+        tipo: type === "CLOSE_BILL" ? "CLOSE" : "RELEASE",
+        mesa_id: mesaId,
+        payload: type === "CLOSE_BILL" ? { sync: payload.sync || payload } : {},
+      });
+    } catch {
+      /* ignore */
+    }
+    return {
+      status: 200,
+      body: { revision: r.revision || currentRev + 1, state: nextState },
+    };
+  }
+
+  if (type === "OPEN") {
+    nextState = {
+      mesa_id: mesaId,
+      order_id: String(payload.order_id || payload.orderId || opId),
+      client_order_number: String(
+        payload.client_order_number || payload.clientOrderNumber || opId,
+      ),
+      mesa_codigo: payload.mesa_codigo || payload.mesaCodigo || null,
+      status: "ocupada",
+      closed_for_billing: false,
+      order_total: Number(payload.order_total) || 0,
+      order_items_count: Number(payload.order_items_count) || 0,
+      draft_json: payload.draft_json || payload.draft || null,
+      server_order_id: payload.server_order_id || null,
+    };
+  } else if (type === "ADD_LINES" || type === "SET_NOTES" || type === "SET_CLOSED_FOR_BILLING" || type === "SYNC") {
+    if (!current && type !== "OPEN") {
+      return { status: 409, body: { code: "MESA_CLOSED", revision: 0, state: null } };
+    }
+    const itemsCount =
+      payload.order_items_count != null
+        ? Number(payload.order_items_count)
+        : Array.isArray(payload.items)
+          ? payload.items.length
+          : current?.order_items_count || 0;
+    const orderTotal =
+      payload.order_total != null ? Number(payload.order_total) : current?.order_total || 0;
+    // Só SYNC (snapshot nuvem/fila) bloqueia shrink.
+    // ADD_LINES com revision correta = edição autoritativa (inclui remoção).
+    if (
+      type === "SYNC" &&
+      current &&
+      isSyncShrink(itemsCount, orderTotal, current.order_items_count, current.order_total)
+    ) {
+      return {
+        status: 409,
+        body: {
+          code: "SHRINK_BLOCKED",
+          revision: currentRev,
+          state: current,
+        },
+      };
+    }
+    nextState = {
+      mesa_id: mesaId,
+      order_id: current?.order_id || String(payload.order_id || opId),
+      client_order_number:
+        current?.client_order_number || String(payload.client_order_number || opId),
+      mesa_codigo: payload.mesa_codigo ?? current?.mesa_codigo ?? null,
+      status: "ocupada",
+      closed_for_billing:
+        type === "SET_CLOSED_FOR_BILLING"
+          ? !!payload.closed_for_billing
+          : !!current?.closed_for_billing,
+      order_total: orderTotal,
+      order_items_count: itemsCount,
+      draft_json: payload.draft_json ?? payload.draft ?? current?.draft_json ?? null,
+      server_order_id: payload.server_order_id ?? current?.server_order_id ?? null,
+    };
+  } else if (type === "VOID_LINE") {
+    if (!current) {
+      return { status: 409, body: { code: "MESA_CLOSED", revision: 0, state: null } };
+    }
+    const itemsCount = Math.max(0, (current.order_items_count || 0) - 1);
+    nextState = {
+      ...current,
+      mesa_id: mesaId,
+      order_items_count: itemsCount,
+      order_total: Number(payload.order_total) || current.order_total,
+      draft_json: payload.draft_json ?? current.draft_json,
+    };
+  } else {
+    return { status: 400, body: { erro: `type invalido: ${type}` } };
+  }
+
+  const up = upsertLocal(nextState, {
+    allowReopen: type === "OPEN",
+    // Edição versionada pode reduzir itens; PUT cego e SYNC não.
+    allowShrink:
+      type === "VOID_LINE" || type === "ADD_LINES" || type === "SET_NOTES",
+  });
+  if (up?.ok === false) {
+    return {
+      status: 409,
+      body: {
+        code: up.code || "SHRINK_BLOCKED",
+        revision: up.revision || currentRev,
+        state: up.state || current || null,
+      },
+    };
+  }
+  db.prepare(
+    `INSERT INTO mesa_op_log (op_id, mesa_id, type, payload, base_rev, new_rev, actor_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    opId,
+    mesaId,
+    type,
+    JSON.stringify(payload),
+    baseRevision,
+    up.revision,
+    actor ? JSON.stringify(actor) : null,
+  );
+
+  if (type === "OPEN") {
+    try {
+      enfileirarOp({
+        tipo: "OPEN",
+        mesa_id: mesaId,
+        payload: { client_order_number: nextState.client_order_number },
+      });
+    } catch {
+      /* ignore */
+    }
+  } else if (type === "SYNC" || type === "ADD_LINES") {
+    try {
+      if (payload.sync || (type === "SYNC" && payload.items)) {
+        enfileirarOp({
+          tipo: "SYNC",
+          mesa_id: mesaId,
+          payload: { sync: payload.sync || payload },
+        });
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return {
+    status: 200,
+    body: { revision: up.revision, state: obterLocal(mesaId) },
+  };
+}
+
+function features() {
+  return {
+    mesaOplog: isOplogEnabled(),
+    sse: true,
+    antiShrink: true,
+    revision: true,
+  };
 }
 
 module.exports = {
@@ -627,4 +1096,11 @@ module.exports = {
   clientKeysComOpenPendente,
   deveAdiarVendaOrder,
   sincronizar,
+  applyOp,
+  subscribeEvents,
+  publishEvent,
+  eventsSince,
+  isOplogEnabled,
+  isSyncShrink,
+  features,
 };
