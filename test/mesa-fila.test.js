@@ -505,4 +505,42 @@ describe("mesaFila", () => {
     const replay = mesaFila.eventsSince(last);
     assert.ok(replay.some((e) => e.type === "mesa.updated" && e.mesaId === "t-sse"));
   });
+
+  it("SET_CLOSED_FOR_BILLING marca pré-conta sem liberar; OPEN preserva flag", () => {
+    mesaFila.applyOp({
+      opId: "open-pre-1",
+      mesaId: "t-pre",
+      type: "OPEN",
+      baseRevision: 0,
+      payload: { order_id: "o-pre", client_order_number: "o-pre", order_total: 40, order_items_count: 2 },
+    });
+    const set = mesaFila.applyOp({
+      opId: "set-pre-1",
+      mesaId: "t-pre",
+      type: "SET_CLOSED_FOR_BILLING",
+      baseRevision: 0,
+      payload: { closed_for_billing: true, order_total: 40, order_items_count: 2 },
+    });
+    assert.equal(set.status, 200);
+    assert.equal(set.body.state.closed_for_billing, true);
+    assert.equal(set.body.state.status, "ocupada");
+
+    mesaFila.marcarLivreNoSnapshot("t-pre");
+    const reopen = mesaFila.applyOp({
+      opId: "open-pre-2",
+      mesaId: "t-pre",
+      type: "OPEN",
+      baseRevision: 0,
+      payload: {
+        order_id: "o-pre2",
+        client_order_number: "o-pre2",
+        order_total: 40,
+        order_items_count: 2,
+        closed_for_billing: true,
+      },
+    });
+    assert.equal(reopen.status, 200);
+    assert.equal(reopen.body.state.closed_for_billing, true);
+    assert.equal(reopen.body.state.status, "ocupada");
+  });
 });

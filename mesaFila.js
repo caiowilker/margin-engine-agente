@@ -294,6 +294,8 @@ function upsertLocal(state, opts = {}) {
       revision: nextRev,
       orderItemsCount: Number(state.order_items_count) || 0,
       orderTotal: Number(state.order_total) || 0,
+      closedForBilling: !!state.closed_for_billing,
+      status: status,
     });
   }
   return { ok: true, revision: nextRev };
@@ -892,7 +894,13 @@ function applyOp(body) {
     };
   }
 
-  if (baseRevision !== currentRev && type !== "OPEN" && type !== "CLOSE_BILL" && type !== "RELEASE") {
+  if (
+    baseRevision !== currentRev &&
+    type !== "OPEN" &&
+    type !== "CLOSE_BILL" &&
+    type !== "RELEASE" &&
+    type !== "SET_CLOSED_FOR_BILLING"
+  ) {
     return {
       status: 409,
       body: {
@@ -944,7 +952,8 @@ function applyOp(body) {
       ),
       mesa_codigo: payload.mesa_codigo || payload.mesaCodigo || null,
       status: "ocupada",
-      closed_for_billing: false,
+      // Pré-conta: reopen após MESA_CLOSED deve preservar o flag (não zerar).
+      closed_for_billing: !!payload.closed_for_billing,
       order_total: Number(payload.order_total) || 0,
       order_items_count: Number(payload.order_items_count) || 0,
       draft_json: payload.draft_json || payload.draft || null,
