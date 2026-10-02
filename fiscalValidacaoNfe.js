@@ -85,10 +85,18 @@ function validarDestinatarioNfe(dest) {
     indIEDest: indIE,
     endereco: { ...end, cep, codigoMunicipio: ibge, codigoIbge: ibge },
   };
-  if (indIE === 9) {
+  if (indIE === 9 || indIE === 2) {
+    // MOC: não informar tag IE para não contribuinte (9) nem isento (2).
     delete destNormalizado.inscricaoEstadual;
-  } else if (indIE === 1 && doc.length === 14 && !limpar(dest?.inscricaoEstadual)) {
-    faltando.push("Inscrição estadual (contribuinte ICMS)");
+  } else if (indIE === 1) {
+    const ieDigits = String(dest?.inscricaoEstadual || "").replace(/\D/g, "");
+    if (ieDigits.length < 2 || ieDigits.length > 14) {
+      faltando.push(
+        "Inscrição estadual (contribuinte ICMS — PJ ou produtor rural PF com IE vinculada ao CPF)",
+      );
+    } else {
+      destNormalizado.inscricaoEstadual = ieDigits;
+    }
   }
 
   if (faltando.length) {

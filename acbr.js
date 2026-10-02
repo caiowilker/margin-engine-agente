@@ -1052,10 +1052,12 @@ function montarSecaoDestinatarioNfe(dest, tpAmb) {
   ini += `CNPJCPF=${doc}\n`;
   ini += `xNome=${nome}\n`;
   ini += `indIEDest=${indIE}\n`;
-  if (indIE === 1 && dest.inscricaoEstadual) {
-    ini += `IE=${sanitizeAcbrText(dest.inscricaoEstadual, 20)}\n`;
-  } else if (indIE === 2 && dest.inscricaoEstadual) {
-    ini += `IE=${sanitizeAcbrText(dest.inscricaoEstadual, 20)}\n`;
+  // MOC: IE só quando indIEDest=1 (contribuinte). Isento (2) e não contribuinte (9) sem tag IE.
+  if (indIE === 1) {
+    const ieDigits = String(dest.inscricaoEstadual || "").replace(/\D/g, "");
+    if (ieDigits.length >= 2) {
+      ini += `IE=${ieDigits.slice(0, 14)}\n`;
+    }
   }
   ini += `xLgr=${logradouro}\n`;
   ini += `nro=${numero}\n`;

@@ -106,5 +106,30 @@ test("NFC-e — CNPJ consumidor 14 dígitos — ok", () => {
   });
 });
 
+test("produtor rural PF — indIEDest=1 + IE — ok", () => {
+  const d = destinatarioCompleto();
+  d.indIEDest = 1;
+  d.inscricaoEstadual = "001.641.307.0030";
+  const out = validarDestinatarioNfe(d);
+  assert.strictEqual(out.indIEDest, 1);
+  assert.strictEqual(out.inscricaoEstadual, "0016413070030");
+});
+
+test("produtor rural PF — indIEDest=1 sem IE — rejeita", () => {
+  const d = destinatarioCompleto();
+  d.indIEDest = 1;
+  d.inscricaoEstadual = "";
+  assert.throws(() => validarDestinatarioNfe(d), /Inscrição estadual|produtor rural/i);
+});
+
+test("indIEDest=2 — remove IE do payload (MOC)", () => {
+  const d = destinatarioCompleto();
+  d.indIEDest = 2;
+  d.inscricaoEstadual = "1234567890";
+  const out = validarDestinatarioNfe(d);
+  assert.strictEqual(out.indIEDest, 2);
+  assert.strictEqual(out.inscricaoEstadual, undefined);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
