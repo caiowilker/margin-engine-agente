@@ -273,6 +273,27 @@ async function run() {
     assert.strictEqual(bloqueadoComForcar, false);
   });
 
+  await test("forcarEmissao — NF-e 55 driver gate (painel Conversão)", async () => {
+    const prev = process.env.ACBR_NFE_ENABLED;
+    process.env.ACBR_NFE_ENABLED = "true";
+    acbr.setRuntimeEmissaoFiscal(false);
+    assert.strictEqual(acbr.isNfeModelo55Habilitado(), false);
+    assert.strictEqual(acbr.podeEmitirNfeModelo55({}), false);
+    assert.strictEqual(
+      acbr.podeEmitirNfeModelo55({ forcarEmissao: true }),
+      true,
+      "painel deve emitir 55 com toggle OFF",
+    );
+    process.env.ACBR_NFE_ENABLED = "false";
+    assert.strictEqual(
+      acbr.podeEmitirNfeModelo55({ forcarEmissao: true }),
+      false,
+      "ACBR_NFE_ENABLED=false continua bloqueando",
+    );
+    process.env.ACBR_NFE_ENABLED = prev;
+    acbr.setRuntimeEmissaoFiscal(null);
+  });
+
   await test("configSync — emissão fiscal vem do agente local (SSOT)", async () => {
     const authority = require("../fiscalConfigAuthority");
     authority.resetAutoridadeLocal();

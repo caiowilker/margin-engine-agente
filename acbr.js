@@ -42,11 +42,27 @@ function setRuntimeEmissaoFiscal(valor) {
   runtimeEmissaoFiscal = !!valor;
 }
 
-/** NF-e modelo 55 — relê env a cada consulta (config operacional pode alterar em runtime). */
+/** ACBr NF-e 55 ligada no env (independe do toggle da frente). */
+function isAcbrNfeEnvHabilitado() {
+  return (process.env.ACBR_NFE_ENABLED || "true").toLowerCase() === "true";
+}
+
+/**
+ * NF-e modelo 55 “ligada no caixa” (status/diagnóstico).
+ * Toggle EMISSAO_FISCAL + ACBR_NFE_ENABLED — não usa forcarEmissao.
+ */
 function isNfeModelo55Habilitado() {
-  const habilitado =
-    (process.env.ACBR_NFE_ENABLED || "true").toLowerCase() === "true";
-  return getEmissaoFiscalAtivo() && habilitado;
+  return getEmissaoFiscalAtivo() && isAcbrNfeEnvHabilitado();
+}
+
+/**
+ * Pode emitir NF-e 55 agora?
+ * Frente (sem forcar): exige toggle. Painel Conversão: forcarEmissao bypassa só o toggle.
+ */
+function podeEmitirNfeModelo55(payload) {
+  if (!isAcbrNfeEnvHabilitado()) return false;
+  if (getEmissaoFiscalAtivo()) return true;
+  return payload?.forcarEmissao === true;
 }
 
 /** NFS-e modelo 99 — módulo paralelo (NFSE_ENABLED). */
@@ -2003,7 +2019,8 @@ async function emitirNfceCore(payload) {
 }
 
 async function emitirNfe(payload) {
-  if (!isNfeModelo55Habilitado()) return { fiscal: false };
+  // Espelha NFC-e: forcarEmissao (painel Conversão) ignora toggle da frente.
+  if (!podeEmitirNfeModelo55(payload)) return { fiscal: false };
 
   const { withEmissionLock } = require("./fiscal/fiscalEmissionLock");
   const physical = require("./runtime/physicalResourceLock");
@@ -2926,7 +2943,9 @@ module.exports = {
   emitirNfce,
   emitirNfe,
   emitirNfse,
+  isAcbrNfeEnvHabilitado,
   isNfeModelo55Habilitado,
+  podeEmitirNfeModelo55,
   isNfseHabilitado,
   montarIniNfe,
   criarEnviarIniModelo,

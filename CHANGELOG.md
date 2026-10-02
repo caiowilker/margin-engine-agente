@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.19] - 2026-10-02
+
+### Fixed — Conversão NF-e emite com toggle da frente desligado
+
+- Drivers NF-e 55 (`emitirNfe` / `emitirNfeLib`) respeitam `forcarEmissao` como a NFC-e já fazia.
+- Painel Conversão (`/pdv/nfe`) emite 55 e 65 com “Emissão fiscal” OFF no caixa; checkout continua sem emitir.
+
 ## [1.0.18] - 2026-10-02
 
 ### Fixed — salão QR: comanda LAN no mesmo kick do cupom

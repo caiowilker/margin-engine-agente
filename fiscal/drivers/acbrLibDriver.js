@@ -249,7 +249,21 @@ async function emitirNfseLib(payload) {
 }
 
 async function emitirNfeLib(payload) {
-  if (!acbr.isNfeModelo55Habilitado()) return { fiscal: false };
+  // Painel Conversão envia forcarEmissao — não pode morrer no toggle da frente.
+  const pode =
+    typeof acbr.podeEmitirNfeModelo55 === "function"
+      ? acbr.podeEmitirNfeModelo55(payload)
+      : (() => {
+          const envOk =
+            (process.env.ACBR_NFE_ENABLED || "true").toLowerCase() === "true";
+          if (!envOk) return false;
+          const emissao =
+            typeof acbr.getRuntimeEmissaoFiscal === "function"
+              ? acbr.getRuntimeEmissaoFiscal()
+              : !!acbr.EMISSAO_FISCAL;
+          return emissao || payload?.forcarEmissao === true;
+        })();
+  if (!pode) return { fiscal: false };
   const physical = require("../../runtime/physicalResourceLock");
   const map = require("../../runtime/physicalResourceMap");
   return physical.run(

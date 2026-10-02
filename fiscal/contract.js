@@ -9,6 +9,7 @@
  * @property {(payload: object) => Promise<object>} emitirNfce
  * @property {(payload: object) => Promise<object>} emitirNfe
  * @property {() => boolean} isNfeModelo55Habilitado
+ * @property {(payload?: object) => boolean} [podeEmitirNfeModelo55]
  * @property {(payload: object, numeracao?: object) => string} montarIniNfe
  * @property {(ini: string, modelo: string) => Promise<object>} criarEnviarIniModelo
  * @property {(xml: string, modelo: string) => Promise<object>} enviarNfeModelo
