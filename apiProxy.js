@@ -69,7 +69,8 @@ function normalizeBackendUrl(url) {
     }
     // PDV empacotado aponta para api.*; config antiga com IP WSL/LAN morto
     // quebra /api-proxy (502) e a print station — remapeia para produção.
-    if (isPrivateLanHostname(host) && wantsProductionBackend()) {
+    // ALLOW_PRIVATE_BACKEND=1 preserva LAN só em laboratório explícito.
+    if (isPrivateLanHostname(host) && process.env.ALLOW_PRIVATE_BACKEND !== "1") {
       return PRODUCTION_API_URL;
     }
   } catch {

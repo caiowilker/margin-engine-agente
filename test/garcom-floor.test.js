@@ -206,3 +206,41 @@ test("exchange soft-expired pede reativação sem invalidar token", () => {
   const ok = garcomFloor.exchange(minted.floorToken);
   assert.equal(ok.ok, true);
 });
+
+test("exchange com JWT morto sem refreshIsolated retorna FLOOR_JWT_STALE", () => {
+  const expiredJwt =
+    Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url") +
+    "." +
+    Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) - 120 })).toString(
+      "base64url",
+    ) +
+    ".sig";
+  const minted = garcomFloor.mint({
+    accessToken: expiredJwt,
+    lanIp: "192.168.1.50",
+    forceNew: true,
+  });
+  const ex = garcomFloor.exchange(minted.floorToken);
+  assert.equal(ex.ok, false);
+  assert.equal(ex.code, "FLOOR_JWT_STALE");
+});
+
+test("exchange com JWT morto + refreshIsolated ainda devolve tokens", () => {
+  const expiredJwt =
+    Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url") +
+    "." +
+    Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) - 120 })).toString(
+      "base64url",
+    ) +
+    ".sig";
+  const minted = garcomFloor.mint({
+    accessToken: expiredJwt,
+    refreshToken: "floor-refresh",
+    refreshIsolated: true,
+    lanIp: "192.168.1.50",
+    forceNew: true,
+  });
+  const ex = garcomFloor.exchange(minted.floorToken);
+  assert.equal(ex.ok, true);
+  assert.equal(ex.refreshToken, "floor-refresh");
+});

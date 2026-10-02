@@ -44,6 +44,14 @@ const REGRAS = [
     comoResolver: "Aguarde e consulte Diagnóstico → Fila fiscal.",
   },
   {
+    // Antes de /agente/ — "… no agente (EMISSAO_FISCAL)" não é "serviço parado".
+    teste: /EMISSAO_FISCAL|emiss[aã]o fiscal desabilitada|emiss[aã]o fiscal desativada/i,
+    problema: "Emissão fiscal não está disponível neste caixa.",
+    causa: "A emissão de NFC-e está desligada ou o terminal precisa ser reativado.",
+    comoResolver:
+      "Reative o terminal em PDV → Ativar. Depois confira Configurações → Agente → Emissão fiscal e tente emitir de novo.",
+  },
+  {
     teste: /agente|offline|inacess|econn/i,
     problema: "Serviço local indisponível.",
     causa: "Margin Engine pode estar parado.",

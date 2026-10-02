@@ -24,6 +24,19 @@ function tokensEqual(a, b) {
 const TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias
 const HUB_PATH = "/pdv/mesas";
 
+/** @param {string} token */
+function decodeJwtExpMs(token) {
+  try {
+    const parts = String(token || "").split(".");
+    if (parts.length < 2) return null;
+    const json = Buffer.from(parts[1], "base64url").toString("utf8");
+    const data = JSON.parse(json);
+    return typeof data.exp === "number" ? data.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Snapshot mínimo do operador para o celular abrir mesas sem getMe.
  * @param {unknown} me
@@ -259,6 +272,18 @@ function exchange(floorToken, opts = {}) {
       ok: false,
       status: 409,
       erro: "Sessão do salão sem operador vinculado. Faça login no PDV do caixa e regenere o QR.",
+    };
+  }
+  // JWT morto sem refresh isolado: caixa precisa abrir o painel (remint soft).
+  const jwtExpMs = decodeJwtExpMs(state.accessToken);
+  const jwtAlive = jwtExpMs === null || jwtExpMs > Date.now();
+  if (!jwtAlive && !(state.refreshIsolated && state.refreshToken)) {
+    return {
+      ok: false,
+      status: 401,
+      code: "FLOOR_JWT_STALE",
+      erro:
+        "Sessão do operador no QR expirou. No PC do caixa, abra QR Codes (o mesmo código continua válido) e escaneie de novo.",
     };
   }
   return {

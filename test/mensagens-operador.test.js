@@ -21,3 +21,12 @@ test("sanitizarErroFila", () => {
   const s = mo.sanitizarErroFila("NFE_Enviar timeout após 90000ms — ACBrLib");
   assert.doesNotMatch(s, /ACBr|90000/i);
 });
+
+test("EMISSAO_FISCAL no agente não vira serviço local indisponível", () => {
+  const m = mo.paraOperador(
+    new Error("Emissão fiscal desabilitada ou indisponível no agente (EMISSAO_FISCAL)"),
+  );
+  assert.match(m.problema, /emiss[aã]o fiscal/i);
+  assert.doesNotMatch(m.problema, /Serviço local indisponível/i);
+  assert.match(m.comoResolver, /reativ|emiss[aã]o fiscal/i);
+});

@@ -470,10 +470,24 @@ async function boot() {
     } else if (fixed) {
       try {
         const host = new URL(fixed).hostname;
-        if (isPrivateLanHostname(host) && process.env.ALLOW_PRIVATE_BACKEND !== "1") {
+        // WSL/LAN morto no caixa empacotado: força API de produção (token ainda exige reativar se 401).
+        if (
+          isPrivateLanHostname(host) &&
+          process.env.ALLOW_PRIVATE_BACKEND !== "1"
+        ) {
           console.warn(
-            `[Boot] backendUrl ainda é IP privado (${fixed}). Claim/print via api-proxy pode falhar.`,
+            `[Boot] backendUrl IP privado persistente (${fixed}) → ${PRODUCTION_API_URL}`,
           );
+          config.backendUrl = PRODUCTION_API_URL;
+          process.env.BACKEND_URL = PRODUCTION_API_URL;
+          try {
+            await salvarConfig({ ...config, backendUrl: PRODUCTION_API_URL });
+          } catch (e) {
+            console.warn(
+              "[Boot] Não foi possível persistir backendUrl de produção:",
+              e.message,
+            );
+          }
         }
       } catch {
         /* ignore */
