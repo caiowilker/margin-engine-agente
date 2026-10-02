@@ -135,3 +135,74 @@ test("mint reutiliza token válido e atualiza JWT", () => {
   // O refresh é sessão privada do PC: QR nunca pode recebê-lo.
   assert.equal(ex.refreshToken, undefined);
 });
+
+test("mint sem forceNew NÃO gira token mesmo após soft-expiry", () => {
+  const a = garcomFloor.mint({
+    accessToken: "acc",
+    lanIp: "10.0.0.8",
+    port: 9100,
+    forceNew: true,
+  });
+  // Força soft-expiry no disco
+  const file = process.env.GARCOM_FLOOR_FILE;
+  const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+  raw.expiresAt = Date.now() - 1000;
+  fs.writeFileSync(file, JSON.stringify(raw));
+  garcomFloor._resetForTests();
+
+  const b = garcomFloor.mint({
+    accessToken: "acc2",
+    lanIp: "10.0.0.99", // IP diferente — deve ignorar (pin)
+    port: 9100,
+    forceNew: false,
+  });
+  assert.equal(b.reused, true);
+  assert.equal(b.floorToken, a.floorToken);
+  assert.equal(b.lanIp, "10.0.0.8");
+  assert.ok(b.qrUrl.includes("10.0.0.8"));
+  assert.ok(!b.qrUrl.includes("10.0.0.99"));
+  assert.ok(b.expiresAt > Date.now());
+});
+
+test("só forceNew gira o floorToken e o IP pinado", () => {
+  const a = garcomFloor.mint({
+    accessToken: "a1",
+    lanIp: "192.168.0.10",
+    forceNew: true,
+  });
+  const b = garcomFloor.mint({
+    accessToken: "a2",
+    lanIp: "192.168.0.20",
+    forceNew: true,
+  });
+  assert.equal(b.reused, false);
+  assert.notEqual(b.floorToken, a.floorToken);
+  assert.equal(b.lanIp, "192.168.0.20");
+  assert.ok(b.qrUrl.includes("192.168.0.20"));
+});
+
+test("exchange soft-expired pede reativação sem invalidar token", () => {
+  const minted = garcomFloor.mint({
+    accessToken: "acc",
+    lanIp: "192.168.1.50",
+    forceNew: true,
+  });
+  const file = process.env.GARCOM_FLOOR_FILE;
+  const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+  raw.expiresAt = Date.now() - 1;
+  fs.writeFileSync(file, JSON.stringify(raw));
+  garcomFloor._resetForTests();
+
+  const ex = garcomFloor.exchange(minted.floorToken);
+  assert.equal(ex.ok, false);
+  assert.equal(ex.status, 401);
+  assert.equal(ex.code, "FLOOR_SOFT_EXPIRED");
+  // Token ainda no disco — remint reuse revive
+  const revived = garcomFloor.mint({
+    accessToken: "acc3",
+    forceNew: false,
+  });
+  assert.equal(revived.floorToken, minted.floorToken);
+  const ok = garcomFloor.exchange(minted.floorToken);
+  assert.equal(ok.ok, true);
+});
