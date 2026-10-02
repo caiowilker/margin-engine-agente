@@ -2434,7 +2434,10 @@ function iniciarServidor() {
         agentToken: cfg.agentToken || null,
       });
       if (!result.ok) {
-        return res.status(result.status || 401).json({ erro: result.erro });
+        return res.status(result.status || 401).json({
+          erro: result.erro,
+          ...(result.code ? { code: result.code } : {}),
+        });
       }
       res.json({
         accessToken: result.accessToken,
@@ -2515,7 +2518,10 @@ function iniciarServidor() {
         { agentToken: cfg.agentToken || null },
       );
       if (!result.ok) {
-        return res.status(result.status || 401).json({ erro: result.erro });
+        return res.status(result.status || 401).json({
+          erro: result.erro,
+          ...(result.code ? { code: result.code } : {}),
+        });
       }
       res.json({
         accessToken: result.accessToken,

@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.18] - 2026-10-02
+
+### Fixed — salão QR: comanda LAN no mesmo kick do cupom
+
+- `pedido_comanda` dispara `processarFila()` na hora (igual cupom/gaveta) — papel sem esperar o poll.
+- Exchange floor devolve `code: FLOOR_JWT_STALE` no JSON (front trata sessão morta sem parsear texto).
+- Front: delta multi-estação com ACK por estação; mesa com `tableCode` sempre na chave `mesa-kitchen:` (sem folha dupla ORDER_CREATED).
+
 ### Fixed — sync Windows build: Schemas via cópia case-aware (DrvFS)
 
 - `sync-windows-build.sh`: exclui `acbrlib/data/Schemas` do rsync principal e copia arquivo a arquivo

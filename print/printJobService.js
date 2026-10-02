@@ -341,10 +341,13 @@ function enfileirar(op, args, opts = {}) {
   // Worker ANTES do warm: setImmediate(warm) ganhava de setTimeout(0) e o
   // Add-Type/logo segurava o cupom não fiscal na fila (papel só depois).
   agendarWorker();
-  const cupomCheckoutRapido =
-    row.tipo === "cupom_nao_fiscal" || row.tipo === "gaveta";
-  if (cupomCheckoutRapido && process.env.PRINT_JOB_WORKER !== "false") {
-    // Processa na hora — warm só depois (não compete com este cupom).
+  // Cupom/gaveta + comanda de preparo: kick imediato (salão QR → papel sem esperar poll).
+  const kickImediato =
+    row.tipo === "cupom_nao_fiscal" ||
+    row.tipo === "gaveta" ||
+    row.tipo === "pedido_comanda";
+  if (kickImediato && process.env.PRINT_JOB_WORKER !== "false") {
+    // Processa na hora — warm só depois (não compete com este job).
     void processarFila()
       .catch(() => {})
       .finally(() => {
