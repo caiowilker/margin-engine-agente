@@ -518,6 +518,8 @@ async function processarFila() {
         if (!row) break;
         await processarJobRow(row);
         processados += 1;
+        // Cede o event-loop entre jobs — HTTP/SSE do salão não travam no USB.
+        await new Promise((r) => setImmediate(r));
       }
     });
   } finally {

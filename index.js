@@ -3951,6 +3951,27 @@ function iniciarServidor() {
     }
   });
 
+  /** Mantém PosPrinter aquecido no salão (sem imprimir). */
+  app.post("/impressora/warm", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    try {
+      const core = require("./print/escpos/impressoraCore");
+      if (typeof core.warmPrintHotPath !== "function") {
+        return res.json({ ok: true, warmed: false });
+      }
+      const ok = await Promise.race([
+        core.warmPrintHotPath(),
+        new Promise((resolve) => setTimeout(() => resolve(false), 4_000)),
+      ]);
+      res.json({ ok: true, warmed: ok === true });
+    } catch (err) {
+      res.status(200).json({
+        ok: true,
+        warmed: false,
+        erro: err.message || "warm falhou",
+      });
+    }
+  });
+
   /**
    * Etiqueta térmica ZPL/PPLA — bytes raw (nunca ESC/POS/ACBr tags).
    * Body: { data, formato?: "zpl"|"ppla", encoding?: "utf8"|"latin1"|"base64",
