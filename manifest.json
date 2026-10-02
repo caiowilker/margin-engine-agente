@@ -1,10 +1,10 @@
 {
-  "versao": "1.0.18",
-  "geradoEm": "2026-10-02T18:26:27.432Z",
+  "versao": "1.0.19",
+  "geradoEm": "2026-10-02T19:27:49.322Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
-      "sha256": "737b8cd579a6bca54722cb71d07c7e6a4bfe8bdfd731752ae99a87f382e3d6cc"
+      "sha256": "53626c2cebda5c7d8f8f3b1aa7179eae7cf46e5c92a66d8ee8294d174db45d21"
     },
     {
       "arquivo": "acbrLibResposta.js",
@@ -108,11 +108,11 @@
     },
     {
       "arquivo": "fiscal/contract.js",
-      "sha256": "518f9cf46ca72543be325dc9920acb682dcc4acae5346dfedaaab1686a4bdb02"
+      "sha256": "5c32fc6a35fc98fea7b7391fcaccf003e068bcbe46fed831f20ead041afba617"
     },
     {
       "arquivo": "fiscal/drivers/acbrLibDriver.js",
-      "sha256": "51b80d33ba9a4c06dd296e01e5533cc02190bab2825e0849e1bfa0b2a52ed718"
+      "sha256": "6431b83e4913300b9638f600b31adc510c81536ecc748c5acbb87ddc6a3266ae"
     },
     {
       "arquivo": "fiscal/drivers/acbrLibProcessRecycle.js",
@@ -284,7 +284,7 @@
     },
     {
       "arquivo": "frontend-dist/api-backend.json",
-      "sha256": "67b1d42240e7648e01f9a66c9ace5e14d26d41382f248306b887228e09b77a49"
+      "sha256": "ee68cd4fc500b07e63cc8f8e1cd429ecc989895b0e927ff162c2c62614e83090"
     },
     {
       "arquivo": "frontend-dist/apple-touch-icon.png",
@@ -2668,7 +2668,7 @@
     },
     {
       "arquivo": "frontend-dist/version.json",
-      "sha256": "10608a33348d2bd8749b4392403e2416495627968399beecdd9440f7df29b385"
+      "sha256": "d9c465356c4e0bd8bafab9107b7a676edc0eb0ce3b25c0331a6a55153f059218"
     },
     {
       "arquivo": "frontend-dist/workbox-3147e214.js",
@@ -2736,7 +2736,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "7765ea06bfc6c6f69a4a669addd10332d49aae1a1a2bdb370e2c9306d82ade0c"
+      "sha256": "498577def92ea4208f24b75b83a6c00c23460f714fed565b03688f3a27eb1671"
     },
     {
       "arquivo": "print/acbrPosExports.js",
@@ -3084,7 +3084,7 @@
     },
     {
       "arquivo": "VERSION",
-      "sha256": "7c04a0fc70c361f001ca9007616c5f1824460c6b85a96ea16a84160533804e50"
+      "sha256": "de845d5f200af97f735e5f5dcc7b8c843cc6b98e0be7c23cc8ca1b3f73d078b9"
     },
     {
       "arquivo": "watchdog.js",
