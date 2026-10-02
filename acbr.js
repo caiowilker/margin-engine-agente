@@ -1013,11 +1013,15 @@ function montarSecaoDestinatario(payload, tpAmb) {
 }
 
 function resolverIndIeDestNfe(dest, doc) {
-  if (dest.indIEDest != null && dest.indIEDest !== "") {
-    return Number(dest.indIEDest);
+  const raw = dest.indIEDest != null && dest.indIEDest !== "" ? Number(dest.indIEDest) : NaN;
+  if (raw === 1 || raw === 2 || raw === 9) return raw;
+  const ie = limparTexto(dest.inscricaoEstadual);
+  if (ie) {
+    if (String(ie).trim().toUpperCase() === "ISENTO") return 2;
+    const digits = String(ie).replace(/\D/g, "");
+    if (digits.length >= 2) return 1;
   }
-  if (limparTexto(dest.inscricaoEstadual)) return 1;
-  if (doc.length === 14) return 1;
+  // Padrão MOC: não contribuinte (CPF ou CNPJ sem IE explícita).
   return 9;
 }
 
@@ -2963,4 +2967,5 @@ module.exports = {
   resolverTpAmb,
   resolverTpAmbAcbr,
   ambienteSefazEfetivo,
+  montarSecaoDestinatarioNfe,
 };

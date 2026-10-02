@@ -70,14 +70,23 @@ function validarDestinatarioNfe(dest) {
   const ibge = ibgeDoEndereco(end);
   if (ibge.length !== 7) faltando.push("Código IBGE do município (7 dígitos)");
 
-  const indIE =
-    dest?.indIEDest != null && dest?.indIEDest !== ""
-      ? Number(dest.indIEDest)
-      : limpar(dest?.inscricaoEstadual)
-        ? 1
-        : doc.length === 14
-          ? 1
-          : 9;
+  const hasExplicitInd = dest?.indIEDest != null && dest?.indIEDest !== "";
+  const rawInd = hasExplicitInd ? Number(dest.indIEDest) : NaN;
+  let indIE;
+  if (hasExplicitInd) {
+    if (rawInd === 1 || rawInd === 2 || rawInd === 9) {
+      indIE = rawInd;
+    } else {
+      faltando.push("indIEDest inválido (use 1, 2 ou 9)");
+      indIE = null;
+    }
+  } else if (limpar(dest?.inscricaoEstadual)) {
+    const ieRaw = String(dest.inscricaoEstadual).trim().toUpperCase();
+    indIE = ieRaw === "ISENTO" ? 2 : 1;
+  } else {
+    // Alinhado ao back: sem ind/IE → não contribuinte (9), CPF ou CNPJ.
+    indIE = 9;
+  }
 
   const destNormalizado = {
     ...dest,

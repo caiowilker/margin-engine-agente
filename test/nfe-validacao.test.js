@@ -131,5 +131,42 @@ test("indIEDest=2 — remove IE do payload (MOC)", () => {
   assert.strictEqual(out.inscricaoEstadual, undefined);
 });
 
+test("CNPJ sem ind/IE — default indIEDest=9 (não força contribuinte)", () => {
+  const d = destinatarioCompleto();
+  d.cpfCnpj = "11222333000181";
+  delete d.indIEDest;
+  delete d.inscricaoEstadual;
+  const out = validarDestinatarioNfe(d);
+  assert.strictEqual(out.indIEDest, 9);
+  assert.strictEqual(out.inscricaoEstadual, undefined);
+});
+
+test("indIEDest inválido — rejeita", () => {
+  const d = destinatarioCompleto();
+  d.indIEDest = 3;
+  assert.throws(() => validarDestinatarioNfe(d), /indIEDest inválido/i);
+});
+
+test("INI destinatário — produtor rural CPF + IE", () => {
+  const { montarSecaoDestinatarioNfe } = require("../acbr");
+  const d = destinatarioCompleto();
+  d.indIEDest = 1;
+  d.inscricaoEstadual = "001.641.307.0030";
+  const ini = montarSecaoDestinatarioNfe(d, "2");
+  assert.match(ini, /indIEDest=1/);
+  assert.match(ini, /IE=0016413070030/);
+  assert.match(ini, /CNPJCPF=12345678909/);
+});
+
+test("INI destinatário — indIEDest=2 sem tag IE", () => {
+  const { montarSecaoDestinatarioNfe } = require("../acbr");
+  const d = destinatarioCompleto();
+  d.indIEDest = 2;
+  d.inscricaoEstadual = "1234567890";
+  const ini = montarSecaoDestinatarioNfe(d, "2");
+  assert.match(ini, /indIEDest=2/);
+  assert.doesNotMatch(ini, /^IE=/m);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
