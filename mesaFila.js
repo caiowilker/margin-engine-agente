@@ -605,19 +605,27 @@ function mesclarSnapshotComLocal() {
 
     const snapLivre = m.status === "livre" && !m.open_order_id;
     if (snapLivre) {
+      const updatedMs = Date.parse(local.updated_at || "") || 0;
+      const localAgeMs = Number.isFinite(updatedMs) && updatedMs > 0
+        ? Date.now() - updatedMs
+        : Number.POSITIVE_INFINITY;
+      const PRE_CONTA_GRACE_MS = 120_000;
+      const livePreConta =
+        local.status === "ocupada" &&
+        !!local.closed_for_billing &&
+        localAgeMs < PRE_CONTA_GRACE_MS;
       const liveConsumo =
         local.status === "ocupada" &&
         !local.closed_for_billing &&
         ((Number(local.order_items_count) || 0) > 0 ||
           (Number(local.order_total) || 0) > 0);
       // Open recente sem itens ainda (race pós-abrir QR) — 120s de graça.
-      const updatedMs = Date.parse(local.updated_at || "") || 0;
       const openRecenteVazio =
         local.status === "ocupada" &&
         !local.closed_for_billing &&
         Boolean(local.server_order_id || local.order_id) &&
-        Date.now() - updatedMs < 120_000;
-      if (!liveConsumo && !openRecenteVazio) {
+        localAgeMs < PRE_CONTA_GRACE_MS;
+      if (!liveConsumo && !openRecenteVazio && !livePreConta) {
         return {
           ...m,
           status: "livre",

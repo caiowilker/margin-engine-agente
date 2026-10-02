@@ -151,9 +151,42 @@ describe("mesaFila", () => {
       order_items_count: 2,
       closed_for_billing: true,
     });
+    // Força updated_at antigo em ISO (fora da graça de 120s).
+    const Database = require("better-sqlite3");
+    const db = new Database(process.env.DB_PATH);
+    const staleIso = new Date(Date.now() - 5 * 60_000).toISOString();
+    db.prepare(`UPDATE mesa_local SET updated_at = ? WHERE mesa_id = ?`).run(staleIso, "t1");
+    db.close();
     const merged = mesaFila.mesclarSnapshotComLocal();
     assert.equal(merged[0].status, "livre");
     assert.equal(merged[0].closed_for_billing, false);
+  });
+
+  it("pré-conta live vence snapshot livre stale", () => {
+    mesaFila.salvarSnapshot([
+      {
+        id: "t1b",
+        code: "1",
+        status: "livre",
+        display_order: 1,
+        open_order_id: null,
+        order_total: 0,
+        order_items_count: 0,
+        closed_for_billing: false,
+      },
+    ]);
+    mesaFila.upsertLocal({
+      mesa_id: "t1b",
+      order_id: "o1b",
+      client_order_number: "o1b",
+      status: "ocupada",
+      order_total: 30,
+      order_items_count: 2,
+      closed_for_billing: true,
+    });
+    const merged = mesaFila.mesclarSnapshotComLocal();
+    assert.equal(merged[0].status, "ocupada");
+    assert.equal(merged[0].closed_for_billing, true);
   });
 
   it("não apaga draft_json existente quando upsert vem sem draft", () => {
