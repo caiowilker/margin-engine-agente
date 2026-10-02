@@ -52,6 +52,7 @@ const OP_TO_TIPO = Object.freeze({
     const t = String(payload?.tipo || "").toLowerCase();
     if (t.includes("sangria")) return TIPOS.SANGRIA;
     if (t.includes("suprimento")) return TIPOS.SUPRIMENTO;
+    if (t.includes("transfer")) return TIPOS.MOVIMENTO_CAIXA;
     return TIPOS.MOVIMENTO_CAIXA;
   },
   imprimirTeste: () => TIPOS.TESTE,

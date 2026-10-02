@@ -301,13 +301,31 @@ function upsertLocal(state, opts = {}) {
   return { ok: true, revision: nextRev };
 }
 
-function marcarLivreNoSnapshot(mesaId) {
+function marcarLivreNoSnapshot(mesaId, opts = {}) {
   const id = String(mesaId);
   let revision = 0;
   // Limpa draft local ao liberar — evita pull reocupar com carrinho stale.
   if (db) {
     try {
       const prev = obterLocal(id);
+      // Cleanup atrasado após re-OPEN: não derruba occupy novo (order_id vivo).
+      // Liberar intencional ainda passa — OPEN novo tem order_id; liberar zera depois.
+      // Só ignora se caller pediu baseRevision e o local já avançou com OPEN.
+      const baseRev = Number(opts.baseRevision);
+      if (
+        prev &&
+        prev.status === "ocupada" &&
+        String(prev.order_id || "").trim() &&
+        Number.isFinite(baseRev) &&
+        (Number(prev.revision) || 0) > baseRev
+      ) {
+        return {
+          ok: true,
+          changed: false,
+          revision: Number(prev.revision) || 0,
+          skipped: "reopened",
+        };
+      }
       revision = (prev?.revision || 0) + 1;
       db.prepare(
         `UPDATE mesa_local SET
@@ -315,6 +333,8 @@ function marcarLivreNoSnapshot(mesaId) {
            closed_for_billing = 0,
            order_total = 0,
            order_items_count = 0,
+           order_id = '',
+           client_order_number = '',
            draft_json = NULL,
            server_order_id = NULL,
            revision = ?,
@@ -921,7 +941,18 @@ function applyOp(body) {
 
   let nextState;
   if (type === "CLOSE_BILL" || type === "RELEASE") {
-    const r = marcarLivreNoSnapshot(mesaId);
+    // baseRevision do op: se a mesa reabriu (rev > base), não derruba o OPEN novo.
+    const r = marcarLivreNoSnapshot(mesaId, { baseRevision });
+    if (r.skipped === "reopened") {
+      return {
+        status: 200,
+        body: {
+          revision: r.revision,
+          state: obterLocal(mesaId),
+          skipped: "reopened",
+        },
+      };
+    }
     nextState = obterLocal(mesaId);
     db.prepare(
       `INSERT INTO mesa_op_log (op_id, mesa_id, type, payload, base_rev, new_rev, actor_json)

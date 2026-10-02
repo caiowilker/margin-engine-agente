@@ -4526,7 +4526,12 @@ function iniciarServidor() {
   });
 
   app.post("/mesa/local/:mesaId/marcar-livre", exigirAgentToken, (req, res) => {
-    res.json(mesaFila.marcarLivreNoSnapshot(req.params.mesaId));
+    const baseRevision = req.body?.baseRevision ?? req.body?.base_rev;
+    res.json(
+      mesaFila.marcarLivreNoSnapshot(req.params.mesaId, {
+        ...(baseRevision != null ? { baseRevision } : {}),
+      }),
+    );
   });
 
   app.post("/mesa/ops/cancel", exigirAgentToken, (req, res) => {

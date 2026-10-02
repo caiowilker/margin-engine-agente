@@ -372,6 +372,42 @@ describe("mesaFila", () => {
     unsub();
   });
 
+  it("RELEASE stale após re-OPEN não derruba occupy novo", () => {
+    const open1 = mesaFila.applyOp({
+      opId: "op-reopen-a",
+      mesaId: "t-reopen",
+      type: "OPEN",
+      baseRevision: 0,
+      payload: { order_id: "ord-a", client_order_number: "ord-a" },
+    });
+    assert.equal(open1.status, 200);
+    const revAfterFirst = Number(open1.body.revision) || 1;
+    mesaFila.marcarLivreNoSnapshot("t-reopen");
+    const open2 = mesaFila.applyOp({
+      opId: "op-reopen-b",
+      mesaId: "t-reopen",
+      type: "OPEN",
+      baseRevision: 0,
+      allowReopen: true,
+      payload: { order_id: "ord-b", client_order_number: "ord-b", order_items_count: 1, order_total: 10 },
+    });
+    assert.equal(open2.status, 200);
+    assert.equal(mesaFila.obterLocal("t-reopen").status, "ocupada");
+    assert.equal(mesaFila.obterLocal("t-reopen").order_id, "ord-b");
+    // RELEASE atrasado ainda carrega baseRevision do ciclo antigo.
+    const stale = mesaFila.applyOp({
+      opId: "op-release-stale",
+      mesaId: "t-reopen",
+      type: "RELEASE",
+      baseRevision: revAfterFirst,
+      payload: {},
+    });
+    assert.equal(stale.status, 200);
+    assert.equal(stale.body.skipped, "reopened");
+    assert.equal(mesaFila.obterLocal("t-reopen").status, "ocupada");
+    assert.equal(mesaFila.obterLocal("t-reopen").order_id, "ord-b");
+  });
+
   it("applyOp SYNC shrink bloqueia", () => {
     mesaFila.applyOp({
       opId: "op-open-3",

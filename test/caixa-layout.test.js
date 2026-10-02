@@ -94,6 +94,27 @@ test("suprimento: entrada de numerario", () => {
   assert.ok(text.includes("R$ 50,00"));
 });
 
+test("transferencia conta↔conta: origem destino sem saldo obrigatorio", () => {
+  const text = plain(
+    buildMovimentoLayout({
+      tipo: "transferencia",
+      valor: 120,
+      motivo: "Malote",
+      operador: "Maria",
+      origem: "Cofre da loja",
+      destino: "Banco do Brasil",
+      emitidoEm: "02/10/2026 19:00",
+      exibirLogo: false,
+    }),
+  );
+  assert.ok(text.includes("TRANSFERENCIA"));
+  assert.ok(text.includes("Cofre da loja"));
+  assert.ok(text.includes("Banco do Brasil"));
+  assert.ok(text.includes("R$ 120,00"));
+  assert.ok(text.includes("Malote"));
+  assert.ok(!text.includes("Saldo apos"));
+});
+
 test("fechamento: formas alinhadas + conferencia sobra/falta + sangrias", () => {
   const text = plain(
     buildFechamentoLayout({

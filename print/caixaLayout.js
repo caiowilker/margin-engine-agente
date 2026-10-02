@@ -156,24 +156,42 @@ function buildAberturaLayout(payload = {}) {
  */
 function buildMovimentoLayout(payload = {}) {
   const cols = getThermalCols();
-  const isSuprimento = String(payload.tipo || "").toLowerCase() === "suprimento";
-  const titulo = isSuprimento ? "SUPRIMENTO" : "SANGRIA";
+  const tipo = String(payload.tipo || "").toLowerCase();
+  const isTransferencia = tipo.includes("transfer");
+  const isSuprimento = tipo === "suprimento";
   const lines = [];
 
   pushSep(lines);
-  lines.push({
-    kind: "text",
-    text: `${titulo} DE CAIXA`,
-    bold: true,
-    center: true,
-    size: "lg",
-  });
-  lines.push({
-    kind: "text",
-    text: isSuprimento ? "Entrada de numerario" : "Retirada de numerario",
-    center: true,
-    size: "sm",
-  });
+  if (isTransferencia) {
+    lines.push({
+      kind: "text",
+      text: "TRANSFERENCIA",
+      bold: true,
+      center: true,
+      size: "lg",
+    });
+    lines.push({
+      kind: "text",
+      text: "Entre contas / caixa",
+      center: true,
+      size: "sm",
+    });
+  } else {
+    const titulo = isSuprimento ? "SUPRIMENTO" : "SANGRIA";
+    lines.push({
+      kind: "text",
+      text: `${titulo} DE CAIXA`,
+      bold: true,
+      center: true,
+      size: "lg",
+    });
+    lines.push({
+      kind: "text",
+      text: isSuprimento ? "Entrada de numerario" : "Retirada de numerario",
+      center: true,
+      size: "sm",
+    });
+  }
   pushSep(lines);
 
   if (payload.empresa?.nome || payload.empresa?.nomeFantasia) {
@@ -181,10 +199,12 @@ function buildMovimentoLayout(payload = {}) {
     lines.push({ kind: "blank" });
   }
 
-  lines.push({
-    kind: "text",
-    text: col2("Caixa", String(payload.numeroCaixa || "Principal"), cols),
-  });
+  if (!isTransferencia || payload.numeroCaixa) {
+    lines.push({
+      kind: "text",
+      text: col2("Caixa", String(payload.numeroCaixa || "Principal"), cols),
+    });
+  }
   lines.push({
     kind: "text",
     text: col2("Operador", tx(payload.operador || "-"), cols),
@@ -197,6 +217,21 @@ function buildMovimentoLayout(payload = {}) {
       cols,
     ),
   });
+
+  if (isTransferencia) {
+    if (payload.origem) {
+      lines.push({
+        kind: "text",
+        text: col2("De", tx(payload.origem), cols),
+      });
+    }
+    if (payload.destino) {
+      lines.push({
+        kind: "text",
+        text: col2("Para", tx(payload.destino), cols),
+      });
+    }
+  }
 
   pushSep(lines, "dash");
   lines.push({ kind: "text", text: "VALOR", bold: true, center: true });
@@ -214,12 +249,14 @@ function buildMovimentoLayout(payload = {}) {
     lines.push({ kind: "text", text: tx(payload.motivo) });
   }
 
-  pushSep(lines, "dash");
-  lines.push({
-    kind: "text",
-    text: col2("Saldo apos", fmtR$OrDash(payload.saldoAtual), cols),
-    bold: true,
-  });
+  if (!isTransferencia || payload.saldoAtual != null) {
+    pushSep(lines, "dash");
+    lines.push({
+      kind: "text",
+      text: col2("Saldo apos", fmtR$OrDash(payload.saldoAtual), cols),
+      bold: true,
+    });
+  }
   pushSep(lines);
 
   return { showLogo: payload.exibirLogo !== false, lines };
