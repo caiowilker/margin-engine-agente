@@ -1,0 +1,19 @@
+           t           |            c            |        v         |  n  
+-----------------------+-------------------------+------------------+-----
+ pdv_cliente           | segmento                | NAO_CLASSIFICADO |   2
+ pdv_cliente           | segmento                | RECORRENTE       |   1
+ pdv_cliente           | segmento                | VIP              |   2
+ pdv_cliente           | tipo_pessoa             | PF               |   2
+ pdv_cliente           | tipo_pessoa             | PJ               |   3
+ pdv_crediario_cliente | modo_aplicacao_encargos |                  |   1
+ pdv_crediario_cliente | periodicidade           |                  |   1
+ pdv_crediario_cliente | status                  | ATIVO            |   1
+ pdv_venda             | status                  | CANCELADA        |   8
+ pdv_venda             | status                  | CONCLUIDA        | 242
+ pdv_venda_pagamento   | forma                   | CARTAO_CREDITO   |   9
+ pdv_venda_pagamento   | forma                   | CARTAO_DEBITO    |  29
+ pdv_venda_pagamento   | forma                   | DINHEIRO         |  82
+ pdv_venda_pagamento   | forma                   | PIX              |  93
+ retail_fornecedor     | ativo                   | true             |   1
+(15 rows)
+

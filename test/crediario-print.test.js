@@ -29,3 +29,23 @@ assert.equal(normalizarCrediarioPayload({ totalRecebido: 10 }).valorRecebido, 10
 assert.equal(normalizarCrediarioPayload({}).naoFiscal, true);
 
 console.log("crediario-print.test.js ok");
+
+const tagsQuit = renderCrediarioTags({
+  titulo: "QUITACAO CREDIARIO",
+  clienteNome: "Cliente Teste",
+  valorRecebido: 80,
+  parcelasQuitadas: 2,
+  parcelasParciais: 1,
+  formaPagamento: "PIX",
+  saldoRemanescente: 0,
+});
+assert.match(tagsQuit, /QUITACAO CREDIARIO/);
+assert.match(tagsQuit, /2 quitada/);
+assert.match(tagsQuit, /1 parcial/);
+
+const tagsParcial = renderCrediarioTags({
+  titulo: "PAGAMENTO PARCIAL CREDIARIO",
+  valorRecebido: 20,
+  clienteNome: "X",
+});
+assert.match(tagsParcial, /PAGAMENTO PARCIAL/);

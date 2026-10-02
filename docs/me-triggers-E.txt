@@ -1,0 +1,15 @@
+        event_object_table         |               trigger_name               | event_manipulation | action_timing |                         action_statement                         
+-----------------------------------+------------------------------------------+--------------------+---------------+------------------------------------------------------------------
+ estoque_custo_historico           | trg_estoque_custo_historico_no_update    | DELETE             | BEFORE        | EXECUTE FUNCTION estoque_custo_historico_append_only()
+ estoque_custo_historico           | trg_estoque_custo_historico_no_update    | UPDATE             | BEFORE        | EXECUTE FUNCTION estoque_custo_historico_append_only()
+ fiscal_emissao_transicao          | trg_fiscal_emissao_transicao_no_update   | UPDATE             | BEFORE        | EXECUTE FUNCTION fiscal_emissao_transicao_append_only()
+ fiscal_emissao_transicao          | trg_fiscal_emissao_transicao_no_update   | DELETE             | BEFORE        | EXECUTE FUNCTION fiscal_emissao_transicao_append_only()
+ fiscal_reforma_ativacao_auditoria | trg_reforma_ativacao_auditoria_no_update | DELETE             | BEFORE        | EXECUTE FUNCTION fiscal_reforma_ativacao_auditoria_append_only()
+ fiscal_reforma_ativacao_auditoria | trg_reforma_ativacao_auditoria_no_update | UPDATE             | BEFORE        | EXECUTE FUNCTION fiscal_reforma_ativacao_auditoria_append_only()
+ pdv_crediario_parcela             | trg_saldo_crediario                      | DELETE             | AFTER         | EXECUTE FUNCTION fn_atualiza_saldo_crediario()
+ pdv_crediario_parcela             | trg_saldo_crediario                      | INSERT             | AFTER         | EXECUTE FUNCTION fn_atualiza_saldo_crediario()
+ pdv_crediario_parcela             | trg_saldo_crediario                      | UPDATE             | AFTER         | EXECUTE FUNCTION fn_atualiza_saldo_crediario()
+ pdv_produto                       | trg_alerta_estoque                       | UPDATE             | BEFORE        | EXECUTE FUNCTION fn_atualiza_alerta_estoque()
+ pdv_produto                       | trg_alerta_estoque                       | INSERT             | BEFORE        | EXECUTE FUNCTION fn_atualiza_alerta_estoque()
+(11 rows)
+
