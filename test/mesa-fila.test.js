@@ -433,6 +433,34 @@ describe("mesaFila", () => {
     assert.equal(mesaFila.obterLocal("t-livre").status, "livre");
   });
 
+  it("applyOp OPEN reabre sticky livre (allowReopen)", () => {
+    mesaFila.upsertLocal({
+      mesa_id: "t-reopen",
+      order_id: "o8",
+      client_order_number: "o8",
+      status: "ocupada",
+      order_items_count: 1,
+      order_total: 10,
+    });
+    mesaFila.marcarLivreNoSnapshot("t-reopen");
+    assert.equal(mesaFila.obterLocal("t-reopen").status, "livre");
+    const r = mesaFila.applyOp({
+      opId: "op-reopen-1",
+      mesaId: "t-reopen",
+      type: "OPEN",
+      baseRevision: 0,
+      payload: {
+        order_id: "o9",
+        client_order_number: "o9",
+        order_items_count: 2,
+        order_total: 25,
+      },
+    });
+    assert.equal(r.status, 200);
+    assert.equal(mesaFila.obterLocal("t-reopen").status, "ocupada");
+    assert.equal(mesaFila.obterLocal("t-reopen").order_items_count, 2);
+  });
+
   it("enfileirarOp SYNC nao troca payload rico por shrinker", () => {
     mesaFila.enfileirarOp({
       tipo: "SYNC",

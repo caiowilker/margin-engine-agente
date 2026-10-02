@@ -4471,7 +4471,7 @@ function iniciarServidor() {
     try {
       const body = { ...(req.body || {}), mesa_id: req.params.mesaId };
       const result = mesaFila.upsertLocal(body);
-      if (result?.ok === false && result.code === "SHRINK_BLOCKED") {
+      if (result?.ok === false && (result.code === "SHRINK_BLOCKED" || result.code === "MESA_CLOSED")) {
         return res.status(409).json(result);
       }
       res.json(result);
