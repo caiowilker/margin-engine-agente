@@ -1,6 +1,6 @@
 {
-  "versao": "1.0.19",
-  "geradoEm": "2026-10-03T00:34:26.912Z",
+  "versao": "1.0.20",
+  "geradoEm": "2026-10-03T21:24:06.407Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -2716,7 +2716,7 @@
     },
     {
       "arquivo": "index.js",
-      "sha256": "d8d3d86c607e4ecd525cf98d8af2ce8dd81daaaecfc141bd38fe6c4eeb6dd19e"
+      "sha256": "4f70f52f140b943e173406ce321b5df76a75da666ddc0f0da228fa17ade8a9fb"
     },
     {
       "arquivo": "install-service.js",
@@ -2752,7 +2752,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "498577def92ea4208f24b75b83a6c00c23460f714fed565b03688f3a27eb1671"
+      "sha256": "61f7ab15620e6da19b61e22996fd190d95c5ec165cbda19ab40c283dbeb6808e"
     },
     {
       "arquivo": "print/acbrPosExports.js",
@@ -3004,7 +3004,7 @@
     },
     {
       "arquivo": "runtime/directoryManager.js",
-      "sha256": "3056f186973a2e2ef311ec228b6621c88062484471918d06b271a850d9c29f80"
+      "sha256": "de1b916398efe0d1d5a260892ecebb885dfa126406482d68ae458787cf2d9281"
     },
     {
       "arquivo": "runtime/frontendIntegrity.js",

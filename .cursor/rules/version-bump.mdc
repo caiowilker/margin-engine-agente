@@ -1,0 +1,24 @@
+---
+description: Sempre subir a versão do agente (e alinhar release) a cada alteração entregue
+alwaysApply: true
+---
+
+# Version bump a cada alteração
+
+Em **toda** entrega que altere código/comportamento do agente (ou contratos back/front acoplados), **suba a versão patch** antes do commit (`1.0.N` → `1.0.N+1`).
+
+## Checklist obrigatório
+
+1. `agente-local/package.json` (+ `package-lock.json` root)
+2. `npm run sync:installer-version` → `pdv-agente-installer.iss`
+3. `npm run build` → regenera `manifest.json`
+4. Entrada em `CHANGELOG.md` sob a nova versão
+5. Alinhar release (mesmo número):
+   - `margin-engine/pom.xml` (versão do artefato)
+   - `margin-engine` `pdv.agente.versao` default em `application.properties`
+   - `margin-engine/.env.example` `PDV_AGENTE_VERSAO`
+   - `margin-engine-front/package.json` (+ lock se existir)
+6. `npm run check:release-alignment` deve passar
+7. Após commit/push: `npm run sync:windows-build` quando for build Windows
+
+Não deixar commits de feature/fix sem bump. Hotfix cosmético de docs-only pode ficar sem bump; qualquer runtime/contrato = bump.

@@ -6,6 +6,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.20] - 2026-10-03
+
+### Added — Checkout scale GA + contratos de carga MGV
+
+- Checkout: leitura de balança no PDV (ENQ/PesoLiquido), hot-path e matriz de aceite.
+- Carga MGV: `enviar-agora` com `produtoIds`, slot 409 (`BALANCA_LOTE_EM_ANDAMENTO`), pasta default ProgramData, refila FAILED/TIMEOUT→PENDING (C11).
+- UI: seleção≡lote, single-flight, drawer por `produtoId`, banners/feedback de produção.
+- Instalador/DirectoryManager: dirs `balanca/{carga,sombra}`; contratos e matriz de aceite documentados.
+
 ## [1.0.19] - 2026-10-02
 
 ### Fixed — Conversão NF-e emite com toggle da frente desligado
