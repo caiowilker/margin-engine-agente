@@ -631,6 +631,12 @@ async function boot() {
   } catch (err) {
     console.warn("[Balanca] Módulo não iniciado:", err.message);
   }
+  try {
+    const scale = require("./src/scale");
+    scale.boot({ agentVersion: require("./package.json").version });
+  } catch (err) {
+    console.warn("[Scale] Módulo não iniciado:", err.message);
+  }
   watchdog.iniciar(reiniciarEmissorFiscal, {
     onDegraded: (err) =>
       ativarContingencia(err?.message || "SEFAZ indisponível — fila fiscal pausada", {
@@ -2272,6 +2278,16 @@ function iniciarServidor() {
     });
   } catch (err) {
     console.warn("[Balanca] Rotas não registradas:", err.message);
+  }
+
+  // ── Balança de checkout (ENQ_STX5 — isolado de carga MGV) ───────────────────
+  try {
+    require("./src/scale").registerRoutes(app, {
+      privateNetworkHeaders,
+      exigirAgentToken,
+    });
+  } catch (err) {
+    console.warn("[Scale] Rotas não registradas:", err.message);
   }
 
   /** Rotas printType → porta (2 impressoras no mesmo PC: cozinha + bar). */

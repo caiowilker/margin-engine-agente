@@ -39,6 +39,28 @@ test("schema rejeita gerenciador inválido com enabled", () => {
   );
 });
 
+test("C7: pastaCarga vazia resolve default ProgramData/balanca/carga", () => {
+  const gid = "11111111-1111-4111-8111-111111111111";
+  const cfg = config.validar({
+    enabled: true,
+    gerenciadorId: gid,
+    pastaCarga: "",
+    modoSombra: false,
+  });
+  assert.equal(cfg.pastaCarga, "");
+  const efetivo = config.efetivar(cfg);
+  assert.match(efetivo.pastaCarga.replace(/\\/g, "/"), /balanca\/carga$/);
+  assert.ok(fs.existsSync(efetivo.pastaCarga));
+  assert.equal(efetivo.pastaCargaConfigurada, "");
+});
+
+test("C8: UNC/config preenchida não é substituída pelo default", () => {
+  const unc = "\\\\servidor\\mgv\\carga";
+  const efetivo = config.efetivar({ pastaCarga: unc, enabled: false });
+  assert.equal(efetivo.pastaCarga, unc);
+  assert.equal(efetivo.pastaCargaConfigurada, unc);
+});
+
 test("allowlist bloqueia nome estranho", () => {
   assert.equal(allowlist.nomePermitido("ITENSMGV.TXT"), true);
   assert.throws(() => allowlist.exigirPermitido("../evil.txt"), /não permitido/);

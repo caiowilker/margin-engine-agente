@@ -254,6 +254,68 @@ function nativeDepsReady() {
   return true;
 }
 
+/** Binding serialport real (.node) — pasta prebuilds sozinha não conta. */
+function scaleNativeReady() {
+  const base = path.join(appDir, "node_modules");
+  const pkg = path.join(base, "serialport", "package.json");
+  if (!fs.existsSync(pkg)) return false;
+  const candidates = [
+    path.join(base, "@serialport", "bindings-cpp", "build", "Release", "bindings.node"),
+    path.join(base, "serialport", "node_modules", "@serialport", "bindings-cpp", "build", "Release", "bindings.node"),
+    path.join(base, "serialport", "build", "Release", "serialport.node"),
+  ];
+  if (candidates.some((p) => fs.existsSync(p))) return true;
+  // prebuilds/<platform>/…/bindings.node (serialport v12)
+  const prebuildsRoot = path.join(base, "@serialport", "bindings-cpp", "prebuilds");
+  if (fs.existsSync(prebuildsRoot)) {
+    try {
+      const stack = [prebuildsRoot];
+      while (stack.length) {
+        const dir = stack.pop();
+        for (const name of fs.readdirSync(dir)) {
+          const full = path.join(dir, name);
+          let st;
+          try {
+            st = fs.statSync(full);
+          } catch {
+            continue;
+          }
+          if (st.isDirectory()) stack.push(full);
+          else if (name === "bindings.node" || name.endsWith(".node")) return true;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return false;
+}
+
+function ensureScaleNative() {
+  if (scaleNativeReady()) {
+    initBootstrapLog().info({ acao: "scale_native_ok" }, "serialport pronto para balança de checkout");
+    return true;
+  }
+  try {
+    runNpm(["rebuild", "serialport"], { inherit: true });
+  } catch (err) {
+    initBootstrapLog().warn(
+      { acao: "serialport_rebuild_fail", err: err?.message },
+      "serialport rebuild falhou — balança de checkout ficará indisponível (SCALE_NATIVE_MISSING). Repare o instalador antes de ligar a flag no PDV.",
+    );
+    return false;
+  }
+  if (!scaleNativeReady()) {
+    initBootstrapLog().warn(
+      { acao: "serialport_still_missing" },
+      "serialport ainda ausente após rebuild — SCALE_NATIVE_MISSING",
+    );
+    return false;
+  }
+  initBootstrapLog().info({ acao: "scale_native_rebuilt" }, "serialport rebuild OK");
+  return true;
+}
+
 function writeDefaultConfigs() {
   if (mode === "update") {
     initBootstrapLog().info({ acao: "skip_default_config" }, "Atualização — configurações existentes preservadas");
@@ -440,11 +502,14 @@ function npmInstallIfNeeded() {
     initBootstrapLog().info({ acao: "skip_npm_ci" }, "Dependências nativas já empacotadas no instalador");
     ensureKoffi();
     require(path.join(appDir, "runtime", "acbrKoffiTopology")).enforceSingleKoffi({ appRoot: appDir });
+    // Mesmo com skip npm ci, garantir binding serialport (balança GA).
+    ensureScaleNative();
     return;
   }
   initBootstrapLog().info({ acao: "npm_ci" }, "Instalando dependências (primeira execução ou pacote sem node_modules)");
   runNpm(["ci", "--omit=dev"], { inherit: true });
   runNpm(["rebuild", "better-sqlite3"], { inherit: true });
+  ensureScaleNative();
   ensureKoffi();
   require(path.join(appDir, "runtime", "acbrKoffiTopology")).enforceSingleKoffi({ appRoot: appDir });
 }
@@ -492,10 +557,12 @@ function npmRepairSteps() {
     initBootstrapLog().info({ acao: "skip_npm_repair" }, "node_modules presente — reparo sem npm ci");
     ensureKoffi();
     require(path.join(appDir, "runtime", "acbrKoffiTopology")).enforceSingleKoffi({ appRoot: appDir });
+    ensureScaleNative();
     return;
   }
   runNpm(["ci", "--omit=dev"], { inherit: true });
   runNpm(["rebuild", "better-sqlite3"], { inherit: true });
+  ensureScaleNative();
   ensureKoffi();
   require(path.join(appDir, "runtime", "acbrKoffiTopology")).enforceSingleKoffi({ appRoot: appDir });
 }

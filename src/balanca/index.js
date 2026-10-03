@@ -2,29 +2,38 @@
 
 const fs = require("fs");
 const path = require("path");
-const { ler, salvar, configPath, auditDir, DEFAULTS } = require("./config");
+const {
+  ler,
+  salvar,
+  configPath,
+  auditDir,
+  efetivar,
+  pastaCargaDefault,
+  DEFAULTS,
+} = require("./config");
 const { diagnosticarPasta, listarPresentes, limparTemporariosOrfaos } = require("./pasta");
 const worker = require("./worker");
 const { version: AGENT_VERSION } = require("../../package.json");
 
 function getDiagnostico() {
-  const cfg = ler();
-  const pasta = cfg.modoSombra ? auditDir(cfg.pastaCarga) : cfg.pastaCarga;
-  let diag = { ok: false, erro: "sem pasta" };
+  const cfg = efetivar(ler());
+  const pasta = cfg.modoSombra ? auditDir(cfg.pastaCargaConfigurada) : cfg.pastaCarga;
+  let diag = { ok: false, erro: "Pasta de carga não resolvível." };
   try {
     if (pasta) {
-      if (cfg.modoSombra) {
-        fs.mkdirSync(pasta, { recursive: true });
-      }
+      fs.mkdirSync(pasta, { recursive: true });
       diag = diagnosticarPasta(pasta);
-      // em sombra, ocupação da pasta MGV não bloqueia — reavaliar pasta real se existir
       if (cfg.modoSombra && cfg.pastaCarga) {
         const mgv = diagnosticarPasta(cfg.pastaCarga);
         diag.mgv = mgv;
       }
     }
   } catch (err) {
-    diag = { ok: false, erro: err.message };
+    diag = {
+      ok: false,
+      erro: err.message || "Falha ao acessar pasta de carga.",
+      codigo: "BALANCA_PASTA_INACESSIVEL",
+    };
   }
   const h = worker.health();
   return {
@@ -36,7 +45,9 @@ function getDiagnostico() {
     config: {
       enabled: cfg.enabled,
       gerenciadorId: cfg.gerenciadorId,
-      pastaCarga: cfg.pastaCarga,
+      pastaCarga: cfg.pastaCargaConfigurada || "",
+      pastaCargaEfetiva: cfg.pastaCarga,
+      pastaCargaDefault: pastaCargaDefault(),
       encoding: cfg.encoding,
       timeoutImportacaoSeg: cfg.timeoutImportacaoSeg,
       intervaloPollingBakMs: cfg.intervaloPollingBakMs,
@@ -158,9 +169,9 @@ function registerRoutes(app, { privateNetworkHeaders, exigirAgentToken }) {
     privateNetworkHeaders,
     exigirAgentToken,
     (req, res) => {
-      const cfg = ler();
+      const cfg = efetivar(ler());
       const n1 = limparTemporariosOrfaos(cfg.pastaCarga);
-      const n2 = limparTemporariosOrfaos(auditDir(cfg.pastaCarga));
+      const n2 = limparTemporariosOrfaos(auditDir(cfg.pastaCargaConfigurada));
       res.json({ removidos: n1 + n2 });
     },
   );
@@ -200,9 +211,9 @@ function registerRoutes(app, { privateNetworkHeaders, exigirAgentToken }) {
 function boot(opts = {}) {
   worker.configurar(opts);
   try {
-    const cfg = ler();
+    const cfg = efetivar(ler());
     if (cfg.pastaCarga) limparTemporariosOrfaos(cfg.pastaCarga);
-    limparTemporariosOrfaos(auditDir(cfg.pastaCarga));
+    limparTemporariosOrfaos(auditDir(cfg.pastaCargaConfigurada));
   } catch {
     /* ignore */
   }

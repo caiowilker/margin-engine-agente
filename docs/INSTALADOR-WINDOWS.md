@@ -59,7 +59,7 @@ Script: `scripts/installer-bootstrap.js`
 2. Aplica permissões (Windows)
 3. Cria logs e configuração inicial (`.env` padrão)
 4. Valida dependências (Node, SQLite, manifest)
-5. Dependências nativas, manifest e predeploy **já vêm do build** (`prepare-build.ps1`). No caixa o bootstrap **não** roda `npm ci` nem recalcula SHA-256 se existir `BUILD_STAMP.json` e `node_modules`.
+5. Dependências nativas, manifest e predeploy **já vêm do build** (`prepare-build.ps1`). No caixa o bootstrap **não** roda `npm ci` nem recalcula SHA-256 se existir `BUILD_STAMP.json` e `node_modules`. Quando precisa reinstalar deps, faz `npm rebuild better-sqlite3` e **`npm rebuild serialport`** (balança de checkout ENQ_STX5; falha → feature off com `SCALE_NATIVE_MISSING`, agente sobe).
 6. Regra de firewall na porta do agente (instalação/atualização)
 7. Registra serviço Windows automaticamente
 8. Gera diagnóstico inicial em `Diagnostics/install-last-report.txt`

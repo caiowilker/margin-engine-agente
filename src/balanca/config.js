@@ -31,11 +31,48 @@ function configPath() {
   return getDirectoryManager().file("config", "balanca-carga.json");
 }
 
+/** Default instalado: %ProgramData%\MarginEngine\balanca\carga */
+function pastaCargaDefault() {
+  const dm = getDirectoryManager();
+  return dm.ensurePath(dm.dir("balancaCarga"), "balancaCarga");
+}
+
+/** Default sombra: %ProgramData%\MarginEngine\balanca\sombra */
+function pastaSombraDefault() {
+  const dm = getDirectoryManager();
+  return dm.ensurePath(dm.dir("balancaSombra"), "balancaSombra");
+}
+
+/**
+ * Path efetivo de carga: config não-vazia (UNC/custom) > default ProgramData.
+ * Nunca grava o default de volta no JSON — update/repair preserva UNC salva.
+ */
+function resolvePastaCarga(pastaOuCfg) {
+  const raw =
+    pastaOuCfg && typeof pastaOuCfg === "object"
+      ? pastaOuCfg.pastaCarga
+      : pastaOuCfg;
+  const configured = raw == null ? "" : String(raw).trim();
+  if (configured) return configured;
+  return pastaCargaDefault();
+}
+
 function auditDir(pastaCarga) {
-  const base = pastaCarga && String(pastaCarga).trim()
-    ? String(pastaCarga).trim()
-    : getDirectoryManager().dir("diagnostics");
-  return path.join(base, "_margin_balanca_sombra");
+  const configured = pastaCarga && String(pastaCarga).trim();
+  if (configured) {
+    // Pasta custom/UNC: sombra ao lado, sem sobrescrever a pasta MGV.
+    return path.join(configured, "_margin_balanca_sombra");
+  }
+  return pastaSombraDefault();
+}
+
+/** Runtime: config + pastaCarga já resolvida (default se vazia). */
+function efetivar(cfg) {
+  const base = cfg && typeof cfg === "object" ? { ...cfg } : { ...DEFAULTS };
+  const configurada = base.pastaCarga == null ? "" : String(base.pastaCarga).trim();
+  base.pastaCargaConfigurada = configurada;
+  base.pastaCarga = resolvePastaCarga(configurada);
+  return base;
 }
 
 /**
@@ -115,15 +152,7 @@ function validar(raw) {
       "wsBaseUrl é obrigatória quando modoEntrega=WS_MGV7 e modoSombra=false.",
     );
   }
-  const pastaObrigatoria =
-    cfg.modoEntrega === "PASTA"
-    || cfg.modoEntrega === "PASTA_MONITORADA"
-    || cfg.modoEntrega === "PASTA_GATILHO_POR_DATA";
-  if (cfg.enabled && pastaObrigatoria && !cfg.modoSombra && !cfg.pastaCarga) {
-    throw new Error(
-      "pastaCarga é obrigatória quando enabled=true, entrega por pasta e modoSombra=false.",
-    );
-  }
+  // pastaCarga vazia é válida: runtime resolve %ProgramData%\MarginEngine\balanca\carga.
   if (
     cfg.gerenciadorId &&
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -174,6 +203,10 @@ module.exports = {
   DEFAULTS,
   configPath,
   auditDir,
+  pastaCargaDefault,
+  pastaSombraDefault,
+  resolvePastaCarga,
+  efetivar,
   validar,
   ler,
   salvar,

@@ -1,7 +1,7 @@
 "use strict";
 
 const fetch = require("node-fetch");
-const { ler: lerConfigBalanca } = require("./config");
+const { ler: lerConfigBalanca, efetivar } = require("./config");
 const { processarLote } = require("./loteRunner");
 const { limparTemporariosOrfaos } = require("./pasta");
 const log = require("../../logger").child({ modulo: "balanca_worker" });
@@ -23,6 +23,7 @@ function health() {
     modoSombra: cfg.modoSombra === true,
     gerenciadorId: cfg.gerenciadorId || null,
     pastaCarga: cfg.pastaCarga || null,
+    pastaCargaConfigurada: cfg.pastaCargaConfigurada || "",
     encoding: cfg.encoding,
     workerAtivo: timer != null,
     inFlight,
@@ -33,9 +34,9 @@ function health() {
 
 function safeCfg() {
   try {
-    return lerConfigBalanca();
-  } catch {
-    return { enabled: false };
+    return efetivar(lerConfigBalanca());
+  } catch (err) {
+    return { enabled: false, pastaCarga: null, ultimoErroCfg: err && err.message };
   }
 }
 

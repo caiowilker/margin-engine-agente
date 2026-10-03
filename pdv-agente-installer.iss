@@ -109,6 +109,9 @@ Source: "assets\margin-engine.ico"; DestDir: "{app}\app\assets"; Flags: ignoreve
 Name: "{app}\app\data"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\cert"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\balanca"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\balanca\carga"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\balanca\sombra"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\Logs"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\Config"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\Backup"; Permissions: users-modify; Flags: uninsneveruninstall

@@ -5,7 +5,7 @@ const fs = require("fs");
 const { exigirPermitido } = require("./allowlist");
 const { limparTemporariosOrfaos } = require("./pasta");
 const { validarSha256, escreverAtomico, ordenarArquivos } = require("./atomicWrite");
-const { auditDir } = require("./config");
+const { auditDir, efetivar } = require("./config");
 const { processarLoteWs } = require("./wsRunner");
 const {
   entregarPastaMonitorada,
@@ -27,9 +27,21 @@ const INCREMENTAL_STATE_FILE = ".me-balanca-incremental-state.json";
  * Prioridade modoSombra: lote (claim) > config local.
  */
 async function processarLote(lote, cfg, hooks = {}) {
-  const modoEntrega = String(lote.modoEntrega || cfg.modoEntrega || "PASTA").toUpperCase();
-  const modoSombra = resolverModoSombra(lote, cfg);
-  const cfgEfetivo = { ...cfg, modoSombra };
+  const cfgResolvido = efetivar(cfg || {});
+  const modoEntrega = String(
+    lote.modoEntrega || cfgResolvido.modoEntrega || "PASTA",
+  ).toUpperCase();
+  const modoSombra = resolverModoSombra(lote, cfgResolvido);
+  const cfgEfetivo = { ...cfgResolvido, modoSombra };
+  if (!String(cfgEfetivo.pastaCarga || "").trim() && modoEntrega !== "WS_MGV7") {
+    return {
+      status: "ERRO",
+      detalhe:
+        "Pasta de carga não resolvível. Configure pastaCarga ou reinstale o agente (default ProgramData\\MarginEngine\\balanca\\carga).",
+      evidenciasBak: [],
+      statusUi: STATUS_UI.FALHOU,
+    };
+  }
 
   if (modoEntrega === "WS_MGV7") {
     return processarLoteWs(lote, cfgEfetivo);
