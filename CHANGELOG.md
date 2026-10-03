@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.21] - 2026-10-03
+
+### Fixed — tipagem operacional da balança no painel do terminal
+
+- `PdvTerminalConfigPanel`: preserva `Record` ao ligar `checkoutScaleEnabled` + default `autoConfirmScale` (desbloqueia `build:pdv-prod` / sync Windows).
+
 ## [1.0.20] - 2026-10-03
 
 ### Added — Checkout scale GA + contratos de carga MGV
