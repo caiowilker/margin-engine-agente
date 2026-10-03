@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.22] - 2026-10-03
+
+### Improved — Contas a pagar (R53) UX operacional
+
+- Front: navegação rápida sticky (urgência, busca, status), KPIs clicáveis, lista agrupada por atraso/hoje/a vencer, Escape fecha painéis.
+
 ## [1.0.21] - 2026-10-03
 
 ### Fixed — tipagem operacional da balança no painel do terminal
