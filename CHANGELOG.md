@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.23] - 2026-10-03
+
+### Improved — Crediário UX operacional
+
+- Front: dashboard acionável (KPIs, atalhos, vencimentos por dia, aging visual), abas sticky, filtros em chips + busca nas listas.
+
 ## [1.0.22] - 2026-10-03
 
 ### Improved — Contas a pagar (R53) UX operacional
