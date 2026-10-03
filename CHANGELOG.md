@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.24] - 2026-10-03
+
+### Improved — Crediário + Contas a pagar UX solid
+
+- Status legíveis com badges, empty states com CTA, Escape fecha modais, abas dense, aging/atraso na linha, DataTable minimal com ação.
+
 ## [1.0.23] - 2026-10-03
 
 ### Improved — Crediário UX operacional
