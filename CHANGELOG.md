@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.25] - 2026-10-03
+
+### Improved — Campanha WhatsApp reativação (UX)
+
+- Front: presets, toggle ativo/pausado, dirty/save, KPIs de resultado, tabela de execuções e link para editar mensagem.
+
 ## [1.0.24] - 2026-10-03
 
 ### Improved — Crediário + Contas a pagar UX solid
