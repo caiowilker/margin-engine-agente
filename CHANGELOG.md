@@ -6,6 +6,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.40] - 2026-10-04
+
+### Improved — frontend-dist (PDV UX)
+
+- Cardápio Delivery marketplace (nav, hero, grid, sacola).
+- Hub Relatórios Início/Catálogo/Por tarefa; som da Central persistente e on por padrão.
+- Frente sem stepper Total/Formas/Confirmação; CTAs sólidos; Delivery Hub e nav ERP.
+
+### Fixed — Frente de caixa
+
+- Remove o fluxo em 3 passos (Total/Formas/Confirmação) do painel de pagamento.
+
 ## [1.0.39] - 2026-10-04
 
 ### Fixed — Frente de caixa
