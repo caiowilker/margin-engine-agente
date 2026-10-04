@@ -1,6 +1,6 @@
 {
   "versao": "1.0.31",
-  "geradoEm": "2026-10-04T03:19:52.146Z",
+  "geradoEm": "2026-10-04T03:21:34.376Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -284,15 +284,15 @@
     },
     {
       "arquivo": "frontend-dist/api-backend.json",
-      "sha256": "5cf9d42584ae4f21f25c6d3a57980a257519f78315d3d954a6e62c707ad7db50"
+      "sha256": "c849f56c50d3b00b18e6ac9cf0add1bce763f8e37b60580e9b269c92d4626764"
     },
     {
       "arquivo": "frontend-dist/apple-touch-icon.png",
       "sha256": "aeef2ab0a3509d9324c1b955747e79718ced9cf40a6053c6642fba92bb0183fd"
     },
     {
-      "arquivo": "frontend-dist/assets/ActivationGatePage-WxBOVKpF.js",
-      "sha256": "8b08249ba727e17d51b8550a98062d25e1809536a54380b36136572d8d4e795f"
+      "arquivo": "frontend-dist/assets/ActivationGatePage-CMkJd_w8.js",
+      "sha256": "43c2f9b7fd96cfbef058329a7e1337cd0f829f852df384843c37d699fc532c7e"
     },
     {
       "arquivo": "frontend-dist/assets/ActivationPage-Dr0-Somf.js",
@@ -303,248 +303,248 @@
       "sha256": "5c443a02dc51b89d7c3e77dabf062c11b980a980a73085780a6b32570dbd5cea"
     },
     {
-      "arquivo": "frontend-dist/assets/agenteFiscalPreflight-mWYxgB9t.js",
-      "sha256": "585d0310a1a1b7227a021bc10e3cb75d83c520f46dbd62c1de50ab3d036b2b11"
+      "arquivo": "frontend-dist/assets/agenteFiscalPreflight-B8tSawxs.js",
+      "sha256": "fd44e31651b3deea062193458de0a615b9b389a2ed96ec2b9f384e26813405c6"
     },
     {
-      "arquivo": "frontend-dist/assets/AgenteLocalIndisponivel-BcvQg_l_.js",
-      "sha256": "088a5fd6553f7669dfa84e6f279eee803a772998b5a534f20fdc0884b340a293"
+      "arquivo": "frontend-dist/assets/AgenteLocalIndisponivel-CamvT_vT.js",
+      "sha256": "480478832e049056669d83f3edc4927e2414d54d8776b8aeafa03f707e9966b5"
     },
     {
-      "arquivo": "frontend-dist/assets/AjusteMonetarioCampo-BnLtti_V.js",
-      "sha256": "cb06e897565a75d274ddc8a8265948b1d78fe1ab28f74627e7ea3309671136cf"
+      "arquivo": "frontend-dist/assets/AjusteMonetarioCampo-CcefkGcD.js",
+      "sha256": "49df4af8031046fb1a24f4f2890d98f4d8dabb0986f58288d1044193154d02b7"
     },
     {
-      "arquivo": "frontend-dist/assets/AlcadasAprovacaoPage-DMw_l29x.js",
-      "sha256": "d8a22470d84f9e94d130c4a7babb119e315aef737e337f44f89e76149247127e"
+      "arquivo": "frontend-dist/assets/AlcadasAprovacaoPage-BpwjJmON.js",
+      "sha256": "d316990465b1c8aaa79287bb8f16909b54b7f62c8bc88c406f5ba51caec0d38f"
     },
     {
-      "arquivo": "frontend-dist/assets/AlertsPage-DiXSQ_e8.js",
-      "sha256": "8e5878d425afca9cc455cdcbccd47ef9a0782d803066d4100cc653c35f64d9a0"
+      "arquivo": "frontend-dist/assets/AlertsPage-zp08xmNf.js",
+      "sha256": "15025ffb9c76651241cd55f728810bbf2194ed279713e3ed3bb36b3a5b757b60"
     },
     {
       "arquivo": "frontend-dist/assets/aliquotaVigenciaErro-5VYBn_fE.js",
       "sha256": "6a114742223ffe6e54b8782e3b169c7e1785281763361e6afa2613dde96b84b3"
     },
     {
-      "arquivo": "frontend-dist/assets/AnalyticsPage-CpG7JUOa.js",
-      "sha256": "cfbd778c2bd3ee98eb8987d30c5b35ee64862cc7bc6de99013f27b46853d027d"
+      "arquivo": "frontend-dist/assets/AnalyticsPage-2mpczM1G.js",
+      "sha256": "ac2a311f89ccfc994c864f4deba89d5786b9115413e92e37916ea73daaaefc51"
     },
     {
-      "arquivo": "frontend-dist/assets/apiError-DM26Vok7.js",
-      "sha256": "594e2c5acfbffcacadbdbd770a7f4e0c9e47d1ee8fc17e33d4732fbaf431e5b7"
+      "arquivo": "frontend-dist/assets/apiError-CzePXy2V.js",
+      "sha256": "a2cb651dd4200b50e4a4cb0719bb39ce9fa2258f5b27ce96a9f1d63042721f12"
     },
     {
-      "arquivo": "frontend-dist/assets/ApontamentoProducaoPage-Cdflvjc6.js",
-      "sha256": "d9c1a741a6a4e414cdc16ac7bc7c1f427ccb3cefd2c843538890fa9ffe9b834c"
+      "arquivo": "frontend-dist/assets/ApontamentoProducaoPage-CCGeitv9.js",
+      "sha256": "3032d1d116e7513483faa6b8b59030c858d03ec73a9e50bf6b89c1464b9c194c"
     },
     {
-      "arquivo": "frontend-dist/assets/arrow-down-right-DXjLmvW3.js",
-      "sha256": "a30a29876e5872f09a593852905fe871720202923e4001248bee29824f53d0ca"
+      "arquivo": "frontend-dist/assets/arrow-down-right-CpS6ePfz.js",
+      "sha256": "113437d913b5785f92bfa94a1ef5bf703f1481916b9c24bb2b88bd327f97b85d"
     },
     {
-      "arquivo": "frontend-dist/assets/arrow-down-to-line-DbbSlQWs.js",
-      "sha256": "1a5dc22ac06d5db199690edaebe7604b1c35db1664e1ab9aed6387ab855b4755"
+      "arquivo": "frontend-dist/assets/arrow-down-to-line-DbADlWbY.js",
+      "sha256": "0999c00681faad0b72699c5148338c708da3e4731651a93c982e8dbe57a40dc9"
     },
     {
-      "arquivo": "frontend-dist/assets/arrow-left-right-BNV_vZsD.js",
-      "sha256": "8bf93c3ae0e61b80167f59c304f31f03119f3e0dfe5ee3109acf37aaf9238415"
+      "arquivo": "frontend-dist/assets/arrow-left-right-kvqv8BAK.js",
+      "sha256": "61215d1694388aa175d4f010ef9c839c0b1daf9b765ac37a76625253abbdaec6"
     },
     {
-      "arquivo": "frontend-dist/assets/arrow-right-7J4sSTtP.js",
-      "sha256": "6b3032f56ab99e6755c737ec5034559a07ed7d4c382b418cabb7a21a29f5ed50"
+      "arquivo": "frontend-dist/assets/arrow-right-CfFi5bvZ.js",
+      "sha256": "9a11b3c8740a7ffb226a88919d5e10e448a8ff141bd8f84f83cadf208dae3a4f"
     },
     {
-      "arquivo": "frontend-dist/assets/arrow-up-from-line-sS80oJ90.js",
-      "sha256": "2bc2e43aee1bafe91b19593ab6341917953b5806ff9c39cf5a3d5815c43df0f7"
+      "arquivo": "frontend-dist/assets/arrow-up-from-line-DLyur5x9.js",
+      "sha256": "f2cdbce91678e5204eea2809dfb7d2dfafbd31fcd4cef367b85e6cb3c59623b4"
     },
     {
-      "arquivo": "frontend-dist/assets/arrow-up-right-CvLGG9u8.js",
-      "sha256": "fd313206f735195ec5223fbedf17de019ccc6bf0f20dc1a1acec7fb984f4e22b"
+      "arquivo": "frontend-dist/assets/arrow-up-right-rGFq4uV-.js",
+      "sha256": "87c3758fc5d6fe2b5f98aaed6cfdb9193642cd36895a0cf94cd75c7788070335"
     },
     {
-      "arquivo": "frontend-dist/assets/AtivacaoPdvPage-DVgh9Z9s.js",
-      "sha256": "006974dcbb8278685f363ccc02bd028d4e152058fe678b91834acaa8d012fc0a"
+      "arquivo": "frontend-dist/assets/AtivacaoPdvPage-CL8a3fuI.js",
+      "sha256": "0c9717d815496744727a4f9569dc973bc9a403279fbdd082248dd0eece0949d1"
     },
     {
-      "arquivo": "frontend-dist/assets/AuthLegalLinks-CRU7Z3R7.js",
-      "sha256": "7f5791bf3668615febd26fa05fbf3c0ec9fe419ba2d243d92627ae67ecea2a36"
+      "arquivo": "frontend-dist/assets/AuthLegalLinks-BzfpBQp1.js",
+      "sha256": "72632d2889f034a3949d17bfc07372f8684c6c57c929a97d2c1ffe07228939fc"
     },
     {
-      "arquivo": "frontend-dist/assets/baixarXmlFiscalVenda-D8vQXnKU.js",
-      "sha256": "d77561e68c003961ae67412915f5b5ef42c573d8a17a3ccf1ecf65f09e287215"
+      "arquivo": "frontend-dist/assets/baixarXmlFiscalVenda-CBKsKLvn.js",
+      "sha256": "767d8247ef0fd553cb545530afad5f75e55afc078e1de2a2adfffd898b1e650c"
     },
     {
-      "arquivo": "frontend-dist/assets/BalancaCargaPage-BO_2CkP1.js",
-      "sha256": "e84edcddb0bf91c2a18b34665dfa2d6e9afbb69f85021af945bc17bb11e383f4"
+      "arquivo": "frontend-dist/assets/BalancaCargaPage-BHN64c5m.js",
+      "sha256": "9803c6aa8624a37322254041853aa0a80837f179b36a8986702711808bceb2e7"
     },
     {
-      "arquivo": "frontend-dist/assets/balancaParser-C7FjpVow.js",
-      "sha256": "2adada24b04b6c7aff44a215ed9121f84504d248a40d9d9a372390dcd15629fa"
+      "arquivo": "frontend-dist/assets/balancaParser-DjEXFqsZ.js",
+      "sha256": "f29b3d1273898c49a46924fd89bbb00e69e723a7e7c6d2554f759bf1548f1019"
     },
     {
-      "arquivo": "frontend-dist/assets/BalancoPage-DTc3QiIk.js",
-      "sha256": "98775484bc21140ba70595e22073cf9a8c1a03b575d90da341e72787ed8be7a2"
+      "arquivo": "frontend-dist/assets/BalancoPage-BrjnBkVQ.js",
+      "sha256": "be703f612b1fb8c683f70ac4d720eb192c51bbd9d2b28373ec5562dda1b2933f"
     },
     {
-      "arquivo": "frontend-dist/assets/ban-CHz0so6B.js",
-      "sha256": "ed5b89e59125048a801e8760a1a848791aebb23f93d1539cc5411fa5b33758b3"
+      "arquivo": "frontend-dist/assets/ban-CPz8dTy-.js",
+      "sha256": "a6e2a866bce63daff000a2a222c73934a150b9e4afe59f04f29b6a88fbfd766e"
     },
     {
-      "arquivo": "frontend-dist/assets/banknote-CCHvAoPI.js",
-      "sha256": "3fea5d0afbe123956ebad2ea9a7b314aaf3b8157cab1b2b842e9126404881867"
+      "arquivo": "frontend-dist/assets/banknote-C5Xhv8UF.js",
+      "sha256": "3ee6085d1a90cad2c9df8884caa0acc290cbedb4d8d78c570140c7b2ed5cc934"
     },
     {
-      "arquivo": "frontend-dist/assets/barcode-DqRgwuSk.js",
-      "sha256": "a468535966516e9386805343aea46257d5976f3ac425d7611ccc5e6143e2ca36"
+      "arquivo": "frontend-dist/assets/barcode-B6uruFCN.js",
+      "sha256": "e4e20bb0372580ed147a61d3d89a002aa181b39946b3d855d85b174ba8ee4829"
     },
     {
-      "arquivo": "frontend-dist/assets/BarraRetornoCaixa-EC6L5TAC.js",
-      "sha256": "b1bf153d9ab5319a52f3093a3bfc6547d17eb08198f4156bf923a3bde6a548bb"
+      "arquivo": "frontend-dist/assets/BarraRetornoCaixa-zy9HVauy.js",
+      "sha256": "d5f61e0a8dc717bc97a99aad85a925dcbac2fb92f5a74aad9fa3217deb6814d0"
     },
     {
-      "arquivo": "frontend-dist/assets/beef-BQvuW8IH.js",
-      "sha256": "9e23f0740809304be6a7a883f6d402bed379ddcadf4c27603bb47c201461fa97"
+      "arquivo": "frontend-dist/assets/beef-DypnGp5f.js",
+      "sha256": "25d13ac2df1f3ae0b68a04211abcbe4ac662abd836418bc92b0d57895c558870"
     },
     {
-      "arquivo": "frontend-dist/assets/bike-ClFEQ9Vd.js",
-      "sha256": "46df763bf8ddeab4fd5b5ec91ac5817042a980c413b879c8a752307bf7a813ae"
+      "arquivo": "frontend-dist/assets/bike-B5d1a-jH.js",
+      "sha256": "cd7d02c36b898569f7ac1c2f96025b551d241ea8561049babebeb5842c734e0b"
     },
     {
-      "arquivo": "frontend-dist/assets/BillingCancelPage-2FZpoubC.js",
-      "sha256": "cc5359f2a10f07be0e14c6f93fe6a957bf97795fecc13fa055ea81e95a8fbed1"
+      "arquivo": "frontend-dist/assets/BillingCancelPage-c3ICIWIt.js",
+      "sha256": "a77115daaad6b4dab48560a12bc8ec1ff3699d95b8866fc8049f4b855fd5b29b"
     },
     {
-      "arquivo": "frontend-dist/assets/BillingManagePage-CBhM_gub.js",
-      "sha256": "379214e934e9c8aba9a5ef8f629b473a1a0555841ded5f3640eba773dcf539ed"
+      "arquivo": "frontend-dist/assets/BillingManagePage-CYOmQWPA.js",
+      "sha256": "e26b74338889b1f5e00bae9a2df0be03c8c3ccf2bcd5c9488c33458c7f478696"
     },
     {
-      "arquivo": "frontend-dist/assets/BillingPage-Dwk-Zrn9.js",
-      "sha256": "2e77ded092669a71d9770100c51f3f7b57f9234030a765c5c688f6681958876b"
+      "arquivo": "frontend-dist/assets/BillingPage-D8JBFgRb.js",
+      "sha256": "54c73c922d2aacef9f7237b9d707746c1261f78a5381b6c776242e06312c4316"
     },
     {
-      "arquivo": "frontend-dist/assets/BillingSuccessPage-BciPi4hC.js",
-      "sha256": "fa33f0804d0a61ca446ac7a1c9a953feaac908ead2cf10c996dc86eb350b6176"
+      "arquivo": "frontend-dist/assets/BillingSuccessPage-DtmP14Fd.js",
+      "sha256": "8cff9987a28ec5fdc5a13c5670058bac0c78b65e00927bd2e6413d3a84b28de1"
     },
     {
-      "arquivo": "frontend-dist/assets/CadastroProdutosPage-DsgH5jC7.js",
-      "sha256": "a035c618ff644afe5ddfd4caaca7b11c4d85bd71aff26a7ed55965bcb6d64e9f"
+      "arquivo": "frontend-dist/assets/CadastroProdutosPage-5I4EG3d8.js",
+      "sha256": "358bc9abb2f7afcc66528d80aa7318b3cfe19f63542a0d6293de67dd3709b7e2"
     },
     {
-      "arquivo": "frontend-dist/assets/caixaImpressaoTermica-Ct5QfqbM.js",
-      "sha256": "91c3186ea2120441ca128876b8159b6640c82c09067acb2183632876dc0e5e02"
+      "arquivo": "frontend-dist/assets/caixaImpressaoTermica-DmEguvK2.js",
+      "sha256": "106021bee807ee709a0deff27b235b5a6d2a83a3748718269bd3c6c9f6939081"
     },
     {
-      "arquivo": "frontend-dist/assets/CaixaPage-Dn7GCSzH.js",
-      "sha256": "4c29d86b1a91617fbf43203fb7bfc17087597f0016a3eba203778dc0a453d35c"
+      "arquivo": "frontend-dist/assets/CaixaPage-B7wwklTJ.js",
+      "sha256": "0fb3af460cd1f1afadfd51e1b0f8d5df4a5c563e848a7e3e5c464e494bc3b84b"
     },
     {
-      "arquivo": "frontend-dist/assets/calendar-Bo7zKJbS.js",
-      "sha256": "e11d77df19be36fd94ad1f4a36cdc8a8f26016eb8d58f58b5f1281db1506718e"
+      "arquivo": "frontend-dist/assets/calendar-BPoG2JjD.js",
+      "sha256": "4fd19f0c70c224b9b070fa17eb70f882c1ffc113b0d2d311cf2ffc368139d938"
     },
     {
-      "arquivo": "frontend-dist/assets/calendar-clock-zWVGWIig.js",
-      "sha256": "5fec80214a44c9b1b4915086fd0f3b9b46be7336cc86b9d9c1c54f855aa95375"
+      "arquivo": "frontend-dist/assets/calendar-clock-BVqxGDBA.js",
+      "sha256": "ef696cafb54e409e5918cfd2e557bd23db1921e01a40cc72b99b41f0f3f268f1"
     },
     {
-      "arquivo": "frontend-dist/assets/calendar-days-CMRY-yJe.js",
-      "sha256": "df15c4c2f8e831de9c2e7e262ea304a10d20339107d3866caac7a1589c4e194a"
+      "arquivo": "frontend-dist/assets/calendar-days-CZTeCfP0.js",
+      "sha256": "3c69666cee47f7d0b55c39ae5b7235d745c3a60ac54ba446adf50ddd6bfb9bfe"
     },
     {
-      "arquivo": "frontend-dist/assets/calendar-range-CzXlDqgO.js",
-      "sha256": "9eae39450957b89c51e7c5629baae1f4726c276e09e8875ba736376fa649e7ec"
+      "arquivo": "frontend-dist/assets/calendar-range-MWfMz42F.js",
+      "sha256": "f063d4d40a240b001fd4801cb2e81eaed9d56151a90c8b9af12403cbeaa3a0c3"
     },
     {
-      "arquivo": "frontend-dist/assets/CamposInscricaoEstadual-B_hQSlN_.js",
-      "sha256": "bb5c4fc6cd8069a757e3ce28607c4d7a4f3a0bca172f012dc5639812ceef29e2"
+      "arquivo": "frontend-dist/assets/CamposInscricaoEstadual-DlgBEETu.js",
+      "sha256": "352f72f8c641888b3f756e8e8a9980ee0676be3008a99020e43f420ea957c7cc"
     },
     {
-      "arquivo": "frontend-dist/assets/cardapioApi-D6dALv8l.js",
-      "sha256": "cdbf1c4809474b025b0515ded60ffaca368f226f74eb0715a31a3e8bae547e35"
+      "arquivo": "frontend-dist/assets/cardapioApi-BlEtUcTP.js",
+      "sha256": "d9423c6d68331ec6325267afe864a154e4c5ce3d97e238958556467001831213"
     },
     {
-      "arquivo": "frontend-dist/assets/CardapioDigitalPage-q6Ngno1p.js",
-      "sha256": "3dc84604a7153a846634e9af324ffefb9be7aa9affe826068fb2e00b351feb4f"
+      "arquivo": "frontend-dist/assets/CardapioDigitalPage-DCNzWi2A.js",
+      "sha256": "063532236e0815c62e9badbb72504323d3e506bebe0606b64631154de369f02b"
     },
     {
       "arquivo": "frontend-dist/assets/cardapioReadiness-D-tMFmPK.js",
       "sha256": "bb1c05ac0cc4d670c7a54b1816ed6677104733ccf3f6c2c552264f1eada421f1"
     },
     {
-      "arquivo": "frontend-dist/assets/CargaInicialCatalogoPage-BUiWKHsB.js",
-      "sha256": "48db7d29eb8e59e81d7d0202652e92908a25150d2deb09227d1d53a6950f8b47"
+      "arquivo": "frontend-dist/assets/CargaInicialCatalogoPage-BoPIeRVD.js",
+      "sha256": "e1f3c0cc933761e39b91055ad563451ec71c43fec4f954a4041a002428b3a23a"
     },
     {
-      "arquivo": "frontend-dist/assets/CategoriaCustoSelect-EGAj8xow.js",
-      "sha256": "5d9553102d61bf4b2cee4f088e82b6e8db94d3ce70d65ab54b9d531689d5c5d6"
+      "arquivo": "frontend-dist/assets/CategoriaCustoSelect-DZfLj41N.js",
+      "sha256": "63ed7ffe07f82924709db325f76a18cc10990a223380aaa0e6b7b204deb2c07a"
     },
     {
-      "arquivo": "frontend-dist/assets/categoriasCustoApi-D7lmha2p.js",
-      "sha256": "e25e11e0e0c0489ab6822bcb040fefc53b398d56a8cdcce686d209a6b170e227"
+      "arquivo": "frontend-dist/assets/categoriasCustoApi-DXT5Bz8_.js",
+      "sha256": "7bff0fed95a6ef5fbacfbb157b986cfe8156c0010a3b2e58a9466c926cdddf7a"
     },
     {
-      "arquivo": "frontend-dist/assets/CategoriasCustoPage-_DVTdie-.js",
-      "sha256": "68c0875afb087d0b0d5286a4a37ede519882502052653725b74aaf431a885017"
+      "arquivo": "frontend-dist/assets/CategoriasCustoPage-m5NvG7yL.js",
+      "sha256": "b1a9f2d97027c22511e1b95505fea29ad4854764969c1d986b7fd6ff561cd2d1"
     },
     {
-      "arquivo": "frontend-dist/assets/CategoriaSelect-CSE7LyzS.js",
-      "sha256": "45fb0c331bfc9a69577da348465ac23a03d7fc90932474e118ed9a93e878c643"
+      "arquivo": "frontend-dist/assets/CategoriaSelect-D4sXiMA_.js",
+      "sha256": "546495789d12241130b9e32e2a7496bd22b9e95cfbcad720859bc1ba9db67f58"
     },
     {
-      "arquivo": "frontend-dist/assets/CategoriasPage-D-KoNA5d.js",
-      "sha256": "cfc1c3b3fe72e91648f871df10e8e6baedd3a895d6a0fb88bfbe03cfc9ac7666"
+      "arquivo": "frontend-dist/assets/CategoriasPage-BuL_BYTA.js",
+      "sha256": "857fdb00cd799196a7ffb0e02fcb8d2cda52b57b57432fe4cf369d64b6e030fe"
     },
     {
-      "arquivo": "frontend-dist/assets/categoriasPdvService-BJeASCaH.js",
-      "sha256": "fe8a6e3e73122d1e11fe1a186389851b3bcafcc7b45877e21777f22aaffb01a4"
+      "arquivo": "frontend-dist/assets/categoriasPdvService-BtmShyLp.js",
+      "sha256": "156612d60210059f373bd20539c07570976533623a7f4c6f300ab1382284647b"
     },
     {
-      "arquivo": "frontend-dist/assets/CentralPedidosPage-DTLXLB3w.js",
-      "sha256": "523db13698f5efbcccfef65c372adcf442f496a4bc5418a3daef5b7b90e52a30"
+      "arquivo": "frontend-dist/assets/CentralPedidosPage-B2C53GL0.js",
+      "sha256": "f58691683aab5e6422c23520f0e06517213f53e22ccf4c2e0f376ae2949204fc"
     },
     {
-      "arquivo": "frontend-dist/assets/CentroCustoFormModal-CbzkwInf.js",
-      "sha256": "d160ac428117bcbb02ffc77c1071bd632ddc1b0956c30f920324130017dbe7de"
+      "arquivo": "frontend-dist/assets/CentroCustoFormModal-xftujbwp.js",
+      "sha256": "367afcd95741fcfa1c01de74153d514f7f9d6921562e52f83ef8bb60a3b2580d"
     },
     {
-      "arquivo": "frontend-dist/assets/CentrosCustoPage-CTGcQD6r.js",
-      "sha256": "e457afebc323f330b92a6700959ec45bb38308c2fe572de2e30f5e465ddf997e"
+      "arquivo": "frontend-dist/assets/CentrosCustoPage-Bmm1ZSa8.js",
+      "sha256": "13359653ae0cdf85e4659b62c0fe1c060145930a4e8b6467ed6c19ff38e9d63a"
     },
     {
       "arquivo": "frontend-dist/assets/chartFormat-BErYiLqD.js",
       "sha256": "b5f0d131d45781b1de0df286491e0912af8462e33690ce838eed51f151138f5d"
     },
     {
-      "arquivo": "frontend-dist/assets/check-kRVAySJD.js",
-      "sha256": "fe780348497b42f4abbf729ceeabe427971f80922384f12aa1a2f933483292d6"
+      "arquivo": "frontend-dist/assets/check-CyBpi4y4.js",
+      "sha256": "5fef65be03008f3837ebdce491be6b5f32bf52cf1068192f2b8658ef35010dc4"
     },
     {
       "arquivo": "frontend-dist/assets/checkoutScale-EGJ_ZLRE.js",
       "sha256": "997092757e2f4bbb51f90b3ba5bdd8f34a7853b5ee8c5526632bc1b8f6452d6a"
     },
     {
-      "arquivo": "frontend-dist/assets/chevron-up-Dtfc43YH.js",
-      "sha256": "d0d317dcfc89fc8d937167477089443e7345c518cfbdae2e804a44db96154711"
+      "arquivo": "frontend-dist/assets/chevron-up-C00FgQBo.js",
+      "sha256": "96efe3af866db08ecbc36ca561a50d917b1ea14afb8e8a91771d95d5f464534a"
     },
     {
-      "arquivo": "frontend-dist/assets/circle-CAWhJNm3.js",
-      "sha256": "a2598467d89e2ad7b194282af758c1b11cdb18ebef4d5d57a25ef4fd75ae68af"
+      "arquivo": "frontend-dist/assets/circle-check-big-CmwPCvZd.js",
+      "sha256": "f27904bf7cb81d114fc3d19ecd8946cfb83ed28cb54565e61773762cd5e9606a"
     },
     {
-      "arquivo": "frontend-dist/assets/circle-check-big-CN4HAhWE.js",
-      "sha256": "4788d20be32ca5e4674e3f4993776fe0bf30998ea9a36a4edab4bc2352625b8e"
+      "arquivo": "frontend-dist/assets/circle-CU-fV418.js",
+      "sha256": "f105a8babb3740f2823cb881385a6a1b1330f86563f92c4f7eb466c0c1ac31b9"
     },
     {
-      "arquivo": "frontend-dist/assets/circle-pause-CLDoE4Mo.js",
-      "sha256": "15fd6f299a247622af24d78b44e6db8e8df1bca0fb34fef05e7e318e6f451235"
+      "arquivo": "frontend-dist/assets/circle-pause-DszfC2D2.js",
+      "sha256": "a802f0c473e7e386f97bb8dc26758a364caa420d0dd697fb7922387fad3ed81a"
     },
     {
-      "arquivo": "frontend-dist/assets/circle-plus-BSZsuA7M.js",
-      "sha256": "ce150989b858a53d1c04562b207dabbc21e776290855729beb92cdd8bda64c74"
+      "arquivo": "frontend-dist/assets/circle-plus-CZlYyMhF.js",
+      "sha256": "c26c40da73a1bb79fc99bc8cc62b07cba606cf403654a0dbbfec53ad9b73467e"
     },
     {
-      "arquivo": "frontend-dist/assets/circle-question-mark-Dirckbmu.js",
-      "sha256": "4e1ae39dfb2070d3de5a76902a9e0f4741e87f59f97f4c9414441c8a59fe074d"
+      "arquivo": "frontend-dist/assets/circle-question-mark-7lj183c-.js",
+      "sha256": "035221303895783989909f1e6f0ef92acf99d47a7694f66e2763f8c88c592aac"
     },
     {
       "arquivo": "frontend-dist/assets/ClampedNumberInput-BejNIABz.js",
@@ -559,192 +559,192 @@
       "sha256": "d47a342270fe12ecf9b6e5afa47b1ec353a6b665ff0e6f3625fe2a674003a292"
     },
     {
-      "arquivo": "frontend-dist/assets/ClienteSelector-CxLEXTJt.js",
-      "sha256": "581c2663e529e7a25400bf393055dbac252c9875242edc7b7a245c2ce7d8ac42"
+      "arquivo": "frontend-dist/assets/ClienteSelector-DqY61OX9.js",
+      "sha256": "dd554819c60b93e441c742fe0d85b6126dffc83c2ae3ec85072849b754536744"
     },
     {
-      "arquivo": "frontend-dist/assets/clienteService-DHO_2FOG.js",
-      "sha256": "067ae3a85c15fdb7f88ae6c3fe0028fad6e7cbfc011c9dcb5c31f0df57906ab6"
+      "arquivo": "frontend-dist/assets/clienteService-Gd8I8yg9.js",
+      "sha256": "335f7e45fd8461568aa7982e9b65f031c8162e2bb392514cae7b20e08a26a039"
     },
     {
-      "arquivo": "frontend-dist/assets/ClientesPage-jiyjet--.js",
-      "sha256": "b1692fb8ce5bc10d02c5655a146894d1719335e60f3e471d2dcdc5831a7ff73c"
+      "arquivo": "frontend-dist/assets/ClientesPage-B1n1q768.js",
+      "sha256": "19101f787ee72ba55cb73d757b6352157aa724ee671d7bfc6446dfc685d4fc9b"
     },
     {
-      "arquivo": "frontend-dist/assets/clipboard-check-CuDZGtiu.js",
-      "sha256": "7648fff55be8a612ffe22e938dac02db937aa12324086306f2257b895090e229"
+      "arquivo": "frontend-dist/assets/clipboard-check-DuPXj6l2.js",
+      "sha256": "dcd963c040a9c7e88ed3c891dd317593228b252e37d4a6787ccf5279a330af33"
     },
     {
-      "arquivo": "frontend-dist/assets/clock-3-BagSEFba.js",
-      "sha256": "9f68f581f8e9c6c019008c0505e37bee4100bfdfd079eb669fc4afba3b306f0b"
+      "arquivo": "frontend-dist/assets/clock-3-DCWc4zVr.js",
+      "sha256": "e6bed4b6003f2c049f4c83cf1e730071364c460fa46fcad1a22551840b7ad275"
     },
     {
-      "arquivo": "frontend-dist/assets/colaboradoresApi-DiBmjCL0.js",
-      "sha256": "c087295f19555dcb2d95e86256d4fd078c525b6f1bf28b926593293990c0a03f"
+      "arquivo": "frontend-dist/assets/colaboradoresApi-BH3-I9_k.js",
+      "sha256": "840275308353221878e34d688a5387ada864f38c14e5c1522fcb6c22120a6bdd"
     },
     {
-      "arquivo": "frontend-dist/assets/ColaboradoresPage-CimJ86Dg.js",
-      "sha256": "f28a78d951babb756766cb39dea02fb416acd736f7ce399dd9ebe032ecb34463"
+      "arquivo": "frontend-dist/assets/ColaboradoresPage-w-jpYeQk.js",
+      "sha256": "585d4947cfe140cfe032be1fc32bba2502a1736e341be32a9a0f6e41614e3d5c"
     },
     {
-      "arquivo": "frontend-dist/assets/CollapsibleSection-PXVkKqp-.js",
-      "sha256": "ec88ef7f82fc906b32b40586854a1b62b07bfa5cf9caa05d38a08b73202727a7"
+      "arquivo": "frontend-dist/assets/CollapsibleSection-Duy_s2qa.js",
+      "sha256": "de5e08d3d6f621584663353cafc2f2ff361b38fdde88e0bcd5778f4b1027a685"
     },
     {
-      "arquivo": "frontend-dist/assets/ComissoesPage-C5wSt0yI.js",
-      "sha256": "55b54b620efdbc79c497ac9bf0c9da9a168eb39a2621225610c47760998d21aa"
+      "arquivo": "frontend-dist/assets/ComissoesPage-DNITO9HH.js",
+      "sha256": "357f5be518df5b202e29f069e17b8d37fe99863eff83ff8efd52c395c5e04680"
     },
     {
-      "arquivo": "frontend-dist/assets/ComissoesSubNav-BmzTZdzd.js",
-      "sha256": "7f039b0d2145d36070337c22a1669406711ce89c5dff836b4f9b62aea33aa529"
+      "arquivo": "frontend-dist/assets/ComissoesSubNav-CjT3KeHA.js",
+      "sha256": "6bf14d492fa138dfef3b8002ef65ed72bb0e9968ec89767ad6c608f020a9da9e"
     },
     {
-      "arquivo": "frontend-dist/assets/commercialUx-BRJfuQo4.js",
-      "sha256": "fc922d3ced90ed9144a2387113064bb7b9dd096ca37e7ef0a9ae27fdd3ff90cf"
+      "arquivo": "frontend-dist/assets/commercialUx-BVVuOYRL.js",
+      "sha256": "ed8e5eb03bded6951b0e70db69cc5cd6c97a15f72ca32686a586b68ec6982514"
     },
     {
-      "arquivo": "frontend-dist/assets/compraApi-b0LLjnTL.js",
-      "sha256": "26f81ef86895aa27777c3b7bdd663f3106e8ee58b3b44a6dd4778246b18c2f53"
+      "arquivo": "frontend-dist/assets/compraApi-BAk7bbek.js",
+      "sha256": "b6ac8f3b64b8f7f7f515a681c8581ae74f5095a2970d1ec68ca4f33526b6e5c1"
     },
     {
-      "arquivo": "frontend-dist/assets/ComprasLayout-BTPC7Tsy.js",
-      "sha256": "f2baf3a8c75704bbb7769727ce52c268e0a1d693f108c914ad8ff0bf313c3920"
+      "arquivo": "frontend-dist/assets/ComprasLayout-DQo0vekH.js",
+      "sha256": "f9bb7ab488441a147ff4c07ade13f64d1d5c006b157bcdcf5aad9d1375637e43"
     },
     {
-      "arquivo": "frontend-dist/assets/ConfiguracoesFiscaisPage-zXHcHrdV.js",
-      "sha256": "302519a44db2caa288994ce1987942c89e48784600c58eb4599658deafc80726"
+      "arquivo": "frontend-dist/assets/ConfiguracoesFiscaisPage-D9JLQ4XF.js",
+      "sha256": "5185effbc3bf6eda8dcaa3fb56c6ce05b0577dc14aa47d8dc655099a26da2411"
     },
     {
-      "arquivo": "frontend-dist/assets/ConfiguracoesPdvPage-B2wVjml1.js",
-      "sha256": "35fbdd0e00f4a21ccba19605ca6ba8799a321f209125c5f46226dcd4c55a55bc"
+      "arquivo": "frontend-dist/assets/ConfiguracoesPdvPage-CJgvSpiS.js",
+      "sha256": "e561dd5ceac739386ce2e9704ed1ba23cfb75792e89598fdb853a0c795d73d1a"
     },
     {
-      "arquivo": "frontend-dist/assets/ConfiguracoesTerminalPdvPage-CWx0rLSu.js",
-      "sha256": "786579f67e0490d7784343908b2cbab8dda6566f8ed160e3ba455f252836ea45"
+      "arquivo": "frontend-dist/assets/ConfiguracoesTerminalPdvPage-CcBA_Vxv.js",
+      "sha256": "11625865db6a8e9e0eef639a39bc6546cb1ab3ab8f0221211c3d10d159e9b576"
     },
     {
-      "arquivo": "frontend-dist/assets/ConfirmActionModal-GXJKUsmS.js",
-      "sha256": "623508e2204f52486b491c87574d9e083e5ce8653ef80eef5c34adbfbf773487"
+      "arquivo": "frontend-dist/assets/ConfirmActionModal-BYOtxr17.js",
+      "sha256": "5e53ced6bf7876c41ba6604f2d27800e5802a8fb1b1f97027beb701059e8029d"
     },
     {
-      "arquivo": "frontend-dist/assets/ConfirmModal-CphGoAVe.js",
-      "sha256": "2bcfbdb2ef6b535dac31d6eeabcc63688e15ba60c3effeb2429ee0d0cd977e74"
+      "arquivo": "frontend-dist/assets/ConfirmModal-B6pxgqk_.js",
+      "sha256": "545b1c83466168d9898110d7b2f8edb76505264f7000e793685f246c590fccf2"
     },
     {
       "arquivo": "frontend-dist/assets/constants-Ct9oLAmO.js",
       "sha256": "51c1fe7f482e4fcdd0a33237a2e636163b2818fb3b01940b2757ebf5a55d4c2f"
     },
     {
-      "arquivo": "frontend-dist/assets/ContadorApuracaoFiscalPage-B7F4ijn0.js",
-      "sha256": "86682dff96b833f73e7ad2fa1cd9abedf07337ff8dc77e59a5a474e4063e8618"
+      "arquivo": "frontend-dist/assets/ContadorApuracaoFiscalPage-BoW3L3An.js",
+      "sha256": "f2aa23ec1e9a39a4e32cd1d7989b7c5a38a004f40a1f9ab123d371a8005a5b7c"
     },
     {
-      "arquivo": "frontend-dist/assets/ContadorBlocoKPage-K220B7kM.js",
-      "sha256": "6a78bf04adb8ec9b9f71131d825945adbf47fbefc5a3d2e57f9cbff104b9891e"
+      "arquivo": "frontend-dist/assets/ContadorBlocoKPage-YWCvouZg.js",
+      "sha256": "e1c3159e5ead40410fbb538ce645647f9b67168a7873730c7db92c74186761f9"
     },
     {
-      "arquivo": "frontend-dist/assets/ContadorCClassTribOrfaosPage-WK2BoG4M.js",
-      "sha256": "952feecf64809f4c4b60d5e63c24eb29b47737db4bd991bf8727a04f605398ef"
+      "arquivo": "frontend-dist/assets/ContadorCClassTribOrfaosPage-BtDgP-Go.js",
+      "sha256": "562b2ad2d2860dee71c09fa38bcf89be0f239e4b991a2f960af2581276bf7448"
     },
     {
-      "arquivo": "frontend-dist/assets/ContadorDocumentosPage-CqvVTWTf.js",
-      "sha256": "e9af98909aa1d8b18fa1b766085ccb1181f6e4ec2a5e441279e90d07b5ce1129"
+      "arquivo": "frontend-dist/assets/ContadorDocumentosPage-BjZ4FKLA.js",
+      "sha256": "6bbf258279381f738c47cc23036f5deefb1ce4dd9ee19777debaa0deee2ec8a3"
     },
     {
-      "arquivo": "frontend-dist/assets/ContadorEmpresasPage-Ce3cPq2v.js",
-      "sha256": "e11e712b69c980f3836e042ff8b5975fdd6d8debf119b45e7d9d88dceeb54c79"
+      "arquivo": "frontend-dist/assets/ContadorEmpresasPage-BJyevYkd.js",
+      "sha256": "dbeec050a64d64e27dd73b3e484518b5261f059b8e46d7c77d9fa9affe494518"
     },
     {
-      "arquivo": "frontend-dist/assets/ContadorExportacoesPage-eTT2QIN2.js",
-      "sha256": "d44f2101203ce12d3790f252eb4260c8089be94c8b02ade632b63687149432cc"
+      "arquivo": "frontend-dist/assets/ContadorExportacoesPage-DOFpDi8D.js",
+      "sha256": "817d3f51093df47424028d0a0512e278b4364dd21b10c050058440506a107774"
     },
     {
-      "arquivo": "frontend-dist/assets/ContadorFechamentoPage-BG_S7mQN.js",
-      "sha256": "a552b4b91b74024e5529959ce45e4b6f337b241572752c5448e13c504ac0c5f9"
+      "arquivo": "frontend-dist/assets/ContadorFechamentoPage-QSUlVnvA.js",
+      "sha256": "e7f333e22ed957e329ef94c8c00336096b2e9df79fcde2581cbce9f82e1f87eb"
     },
     {
-      "arquivo": "frontend-dist/assets/ContadorInventarioPage-C3aVYNYQ.js",
-      "sha256": "1dfc78b2d47c2025d210f8206e078d03d8042f5fb099c209c9db20fcf83ec85b"
+      "arquivo": "frontend-dist/assets/ContadorInventarioPage-B91z6GfP.js",
+      "sha256": "be12b0db121631582ec18be9e35dfb4582da77f55ffedb0a7682687bf091706a"
     },
     {
-      "arquivo": "frontend-dist/assets/ContadorLayout-81HGfTJ1.js",
-      "sha256": "e4878d7f313e3dcde8239836dec4f6eb1674c68b93692fbe8c51bedfccaf5ae5"
+      "arquivo": "frontend-dist/assets/ContadorLayout-XXf-BEkG.js",
+      "sha256": "bda83665db62659e6e91c62d415678bd6377d8653261312990fe6b46a1b7486e"
     },
     {
-      "arquivo": "frontend-dist/assets/ContadorObservabilidadePage-B-5mxxi9.js",
-      "sha256": "9499e56e7ef23c8979fefabfb116cc025d43744f1b6ff21ccccc95c1df7898a8"
+      "arquivo": "frontend-dist/assets/ContadorObservabilidadePage-PPmRujTx.js",
+      "sha256": "fb88dc2f3db31b352fc10bc8316dacffff1d61a661ad045f132fb45993d63a98"
     },
     {
-      "arquivo": "frontend-dist/assets/ContadorPainelPage-CY0pQP7F.js",
-      "sha256": "3ac77708dd25af147f2251377501f9fb602c4a9387845abe57f0713a8723554e"
+      "arquivo": "frontend-dist/assets/ContadorPainelPage-Ckxn55Eg.js",
+      "sha256": "e66ae3ba0ea7a82a7c25e8e7deb462f73b5d68394dc4d1479261963d3a33ed95"
     },
     {
-      "arquivo": "frontend-dist/assets/ContadorPerfilPage-DpEzESnj.js",
-      "sha256": "c57ea12117af7a21b8abaaf53527cbd730f4ee6847b2c3cb278f08430defcca0"
+      "arquivo": "frontend-dist/assets/ContadorPerfilPage-sPr1RjWM.js",
+      "sha256": "46ba43855c37b4889845f1225a33cd6f1ecf86afb6dbdb8b8d83051b80ca93ee"
     },
     {
-      "arquivo": "frontend-dist/assets/ContadorReprocessamentoTributarioPage-gw9j3pOq.js",
-      "sha256": "b057079a1a42ef73310e47f01d49334a4093d12df2d826a13456bc0d1f552065"
+      "arquivo": "frontend-dist/assets/ContadorReprocessamentoTributarioPage-BKWsV03r.js",
+      "sha256": "44a68cb87f87328f765d7fd05fcea6c455e89e92f77db4cfe858133a1fa80df7"
     },
     {
-      "arquivo": "frontend-dist/assets/ContadorSplitPaymentPage-DbjNC5jv.js",
-      "sha256": "fb9e730bfc5e03e7ccce05d6e0209027800345fb3fd28257706b3d361f276a5c"
+      "arquivo": "frontend-dist/assets/ContadorSplitPaymentPage-ChNVzNox.js",
+      "sha256": "e5a398fa5e801b6271f1ff073d8cc8b4eab29ea90070f332f48af7a00734adb1"
     },
     {
-      "arquivo": "frontend-dist/assets/ContadorUi-BanV-qsn.js",
-      "sha256": "0f908e99b231f4f14b64cc8b4c140557f6a0710dc5538312136da98dc9d7ddd7"
+      "arquivo": "frontend-dist/assets/ContadorUi-S-4nSySe.js",
+      "sha256": "c23671b22812367c60ed298a7441716a193f21513684ce1eaf67ef8c05531c9e"
     },
     {
-      "arquivo": "frontend-dist/assets/ContasPagarPage-BKgTlLnC.js",
-      "sha256": "7b5de7ae2ab4d01c0c49bfd4b75e28a39159bd177549631de58cd259bbdcca66"
+      "arquivo": "frontend-dist/assets/ContasPagarPage-CuL70pnU.js",
+      "sha256": "ef81afab2abbc6561e2bc9c18715d668b35639f271c9c332d0668e4ba16da211"
     },
     {
-      "arquivo": "frontend-dist/assets/ContingenciaPage-DBlG7-PR.js",
-      "sha256": "76b4e7c3ce573f34145d93b54159380e645247cebf63d496a8082addfe431553"
+      "arquivo": "frontend-dist/assets/ContingenciaPage-2dtt8cUM.js",
+      "sha256": "f3e19e2b0afe69a86dc1d78b88b69a384f5453244e91337b87bc2b4ed86c255b"
     },
     {
-      "arquivo": "frontend-dist/assets/ContratosComerciaisPage-DOpiaQ3h.js",
-      "sha256": "0c7214a6163ff3ae1abeb3f698ac9354fc6202705407d9cc174059c61a0f9691"
+      "arquivo": "frontend-dist/assets/ContratosComerciaisPage-DZPn-9Th.js",
+      "sha256": "81da366f7307c3d4485d965853e82647b0da3452654da6bf800f3b6e3508e7eb"
     },
     {
-      "arquivo": "frontend-dist/assets/ConversaoNfePage-DsbaphUD.js",
-      "sha256": "f0cb8a4c5cb77522c40a48ae22463abce9ab2283e727638e1c196795801b17e7"
+      "arquivo": "frontend-dist/assets/ConversaoNfePage-BF0A6w5o.js",
+      "sha256": "a3938c4c82bb6eb92a1a6de9eefd7c5d21fcb2fba3025ae32aee4f42c831166c"
     },
     {
-      "arquivo": "frontend-dist/assets/CookiesPage-dV4VZs5w.js",
-      "sha256": "ae152dcd0ab6250ad7e451330e758687d1c996f2c203e78b79ccdd31df37b23c"
+      "arquivo": "frontend-dist/assets/CookiesPage-C_HKM_rO.js",
+      "sha256": "56f85f7c04e008d384c7dde6eaba875d45d9797e8afd2aee462bd53d671a308c"
     },
     {
       "arquivo": "frontend-dist/assets/copiarTexto-iY2zJSY7.js",
       "sha256": "0f2e64fffe5c462f916e489e7373c472d0b19382c435aba3745ea55a3de87790"
     },
     {
-      "arquivo": "frontend-dist/assets/copy-DK9jo-rI.js",
-      "sha256": "cb7601fb3203ba91a98daa38b75c843c6c65e8157a53a0a5c00cd3347305b8c7"
+      "arquivo": "frontend-dist/assets/copy-DUWvSNeA.js",
+      "sha256": "a9ad40ccaf75c3d31de8fb725f1fb0b66791df56110cb0f1812fb9e07cb3ed84"
     },
     {
-      "arquivo": "frontend-dist/assets/CotacaoComparativaPage-CkZH4UQT.js",
-      "sha256": "ca17ad158469b4ded446654c484de53391b85c395f9e8e23a3b5b4b9932ebe76"
+      "arquivo": "frontend-dist/assets/CotacaoComparativaPage-CPxCquDm.js",
+      "sha256": "1bf519f663b42d815a1d036bfcdd7172f847428ac37317616d30418d7ed77b7e"
     },
     {
-      "arquivo": "frontend-dist/assets/cozinhaComandaAuto-DV_HXbRb.js",
-      "sha256": "7c35d750386176f8ddefcdbc97b6bb35791daf6f7eb061cb239eab8bad68456b"
+      "arquivo": "frontend-dist/assets/cozinhaComandaAuto-DNAHSgau.js",
+      "sha256": "dd43080ebc79ba3f307aa9095978a8552c832320b0b73d80845972cc54303c0a"
     },
     {
       "arquivo": "frontend-dist/assets/cpfCnpj-Bja0DPCm.js",
       "sha256": "ea3753a13e345b97ab6c92bf6fd49f00f2e68cb5c771288e4293c1a36fa2530e"
     },
     {
-      "arquivo": "frontend-dist/assets/CreateUserPage-DQGyq8kJ.js",
-      "sha256": "3d8ef087514acb5cbda3e38a77abca73fd346cc8b73f8c9c780ccbb92209cdc0"
+      "arquivo": "frontend-dist/assets/CreateUserPage-CvYrs_v6.js",
+      "sha256": "97969e23c6d7f43d76395ec35631126bf7996cb2787c3fba5263921db9cc4dd6"
     },
     {
-      "arquivo": "frontend-dist/assets/CrediarioPage-DUIxkXLw.js",
-      "sha256": "fbe8f1ef0f8019ed92ea1d7c8e36150d503f0e4c4e217604c36dad8c9da51323"
+      "arquivo": "frontend-dist/assets/CrediarioPage-C1SCO1gF.js",
+      "sha256": "f085b78154a7559437f3febe71eb01c3eb3b157ad73348285a6d044023e081fb"
     },
     {
-      "arquivo": "frontend-dist/assets/crediarioService-BSuPlIGv.js",
-      "sha256": "56857172316b094d2549382655cc3aa2cf0d5be7f44a22c0fca8ec4f38a61f72"
+      "arquivo": "frontend-dist/assets/crediarioService-D7S7_CBp.js",
+      "sha256": "2094ed3a640ed8e68f3dce69a16b903b3bcba6f61551bec449a972d837fa13e5"
     },
     {
       "arquivo": "frontend-dist/assets/cupomFiscalFormat-Cei3Dj8q.js",
@@ -755,396 +755,396 @@
       "sha256": "c6ce8a6ebdfcf7c7a005e1006f04fbfed4aab93f341619e45b27f5e87efe81c7"
     },
     {
-      "arquivo": "frontend-dist/assets/cupomLogoPreview-CrUo6HGr.js",
-      "sha256": "1fe474ae3ecdda156e7d33f47bbf4e60fc21e90657b6a784d3d8a4717a1972bd"
+      "arquivo": "frontend-dist/assets/cupomLogoPreview-B6mhMD_s.js",
+      "sha256": "4ab8073b8f75345851aa1572a1212af43486bee325bf21e20ace6346adfa8a6f"
     },
     {
       "arquivo": "frontend-dist/assets/cupomPreviewFit-CL5K5g0n.js",
       "sha256": "ac0b60aed2996fd6b8584cf25d294b6bcafc484336a058d90799545210d0ab5b"
     },
     {
-      "arquivo": "frontend-dist/assets/CutsPage-CnilnvQe.js",
-      "sha256": "b2fdc49189d0d4aa5c4bcc9673aefe2f48ed43b07aed757cef709f9760583db1"
+      "arquivo": "frontend-dist/assets/CutsPage-CYVwOCs4.js",
+      "sha256": "19f5ee1cce4d339244549fb1f361fec8cb9c15baf356064973ab0cf2c855fc63"
     },
     {
-      "arquivo": "frontend-dist/assets/cutsService-Dv_5QhUU.js",
-      "sha256": "57023d18a40773d3112a8dbdd6138cfca7c40798cbcc14023add4611fcc21ef0"
+      "arquivo": "frontend-dist/assets/cutsService-BiU47aCI.js",
+      "sha256": "2b475af9bf935fe7d4f78dbba4361ad083729e463001f61a2cc2a6db4968716d"
     },
     {
-      "arquivo": "frontend-dist/assets/DashboardLayout-K5hXmJeZ.js",
-      "sha256": "4fb73f71b66a219d5edb3417d6cf9a8a95adcc666973a32e16181b28c46a20fb"
+      "arquivo": "frontend-dist/assets/DashboardLayout-DU0DO7N5.js",
+      "sha256": "16d9d4cc46459cccb42d76ba1852af024bb4e7a0eef8c77b0a194e13820e2f3c"
     },
     {
-      "arquivo": "frontend-dist/assets/DashboardPage-DMuN0VPE.js",
-      "sha256": "07274496e2fe499d6b509840e96aef0a98f0bfded82f989fd724404af944ff19"
+      "arquivo": "frontend-dist/assets/DashboardPage-DcM24QBT.js",
+      "sha256": "807552d8c73b23fde4260582212288253033d8f2217dff063a9edd80bfcfb293"
     },
     {
-      "arquivo": "frontend-dist/assets/DashboardPdvPage-DSyfqdP2.js",
-      "sha256": "71a57a6526f90edc599bab042979014823d2378044f2ac74f34ebf7119a16f0e"
+      "arquivo": "frontend-dist/assets/DashboardPdvPage-jnLXI5Qp.js",
+      "sha256": "ee192426bd9ed3b30a8873594ceb4a414b3cd771428065c1a014a8f02a78d0ab"
     },
     {
-      "arquivo": "frontend-dist/assets/dashboardService-C7RrRom2.js",
-      "sha256": "9a70e407f7ba4bf54bfc6fe2d1d3338ac3e67a7e248b63ccdbaa5f9d278e4c02"
+      "arquivo": "frontend-dist/assets/dashboardService-BbSkQkS6.js",
+      "sha256": "a9397968195292f07bf42ac3c42f2c510b500fc24b617a9bda1d3a6ac291354d"
     },
     {
-      "arquivo": "frontend-dist/assets/DataTable-BtQlexEI.js",
-      "sha256": "94e1ba4a5c2d7e598c96393245066316bf62be00593bdea0c8dab4be7d91c580"
+      "arquivo": "frontend-dist/assets/DataTable-CI4Z-0Jl.js",
+      "sha256": "e33e981856b710f7388fed797340ac9f889e6c2a3f3922c77d00c81ef1ee4b6d"
     },
     {
-      "arquivo": "frontend-dist/assets/DataTable-DevFhGs-.js",
-      "sha256": "cc2d47aea1aa01f3fc3ff84fbaae13f07d2d1033f10e1b885f3030c62d44129f"
+      "arquivo": "frontend-dist/assets/DataTable-l4GM5zi0.js",
+      "sha256": "f5a49517a24e72ecda96e7c6231c3d4189240e5961bf18c206f79a9822147f8c"
     },
     {
       "arquivo": "frontend-dist/assets/dateRange-CS7iYibC.js",
       "sha256": "d65b3344d99f8503dc7c70afbe5ff68feb8c7e17c302f54b8f1932352e692386"
     },
     {
-      "arquivo": "frontend-dist/assets/DateRangePicker-BFmMKrUG.js",
-      "sha256": "1f62dfbdd79c79639623c3e0dccd4b62a92c3711b1e93a5ee4d9e23972c46496"
+      "arquivo": "frontend-dist/assets/DateRangePicker-w0SYCjI6.js",
+      "sha256": "dbacac374c8fcf8f7dc885ad7e67d2bdcc871231c4a5ca703c7c344f9fd7cab8"
     },
     {
-      "arquivo": "frontend-dist/assets/delete-DKtzHlzX.js",
-      "sha256": "0785d8231255db152b788840910a3f62ecc12d8efdbde8b8ba82bd257f4813fb"
+      "arquivo": "frontend-dist/assets/delete-Czb_FUnm.js",
+      "sha256": "e93b0f56b71b22a70f883f35465402bda859cdcb8106993c2575e42de246bdb8"
     },
     {
-      "arquivo": "frontend-dist/assets/deliveryHours-KXc0PmpK.js",
-      "sha256": "80c6ae05d3d9919841696210ba5dc1bf623d8a6505ef279985066a0fe353b957"
+      "arquivo": "frontend-dist/assets/deliveryHours-DJ4yI13v.js",
+      "sha256": "f53460368c9a0b1c78362c8d9a3a17fb8522aebdf89ead8ff99beaed6de05cc7"
     },
     {
-      "arquivo": "frontend-dist/assets/DeliveryHubPage-DYC_Rs0U.js",
-      "sha256": "a3e26c7c97e546f613191910a2bfdfb2fd844c71f567c893fbf988ea8e2ab7bf"
+      "arquivo": "frontend-dist/assets/DeliveryHubPage-BNjzK3WN.js",
+      "sha256": "57a1f7033277460f691c32cb5c6e1edc8240cd5bcadd158a9371f211cf41a37c"
     },
     {
-      "arquivo": "frontend-dist/assets/DepositoSelect-D8CeBvCH.js",
-      "sha256": "e10488438a574dd2dac4534568c3cda987fb6e4d9a0afa9a5ec0e0854ed1ad74"
+      "arquivo": "frontend-dist/assets/DepositoSelect-lLoJN49B.js",
+      "sha256": "0e9c12b7ce775f2898966c17f04321442b4be5827079d982e3ff300ab646f8b2"
     },
     {
-      "arquivo": "frontend-dist/assets/DepositosPage-Bv2skt3u.js",
-      "sha256": "dfbd496d89b12f5a65671aadce14aa80c28d4d9d6259f29e25e1593230283144"
+      "arquivo": "frontend-dist/assets/DepositosPage-CAp4Xcdi.js",
+      "sha256": "7e281ce25ddf7d62723bb1b64612cc23bb46a711e0b39701dfa33d605efd27d3"
     },
     {
-      "arquivo": "frontend-dist/assets/DesktopRecommendedGate-CJ-5k9df.js",
-      "sha256": "7e32c9f4b27b9f8331901e5eae94cc70b22febd1314d17e21d52760ed1a656f4"
+      "arquivo": "frontend-dist/assets/DesktopRecommendedGate-BYlRE490.js",
+      "sha256": "6f6c24f3f3563a1757563818f58d678976746ba2cddb63e8b135cc3d59bf0ba1"
     },
     {
-      "arquivo": "frontend-dist/assets/DesossaAutoChip-HoJHEVx6.js",
-      "sha256": "7c7a9e42f981859b8c314382b299d05efe4a8cec5497825b862b09f0f2c5fbeb"
+      "arquivo": "frontend-dist/assets/DesossaAutoChip-Cpn55yLu.js",
+      "sha256": "c9fac94b5803c396d984623db367314ab359b5dc7dde2eeded0b922cf681e75b"
     },
     {
-      "arquivo": "frontend-dist/assets/DevolucaoCompraPage-CZ8KDgJS.js",
-      "sha256": "403434a8cedf1206c4163c042012daed7dc5f0b82da3d8f467bdb05c93edb76d"
+      "arquivo": "frontend-dist/assets/DevolucaoCompraPage-DtMSt7U0.js",
+      "sha256": "a7891b1f32272285ab5a5b034128fb79eab5c993667be29d71ac3b2a7c5408a5"
     },
     {
-      "arquivo": "frontend-dist/assets/DevolucaoVendaPage-CnrX1MRa.js",
-      "sha256": "c466d96ea7b99944b9319e1187bb8ce47a4634bdfdb04f4184dc2d7853529131"
+      "arquivo": "frontend-dist/assets/DevolucaoVendaPage-B9pyq-DV.js",
+      "sha256": "94604cf74748dc2db3da87129217fec0e2a3d3e1fef31b3512c0ad8cb33b716f"
     },
     {
-      "arquivo": "frontend-dist/assets/DiagnosticoPage-BRWQ8djw.js",
-      "sha256": "632dc3ed3aed4da6c0775d9ee1174aaa170b0124296a2e4655def00e9aae83ce"
+      "arquivo": "frontend-dist/assets/DiagnosticoPage--28Kvqr-.js",
+      "sha256": "4e28150aaa794e138f2146c45468beb88206a3875ea48f41dbec95b7ff6c12f0"
     },
     {
       "arquivo": "frontend-dist/assets/documentoConsumidor-B9h8JWK7.js",
       "sha256": "4f5e3964db5e1c979a1b47a3bec788fc2e5c9236833d1762de7cf04112b8e42f"
     },
     {
-      "arquivo": "frontend-dist/assets/dollar-sign-CNoVKh6W.js",
-      "sha256": "c8b49e8b8bb7a48d0cd6ce1e08ff9472506df33460f035410fbf92eba6b875e7"
+      "arquivo": "frontend-dist/assets/dollar-sign-Cv3UGhDs.js",
+      "sha256": "e9fb5ce93c8f7eafcc41009245a4990d5e0a157e9c0d4fd6ba6ddba8f63b1ccc"
     },
     {
-      "arquivo": "frontend-dist/assets/DrawerConfigTerminal-Ddh_Wxwt.js",
-      "sha256": "5fb161f1ed51fb04642350ef5efd3432f21e3478a1167ef5b8cb87cca3bba892"
+      "arquivo": "frontend-dist/assets/DrawerConfigTerminal-BaFhWxxC.js",
+      "sha256": "f0a832c9a858b00820f25a28a23c9525c6776db71c6f1381c81b762e5594d298"
     },
     {
-      "arquivo": "frontend-dist/assets/DrawerMinhasVendas-BDbigCjH.js",
-      "sha256": "98298c89f7d36eb7e2bf8cff39a1b1c6cf4b524e1177662ad27394199c972a2a"
+      "arquivo": "frontend-dist/assets/DrawerMinhasVendas-P_5Ifc_U.js",
+      "sha256": "f6820de49164322a665061c167776678a04404fa27fe419a0be2423fa55e5452"
     },
     {
-      "arquivo": "frontend-dist/assets/DrawerProdutoRapido-BM3HrAIy.js",
-      "sha256": "fcf23f2dd29c1aa738973bc105e8e82f2313d37fd8fdac5ffeca6c36b31a473e"
+      "arquivo": "frontend-dist/assets/DrawerProdutoRapido-BUOUO9MY.js",
+      "sha256": "fd81f1d4e223ab6f5de6e4c397f817f6714729ae1e8a3c740ee9767f65dd9a4a"
     },
     {
-      "arquivo": "frontend-dist/assets/DriverLoginPage-Zm5F1bgQ.js",
-      "sha256": "b3f342d465722e1ec3d923cd1a4e75504e96bea609cb86d3283e27c735808a79"
+      "arquivo": "frontend-dist/assets/DriverLoginPage-D_iJdnjK.js",
+      "sha256": "784e64a0675e49515a28c9779173d31c7a24f5c9e088ac07d5d31ed22d20b5ef"
     },
     {
-      "arquivo": "frontend-dist/assets/DriverOrdersPage-DkqR5Dw7.js",
-      "sha256": "aebbe476f5d44744dbd332638e878bc7091719f22427a0db1a3508e2b2612dd0"
+      "arquivo": "frontend-dist/assets/DriverOrdersPage-BmTjdlGL.js",
+      "sha256": "5140b24e9f0d53cc21a8b9543650009657f82be189ba68297703b9a742601f50"
     },
     {
-      "arquivo": "frontend-dist/assets/driverSession-E3_s7XA0.js",
-      "sha256": "7f302f64afe51bf6d3b850f90bd58ca41145c943cb9862068b39d38bca589449"
+      "arquivo": "frontend-dist/assets/driverSession-Bn5qkGBv.js",
+      "sha256": "6a710d103ac14f1ec0ac0c0d854c0386fd0ca435dfe64bacf2633b7577623f2f"
     },
     {
       "arquivo": "frontend-dist/assets/eanScannerDetector-5SwqrrVb.js",
       "sha256": "505c78d88153a0a177d2cb32dd8b5be3a43129de803ef747da4b0b483b41aa77"
     },
     {
-      "arquivo": "frontend-dist/assets/empresaOfflineCache-CU5r1vGz.js",
-      "sha256": "5651a71de19e7957ca0a613299d5d8fb33239cda7e08cfedcd8bcff11abbf892"
+      "arquivo": "frontend-dist/assets/empresaOfflineCache-BwIPCS9Z.js",
+      "sha256": "e62ced62909d614fb8c481d6fe348e4186fc2fbb73eae9468fa818d2c69cf39f"
     },
     {
-      "arquivo": "frontend-dist/assets/EmptyState-S7Y0mHsK.js",
-      "sha256": "a4ca61f9e5f3cddb5f5ccbf60aa2f31acc6f662897880975b79184ddb910fd78"
+      "arquivo": "frontend-dist/assets/EmptyState-Dqm7W0fc.js",
+      "sha256": "b7eb0e1f350324754e902901506c2fe17123794d7527ac02b8d05d2d9c58a37d"
     },
     {
-      "arquivo": "frontend-dist/assets/entregaComandaReimpressao-BiL5C2Lz.js",
-      "sha256": "5721e2bb539745e33bdbc70b8cfdf251bdc8d069e3be697ac1b5d2121dfa22c0"
+      "arquivo": "frontend-dist/assets/entregaComandaReimpressao-AF-UPGEh.js",
+      "sha256": "e101c5d371ae6e2dc83d467fb27edc0f2f0f7638639b1e9a19281904dd77b1a7"
     },
     {
       "arquivo": "frontend-dist/assets/equalSplitMoney-B2q2QxIO.js",
       "sha256": "bba8337bd8eac1812fe836b3b2d7cbfd60024380bd988d730982576963138673"
     },
     {
-      "arquivo": "frontend-dist/assets/EscopoFiscalPage-k8FqHNBf.js",
-      "sha256": "fb599aec9f0c2c15fff869bc468135884de4a70851c1d3b19327432add99f699"
+      "arquivo": "frontend-dist/assets/EscopoFiscalPage-BzooZg0D.js",
+      "sha256": "dec8e585c81e806904de0300f52ae571578098a4a2a32e39ceae818a0b088da1"
     },
     {
-      "arquivo": "frontend-dist/assets/EstoqueMinimoComprasPage-F7mjFhyJ.js",
-      "sha256": "46a3cb793561ff36f051b48cbd29f5f7df3dddfc07bd747fb40270891388a796"
+      "arquivo": "frontend-dist/assets/EstoqueMinimoComprasPage-y06pIrL6.js",
+      "sha256": "1248dfde59dfbdcca4c68ed6fe929573e547f23eb3d1a7ef18832a11dcbbad9a"
     },
     {
-      "arquivo": "frontend-dist/assets/estoqueOperacaoUx-D17ukPo1.js",
-      "sha256": "f392e4f9693d24a0e567648ed939387521bf0707216f6fa1765b7d8bd2476291"
+      "arquivo": "frontend-dist/assets/estoqueOperacaoUx-7HpO6ZwR.js",
+      "sha256": "d7e0f0b87a00792cfed043b40cb6f23091f7a6f2f14995ddae31672ddda395ba"
     },
     {
-      "arquivo": "frontend-dist/assets/EstoqueOperacoesPage-DVPBZuQP.js",
-      "sha256": "cddd804abffc1526bea5577d327f63c8fc988250aa658bde4dd51179701850a6"
+      "arquivo": "frontend-dist/assets/EstoqueOperacoesPage-Dg4HHVMR.js",
+      "sha256": "ee35c01d6da8796ad76adc641b66333a9ac9675e22c19355496f25624872d8a8"
     },
     {
-      "arquivo": "frontend-dist/assets/estoqueValorRelatorio-DVtDlVw0.js",
-      "sha256": "85c4bad72ffe9b92f6c55f1afffe587e8687d0be3b19eed0813c0af9cd149097"
+      "arquivo": "frontend-dist/assets/estoqueValorRelatorio-CzvQ3j_1.js",
+      "sha256": "a5907d1c3a28396e5fa41a80f38bb063183712e266e93f2ea0cce3160d8e928f"
     },
     {
-      "arquivo": "frontend-dist/assets/EtiquetaPage-DZa9LeO5.js",
-      "sha256": "5b950744b2adc2458152a3ee1204c14f230b67c929aa10df224fd6e0b34540ce"
+      "arquivo": "frontend-dist/assets/EtiquetaPage-CMXK0SLV.js",
+      "sha256": "f2a17d248ca856978d353e233562abd79386546b6bd60b38e78cceb33dbbf701"
     },
     {
-      "arquivo": "frontend-dist/assets/ExecutiveReportCharts-41Ksy86n.js",
-      "sha256": "0c7809aea1db75cbfc9951b342a366d6e00530682153a8fd08cb6390336dc652"
+      "arquivo": "frontend-dist/assets/executiveReportCharts-Brd66vYg.js",
+      "sha256": "0911174cec0da7ada993d1c5dc8ae17489a99ea3b4210393b7586204f3c3a983"
     },
     {
-      "arquivo": "frontend-dist/assets/executiveReportCharts-D4WdAqsv.js",
-      "sha256": "c741480e4e41e866de2ecf9ddd807ee480700eae465401da0e9f9abf8cdf1533"
+      "arquivo": "frontend-dist/assets/ExecutiveReportCharts-CzqzZRjq.js",
+      "sha256": "919f93c7408103fa58e79f5268aa1326ad2a98f55c7724a6ccc91357c255483f"
     },
     {
-      "arquivo": "frontend-dist/assets/ExportButton-BeiIRIbW.js",
-      "sha256": "58ae911360ade197cb2a1c93f6516a91dc7aebe900a7a258daf59b134b094761"
+      "arquivo": "frontend-dist/assets/ExportButton-C2zyW68q.js",
+      "sha256": "aa86ba231d8f8e40fceecffb744f7556c5972bc428e82dc087a98e456f099978"
     },
     {
-      "arquivo": "frontend-dist/assets/eye-C9ldWG8n.js",
-      "sha256": "276beb54bd11706b6593c8560b51b7945002b08587bea934a7784be32389b96c"
+      "arquivo": "frontend-dist/assets/eye-BT2xaA-9.js",
+      "sha256": "b93ee3978f1eb1ab6d1e64ca49cb06ab5b076c28f28763457760854b3d863f32"
     },
     {
-      "arquivo": "frontend-dist/assets/eye-off-CTjlQBsA.js",
-      "sha256": "238e12f2857add33216eae97d40efd561d382b6097716f09d90d78c974487dd9"
+      "arquivo": "frontend-dist/assets/eye-off-PLapCp5E.js",
+      "sha256": "7f8c56d9802b4f07b77c2925ce346c4427470a17b0ad52fceea94b59e583469d"
     },
     {
-      "arquivo": "frontend-dist/assets/factory-D24Htzpk.js",
-      "sha256": "106583537ddb507d6550e89f1e721468591058da9e471b9af60bcde595473b53"
+      "arquivo": "frontend-dist/assets/factory-i8sVjKJC.js",
+      "sha256": "ff1099d9fe74c329a2da6f201c604bf9f99a432d9912e578e1a7b5da5681acb8"
     },
     {
-      "arquivo": "frontend-dist/assets/FaturarPedidoPage-D1Mny2QP.js",
-      "sha256": "72002bce7bd58cc40ad8581638b7b2c910dcc8387b224731bbb5f354413f824a"
+      "arquivo": "frontend-dist/assets/FaturarPedidoPage-CC-hh9WW.js",
+      "sha256": "e6323613326b064f13e71b45c53233937474ec8b59e3e5ec596efa0f6404a3e6"
     },
     {
       "arquivo": "frontend-dist/assets/featureFlags-FIQwCo7E.js",
       "sha256": "016b2adcc6e3283fa8b1f6e2cbcca9425040e3f2eac238fe6fb512343aeff1e7"
     },
     {
-      "arquivo": "frontend-dist/assets/file-check-corner-BH-_JwJK.js",
-      "sha256": "2cb5465945104ba404fef4baa7d99d44df6e5ee239e83db0b1035c91c1c23842"
+      "arquivo": "frontend-dist/assets/file-check-corner-owPDz-RO.js",
+      "sha256": "5ee615193db9c6e437d4fb16e20c1882789e2c9e76d0310d3c05e8d9db9c576f"
     },
     {
-      "arquivo": "frontend-dist/assets/file-search-B31JY-yx.js",
-      "sha256": "703bacf5722a4c6de57b6903adc188d22efe8e5ece6e0b0cd699537bb21b1b32"
+      "arquivo": "frontend-dist/assets/file-search-xqm9Quo9.js",
+      "sha256": "5ae1c47f36d0d2c18eac4d90309e051d6a789a492c3ec20481852aca5b5b6448"
     },
     {
-      "arquivo": "frontend-dist/assets/file-up-t6lBk_PV.js",
-      "sha256": "44dfb010e0c54041a61e077765879c03682f53672912a845d6956f5b9bedb061"
+      "arquivo": "frontend-dist/assets/file-up-C-HMb9vT.js",
+      "sha256": "36b974fc917efa76528883a13040c5de774ade1595be7390e5fd3f4d970950f6"
     },
     {
-      "arquivo": "frontend-dist/assets/file-x-CPW4WSB2.js",
-      "sha256": "377b4e2a0aa311f152eded0fd5c10f6c55d108aaebfb8855bbc4c50a42eaa184"
+      "arquivo": "frontend-dist/assets/file-x-TwjB52me.js",
+      "sha256": "3bd5c25f4f220655e9e3cd70e4f1bc53889768bfe6e9cba550f9341cd69ae2a4"
     },
     {
-      "arquivo": "frontend-dist/assets/FilterBar-D1zQ4iTy.js",
-      "sha256": "e2baef963262f1b9088bdd94e9722cfa517ce1f2cf595af8997d0c688b3dc9a2"
+      "arquivo": "frontend-dist/assets/FilterBar-DhCpNGVD.js",
+      "sha256": "fb62973b5995edaa7a5db445f1a5fdc264450f93d0eb0ca6761d9d7f6314624e"
     },
     {
-      "arquivo": "frontend-dist/assets/FinanceFormChrome-CErOBqhl.js",
-      "sha256": "a2d52e59701e797ffe8a602d1cadcfb40f653344e8b9da1cbc3bff62be4a9a6c"
+      "arquivo": "frontend-dist/assets/FinanceFormChrome-DC7zUGBG.js",
+      "sha256": "c5861a13b283928617af6ec252318f275e8a3d3769fde89cbade356da695d760"
     },
     {
-      "arquivo": "frontend-dist/assets/financeRelatoriosApi-i1u9ZebD.js",
-      "sha256": "89bac0e81c850bcc986c66d3e58dd9418b96c585a87153f7e3ae03f3fac9baf2"
+      "arquivo": "frontend-dist/assets/financeRelatoriosApi-CkwmXHSx.js",
+      "sha256": "a1867944ef5291e75292758e3440cb8c23d95fbf2269add26c5ef7bf9f946ccb"
     },
     {
-      "arquivo": "frontend-dist/assets/FiscalCrt3EscopoBanner-DYLaYYHJ.js",
-      "sha256": "886c760842a674fb4446f0d3b991ceafd0565f88f853424344aed3370a5a2e9b"
+      "arquivo": "frontend-dist/assets/FiscalCrt3EscopoBanner-Bj7LVdQQ.js",
+      "sha256": "9b5757bbac0a59996868af86d381972052f747e76cbc9f80cf853fd2a2512d53"
     },
     {
-      "arquivo": "frontend-dist/assets/FiscalDataRepositoryAdminPage-j-5JwvCu.js",
-      "sha256": "efdd7270a90d65d126387bdb7e8ffa43842aa1de664bacc84516baa189d047cd"
+      "arquivo": "frontend-dist/assets/FiscalDataRepositoryAdminPage-DmgwFyZI.js",
+      "sha256": "16273d12e63af6ad929e7285fbe659f987cba4000a279d0b644b692de861f2bc"
     },
     {
-      "arquivo": "frontend-dist/assets/fiscalDataRepositoryAdminService-BenO5u7T.js",
-      "sha256": "8e84d94d8c983c0030e82d441cc6028ab8dc8628dcf83152b74e4f28bb1e5e20"
+      "arquivo": "frontend-dist/assets/fiscalDataRepositoryAdminService-h4IyMabI.js",
+      "sha256": "cf6be5c1aad3bf9956ecc537d7dda748d6e5ba426968b18f56abe52715d4abd2"
     },
     {
       "arquivo": "frontend-dist/assets/fiscalDocumento-U3zktb25.js",
       "sha256": "5497b91c0a9ced5ac5f9449004c8e15921ee815f7c171b88d36bf0136013e58b"
     },
     {
-      "arquivo": "frontend-dist/assets/fiscalEntradaRelatoriosApi-B8j-DvGs.js",
-      "sha256": "f3a83abe1710ddf9af266e2a6338b591c57ad2d0c386cb659098febb37f4d737"
+      "arquivo": "frontend-dist/assets/fiscalEntradaRelatoriosApi-BoMXvT9T.js",
+      "sha256": "0ebac001a56606939927ea2f82c7065684ec2d5577d06af69c466b06f4a57f0b"
     },
     {
-      "arquivo": "frontend-dist/assets/fiscalEscrituracaoRelatoriosApi-shyrU03J.js",
-      "sha256": "7c10373f569649aa941bbbf43c108f8ebcbabe51e86589b2faa356a08c772f0a"
+      "arquivo": "frontend-dist/assets/fiscalEscrituracaoRelatoriosApi-B0Pf-dfl.js",
+      "sha256": "96332a105f10358220da56afafcf5810a56d4cb475bfea79ac75d9b998480a7e"
     },
     {
-      "arquivo": "frontend-dist/assets/FiscalLogoUploadPanel-DuT8Err4.js",
-      "sha256": "5233427c1e714c99ebc79635f8543eacad20bd78452be1c5287c281642388558"
+      "arquivo": "frontend-dist/assets/FiscalLogoUploadPanel-n6S6TmY_.js",
+      "sha256": "f77ea90fe8cc4c89b41d96d938639b038f5c50c95f1b536d02707c39e18d4e71"
     },
     {
-      "arquivo": "frontend-dist/assets/FiscalOnboardingPage-D8GnJazs.js",
-      "sha256": "f903f4e3ea8dab09aa23985f8b1c0cc446290e06aeca6769a3e4ef8dd18c2bf4"
+      "arquivo": "frontend-dist/assets/FiscalOnboardingPage-B_-kX68i.js",
+      "sha256": "78446778194ec18eedf1ad313cb6f4e45beeb853aaa36e41ace25333e6bc46b9"
     },
     {
-      "arquivo": "frontend-dist/assets/fiscalProfileService-BRB68axd.js",
-      "sha256": "2919eb1403e58d52221e9b28df629e09721bd6d545a73fc933cfc3331218e479"
+      "arquivo": "frontend-dist/assets/fiscalProfileService--_JFxxLc.js",
+      "sha256": "243b7d4377caf9a8215066453ac78b01c270cb5e0f645d1fd77bf90c3f57f5d4"
     },
     {
-      "arquivo": "frontend-dist/assets/FiscalProfilesPage-CxjjJL7K.js",
-      "sha256": "b394333a5552dd7264403e5dad11be8fdcccfdf471fb390cf0288762a1cc72dc"
+      "arquivo": "frontend-dist/assets/FiscalProfilesPage-BCC0ao4F.js",
+      "sha256": "a9ca5b165231807960866e76ebcb993f0eac5da76ea3db6373ed056a6d461241"
     },
     {
       "arquivo": "frontend-dist/assets/fiscalResponsabilidade-MOVoeM0R.js",
       "sha256": "2bedb20643006aba65d3a4a2eb3745de71a99a17036e9032e2c6487b4205c2f6"
     },
     {
-      "arquivo": "frontend-dist/assets/fiscalSpedApi-DPW82At-.js",
-      "sha256": "d0a6848571d6fc89f38a3f5b3763076377b67980d696faf2376474053690ed21"
+      "arquivo": "frontend-dist/assets/fiscalSpedApi-DZpFoxK8.js",
+      "sha256": "a51d0c9d9dd441c53e03c2238c4816d1a14b3001470cb06ebdd7531fcbcf8065"
     },
     {
-      "arquivo": "frontend-dist/assets/fiscalStatusMap-vhtEfVld.js",
-      "sha256": "98fc07a3acbe373b6388eedd1b105d8cefd4aec5d4c4be2d3f15ab4619871477"
+      "arquivo": "frontend-dist/assets/fiscalStatusMap-BxZyEKOh.js",
+      "sha256": "6beee91f02831d55dafad33451476dc41eeaf7a0a8c856ba148b624a0be340b0"
     },
     {
-      "arquivo": "frontend-dist/assets/flask-conical-D4Nvv41Z.js",
-      "sha256": "50f4d31a1f62109999e41f239f4e674e9f409d8cdbd1371ce5aaea3a4f88c74f"
+      "arquivo": "frontend-dist/assets/flask-conical-CBE7hdo4.js",
+      "sha256": "97b98ad2cb526fa71510963fb31686d9faadf36ea21ed20332e412053c583f35"
     },
     {
       "arquivo": "frontend-dist/assets/floorQrStability-DWLVHO6g.js",
       "sha256": "313452acab9d4f904cb0f7a0ce928228f02d0b064bef25365897bf7e3c235a3d"
     },
     {
-      "arquivo": "frontend-dist/assets/fluxoCaixaApi-CzQlFL5E.js",
-      "sha256": "ea085be8c2d05da8adce84743d661b1ac54604323efb29f8ecf756cd616bf3e8"
+      "arquivo": "frontend-dist/assets/fluxoCaixaApi-Dso7wcvw.js",
+      "sha256": "e29c4be3d5c829689e3641aa230a9f532391424dc29152abacedb1c2dd8be84b"
     },
     {
-      "arquivo": "frontend-dist/assets/FluxoCaixaPage-Dj_FxaYP.js",
-      "sha256": "3632805775302860b15f4069b794ee9bff86e3551cf075cdb369c46280d75441"
+      "arquivo": "frontend-dist/assets/FluxoCaixaPage-BbNmynlg.js",
+      "sha256": "11144e817d68a129c7b298ac741ead912798d24add411bfdf7b19c35d5118967"
     },
     {
       "arquivo": "frontend-dist/assets/focarCampoValorPagamento-g3249N9r.js",
       "sha256": "4d046751b77f5a1da7f4529fd1792f301b22b01e30cf16acf57128326582ba7d"
     },
     {
-      "arquivo": "frontend-dist/assets/FoodKanbanViewport-Qwoxp2vJ.js",
-      "sha256": "813ee41c1ca76a972c8cd656077b427264508907dd929ef756d03a4692db3167"
+      "arquivo": "frontend-dist/assets/FoodKanbanViewport-D9eMwOp0.js",
+      "sha256": "4262db1c802142a976b843c6eee9f2a5114360972e6ad17e7c38a32ef1f050cd"
     },
     {
-      "arquivo": "frontend-dist/assets/FoodServiceGate-C5RclqIQ.js",
-      "sha256": "cac9c326148f8dc5cb1e758379d7114bbae9f3c88507edf2b4dc8b96cd7a70c8"
+      "arquivo": "frontend-dist/assets/FoodServiceGate-BdwztwqW.js",
+      "sha256": "36613a306ceca47b31f883cb08b9c560bc53f999695c81dd3405319592eb592b"
     },
     {
-      "arquivo": "frontend-dist/assets/FoodServicePageShell-B7TDgZon.js",
-      "sha256": "21d3855e353c92e129edf8697d8ef6f9d1488683991c1338104443dfc0d5cf2e"
+      "arquivo": "frontend-dist/assets/FoodServicePageShell-BAXvmkiO.js",
+      "sha256": "3522b631e62824af57dda99f41350f7ec9b41c1082b011a55e65071888fd489d"
     },
     {
-      "arquivo": "frontend-dist/assets/ForgotPasswordPage-CcWx9Gii.js",
-      "sha256": "cb7d3f9bcd6345e81bcdb886ce8b9bb9a15b9fd83b9af173d431ef0b839d8286"
+      "arquivo": "frontend-dist/assets/ForgotPasswordPage-BXm-aHUW.js",
+      "sha256": "6d1c228bbc14d6496b6d58c8a5db12b5d283c406d6f76d3f117b2f61ba9e17e2"
     },
     {
       "arquivo": "frontend-dist/assets/formatarDataExibicao-CP_nBzKz.js",
       "sha256": "736130d849ec03e2739a684990d675c0f152046342d675f47e98fec3b571d71d"
     },
     {
-      "arquivo": "frontend-dist/assets/formatPlanPrice-BwrQkUJh.js",
-      "sha256": "d540413ba4f1c70621ebaf605ac4c9e7ba083b27ed4cea21d4b7c7ed11b932ec"
+      "arquivo": "frontend-dist/assets/formatPlanPrice--PtOwSNk.js",
+      "sha256": "9cec94e0a6b9026a9ed2e8bfdef0a0d0a65ed406cbae09887c38e94b55d0b4e6"
     },
     {
-      "arquivo": "frontend-dist/assets/FornecedoresComprasPage-Dw4zv2tw.js",
-      "sha256": "b958d874306db9d07ba2a7defee0af1c05e2588b6c16ba7d04bc07a5308f7daf"
+      "arquivo": "frontend-dist/assets/FornecedoresComprasPage--_0YrVFs.js",
+      "sha256": "67da99007398dbe7ae92816a9d5ac9e9b92f34cde99838fd7971618b5deb8be2"
     },
     {
-      "arquivo": "frontend-dist/assets/FrenteCaixaPage-Dk4r-urE.js",
-      "sha256": "d56b6fe95115ba3c017bd33f66d5d147dd04de68ae6d0bcb80f47a8a1a7957e1"
+      "arquivo": "frontend-dist/assets/FrenteCaixaPage-CwvY2zWO.js",
+      "sha256": "7c7ed725143d32eebaccba506837a2ef99f4e462db2092d4355a65f61f97ce1d"
     },
     {
-      "arquivo": "frontend-dist/assets/funnel-DBQ3hBDw.js",
-      "sha256": "f79709dd5a60fc1de6aa86caa3ee507a39570bca3091b1324a6afaf54611f48c"
+      "arquivo": "frontend-dist/assets/funnel-bxcO2yNP.js",
+      "sha256": "7967e91c61e779d0ab2286d629a0bfadbccea2b01bf579b1fcfee96ec4a5c76c"
     },
     {
       "arquivo": "frontend-dist/assets/gavetaCaixa-C2EsyNqf.js",
       "sha256": "e384dccaaf515be37e9773bce8f91a2ec27b5336534f0a77cac6df4e96f57fcd"
     },
     {
-      "arquivo": "frontend-dist/assets/globe-D0LK8Ifn.js",
-      "sha256": "2a6a5e3b0b99406f42ac09279acba2d8ff6201723424f0d6592785826e81156a"
+      "arquivo": "frontend-dist/assets/globe-B-QoWUEY.js",
+      "sha256": "52530b6e49ff5073a69f26553d0b8851b670690a4579988194c334f9aa9ee605"
     },
     {
-      "arquivo": "frontend-dist/assets/HistoricoVendasPage-C6F3B-2j.js",
-      "sha256": "0198913898566133815bbef5946f98a25789df0b6f1eb647328511f6510355e5"
+      "arquivo": "frontend-dist/assets/HistoricoVendasPage-nsXv7e83.js",
+      "sha256": "6d93230e2c72c433e73fc878dd0bb4ebed830b5237cc22229afd74565b18e43e"
     },
     {
-      "arquivo": "frontend-dist/assets/IbptAdminPage-CdTXtpY0.js",
-      "sha256": "28b9793cfb29b4bf8e1bce690c200452bd768baf5db77f63d170b2ae1d753f41"
+      "arquivo": "frontend-dist/assets/IbptAdminPage-Cm46DPMT.js",
+      "sha256": "186d093234076b62a356d617ade9f00efb922619b05d209a5b6758b66116e8e0"
     },
     {
-      "arquivo": "frontend-dist/assets/icmsStClassificacaoApi-CYizKWBT.js",
-      "sha256": "b21828c075ced124c179ea1a810e2f3acb332a5ee526e73e39b8488678cccd47"
+      "arquivo": "frontend-dist/assets/icmsStClassificacaoApi-DiCMuIaf.js",
+      "sha256": "f0dd931c03301be9144c3b0791f32b22ba4ba1203cbc72e29ea99b84ac821b13"
     },
     {
-      "arquivo": "frontend-dist/assets/image-BCuwa5KP.js",
-      "sha256": "a475341a36f7487b9ec7bc80d68a4599840eafa41936b65d1a48f3a5cbb76a1b"
+      "arquivo": "frontend-dist/assets/image-98wLvwfL.js",
+      "sha256": "61a57e1a377e8c7a932d22c1fd5f6ee1b18e1cfda5d44316486b6bb44fed5e0d"
     },
     {
-      "arquivo": "frontend-dist/assets/image-plus-DJfHLPRK.js",
-      "sha256": "0e0eeb0c448e269c8c11aaed05a5c44c7bc9c158554a8107e50c7814243a5785"
+      "arquivo": "frontend-dist/assets/image-plus-Dcbmpcfu.js",
+      "sha256": "eb8c49195de948f8438fbf4cdfb5d4774de5896c8cb9ca5eb8ba1f387a0ff0f4"
     },
     {
-      "arquivo": "frontend-dist/assets/ImplantacaoBlockedBanner-B7wYXrxr.js",
-      "sha256": "085366cc35304c75bddacf4320b75f36894a232d8efbe0aea378b2aa292e2007"
+      "arquivo": "frontend-dist/assets/ImplantacaoBlockedBanner-B3vjlRJO.js",
+      "sha256": "5a8df2fe5dc5bf2ee439083b76c77e523b61c8e83827cd7c01e21348814658d9"
     },
     {
-      "arquivo": "frontend-dist/assets/ImportacaoProdutosPage-4PaoE8fz.js",
-      "sha256": "21616092430bcdb857b64dc434016a356777b226927a44928d6ebbc9c0d92847"
+      "arquivo": "frontend-dist/assets/ImportacaoProdutosPage-B3KAIx1h.js",
+      "sha256": "98270f04da93c5f981ac6d2b765d762842a3ca0870949265acb183f8f83a920b"
     },
     {
-      "arquivo": "frontend-dist/assets/imprimirCupomAposQuitadoMesa-Xehs5OSt.js",
-      "sha256": "8bbe8d0a86161657a22c9219f926e00b3fc659530bdc5e935970068527c36223"
+      "arquivo": "frontend-dist/assets/imprimirCupomAposQuitadoMesa-BN-NykFf.js",
+      "sha256": "650b79dc5e61b79886155d973fb2064c2b88c148fad9750699ed124984601cac"
     },
     {
-      "arquivo": "frontend-dist/assets/imprimirCupomFiscalAgente-DRKZD4Bb.js",
-      "sha256": "2724d02a89f5e1d15c57e1d5d3ee0b6b07bbf27d4ecea19757771ea77fdd25eb"
+      "arquivo": "frontend-dist/assets/imprimirCupomFiscalAgente-09BTxMjv.js",
+      "sha256": "77aee979b915bb38ca1753642b6c08149ee930e6a0e5918a4a3cb2ce64c2feb0"
     },
     {
-      "arquivo": "frontend-dist/assets/index-_ik1ltKc.css",
-      "sha256": "fedfd259264aa0c096d849f4d5449dd70a000bbba2f9e4682ca3a640c089980c"
+      "arquivo": "frontend-dist/assets/index-BHWCNPNa.js",
+      "sha256": "253d600d73ddd34f2477be12c51d1b287622c2e0b6549d589ead9724c7ab362d"
     },
     {
-      "arquivo": "frontend-dist/assets/index-Cj9qZShX.js",
-      "sha256": "b46423199048caba76766a27ed0ded3b0b937c4a07567da061a6b1258210133c"
+      "arquivo": "frontend-dist/assets/index-DDHhj6Di.css",
+      "sha256": "c6bf6327faee86b8f7fbd9ff889a56dfb2fc3d201d8903a7aa1a72330c2020e7"
     },
     {
       "arquivo": "frontend-dist/assets/index-DsamWpZt.js",
       "sha256": "97ca501e611f128f5e790f8a1d4bc2ba97f04ecf9a21ed74315747f37f335abe"
     },
     {
-      "arquivo": "frontend-dist/assets/info-wkrW75U-.js",
-      "sha256": "56fdc5736ae7cb37b898ae020f9d0fcfc7b96594025e611021f41a8c86f6eb96"
+      "arquivo": "frontend-dist/assets/info-DH78ZJPG.js",
+      "sha256": "077c0a3cf63a45f0704e1ac6669f2dd3396d1a1e3f4b731a164d48519011f403"
     },
     {
       "arquivo": "frontend-dist/assets/inputDecimalFixo-ro6OIs7I.js",
@@ -1155,392 +1155,392 @@
       "sha256": "cbbe3b96efa500216d6cdd4a92f69b195d092eacd7890d1db3d9fc1d3edd2ed7"
     },
     {
-      "arquivo": "frontend-dist/assets/InputQuantidadeFixa-nGejFEJr.js",
-      "sha256": "07aaf4ace62a7790306b29c73a3f45ce5c7ba06c9623f0ded7bfa8e00a3d54e7"
+      "arquivo": "frontend-dist/assets/InputQuantidadeFixa-D_WAtbQi.js",
+      "sha256": "71626f0c14cd662238aba4286a5ac5967065c8e06002c350ec477394a46a82b2"
     },
     {
-      "arquivo": "frontend-dist/assets/IntegracoesPage-B7joEQup.js",
-      "sha256": "f756f28d1a5cae862bb7e050a19dd453ad3d334ccbdd91682f59e15ddf256c8d"
+      "arquivo": "frontend-dist/assets/IntegracoesPage-YQJUAfPU.js",
+      "sha256": "54a77f28a348c1c037718823aaf090c3edec3cc9c3602437ae5c03f03ce48811"
     },
     {
-      "arquivo": "frontend-dist/assets/InutilizacaoFiscalPage-Bfy9tsHW.js",
-      "sha256": "92d64a78ba761f84ee7c9142de824b0458e04e1a27ea1e620579e8667f41b2d5"
+      "arquivo": "frontend-dist/assets/InutilizacaoFiscalPage-vGpY5RWY.js",
+      "sha256": "804c612b591be05c85e05db2ccaa2d97b8ada536f04a6398b32082878f46a636"
     },
     {
-      "arquivo": "frontend-dist/assets/key-round-B7EOKFvn.js",
-      "sha256": "5342a7396de87be3f490643843faf4fcdf0cd827384720cb2f7cb965054134e8"
+      "arquivo": "frontend-dist/assets/key-round-BsCq-1kl.js",
+      "sha256": "bb9f5567fae50470c48e85e40a1026fa27dd443b492f53561003d2c6719aa783"
     },
     {
-      "arquivo": "frontend-dist/assets/KitchenDisplayPage-czt9Hrey.js",
-      "sha256": "54207fdb3144c8a25a29935c740702160bd35b4a2ba6be87e98c2b08673e58d4"
+      "arquivo": "frontend-dist/assets/KitchenDisplayPage-DGQ7371F.js",
+      "sha256": "8d88c25a50eea4426bbc6e02cb4d0bde1e11b603523b07636fafce97b4374626"
     },
     {
-      "arquivo": "frontend-dist/assets/kitchenStationApi-BrefBChp.js",
-      "sha256": "46a80c615e02eca368ba6c3744c7c98105b9497f43dc392d19a913781899c435"
+      "arquivo": "frontend-dist/assets/kitchenStationApi-Dp0aculC.js",
+      "sha256": "81f6e3c76aed2bdf4e170aad758865c9a7aeed4fa23c0db19b18adf496c0fc49"
     },
     {
-      "arquivo": "frontend-dist/assets/KitchenStationsConfigPage-CMk1seMC.js",
-      "sha256": "4e84e68672a87f1db1ebb73ddb4e7aef6278ff2c69c9a043e4a944bcaf0f0c40"
+      "arquivo": "frontend-dist/assets/KitchenStationsConfigPage-CMlfvlZo.js",
+      "sha256": "ff653a449ac2b1a51877540c31a4d55a863d94359be6bd5013cd284caa7438e1"
     },
     {
-      "arquivo": "frontend-dist/assets/layers-gxLe-QHk.js",
-      "sha256": "3e3c34e65ecb8f754a154cbe1ed68f6582e01447a558fb72fe4f9c4bd7a73f68"
+      "arquivo": "frontend-dist/assets/layers-D6mTgl7N.js",
+      "sha256": "f57d20f9988e507fcf8371dbd025cab998cfc13b6812ec5e536622b48fbb8f14"
     },
     {
-      "arquivo": "frontend-dist/assets/LegalPageShell-D74efQhb.js",
-      "sha256": "140d1ff41f812d0a39faed3db3766b76cb912a9276c3c3af1c99055193e7247d"
+      "arquivo": "frontend-dist/assets/LegalPageShell-DKCqZfTl.js",
+      "sha256": "12bda672db540e9560653640d0b6cbb17e8cae064ca0aad92b73fde54dd85925"
     },
     {
-      "arquivo": "frontend-dist/assets/link-2-BUN7CaZ3.js",
-      "sha256": "d1ef4dbd6bb61a38f3e82631a4140b3046da065104e749d2af8e475015c96c0d"
+      "arquivo": "frontend-dist/assets/link-2-DqUQT8ep.js",
+      "sha256": "404fe3a6ccfc0e423bf1eb9a556383835079e375e5d0c5a822360d41de65f11f"
     },
     {
-      "arquivo": "frontend-dist/assets/LoadingSkeleton-DTrf5KJn.js",
-      "sha256": "0641ca935ad519ef45ff25a8c09bc7f239bb71955d3d600c36da6537a9e49105"
+      "arquivo": "frontend-dist/assets/LoadingSkeleton-xHF_6YRc.js",
+      "sha256": "e88af8884777a5dfef29d2e1ab8fa07a862ce4ce920340583e544987358cb510"
     },
     {
-      "arquivo": "frontend-dist/assets/LocacaoDashboardPage-Bf5LzqzP.js",
-      "sha256": "ba8582eaa20557a2dd36457124b76327747d6d163a89cd0fa43e44f536bed534"
+      "arquivo": "frontend-dist/assets/LocacaoDashboardPage-C4Yrc1Pp.js",
+      "sha256": "d13fcad30a4d13be55032bb6c39075769e654e7f93a7ff5950005145907c3d26"
     },
     {
       "arquivo": "frontend-dist/assets/locacaoEnderecoCliente-O_Hi8qUr.js",
       "sha256": "491c4ccd2ee124f4e412f7918d881227542ca16c8c9d539bb9c2fb130b92b7d8"
     },
     {
-      "arquivo": "frontend-dist/assets/locacaoEquipamentoApi-B1oST190.js",
-      "sha256": "2617b9f942dfd609ced6a331720c06eaa76a751bb00683cdf0984395efa01c4d"
+      "arquivo": "frontend-dist/assets/locacaoEquipamentoApi-D_4qhmUm.js",
+      "sha256": "3aa9ddbda3c9d4f76a77b1574c76166c210e86f60e0fcf84311f7c6116896249"
     },
     {
       "arquivo": "frontend-dist/assets/locacaoEquipamentoApi-DOcQX0Pc.css",
       "sha256": "5e0e305b71384916fb113fe431a579cd3289b51e69ee4c8185a724bf866576b4"
     },
     {
-      "arquivo": "frontend-dist/assets/locacaoIdentidade-DMvoM7kq.js",
-      "sha256": "a343ba7dc25dfa651ff2dd11ff757f5b06de2e2f343c5af1b15e9f1e47b8e8ce"
+      "arquivo": "frontend-dist/assets/locacaoIdentidade-BG_rIA-k.js",
+      "sha256": "effa810abd1edc283f47fbb5de9ae0931c255d26799bc22b69d43698305bc4ff"
     },
     {
-      "arquivo": "frontend-dist/assets/LocacoesEquipamentoPage-C05tebS1.js",
-      "sha256": "cd30ab89553f06d29f4ad7ac5d9822a3e34a524df9a273cc5209e7eb10f0cf44"
+      "arquivo": "frontend-dist/assets/LocacoesEquipamentoPage-ILPbgBrD.js",
+      "sha256": "e9b24c987e35b69ffcc73aa844283aed993f549654c0061069aedf521d2610e8"
     },
     {
-      "arquivo": "frontend-dist/assets/lock-open-D5R-pdrC.js",
-      "sha256": "47ddf6c62ec7af282631c9f61e42b18a4f9124cc1b9252cedf1c947f250d0295"
+      "arquivo": "frontend-dist/assets/lock-open-Cxkn7SSq.js",
+      "sha256": "eae5b44134674e5ddd415630dc8b2cf576206f5641ddc46e29d8f460298bd49d"
     },
     {
-      "arquivo": "frontend-dist/assets/log-in-TTr10OoD.js",
-      "sha256": "54ee6ac6ca675537fe3ebc8dd8aefa1bc71273f7fd1da3c0aae3c72918980e3f"
+      "arquivo": "frontend-dist/assets/log-in-BH0eLYAq.js",
+      "sha256": "e41ace7ad82a625b46319d08abf055ffbf69027e6d0eb209454006eda6821a84"
     },
     {
-      "arquivo": "frontend-dist/assets/LoginPage-CrKLSnLX.js",
-      "sha256": "1157c5a4b98a89507a2da83671ab2e0a55571b07908b8adf3e52ac5f87dba767"
+      "arquivo": "frontend-dist/assets/LoginPage-TrdezaYh.js",
+      "sha256": "d8be854ce6fd1c790d716333ba0e333ad68dab5a7c9661e5d421453db595ae5e"
     },
     {
-      "arquivo": "frontend-dist/assets/LojaSelect-DFLNzzqV.js",
-      "sha256": "5020e9861f519c422ee39df0489c04a067c1f9e0e8555592ff2372ca4e39e1b5"
+      "arquivo": "frontend-dist/assets/LojaSelect-BTt9o6m5.js",
+      "sha256": "284117af023460a310f57434205e15176b5c2c616a7d3811de94fe3fd51ff0a6"
     },
     {
-      "arquivo": "frontend-dist/assets/LojasPage-BL0DbezA.js",
-      "sha256": "8a92b5eb0667d5f688f919c8c3b841bd483c44529b548fe199750b341eb86a14"
+      "arquivo": "frontend-dist/assets/LojasPage-lxZeshCk.js",
+      "sha256": "ef0d4c658d37ef04a1810b140fa33b44d30e60f1d14c372f20b4f66d436aa3a5"
     },
     {
-      "arquivo": "frontend-dist/assets/mail-DuPZIrTn.js",
-      "sha256": "345c19525dd9e5be438055d8eb23f44ad10254e38edcbb244ad1f4d3e1619502"
+      "arquivo": "frontend-dist/assets/mail-BPxKnW_T.js",
+      "sha256": "8acfee4c45fbe52801f2d4ce59c8744f7624398aeccd1fffbde685a75e2be8de"
     },
     {
-      "arquivo": "frontend-dist/assets/ManifestoDestinatarioPage-DSJQBjtx.js",
-      "sha256": "70cfde4702f7428d10f683ce11042bf25b5bd303cbfe6db1a9bbda4243f6b51e"
+      "arquivo": "frontend-dist/assets/ManifestoDestinatarioPage-BWBibBdy.js",
+      "sha256": "86bb5f11d234118cceceb3586ae2447c69ab33f111dd1e050728a6f38dedf431"
     },
     {
-      "arquivo": "frontend-dist/assets/ManifestoDestinatarioPanel-CRzpNOys.js",
-      "sha256": "03433d7555df65029a0a24f1f6aac313bb3c18d037bf2add86fd19c5650edd90"
+      "arquivo": "frontend-dist/assets/ManifestoDestinatarioPanel-wmrUCgUf.js",
+      "sha256": "50f4658d8af7826937c73dba10f9d6fa9ca653884f13b5fa9f58c7a91ed8b3f4"
     },
     {
-      "arquivo": "frontend-dist/assets/map-BVN2edWE.js",
-      "sha256": "bf15d0df345b65967b50bf8cf64a3c89e12840e393345d8f141b7f8a42a158ea"
+      "arquivo": "frontend-dist/assets/map-DF0vjYoT.js",
+      "sha256": "410e953c2bd622c8bd5dd0a7203830974056a850c8c953900832ba38089a1708"
     },
     {
-      "arquivo": "frontend-dist/assets/map-pin-BcTJm-8h.js",
-      "sha256": "dc92111dea33c42eab52a5b3c9b67821784c18daa6b694814f70107f1a736f01"
+      "arquivo": "frontend-dist/assets/map-pin-CrZtgw4y.js",
+      "sha256": "632b8e7d7fe812386f4c7a5a3b9a35ee38f4b3e5e597b51766ebc8fd86255ec9"
     },
     {
-      "arquivo": "frontend-dist/assets/map-pinned-DLEtH8MO.js",
-      "sha256": "c0f61dfb392c3a4b1fffcd754f0485e12591b73eb7fc55017e9e58a1d15477fa"
+      "arquivo": "frontend-dist/assets/map-pinned-BykCQGVh.js",
+      "sha256": "8fa0a10d2e95a761d3e076f2468058b956a72e3059c6174a2627851114d34119"
     },
     {
       "arquivo": "frontend-dist/assets/mapCardapio-CXTzNffm.js",
       "sha256": "f49e0ba01d9d030b7b96626d82cc73e29dd928d12bcfec8f5caa13d653e6b9e0"
     },
     {
-      "arquivo": "frontend-dist/assets/margemBrutaLiquidaReportApi-DX3EPKJs.js",
-      "sha256": "1ad92f083946e405336037fbff8803d95dca20dc5e94e783f6ac0014ab233571"
+      "arquivo": "frontend-dist/assets/margemBrutaLiquidaReportApi-DqXazphv.js",
+      "sha256": "bc4379515760c48d8f21f13e7e11fb8ec0a4ffe4100ea82086e2ad5f52b7a8e3"
     },
     {
-      "arquivo": "frontend-dist/assets/MargemSkuPage-D90fOfhk.js",
-      "sha256": "faf96f21eaba2c27110a3b0a1b48a676abac0c596e973b6d7ef5d4955f3b6982"
+      "arquivo": "frontend-dist/assets/MargemSkuPage-BE1sqEYk.js",
+      "sha256": "ff63c6a6e5d1d5058c73f155ddad42eedcc0eaa8c6d87a9e744c3e553c912cd0"
     },
     {
-      "arquivo": "frontend-dist/assets/marginWhatsAppApi-DbTV31-a.js",
-      "sha256": "68dbdc883f4de2161da32527d4f2169c1f3545e6785ee94e135107cd6797e5a4"
+      "arquivo": "frontend-dist/assets/marginWhatsAppApi-DoAtUvUE.js",
+      "sha256": "4afb052fed9b18cc47120aeb39cb676310eb827e0e099913553d5eb3b9e00ba2"
     },
     {
       "arquivo": "frontend-dist/assets/mensagensOperador-CAPRH52M.js",
       "sha256": "f1316011515f6095db3fbf11d5326f3841b9cbfb47dc747de1ee42d0cd66e297"
     },
     {
-      "arquivo": "frontend-dist/assets/mensagensOperadorFiscal-D3iWdYP0.js",
-      "sha256": "93e252615b161cb076383790703336e9ef3227e849cefb30aabd6ca78abe28c1"
+      "arquivo": "frontend-dist/assets/mensagensOperadorFiscal-CMh_DDVE.js",
+      "sha256": "84d5470ea2e8f32d662d13367a80c3307d8a6ffe66cb2ef061340abf8ebf80fe"
     },
     {
-      "arquivo": "frontend-dist/assets/MenuAreasCaixa-Uup_jEop.js",
-      "sha256": "ef7f48b9dc5e914bba2171c77570b1b5e82d610364b80df2c726b2daacaf8d57"
+      "arquivo": "frontend-dist/assets/MenuAreasCaixa-BWhYyzmK.js",
+      "sha256": "611b0094156ca7055440e560079850b424c0475e8e14531160c837a4fd6f0c56"
     },
     {
-      "arquivo": "frontend-dist/assets/MenuTrocarOperador-C7Iw7gGy.js",
-      "sha256": "736d3d7618eca208023e4a32b194b6dbe8e2494ac52599b1f3a6bf8830b665d7"
+      "arquivo": "frontend-dist/assets/MenuTrocarOperador-BLV4ACrb.js",
+      "sha256": "6af6522e89f7cbc9d7ce365da1d445adcc0a71a4732f7754a6f4e5f5d4ae8823"
     },
     {
-      "arquivo": "frontend-dist/assets/MesaAbrirPorQrPage-DKjaMnxw.js",
-      "sha256": "5cd086f64c0f68e48328bb77b9970c7dc6b1d156a49ac821a763390f68144a3c"
+      "arquivo": "frontend-dist/assets/MesaAbrirPorQrPage-CiXfW5ru.js",
+      "sha256": "2cfab98f74c4dbc6ff5c0b75547ca9b42094e3c5e55609ef9a20c195a5441759"
     },
     {
-      "arquivo": "frontend-dist/assets/mesaComandaLanPrint-B5gJuUHz.js",
-      "sha256": "92eb0df514811f6a41272a3f900dfb5af4efe8e09dccc868e5fd93658ce097b4"
+      "arquivo": "frontend-dist/assets/mesaComandaLanPrint-Cc6cgEg3.js",
+      "sha256": "0968ede859f996f485b407378b45f052cee410ad18b0472e4f3cac3804184eb0"
     },
     {
-      "arquivo": "frontend-dist/assets/mesaOfflineOps-BW5butc3.js",
-      "sha256": "fe18a64b220968f283e894b5c58555f9044aa8956cea0893eb421c0ae262d60b"
+      "arquivo": "frontend-dist/assets/mesaOfflineOps-BvMr9dxc.js",
+      "sha256": "cb2dc600971302586d6f33d877f8b74758b9eea0a0b2a4ffdf1027f86168cf3b"
     },
     {
-      "arquivo": "frontend-dist/assets/MesasPage-BWvTfk6n.js",
-      "sha256": "add9fa0bebcb85724c3541ab91049ceea23f2cb38be6d3377f83ec92400b4a52"
+      "arquivo": "frontend-dist/assets/MesasPage-DjOFydOC.js",
+      "sha256": "c2346d27e399def0f7c11e923ce3a0a8ecc46d67899bded616a82cec605937d5"
     },
     {
       "arquivo": "frontend-dist/assets/mesaStaffQr-GfDGWa-C.js",
       "sha256": "53fbbde331849e83f6a5fbac16ba84a366e1cd7b735bddf4bdab7f7f3efd6539"
     },
     {
-      "arquivo": "frontend-dist/assets/MesaToolbar-CRWux7Wa.js",
-      "sha256": "e1f2ef8c576b1f5f0a8e62cfa899f136efc98502bdaee7b625952f003cbbe1c3"
+      "arquivo": "frontend-dist/assets/MesaToolbar-CsJxEsge.js",
+      "sha256": "5c6b3215dc32bd77a4daa4029e463dae91ef6a98b251aa4ba92eb95025fb0ac3"
     },
     {
-      "arquivo": "frontend-dist/assets/message-square-CMtI-XHn.js",
-      "sha256": "69c7651598683f8fc46ddefb1c859d9e4764d5c8f34db9ca0c76736bfeeb95ee"
+      "arquivo": "frontend-dist/assets/message-square-Cza1MRyC.js",
+      "sha256": "aca80368bdba70ac275e3f79b2b6a484cd1e607cce8261f4f48d9cc3507a0c34"
     },
     {
-      "arquivo": "frontend-dist/assets/metasComerciaisApi-IyYgDze8.js",
-      "sha256": "b2d61fa19592b1b7ccd0836e3f30aaabef0afc653fcf5c4e0f968065241e0a03"
+      "arquivo": "frontend-dist/assets/metasComerciaisApi-SEuguAdl.js",
+      "sha256": "2a0162bd5301723f70b7f3530abca3212b11cd0a134e7258502aea9a40e27eb1"
     },
     {
-      "arquivo": "frontend-dist/assets/MetasComerciaisPage-BXo6PfF4.js",
-      "sha256": "52c3b43a8614e65d0f63fd93300ce8283eab69b8700ec26b5265982d2931893c"
+      "arquivo": "frontend-dist/assets/MetasComerciaisPage-BRMECYxZ.js",
+      "sha256": "a6c5cdc61fa83c6938f84614b8f554f469dfbbae06c783ec7d941752f49072fb"
     },
     {
-      "arquivo": "frontend-dist/assets/MfaSetupPage-BlaV0GEh.js",
-      "sha256": "d36ce04c78eeda6d7038454e277d7cbbcdc254ffdc290e8411de2ef31a6cabaa"
+      "arquivo": "frontend-dist/assets/MfaSetupPage-BVKBgnN2.js",
+      "sha256": "438496e46b907aa09ee86f382470fa47cd017e672787bd29e02e33411e494848"
     },
     {
-      "arquivo": "frontend-dist/assets/minimize-2-QwWGxilO.js",
-      "sha256": "542d41ed805d280b1af1d639fc69e6e6073e519482703cadad03829ada8a8d7e"
+      "arquivo": "frontend-dist/assets/minimize-2-DfPLimK-.js",
+      "sha256": "a917f999bf46a90ea2a5a202c406e65fe3d28665be0c2b293945f972b7402dff"
     },
     {
-      "arquivo": "frontend-dist/assets/minus-BkD7gb3d.js",
-      "sha256": "6be4265619f16ee9bccfbf45349eec651149d3fe8d37e318bec4086afc13d0df"
+      "arquivo": "frontend-dist/assets/minus-Cu5lCJQ7.js",
+      "sha256": "d75ef9770a1efd0d8f6532d2502da84fcc58b2df152abe7f6e00d8bac2138b4d"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalAbrirCaixa-rEazcz6f.js",
-      "sha256": "a0e11ad31d26f94d172e53f3b10314ff87faa6d9e275350eda508c907c475c76"
+      "arquivo": "frontend-dist/assets/ModalAbrirCaixa-CHLzLkAk.js",
+      "sha256": "bb70bf496d5e7f243b4dc49983b02ece55c6124ac8400e611439194bdab33751"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalAjusteVenda--lkU-_fp.js",
-      "sha256": "fdb699b3b921e9559d69ecf604a0752ef10be07beb79cefbcfe596080270271d"
+      "arquivo": "frontend-dist/assets/ModalAjusteVenda-D15JSSww.js",
+      "sha256": "68c8027a423ea5c1bc911990e90805f453494b9e76cdbe8ceb7708ebbe2f5e6a"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalApresentacaoVenda-B-BVHLXw.js",
-      "sha256": "c46a635ec15e7190cd76f6e8429d739d22e751194b4beb3766e83f33685c1665"
+      "arquivo": "frontend-dist/assets/ModalApresentacaoVenda-BSEiF9ze.js",
+      "sha256": "5674830f2c94a3599070f78899efe6c2dd2f056517fc7b0ae3390b25841754f3"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalBarcodeNotFound-DSuvKIsP.js",
-      "sha256": "1bf572a4c31a920b52a91724423bd4d4e41cd48c32a0327d3ec139f726c5da21"
+      "arquivo": "frontend-dist/assets/ModalBarcodeNotFound-CXJP6Rho.js",
+      "sha256": "2f0a5b7f5e8983320b1c8792677046c55d0ee9087608a02f26bd5e75b19832b7"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalCameraScanner-ClValQDB.js",
-      "sha256": "702f33fb75dfc90ad9d5196d36152afb4d28406c28bdd8b3c073fdf99b2bef3e"
+      "arquivo": "frontend-dist/assets/ModalCameraScanner-DpMnH_X-.js",
+      "sha256": "5a203a789874acbd2b325cbe940f560e5d625ef17908f58844ab71170c088867"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalCancelarVenda-BxAJEl5_.js",
-      "sha256": "9c1c3e7f34fb5cc464da1098fba19c74e95f71a7f052c58994104f405e491c8f"
+      "arquivo": "frontend-dist/assets/ModalCancelarVenda-BYpT6gbq.js",
+      "sha256": "4a6b1d82802a109a94b117e529daf00d186bc250f2d3cdd7141baaf1866e28c7"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalConfirmarImpressaoCupom-BmErYkdf.js",
-      "sha256": "db95c06f7df6e3712ae7f2e42d2122d32a1c7d3bbe318b4ead10aea85623cde2"
+      "arquivo": "frontend-dist/assets/ModalConfirmarImpressaoCupom-DSGwVK_R.js",
+      "sha256": "fe1c25892ef21288a5da9a957aa896cb0e9def0439deea10776b28b5f4e53fbe"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalCorrecaoRetroativaMassa-CrJyKEX9.js",
-      "sha256": "8b4b44d80d47226522358d4b720eacf6301066364a056fd9d0013582ca8c471f"
+      "arquivo": "frontend-dist/assets/ModalCorrecaoRetroativaMassa-Ci_UMDDx.js",
+      "sha256": "63ad0d1e796b503dd8b6e078581341079d217d486cceec0420e364e8afab4f37"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalFechamentoCaixa-DbeeNMfL.js",
-      "sha256": "ba072b7d5eb5a2dc5f2e0f4984cd4e481ca4fd7f7b946601ff34cb9f5fe51b62"
+      "arquivo": "frontend-dist/assets/ModalFechamentoCaixa-mvIfCop0.js",
+      "sha256": "e6bb743feffff6051cf70c7372a1cdf4618124d2813e7fb2ef0fd462fdf17560"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalFitaTurno-DQqG4XbT.js",
-      "sha256": "d5d83c33e0928913de84bbc470b2b5bdeda1f91bbc8d35c3f86effc13a1c651b"
+      "arquivo": "frontend-dist/assets/ModalFitaTurno-BSECp4gV.js",
+      "sha256": "2e9173973aeda24cafa3794b29e8a2c5f607135ea5c897fe8a620704610a1f74"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalMovimentacoesContas-DVe2bSD1.js",
-      "sha256": "d6b5d6c8e403f87fb36a38ceb7848d73958f303a1becc5d873d701697aa18d1f"
+      "arquivo": "frontend-dist/assets/ModalMovimentacoesContas-C3GxSqMv.js",
+      "sha256": "a4b49edde5d1193d58b49d9df1526bb592e76403c2f49f7a0345335d0d844ae8"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalMovimentoCaixa-tLetu3jo.js",
-      "sha256": "562fba6885ed155e6c959e558a71da4025b884b3beedbde72e28f96f3a9f51ab"
+      "arquivo": "frontend-dist/assets/ModalMovimentoCaixa-CUKnR03c.js",
+      "sha256": "88f4f3f5842eddb36b8290a5fd20c221557950ee0a8d33c6f868dc82efc5844d"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalPagamentoMobile-DSkZ5Mkc.js",
-      "sha256": "1a90230c1bfcfc488bd8f7779cd51afd4ab7778945d9f1a314034ecb86325e83"
+      "arquivo": "frontend-dist/assets/ModalPagamentoMobile-C9vp22HN.js",
+      "sha256": "a486b8b5ebe38ec1e8df1388d6cd2683e65a7554edf95f485de0a78319a0519e"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalPesoInline-Baqrj2bj.js",
-      "sha256": "8d808e101df733d97d036ecd5be7817434c0ed81a1d442e6b38800d440910b9c"
+      "arquivo": "frontend-dist/assets/ModalPesoInline-CwACB_6V.js",
+      "sha256": "594b03d0da481dfa5eb01b2d22ae29dbbbec1b769e458c01d691347813a4841f"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalReceberCrediario-DSVD68XW.js",
-      "sha256": "4eda6afa154756d8ba2d75672f09b66e86ede2531a13761b409b7e83fe752c6b"
+      "arquivo": "frontend-dist/assets/ModalReceberCrediario-BwrN_iXL.js",
+      "sha256": "0fe981781cb595a3bc2db391b86c614f231bae64b743376e76a60a3ff8655877"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalSegundaVia-BbT1dFnE.js",
-      "sha256": "0eb23d9c2f4eeb3fa8e15eb133e12ebc71bcd54986dce8755e56fa2d5be63193"
+      "arquivo": "frontend-dist/assets/ModalSegundaVia-Du5aV-KT.js",
+      "sha256": "b0ce882b59f4b053aff1ff3c02059f9a096a8191d507b8153eea201fbd54b2bf"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalSupervisor-BIl8RuH8.js",
-      "sha256": "fd0b972ecb39f92b4749b1e5c17dec17aa2eb9442ac67eea5aadbfaa110d41ba"
+      "arquivo": "frontend-dist/assets/ModalSupervisor-BG7Rtauf.js",
+      "sha256": "30e52c04f79b19fc03bb6b6825dccfd496c999f1c7d01dceea854e33796578b4"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalTransferenciaCaixa-Tf3toNIk.js",
-      "sha256": "86a4f6c9af1ce73faf2e9748bb668d551d14d7092aeb7b311f489e42007595bc"
+      "arquivo": "frontend-dist/assets/ModalTransferenciaCaixa-Bq_Rwsm_.js",
+      "sha256": "5a2bf75cb7ef70ee52939cb55be2f32cb222da24a6779df2a277d4bc94023d77"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalTrocarOperador-hN2fJUun.js",
-      "sha256": "82341a46ff2fab0eb120ac71b5ba27247796f774b4149cad6ca80b861b2b9898"
+      "arquivo": "frontend-dist/assets/ModalTrocarOperador-Dpo7Tvwd.js",
+      "sha256": "777f122b31a17c8812492853fb5cafbb9eadadff2c179968d07c4d5f8c8f46d8"
     },
     {
-      "arquivo": "frontend-dist/assets/ModalVendasSuspensas-Dz737t7S.js",
-      "sha256": "60f71b94091054bfe944d15348db00556503cfa1cbc5a790aa448e8f4dc38128"
+      "arquivo": "frontend-dist/assets/ModalVendasSuspensas-CAajRr7J.js",
+      "sha256": "175c0f84005025c94e3d05dd7ec3df5121566cab4fbed5df8132e6fe60c2421d"
     },
     {
-      "arquivo": "frontend-dist/assets/ModifierBomPanel-B1Pw9NwJ.js",
-      "sha256": "528a9119e77c1836d17d6a8b7a18f815b3b769f345c8e5d0d1439d16a17323c9"
+      "arquivo": "frontend-dist/assets/ModifierBomPanel-D892_hyJ.js",
+      "sha256": "7dd689ca3d9bec499462e5138495fb8c06ad10b751cbe1f67b60b9f93b98c5c5"
     },
     {
-      "arquivo": "frontend-dist/assets/MoneyFixedInputs-CpOSqO-u.js",
-      "sha256": "ae3caf9593d67f3d2c197cc8aaf564229d4c9f8c95ab3cdb1e99a36137d3ee02"
+      "arquivo": "frontend-dist/assets/MoneyFixedInputs-DkCF0mTX.js",
+      "sha256": "94958eec45c46805eb196765c24f1094f7a9b0cfa62a58270fd596766c815db9"
     },
     {
-      "arquivo": "frontend-dist/assets/monitor-smartphone-BNHZ2-xk.js",
-      "sha256": "0cb6170e7d0a44ef1455c0c504b6f737b90d24c156a67c5dbda34c350b645a26"
+      "arquivo": "frontend-dist/assets/monitor-smartphone-CA-dRDZm.js",
+      "sha256": "d8f9349c38d8a0e9d10ab6a0709e82c5ae6b5b1023fb1b9b4b5f070624e6b664"
     },
     {
-      "arquivo": "frontend-dist/assets/MostSoldChart-B69rl1Gq.js",
-      "sha256": "aeab8997c08790a27dd160458415e3f55befdd0ba85aa67f6a58b85546ee8a87"
+      "arquivo": "frontend-dist/assets/MostSoldChart-EvGRw1LF.js",
+      "sha256": "3f1520e2eac6f5468ff1fca22edfaf864916dad006dc16eeed2452a0cc5d635d"
     },
     {
-      "arquivo": "frontend-dist/assets/MultiCaixaPage-BdjvGGQJ.js",
-      "sha256": "8eaa52939d7eaf4237a8b532f8b6a6a113bc9c3167dc51e7b0833eecc6b22573"
+      "arquivo": "frontend-dist/assets/MultiCaixaPage-BLVFv9u-.js",
+      "sha256": "73eac05d69a1f341bac9243eb1aa292bfeb876a1f5acc69af3bba8055df3ec10"
     },
     {
-      "arquivo": "frontend-dist/assets/MvaMgAnexoXvAdminPage-CMu6i-Ae.js",
-      "sha256": "325040ca2fa67e627abc216b3ae5f5a82258f454bdd8b5d51b5e35c29103cc68"
+      "arquivo": "frontend-dist/assets/MvaMgAnexoXvAdminPage-KZgL9sHa.js",
+      "sha256": "2d0618ab3170580cc30f9d2abd00d5c027f054682d84429b749a13996563fb55"
     },
     {
-      "arquivo": "frontend-dist/assets/network-Cp2U4yL1.js",
-      "sha256": "ae6cadf00fa721f39b9278616590a66859167414ba108cc6600c2af545342ce9"
+      "arquivo": "frontend-dist/assets/network-Cx6RUBrb.js",
+      "sha256": "b0e93f6fcdcca77afb8733d06062f1292df8c651ba08e397d5b10a4483da18e5"
     },
     {
-      "arquivo": "frontend-dist/assets/NfseConfigPage-BL3PwobH.js",
-      "sha256": "bd5eee501b4056c2a22946a505ced6047e193299c729a19fe30e1e52932a0800"
+      "arquivo": "frontend-dist/assets/NfseConfigPage-CtjwKpmm.js",
+      "sha256": "1521ad0204e0376b4f302b8b7abea90a0468cbe9352d04991f602823e1de9547"
     },
     {
-      "arquivo": "frontend-dist/assets/NfseEmissaoPage-DvUbMSAp.js",
-      "sha256": "b33cdd9a2906f92ba0ff8a8fd7e7de7c23d9a2970ab4afbb8795b9909c546b36"
+      "arquivo": "frontend-dist/assets/NfseEmissaoPage-Cx8KVqrP.js",
+      "sha256": "1322c9f90cd33520f9d9cefb723e6106c4b7560f943430f7161c4a3fe4ade726"
     },
     {
-      "arquivo": "frontend-dist/assets/NfseFeatureGate-gnpRpFTG.js",
-      "sha256": "2c681307a977fb7141f6b366ad5d721ceb26388fb3f7117f3aa0dc5871fb3434"
+      "arquivo": "frontend-dist/assets/NfseFeatureGate-B78RGgAi.js",
+      "sha256": "3777d8cb2fa52f614124986800491cc1373ed94f43923514bbd4e6543ec20441"
     },
     {
-      "arquivo": "frontend-dist/assets/NfseListaPage-lfM331cC.js",
-      "sha256": "24336ee9227f17d0f32d7422114140c4c3b3f6a5d80d371799b292942dc84571"
+      "arquivo": "frontend-dist/assets/NfseListaPage-kLECP8VD.js",
+      "sha256": "935b9a8070f6e89a361ad1803a91d8f8d87f2e33351b47a53c26e3cc5e972004"
     },
     {
       "arquivo": "frontend-dist/assets/nfseMappers-B-IMWz7K.js",
       "sha256": "5aa8ac24a07914ebe737d8114705e9586e65a2a76d8c112a824adf80f4da7b44"
     },
     {
-      "arquivo": "frontend-dist/assets/nfseService-Cg3-eLl3.js",
-      "sha256": "76ffd0edc5988c85ab80d1cc3f95dfd8b6e484b731a3fcc5f92a59d79755582e"
+      "arquivo": "frontend-dist/assets/nfseService-CeT1BIvT.js",
+      "sha256": "0d9e84cfeb5baf2c222ac0128490efb749933ec23730a58a830103bfd02e9b0b"
     },
     {
-      "arquivo": "frontend-dist/assets/NoCutsEmptyState-BG97gTBB.js",
-      "sha256": "31dd18c5899d84dc1cc6def913d33473d68904e6682f9f4479d7130eec7c59bc"
+      "arquivo": "frontend-dist/assets/NoCutsEmptyState-CyHeMM-T.js",
+      "sha256": "ed622fcfbae846cb8a6eed1b489a74bd8bb6281f984a7cd3657e9b81e3081aa6"
     },
     {
-      "arquivo": "frontend-dist/assets/notaEntradaApi-Do0Mq_oJ.js",
-      "sha256": "72ba6daba455675017ea4d2f65df31d37c1a2d3fc2e44fd4a5cf5a3b343c8cca"
+      "arquivo": "frontend-dist/assets/notaEntradaApi-CbNb6Fep.js",
+      "sha256": "b29e140fa7d527b279b3b091372816f3c48624437bc13e92cba05dc408507673"
     },
     {
-      "arquivo": "frontend-dist/assets/NotaEntradaDetalhePage-C-GF08Ge.js",
-      "sha256": "052b9ecffc756ae4ad03bed8c71066528752907a700964c424844addb0dbcc62"
+      "arquivo": "frontend-dist/assets/NotaEntradaDetalhePage-0rmNbDmN.js",
+      "sha256": "145238a351f7cc8cd48553e44df6dbf6927a8d5f74e5e19064b0f3bbd3a0781e"
     },
     {
-      "arquivo": "frontend-dist/assets/notaEntradaListagemFiltros-CXZpgdPm.js",
-      "sha256": "5900d3f636660fe0cae08d4fcc204fccd869b88f8af1ff9037cfe0cfd801a8c3"
+      "arquivo": "frontend-dist/assets/notaEntradaListagemFiltros-C-7ODAeG.js",
+      "sha256": "0903997f4c44c80e5533295f8a616e3f0d8454fe1b6535eeb83b602159f9c4f8"
     },
     {
-      "arquivo": "frontend-dist/assets/NotasEntradaPage-C7vMuvL9.js",
-      "sha256": "04b07977a72f0a60216f62eb0b0cda40d0109a31eabd6b57315346bc4c1f8ebe"
+      "arquivo": "frontend-dist/assets/NotasEntradaPage-0QbvM-lz.js",
+      "sha256": "4ac6262249f590d21acf698ff1c663124fbabb84a90d5efd4b0f0c5eab569a78"
     },
     {
       "arquivo": "frontend-dist/assets/NotFoundPage-CwmmBoHc.js",
       "sha256": "df2e06b32632fbc7ad7f5b5d0364eeeae397a4f6cf591e4360ddaf7362e3ba6a"
     },
     {
-      "arquivo": "frontend-dist/assets/NotificationProvidersPage-CyYWGuGN.js",
-      "sha256": "d8573de3482c00aac98440791080b83a07338469e70174362057818dd221ede2"
+      "arquivo": "frontend-dist/assets/NotificationProvidersPage--_8zFpz_.js",
+      "sha256": "4ed6d412b74b5ee3e538b2f75ca6fe9fd6fe2fecb3d8032fff17be9a5d20360d"
     },
     {
-      "arquivo": "frontend-dist/assets/novaEmpresaApiError-OYR9a4DR.js",
-      "sha256": "dcebb1715338a02facae05f38d68707d703a5d1d4939ef9671b7a8ceeea27725"
+      "arquivo": "frontend-dist/assets/novaEmpresaApiError-BcaQlzNR.js",
+      "sha256": "7d4834ee952ba7444c100a4a10cc7444808c70c9db64d0796056f08ec1b984a5"
     },
     {
-      "arquivo": "frontend-dist/assets/ObservabilidadePage-DTpE2zGj.js",
-      "sha256": "00c4ecf18972481d1d6cfbd212630bd3d078b1e2a5666cbb4f2c1b5497d7083d"
+      "arquivo": "frontend-dist/assets/ObservabilidadePage-D81EcxYb.js",
+      "sha256": "6b8eb6136c1de8c101d9b4840ed5141d20f2ce80be2958ff3fbe8afeafb5b961"
     },
     {
-      "arquivo": "frontend-dist/assets/octagon-alert-Bm6-pAla.js",
-      "sha256": "ae9f946af79a6fab0232d0ea12ed18bb1140bb43d59fd5612c5fa8ee4c0e870f"
+      "arquivo": "frontend-dist/assets/octagon-alert-XZXfTZ9h.js",
+      "sha256": "1dba75e3b7118ea15a0f4cf46cfe93a8518f933762696537a94745617489a0fa"
     },
     {
-      "arquivo": "frontend-dist/assets/OperationsCentralPage-C5L1Wqlx.js",
-      "sha256": "0f0956571d4d4f96d46ae7b746ef74d379a8cda16aa20de786481da833884a1a"
+      "arquivo": "frontend-dist/assets/OperationsCentralPage-Zv0vV30W.js",
+      "sha256": "7d2251a3471dc2827ace2addc588aae2652f9a586abb1b04020d8e9e4c934764"
     },
     {
-      "arquivo": "frontend-dist/assets/OrcadoRealizadoCategoriaPage-qlh_904e.js",
-      "sha256": "5f1b3edae7b1742cbf7d6dd5538682b0a0c552c72d81e35615ce2576becc64cf"
+      "arquivo": "frontend-dist/assets/OrcadoRealizadoCategoriaPage-vlCqxwN-.js",
+      "sha256": "3898b94850aeadde85d95b91624dc7fc31ab83d2252cc236bd00755bacfc1e55"
     },
     {
-      "arquivo": "frontend-dist/assets/OrcamentoPagamentoSection-DTSF_8_I.js",
-      "sha256": "c406bd4ba67a86eec77af5b0d704b5d07878ff66be6b74ae0088c890a9c1aa21"
+      "arquivo": "frontend-dist/assets/OrcamentoPagamentoSection-UAFkDRMm.js",
+      "sha256": "0e4c8dd6055127fa23368704b8830cfd28035235cfd8cfc6fb8a6809695bcd28"
     },
     {
-      "arquivo": "frontend-dist/assets/orcamentoRealizadoApi-BzLQnYq_.js",
-      "sha256": "6647904bbc6d279971d8c9a0cd3003d1f0bf852545e74998b433415279b776ac"
+      "arquivo": "frontend-dist/assets/orcamentoRealizadoApi-CY4wjMha.js",
+      "sha256": "daec27fb6f2763cecb953eed437ed70e1d1c0158e6e32b86a70624c5ff05834c"
     },
     {
-      "arquivo": "frontend-dist/assets/OrcamentosClientePage-BLet-jcz.js",
-      "sha256": "1cdf06eb6a032502c21c017181566b79e62932ae434b5809d9e229778136dc8b"
+      "arquivo": "frontend-dist/assets/OrcamentosClientePage-C9lqlQUt.js",
+      "sha256": "7c8ae1cb71db03b2641ab186c71c3d38b06df826395b27982751be7d5a54c7b1"
     },
     {
-      "arquivo": "frontend-dist/assets/OrdensCompraPage-BWLeMGjm.js",
-      "sha256": "0a551af71b16d29f75b8a2cc013b157622393b7b4ae3711a9f12f8e5293ea605"
+      "arquivo": "frontend-dist/assets/OrdensCompraPage-kI8bwBBy.js",
+      "sha256": "4dea13f3c53828f5666507c24c65d507bff027568c4b0f45c0fb517523a59881"
     },
     {
       "arquivo": "frontend-dist/assets/orderCentral.types-T9bg_V6E.js",
@@ -1551,48 +1551,48 @@
       "sha256": "b35675babdf8cd1b689d2580be78de4116e34b1763041a86f6de724617cd3fd4"
     },
     {
-      "arquivo": "frontend-dist/assets/OrderCobrancaStatusBadge-CTs2mphR.js",
-      "sha256": "e2296ac428df5a44fe3448fec8b88f9e99ba55b4b93943b77df4be75610adddf"
+      "arquivo": "frontend-dist/assets/OrderCobrancaStatusBadge-BSuypTXF.js",
+      "sha256": "253bc7bdbbed4ff78e7772dff968868cdcf87225f5c7e4d0f461942484a9517d"
     },
     {
-      "arquivo": "frontend-dist/assets/orderEngineApi-knHPyCEW.js",
-      "sha256": "b2f7c30f4a3296333ad75732988b277b644cf41ffb14a91f722fb8c2e5c62694"
+      "arquivo": "frontend-dist/assets/orderEngineApi-CqQ5YLnD.js",
+      "sha256": "2909028c2386289b32abe59f470c5a8b41b906f64cf447af8b65ea2e8f66d1a6"
     },
     {
-      "arquivo": "frontend-dist/assets/orderEngineConfigApi-BoP0lVU9.js",
-      "sha256": "42eb232e9a78a47aa84041ca5b2bf2edffbf6131a96c3d93c19558e1dd1554f3"
+      "arquivo": "frontend-dist/assets/orderEngineConfigApi-CivV_PsJ.js",
+      "sha256": "81987d029294ce01981522485e64a92521991be641f23ea3b4301a4778c1a44d"
     },
     {
-      "arquivo": "frontend-dist/assets/OwnerPage-CDVERl4l.js",
-      "sha256": "9eab5d123201b89461be4e7472d3fc50eba877ad503c13e8f192043951af9914"
+      "arquivo": "frontend-dist/assets/OwnerPage-BhV0XpZc.js",
+      "sha256": "3f7b10f04e59c830a4cbdc8b9c9f307552b4bd9096b85dc08c4309df1c0e6b35"
     },
     {
-      "arquivo": "frontend-dist/assets/package-check-DAX0fVii.js",
-      "sha256": "6fdd733b6cb62d388d60efda8bf5b65f9cf7a15618f08ca1c0dbec4ac82a76ce"
+      "arquivo": "frontend-dist/assets/package-check-BmUuGK36.js",
+      "sha256": "d1dab476594e49c4de48f01731f128876cf8553e1f464cc5a9f3be1149ff97a9"
     },
     {
-      "arquivo": "frontend-dist/assets/package-minus-DaLo7S58.js",
-      "sha256": "33336c578d14a6cbc0d12c342a6c627a8ed3ded5429c0d94226195dcfa49ac5f"
+      "arquivo": "frontend-dist/assets/package-minus-B7S0uqqP.js",
+      "sha256": "6fb6fc47a9f1d8adcc74be1a8ce9312309aa0fd6d8b4cb3a7e3b5d43c50cfed9"
     },
     {
-      "arquivo": "frontend-dist/assets/package-search-BQbUg1ad.js",
-      "sha256": "0240b3a64c17e076aa2d7e1af0c0cbb903e480382b3a2155ea85789cc57b7396"
+      "arquivo": "frontend-dist/assets/package-search-BXZbZUB1.js",
+      "sha256": "1c31c4b10ad14af59cfb4846e7779ab823884c5cb68a8e67c45236bda9ddff20"
     },
     {
       "arquivo": "frontend-dist/assets/padariaCusto-DF3_ooBL.js",
       "sha256": "bb509438dcf723b03edb6f862e7751a2e16bfec099dba356d9b30f11467c1db3"
     },
     {
-      "arquivo": "frontend-dist/assets/PadariaMargemPage-CsV6-hvm.js",
-      "sha256": "0b12b8939d71f8d7f74cca0aff33c9b33ebd66071ce844dd3056fa3b1a3ef60a"
+      "arquivo": "frontend-dist/assets/PadariaMargemPage-DoHWF6ZV.js",
+      "sha256": "83d08efb3b32861ea2bf8a6c89027803eb42931b2e0f9076e8c0d2d81f9157cc"
     },
     {
-      "arquivo": "frontend-dist/assets/PadariaPerdasPage-8Ga4dG0h.js",
-      "sha256": "c104ebddbb4166c35f0055ad6590f065790cf59264d3496003048892e5de794b"
+      "arquivo": "frontend-dist/assets/PadariaPerdasPage-D6ozq-P5.js",
+      "sha256": "badca5c61331c155aced92e6a4a1d92be634572938d14a17864e25b58d0d2f26"
     },
     {
-      "arquivo": "frontend-dist/assets/padariaService-tsEycz8Y.js",
-      "sha256": "0df9713229457a445ec25ec60d8a2dac32f5c52dc00a710a505c91bc8b4f5452"
+      "arquivo": "frontend-dist/assets/padariaService-C6__Ndm8.js",
+      "sha256": "a415a2ab5999651376a1510d7e271f6236f03cdf757b403dd7f004495609a3da"
     },
     {
       "arquivo": "frontend-dist/assets/pagamentoVenda-CKsKmlBc.js",
@@ -1603,184 +1603,184 @@
       "sha256": "e02fcf82967b1572edf7a2c44cf6391f0793c3cf22bd6664154ea712693536ce"
     },
     {
-      "arquivo": "frontend-dist/assets/Pagination-MOlb4a0b.js",
-      "sha256": "a714fd3dc5412e0e85ae6fa03fb2babe2fa13d657e786f9e6249deb0853e38b3"
+      "arquivo": "frontend-dist/assets/Pagination-DOFfGqoy.js",
+      "sha256": "937050ca081a2fd27c6ed951bbf2f9706e60c1b01e3fd6afd0dfd365c3ff33e9"
     },
     {
-      "arquivo": "frontend-dist/assets/PainelImplantacaoPage-DlXnMvZ7.js",
-      "sha256": "880cf03e272a4d4f42bb70745dd953da26d4aa72601a75e40b9acca902493436"
+      "arquivo": "frontend-dist/assets/PainelImplantacaoPage-DG2Lb58q.js",
+      "sha256": "a6ae2c0fcb611b28964d696347cbb6779385445a648ea4955c7480f38000338d"
     },
     {
-      "arquivo": "frontend-dist/assets/PainelTotais-DzKMpGda.js",
-      "sha256": "c6b48426f3ff125522bb163e8e56c349d2da6fe9b002eb718a47704db400c0d8"
+      "arquivo": "frontend-dist/assets/PainelTotais-BLqwHOQn.js",
+      "sha256": "d9e4ad50419f0da50ce7d0f0f62fcf8a46519f7b3187ee3b575726da756a1ae4"
     },
     {
-      "arquivo": "frontend-dist/assets/ParticipacaoDonutChart-DFOYuwfn.js",
-      "sha256": "cf7d845f167f395a5333bd5ac8e29f1fdf2a447e229b436732b8d6b9f7c12d51"
+      "arquivo": "frontend-dist/assets/ParticipacaoDonutChart-BUwnH1uQ.js",
+      "sha256": "b010da889c22250a3ea7f65f5ecddbe4979d744bee90326d3362c4c719011863"
     },
     {
-      "arquivo": "frontend-dist/assets/pdfReimpressao-BXg_61Qq.js",
-      "sha256": "326df3caa8f4aec28698dd3c55ead7ff0d11ae9a8bb4ab1bb083446a96e932aa"
+      "arquivo": "frontend-dist/assets/pdfReimpressao-B2Mzfn5c.js",
+      "sha256": "233c71c2e6c294aebe0c63d3b2a97e858a319f008982624cafa529b1dbbdc8b8"
     },
     {
       "arquivo": "frontend-dist/assets/pdvAgenteLanOrigin-CkH6nz9G.js",
       "sha256": "b86e4a63d80b4654df7036c946c9f347a4168f3398a329551d9c90ca2f50e2d5"
     },
     {
-      "arquivo": "frontend-dist/assets/pdvAjustesValor-wR_Vhu-M.js",
-      "sha256": "19e47636e8a5f4034c8a58e1d5f44f4435ba52d4ae0ecf6bb4521b161652e979"
+      "arquivo": "frontend-dist/assets/pdvAjustesValor-D0BtQWn0.js",
+      "sha256": "fc5c686a60ad31dea84080b302f3ef39f66b5d612acf55e3724244ed38143626"
     },
     {
-      "arquivo": "frontend-dist/assets/PdvAnalyticsPage-CIMkeN_2.js",
-      "sha256": "9cf49f8452a995a63575ed90cb450fef60f5b0c1c8fe924b8ddaea7f28ee5e65"
+      "arquivo": "frontend-dist/assets/PdvAnalyticsPage-zZQ8ljcO.js",
+      "sha256": "7f0fcb19e16bff371a86c881d8effe30e6ca0afbab5691017ca4bc018a264406"
     },
     {
-      "arquivo": "frontend-dist/assets/pdvAtivacaoService-Dpdv_lc5.js",
-      "sha256": "9f3e54e1cec9e76f8ef35b195680cb4aeefdf7f5d403951469481e98a3d57d43"
+      "arquivo": "frontend-dist/assets/pdvAtivacaoService-oEKxeE6T.js",
+      "sha256": "026eb54c6d9ae39460f0e07af5f3024531cb75cf680fc28c41466aa93b88408e"
     },
     {
-      "arquivo": "frontend-dist/assets/pdvChartChrome-KfU0uyIS.js",
-      "sha256": "b405ef6fb0270d9c29878360d52f74f7006a1a06ce22b2e45be6834cc7c79613"
+      "arquivo": "frontend-dist/assets/pdvChartChrome-BzPWJVCT.js",
+      "sha256": "a4ea571c298b6b36cc2066bfa2e7d92799ba9b4b8cddae3d614dd09cc8365824"
     },
     {
-      "arquivo": "frontend-dist/assets/PdvChartsHubPage-Ptn3Qs44.js",
-      "sha256": "9cb1833ef2788caef4f0fd7f6a94f83e82d95e9b8dccd4968b25306b156e7fd5"
+      "arquivo": "frontend-dist/assets/PdvChartsHubPage-KYrMRIJs.js",
+      "sha256": "c5ee76a90020808de35185693b97788a7f6d5b1610964fe04f52ab95ba21c3bc"
     },
     {
-      "arquivo": "frontend-dist/assets/pdvErpApi-VrnNJDJa.js",
-      "sha256": "859ab575508126ce50a48095036fe51ba85469f068bc6e460c9bea59bc3a537f"
+      "arquivo": "frontend-dist/assets/pdvErpApi-CXXgrHnj.js",
+      "sha256": "de878dbcb1dcb92745b0f1aea3355c0eae2b8ef00ab8546332f2a97a2da17d07"
     },
     {
       "arquivo": "frontend-dist/assets/pdvErroSupervisor-BMpmQ2ZR.js",
       "sha256": "2196bbbf39a028b497aaa15f8c47ae065b015278626fb7306193c35938f00095"
     },
     {
-      "arquivo": "frontend-dist/assets/PdvFrenteDrawerShell-CyqG7_Xe.js",
-      "sha256": "bfd88476c80264371cb6265bac8206b54f5fad4a536cd7951bd0432238dd4106"
+      "arquivo": "frontend-dist/assets/PdvFrenteDrawerShell-8JabvuKE.js",
+      "sha256": "caf5d7ab3a3d8cf9c6425b8d113bdd43140371d1cadf545626086873ae6fedb2"
     },
     {
-      "arquivo": "frontend-dist/assets/PdvGraficoAreaDual-CWzrwaks.js",
-      "sha256": "16018157a75dab38b591f0060c76d6140834db2230ce9a63606378986fee66fc"
+      "arquivo": "frontend-dist/assets/PdvGraficoAreaDual-BBoP4xfn.js",
+      "sha256": "2fc3af38db8648dfdc2cdd6cd0bcc67a3bbf14330be9d9aeedac75f6aed6fb28"
     },
     {
-      "arquivo": "frontend-dist/assets/PdvGraficoBarrasHorizontais-DeE0OxY4.js",
-      "sha256": "31810cc266488608ea348f046242dce6565d160e4a32b9bab0f166a140c19793"
+      "arquivo": "frontend-dist/assets/PdvGraficoBarrasHorizontais-DUM0yPAf.js",
+      "sha256": "65f15ebe7733865544cbcffba53f2d0577dcc3d739f5141191aa30d292c17273"
     },
     {
-      "arquivo": "frontend-dist/assets/PdvGraficoDonut-CNpf1lIj.js",
-      "sha256": "660e47c55f6b9addf3bf14f11ff7c36b8016d010d2735f8171d2b81148b93369"
+      "arquivo": "frontend-dist/assets/PdvGraficoDonut-CClSWWwe.js",
+      "sha256": "27050860b779e935358e003e873104854f78a8fcf7f2603743e6296088238cc1"
     },
     {
-      "arquivo": "frontend-dist/assets/PdvGraficoLinha-CUPaMFn3.js",
-      "sha256": "3d8c69a62f95703795a8d41716928dd8134396a35d335828b67ffcd9c856545b"
+      "arquivo": "frontend-dist/assets/PdvGraficoLinha-B0TRCnWi.js",
+      "sha256": "24fd3e23f79caabaa33199181eb097d7f16935728f324f5cbc186d8d94698b03"
     },
     {
-      "arquivo": "frontend-dist/assets/PdvMobileUi-8R05O9HK.js",
-      "sha256": "4c1cfa6ebb6f65aed0009a27f847730560350500eaed1cdf176e3a6800635ffe"
+      "arquivo": "frontend-dist/assets/PdvMobileUi-C8KlMDAQ.js",
+      "sha256": "57c45cd9d0dcfb3005fa96211a84de544449a8615b4cb4a57f81faa420f4d943"
     },
     {
-      "arquivo": "frontend-dist/assets/PdvPageState-CKCHu73h.js",
-      "sha256": "71e35fb0438bebc13bb770d5f0b56f9d9cb3e3e25c5f9876d46f19ea803f31c2"
+      "arquivo": "frontend-dist/assets/PdvPageState-DxjbA_Up.js",
+      "sha256": "d836123e13e794f3085b0a58ef7927f5638c64efd2ca19a4c2efe98ce7147ac2"
     },
     {
-      "arquivo": "frontend-dist/assets/PdvPinPad-BvJSjxq7.js",
-      "sha256": "47fda3a0bc4b51417cb284132c8a7cec6b317b7f1048637bee673472677fdc44"
+      "arquivo": "frontend-dist/assets/PdvPinPad-CbL8JHEO.js",
+      "sha256": "acd2937ea810193f3b73a864fa3d223167c001bc1e94c37739af3037ceb8f52f"
     },
     {
-      "arquivo": "frontend-dist/assets/PdvPixQrPanel-rrXd-lZQ.js",
-      "sha256": "9511fe6026d576d7c9175a9c2d2a598f0d7a17b4c4ef00b6933091c4eb10ab4c"
+      "arquivo": "frontend-dist/assets/PdvPixQrPanel-DXQG6bTH.js",
+      "sha256": "08aa61d487c81401edb86152f0bfb0c74242b21938963698c672baf2bffb3fb2"
     },
     {
-      "arquivo": "frontend-dist/assets/PdvReportChartBand-E_6v07mM.js",
-      "sha256": "5b40e23c3a62307a5fd8bf990b06581c0451227f160cb1a0741617e6be8727f1"
+      "arquivo": "frontend-dist/assets/PdvReportChartBand-Cc5849vF.js",
+      "sha256": "beccd30d16c27e2ef49679f29ed5fdc357ca0806f19b259dbf05bc3522776bdc"
     },
     {
-      "arquivo": "frontend-dist/assets/PdvTerminaisPage-t4jrqaYV.js",
-      "sha256": "1a3d8df1aa654974e953df31780bb732943942728cc50a4be0f4f62bc03d8e88"
+      "arquivo": "frontend-dist/assets/PdvTerminaisPage-DVK7ateg.js",
+      "sha256": "fda1af69f56502fb212e8fdbd1cc30435eea5b43492104bf8918b3ba68f477f0"
     },
     {
-      "arquivo": "frontend-dist/assets/pdvTerminalConfig-BSDzunIX.js",
-      "sha256": "bd29d0d2f382561dbe50a5d32bdac3501bd0c437d53b513733a234908d2babcf"
+      "arquivo": "frontend-dist/assets/pdvTerminalConfig-BO59jO4T.js",
+      "sha256": "5e9cbf2a37a2248a99a4101f8984887ce9ce1476d4a76e9e921519380a514aaf"
     },
     {
-      "arquivo": "frontend-dist/assets/PdvTerminalConfigPanel-DFKVEHbz.js",
-      "sha256": "399d7f0c9e68741b8e62dc04a612b23a52852e313d7cea9d512c2c62f45199c0"
+      "arquivo": "frontend-dist/assets/PdvTerminalConfigPanel-DuVuVbHW.js",
+      "sha256": "36e46afe655899264356e13ea64126d24fea5d7bf99493a7ccbc7272f4bb3406"
     },
     {
-      "arquivo": "frontend-dist/assets/PdvTerminalLockGate-CGBn1dhr.js",
-      "sha256": "625aac38cc28f3dee95ca5315cbbda991a3e880bca04c3e21cb7f070a6b6ec74"
+      "arquivo": "frontend-dist/assets/PdvTerminalLockGate-D9aSiMza.js",
+      "sha256": "851674f40f3d4684576e92549419e9d18d7576f1e4f9bc8947d4214cfcba9e66"
     },
     {
-      "arquivo": "frontend-dist/assets/PdvUpgradePage-CgDw7FQo.js",
-      "sha256": "b66b123404381f0ad5972f3dde6954fe26525f8a7d365f37e50701b881e0f2d1"
+      "arquivo": "frontend-dist/assets/PdvUpgradePage-DRlh0ntr.js",
+      "sha256": "66d7151920407c39b49cc7d2861757e64f41a500326388d4ec486ab36d8a42a8"
     },
     {
-      "arquivo": "frontend-dist/assets/PdvVendasPorHoraChart-BoZuGqZj.js",
-      "sha256": "103ac86b50fd6a250c57f2fc0c45fd6e663e4dd1828f9f33c28c1a8c5af952c2"
+      "arquivo": "frontend-dist/assets/PdvVendasPorHoraChart-9wUnjn7a.js",
+      "sha256": "8ae39627ead279be529b462e1ae9c1366779e2295f5550eb7198f600fdb8aa9c"
     },
     {
-      "arquivo": "frontend-dist/assets/PedidosDigitalPage-Dv86jf_n.js",
-      "sha256": "8a1fdfa3a3130e35d04843190b1a4474686a8e03e41e5d9a595f0fe4540d3879"
+      "arquivo": "frontend-dist/assets/PedidosDigitalPage-DLTa-5cj.js",
+      "sha256": "55d13dcffe67072eaf1a3f9ffd2543dadb49791b1ae35cf85595dbf36ef75086"
     },
     {
-      "arquivo": "frontend-dist/assets/PedidosHistoricoPage-BlKI1PDm.js",
-      "sha256": "8018b63b35edf0aa4d861060ab54d226295abaf157526263bc0b3fc21c8374a4"
+      "arquivo": "frontend-dist/assets/PedidosHistoricoPage-D_nLiQLI.js",
+      "sha256": "2d0328ec5552f3dbe0aa0888eaf3bbbfbb9d98dfc9beff5a1e2864d9091fd2b8"
     },
     {
-      "arquivo": "frontend-dist/assets/PedidosPendentesPage-CTQGhwrj.js",
-      "sha256": "72e062a69644e19b2f14aae6c6654ef65e05b176718b1b9130f3a8c63edf6572"
+      "arquivo": "frontend-dist/assets/PedidosPendentesPage-CIOTS6a9.js",
+      "sha256": "f1d4f731cd2c071ad9da90feab101a39e18ba4f935f1255cfb4079fcc38e9d2c"
     },
     {
-      "arquivo": "frontend-dist/assets/pencil-x2wdzzMs.js",
-      "sha256": "7fa07c286dbebe8b4bb9b8f4eee1a6e5d968efd01cb8d1bc6d91528f782bde4a"
+      "arquivo": "frontend-dist/assets/pencil-CDqtqUKQ.js",
+      "sha256": "ec8e6c4abee9492e876a4b0258c28f679c2535bdfbfd61189d2b05bad5526087"
     },
     {
-      "arquivo": "frontend-dist/assets/PeriodSelector-Nnd3wdO8.js",
-      "sha256": "c0fb71db417237fe1fb3424f1764001d62773625dca68321e1bfe01edc120b97"
+      "arquivo": "frontend-dist/assets/PeriodSelector-Cer6362f.js",
+      "sha256": "876aaf1e65950c1903826ab49df80d81defe6124daec4a13fde4581f46759891"
     },
     {
-      "arquivo": "frontend-dist/assets/phone-KThmclCz.js",
-      "sha256": "622b6c7234ba6cf7db8dbe3b5de247b4aae0fbd498657992d2c010ee284287c8"
+      "arquivo": "frontend-dist/assets/phone-C0OCvASC.js",
+      "sha256": "dc1548c08490de3eeed161a27c51496df25b33b979ec4c4c19058ad4a7de2b57"
     },
     {
-      "arquivo": "frontend-dist/assets/PlanLimitInlineNotice-CPs4DizT.js",
-      "sha256": "75dbb8b29d5fd55b7dbf565f35295f7ae3db57d84fed34ec588ed1b092f6a0ad"
+      "arquivo": "frontend-dist/assets/PlanLimitInlineNotice-BPfoRfrB.js",
+      "sha256": "ae16beae34ac5a2e98beeb789df37452eb66accf7f6da2ac6e20249ca15ae8ad"
     },
     {
-      "arquivo": "frontend-dist/assets/PlanLimitModal-C5DUUBRM.js",
-      "sha256": "9c3577a8bd4e5b34f303f95299e9cce6bc0970f52d30f19b31b5ed0446bd85d2"
+      "arquivo": "frontend-dist/assets/PlanLimitModal-Dp_AJAJZ.js",
+      "sha256": "4e1ca1c07f0fe4d7ee4dd812f11e8a350c09954310c35722596f794c3a729132"
     },
     {
       "arquivo": "frontend-dist/assets/planPricingDefaults-nT9KaW9h.js",
       "sha256": "574f40b78a8a95c048643550d1f7abd537b266ec7729c82957006b58244090eb"
     },
     {
-      "arquivo": "frontend-dist/assets/play-BwROk-cb.js",
-      "sha256": "fdbdb69e1f67089fff6175b69e55561acc4a157bcbb59061070191f5b243e548"
+      "arquivo": "frontend-dist/assets/play-CHNqrwb_.js",
+      "sha256": "b3548ee65ad7c68aa4f9ef86b5088978192083cb7551b4710d6cb6b76ae92664"
     },
     {
-      "arquivo": "frontend-dist/assets/plus-BYfzyp9T.js",
-      "sha256": "3c42bcd2a1a5be31d2b6623632f23660d8a11280b898f29608ec7d4c85a61e7d"
+      "arquivo": "frontend-dist/assets/plus-BGNJ7am3.js",
+      "sha256": "e9e9aad3f333dc5588dc130d5c040850e341ed138d0646779d6252dab3d1b5f2"
     },
     {
-      "arquivo": "frontend-dist/assets/power-BFWbwTQw.js",
-      "sha256": "360bfc6b9e2ca46a7e36b79e7278e038aa8cb30a6c757961941e87ed09e889ea"
+      "arquivo": "frontend-dist/assets/power-BPrUpfle.js",
+      "sha256": "2e00fc697fe9eb173ec9465cb0d96bb18c81ce64b39b10b7feb2cd785d7cc273"
     },
     {
-      "arquivo": "frontend-dist/assets/priceService-Dq6aT37z.js",
-      "sha256": "4b89dab86a6a764b1490e3f7b2bde973b53e211af5a748ad3524829a2d414106"
+      "arquivo": "frontend-dist/assets/priceService-CGwuITFI.js",
+      "sha256": "112c0b4fa73b5cab99602bc4edca316b01b3f4203e7c70512429e54064f5a1b6"
     },
     {
-      "arquivo": "frontend-dist/assets/PriceSimulationPage-CFMigGe3.js",
-      "sha256": "93d9eea292320a6f1bba6f401bcb7c1193c82572db700cec9914be9c0b7638ba"
+      "arquivo": "frontend-dist/assets/PriceSimulationPage-CqJsI2eT.js",
+      "sha256": "9090c27f820db124456a41b1c00a9b69120c79207ecc7036f66d5536730c9e7f"
     },
     {
       "arquivo": "frontend-dist/assets/print.types-C4tvUnlY.js",
       "sha256": "67efec6ab1b2cd836fd80831b937a8b9162347e7b40564640c3c8da8ea8bb1ea"
     },
     {
-      "arquivo": "frontend-dist/assets/printApi-2TA1vnq1.js",
-      "sha256": "89e07e51a75ad17a8bbb3b98af74c7fa95a4e9598082eb8e279089648f87d4f5"
+      "arquivo": "frontend-dist/assets/printApi-BvtyxIli.js",
+      "sha256": "394fd90de00e141daa9160cc29198e8a6389b2e9394a0d7f346d53aa86e34201"
     },
     {
       "arquivo": "frontend-dist/assets/printJobQueue-Cmq6tOHR.js",
@@ -1791,64 +1791,64 @@
       "sha256": "c9a75c4f7b29a3699f02b292b1bef7efd89a2a8dd82fa7e4cde4d09f372eb939"
     },
     {
-      "arquivo": "frontend-dist/assets/PrintRulesPage-BAYZZ3lp.js",
-      "sha256": "c6f8f8e545180277de8cb30f1cf6e5f2c6b0b4d62c79d52ed9d66df9f03a450b"
+      "arquivo": "frontend-dist/assets/PrintRulesPage-DQd9tVUv.js",
+      "sha256": "a56a7e4c895d0dfcd41fb44630029cfe1b277189b53fe346f7044d23a1a523a8"
     },
     {
-      "arquivo": "frontend-dist/assets/PrintStationBridge-DDO_tI3j.js",
-      "sha256": "298829bc81ddff18038f1f456923c699942fc16c8a40a19261120c56486c016e"
+      "arquivo": "frontend-dist/assets/PrintStationBridge-BeeMAmkN.js",
+      "sha256": "b07444ae16ddc9bfcb20380baa095932c077f70793f0971efe0787adc15fd9f7"
     },
     {
       "arquivo": "frontend-dist/assets/printStationHotpath-BV4fAMC5.js",
       "sha256": "94ec6aa2e737ce1e2e5df19cc18e201087ea211c3564382e08155180a061fab8"
     },
     {
-      "arquivo": "frontend-dist/assets/PrivacyPage-De2tGRnH.js",
-      "sha256": "f1ae4dc372978fdeee45eef092ce75c8a95b7b3518c729f28e47b244dc490e82"
+      "arquivo": "frontend-dist/assets/PrivacyPage-JDa3xSTK.js",
+      "sha256": "aad1e31c0393c4b94eab3539d72ff1c93d3d81276e601afc237398bd2a20a696"
     },
     {
-      "arquivo": "frontend-dist/assets/producaoApontamentoApi-83hll8cZ.js",
-      "sha256": "c9597c20242bdea1e1c54b9dedaf4e22aaf41168c235d4e137347e763034fe6b"
+      "arquivo": "frontend-dist/assets/producaoApontamentoApi-CPauRg6k.js",
+      "sha256": "ae0ebf58af6421c38c7c9324b00e7a05b27681f19d61e80455d6d8d338dd40c7"
     },
     {
-      "arquivo": "frontend-dist/assets/ProdutoBuscaNfe-CvlzCuxn.js",
-      "sha256": "45a4ed323502685613bba02dc04d634e2ee8ee7ab9b2a399a733bbe2e5a8bf17"
+      "arquivo": "frontend-dist/assets/ProdutoBuscaNfe-D8PC2VHH.js",
+      "sha256": "ca3cb22e6f2e9a0c70648645e38b2b657f1ae888eba5baf51c436582dba5759f"
     },
     {
-      "arquivo": "frontend-dist/assets/ProdutoGlobalCatalogoPage-D0KaJHnK.js",
-      "sha256": "de2418db83142c8424c95afc70d70f6bdc7b197612b479d374f411cfd1e98c8f"
+      "arquivo": "frontend-dist/assets/ProdutoGlobalCatalogoPage-CxNSslDj.js",
+      "sha256": "6ab6a7b75ccb8f58fce5ae799111436291b85d1f12d74ab6a86b2e44849872c4"
     },
     {
-      "arquivo": "frontend-dist/assets/ProdutoGlobalCorrecaoRetroativaPage-Cnhk3y0F.js",
-      "sha256": "ab417c132516a8db960f9dc61ae6c0750fba6568c23620dab87ce377d2a4a86d"
+      "arquivo": "frontend-dist/assets/ProdutoGlobalCorrecaoRetroativaPage-Cmhex8Jn.js",
+      "sha256": "8f5d501eac8fd3cba9750ef47f2c8979694cb1a4ae4eca840d83d5ef9aac0bae"
     },
     {
-      "arquivo": "frontend-dist/assets/ProdutoGlobalDashboardPage-B1OgryfL.js",
-      "sha256": "ad2088931fd2cc67ff38b2ddf064166f63b4f699757efc4333e154b9d76970a3"
+      "arquivo": "frontend-dist/assets/ProdutoGlobalDashboardPage-giPOU998.js",
+      "sha256": "30c746e281d52cf50e52e7049b25b095fbd0d7fca83aa242e0a9b35e71b33dd8"
     },
     {
-      "arquivo": "frontend-dist/assets/ProdutoGlobalDivergenciasPage-LBZgkpsT.js",
-      "sha256": "98cbd30b5cc5fbd0f47db62be308233ca1bacb4efb27cf3468238870bc78ea6e"
+      "arquivo": "frontend-dist/assets/ProdutoGlobalDivergenciasPage-BpyxadNn.js",
+      "sha256": "6236451a70d4047a8a772ac028804877308f7b0a79c0ab5bfcddbbc82df389f2"
     },
     {
-      "arquivo": "frontend-dist/assets/ProdutoGlobalEtlBootstrapPage-BSafAcQ4.js",
-      "sha256": "95d1b9eeb4ca2b9d486235b7d75afa34d7a7919424d1fbf799aa49245310699e"
+      "arquivo": "frontend-dist/assets/ProdutoGlobalEtlBootstrapPage-e3HB19Ac.js",
+      "sha256": "ece00266ffd96ab2eb70de7d7224d811d143a97a2472f8af1a20f605816d3ddd"
     },
     {
-      "arquivo": "frontend-dist/assets/ProdutoGlobalFontesExternasPage-DMVKU2QO.js",
-      "sha256": "b75b3b68602937d30b3c6c03d317c413fc25bb58e6e18f98748f9d1fe8b6579a"
+      "arquivo": "frontend-dist/assets/ProdutoGlobalFontesExternasPage-BPU_LyP9.js",
+      "sha256": "2c6f393a67aa89938ebd27b5e375752905cc039dad06b3c44e708cc1282eca2c"
     },
     {
-      "arquivo": "frontend-dist/assets/ProdutoGlobalHeader-Bn6v-Csq.js",
-      "sha256": "4ac89a964cb9f94d1997f489cfb1cdaaa0299c9da26b1a23617ca016195c4737"
+      "arquivo": "frontend-dist/assets/ProdutoGlobalHeader-KzoHMX3L.js",
+      "sha256": "fd33a96022237b629e9098bc0d90e830552a119abbffa51a9e36e73059552d44"
     },
     {
-      "arquivo": "frontend-dist/assets/ProdutoGlobalThresholdsPage-DvA2uiUM.js",
-      "sha256": "181115ca775d344b48dbad64576f8de207a774a01ed77e7d90918f8b7e41332f"
+      "arquivo": "frontend-dist/assets/ProdutoGlobalThresholdsPage-Ck65DczV.js",
+      "sha256": "04d7a7de630f0f402b84fa1e51ed907b98949ecb20ff075a4c659869236a9015"
     },
     {
-      "arquivo": "frontend-dist/assets/produtoImagem-BvXIBW5y.js",
-      "sha256": "c3af51c9f7f9507223c04d2fb6b3ff0f7ebcf5a5edad0bdb83389170bea5c8ee"
+      "arquivo": "frontend-dist/assets/produtoImagem-kIs0TQo5.js",
+      "sha256": "d24dc278eaa4323d050934196aa03b5a29b64c52672c926bebe3673f3473c724"
     },
     {
       "arquivo": "frontend-dist/assets/produtosCodigoIndex-C1tXoWO0.js",
@@ -1859,616 +1859,616 @@
       "sha256": "fdfd0edf83008018810e9c53348d4af9c27cd64e330232507581e8b60eeab9c4"
     },
     {
-      "arquivo": "frontend-dist/assets/produtosMaisVendidosReportApi-CosxNzyP.js",
-      "sha256": "60c1b171d14e32f8c487df6684db1a84f4287c091b83e830dd7292a8ee13fa7d"
+      "arquivo": "frontend-dist/assets/produtosMaisVendidosReportApi-DK3ExukE.js",
+      "sha256": "493d141d31122d59ccd60b1e08694a3f19814f2ca34e83fb8334fed8fd0a024c"
     },
     {
       "arquivo": "frontend-dist/assets/produtoVendavelCaixa-BVmbGKE2.js",
       "sha256": "8ff0358d0f83445eb1cf8773de691e5a3eda4095f659207bb1dbca75502219a7"
     },
     {
-      "arquivo": "frontend-dist/assets/promocaoApi-DECpixop.js",
-      "sha256": "069cbbac194ee729998e878f99b7280374363d114c88a3545a7c103e28bc06d2"
+      "arquivo": "frontend-dist/assets/promocaoApi-Cj47VKc-.js",
+      "sha256": "2b4e420ae6a6b6abe07a0908aa3d4d232bbbbfc21557d488e8bd538ca9a859c8"
     },
     {
-      "arquivo": "frontend-dist/assets/PromocoesPage-BcV13oKI.js",
-      "sha256": "a02f025f8bf760142f072bde651f93f890d4d2c817b1fb42d384945dd3fd7e2a"
+      "arquivo": "frontend-dist/assets/PromocoesPage-Bt9erpfV.js",
+      "sha256": "80fab52fcb10ee0bcbf31c32fdafbee50514539371f950e4487f2d22416a5c3a"
     },
     {
-      "arquivo": "frontend-dist/assets/PromotionPage-BR6EIGY0.js",
-      "sha256": "460eb1afc092334fe026fbfc80503af013976bddd81e1f53d2662dbbf2ad5a61"
+      "arquivo": "frontend-dist/assets/PromotionPage-CmRgVYu1.js",
+      "sha256": "261f08fdfd1bb6fb94cb8516c7a94466cbb733607fbebb47698cb53337e03f26"
     },
     {
-      "arquivo": "frontend-dist/assets/provisionTenantHelpers-DopwwWGb.js",
-      "sha256": "4b09a1d7b5337c46eb481e1f1694bedc8442fa9bb5f58cc6b12c81be97809234"
+      "arquivo": "frontend-dist/assets/provisionTenantHelpers-V1ARaCmB.js",
+      "sha256": "cb90c0cef78d705bc9b05b15645b8eb6db2c6f349e885db1a922aa44ef576387"
     },
     {
-      "arquivo": "frontend-dist/assets/PurchaseDetailsPage-DmraQA7D.js",
-      "sha256": "a173907b674a64606b8586d412fc79dd40ef780be7bbcc828f63d2ef785796d7"
+      "arquivo": "frontend-dist/assets/PurchaseDetailsPage-BRKr7jI0.js",
+      "sha256": "bba2426ffa17ac17d20a78a588c6105b4bc32acb7d2a9217980fc719aea4b98c"
     },
     {
-      "arquivo": "frontend-dist/assets/PurchasePlanningPage-DEkdDcoa.js",
-      "sha256": "e078f9f8982d88386be2ce6674ae5a8ca7a397421781038ad063724b288abedc"
+      "arquivo": "frontend-dist/assets/PurchasePlanningPage-BjelYsyh.js",
+      "sha256": "d9693f6b3e7e5085d26ad8a5ced98f5ee04cd085c34a43add88bb640ecfbc022"
     },
     {
-      "arquivo": "frontend-dist/assets/purchaseService-D9jAMcxM.js",
-      "sha256": "66302cd40c46caf670b1f455e666752a2f3679647fcf8d700b2e79037c673e4a"
+      "arquivo": "frontend-dist/assets/purchaseService-DME5g3aE.js",
+      "sha256": "beb174d59a9e79ae1c1efb135c0e54e63e0ddd7ae1f75dc66ff80c1fc73a18d2"
     },
     {
-      "arquivo": "frontend-dist/assets/PurchasesPage-S_UbILfK.js",
-      "sha256": "fba8f171751c77f8f6658c11b103efcef6b337fdd48a60d8dc30cd7915b75da2"
+      "arquivo": "frontend-dist/assets/PurchasesPage-DNq3OpxW.js",
+      "sha256": "0e3f7ddf6131dbce29f5a3916664c0d09ef4b5996d5ab54c3822670c1d7dd191"
+    },
+    {
+      "arquivo": "frontend-dist/assets/qr-critical-0GWDpMWL.js",
+      "sha256": "e6ab1d1c1704c3e6b02560289b481170c19b926ad9f49ed9380a345db6d7c5a8"
     },
     {
       "arquivo": "frontend-dist/assets/qr-critical-D7QYmdZq.css",
       "sha256": "e36464892e8a02b1539cc5620bb2ff36db92bedc20ba0f1f3224c08a7b57605e"
     },
     {
-      "arquivo": "frontend-dist/assets/qr-critical-rEQWfb61.js",
-      "sha256": "52c77c3ecd3269023c3b12d4152885f8f07fa27a2b77baecd8c0ab1ee7d49996"
+      "arquivo": "frontend-dist/assets/QrCartDrawer-Dck5GT_V.js",
+      "sha256": "dc2a16034d79b1c746e35ffd3e04744d4cf966f644b8cf3e09267ed139fc9070"
     },
     {
-      "arquivo": "frontend-dist/assets/QrCartDrawer-Dn2BkDhj.js",
-      "sha256": "f68029150cc28ca9c57e88072057678511717a9b1e62dfe7cb15a371e5c3ffbd"
-    },
-    {
-      "arquivo": "frontend-dist/assets/qrCartModel-CsK7TBz9.js",
-      "sha256": "9feb748629f5b17b2bcf60ea6c78c7c0f8dcdc7a4a94cf8383e7103d6807c5f4"
+      "arquivo": "frontend-dist/assets/qrCartModel-CTuw0xi2.js",
+      "sha256": "032482ddc32b090ddd6c596c794a36a927766319721d77e5771759f1e17a5d99"
     },
     {
       "arquivo": "frontend-dist/assets/qrDeliveryForm-Oy09Wd4T.js",
       "sha256": "22d453e6b9d9e459448d7d61726b8bb845b38854217252d843bdd287109bdb21"
     },
     {
-      "arquivo": "frontend-dist/assets/QrDeliveryPage-WSQ8tIDL.js",
-      "sha256": "9d668a22e33596d529fda5d3a7f36e155a3f3617ffde08634efb2bc01ad56491"
+      "arquivo": "frontend-dist/assets/QrDeliveryPage-CUr_SLbG.js",
+      "sha256": "1993c148703c761e589f537af54c1a80543c542c80128cbe0eeac57d5836a200"
     },
     {
-      "arquivo": "frontend-dist/assets/QrGerenciarPage-CfsqLfTj.js",
-      "sha256": "d85c03be50d19b6ed709a4a8356813d012b25b9e3a96e8a8b94c5cb3e5c78630"
+      "arquivo": "frontend-dist/assets/QrGerenciarPage-DloQgpSt.js",
+      "sha256": "359ddcca8702c8abe4216bb960ae00851b342941756c1ba5d93450aa437d6b67"
     },
     {
-      "arquivo": "frontend-dist/assets/QrLojaPage-BC9-kgns.js",
-      "sha256": "02594d3ebc6f4648bbaa280abc8a50093125d404d59372ea134b3d11210f14e8"
+      "arquivo": "frontend-dist/assets/QrLojaPage-DlRVjUxF.js",
+      "sha256": "4bbd9ac7fbd53d9e60618796f2d6121b8705162c70ed5ac90abc3c8fc55d98a8"
     },
     {
-      "arquivo": "frontend-dist/assets/QrMesaPage-LYfcyPvG.js",
-      "sha256": "e9c2e3fac37d26a8cd67eb8a7fee676a3a969fdb606772c694a6e517a00f9602"
+      "arquivo": "frontend-dist/assets/QrMesaPage-DNZHMMZ0.js",
+      "sha256": "644bf05e8bcc0dcc00daed27fa0d9c5ffbfb8f85e695a2ad30403b6140ff85ef"
     },
     {
-      "arquivo": "frontend-dist/assets/QrPageState-gV8JqYIq.js",
-      "sha256": "e4767bd73980d03d3db8b031d2e04d72c16b996bef3e653d0a33741c07fef94e"
+      "arquivo": "frontend-dist/assets/QrPageState-CUCttmld.js",
+      "sha256": "f22e462fcf4060dede662550cc2996288203e1e59c19c27e4577a75c0492401e"
     },
     {
-      "arquivo": "frontend-dist/assets/QrPedidoAvaliacaoPage-XoVRzUAv.js",
-      "sha256": "2fde58fb5dbb587f98c02af21c765d8324d44c400bfa450543082e6b1167e5c5"
+      "arquivo": "frontend-dist/assets/QrPedidoAvaliacaoPage-Cw6nTmCs.js",
+      "sha256": "2fb42ab558223ef133128b8069dbf18645fae6d819b22eb8155a14fe51cceb07"
     },
     {
-      "arquivo": "frontend-dist/assets/QrPedidoShortLinkPage-6omDYg1o.js",
-      "sha256": "a0db13d3c75ddbdec5a91a96b22e98614b845c42ae5e11b3e1cd134f862a549c"
+      "arquivo": "frontend-dist/assets/QrPedidoShortLinkPage-CaWbeNCD.js",
+      "sha256": "63e2346b65b74da2b8cd62cff2a9069f8fd9d862d488bb0a800c7ec55117bee2"
     },
     {
-      "arquivo": "frontend-dist/assets/QrPedidoStatusPage-neDvOGtY.js",
-      "sha256": "da766c8bd68dc51f17bc855ca8b6f94de0d8d5abc58d66e71ecf52db02819d1f"
+      "arquivo": "frontend-dist/assets/QrPedidoStatusPage-D0VqZvlD.js",
+      "sha256": "b4f416d1fa8dd75f5b9ad7b36fdfeabf2a28ac68d82f96561e5a840285532e92"
     },
     {
-      "arquivo": "frontend-dist/assets/QrProductSheet-B0U1e9WM.js",
-      "sha256": "ce5a8491314a9abe4ae169e52d723f2bde6b31376d5acfbf1d4932ec6a605e7d"
+      "arquivo": "frontend-dist/assets/QrProductSheet-NmJsKN0S.js",
+      "sha256": "ca5e5c0c8fa1bfa5f4c089c1d77525136ceeb0f17668ebfa609f8a13e6c09220"
     },
     {
-      "arquivo": "frontend-dist/assets/QrStoreHeader-DoL3oSzk.js",
-      "sha256": "564383e85d2e9dae18c8f13c3c49144c7a377d691df002351343385fabcafe6c"
+      "arquivo": "frontend-dist/assets/QrStoreHeader-Cz6XzXVe.js",
+      "sha256": "35a29c729d4c361a7ac8f471c8c0f9a55a0a94a7f0e786b9255f7c4e47802f17"
     },
     {
       "arquivo": "frontend-dist/assets/qrUx-CDzVgVgF.js",
       "sha256": "c2e7d4fce7434388404da6ae337b8c5058a0342adc039f9c615e0503b1276db6"
     },
     {
-      "arquivo": "frontend-dist/assets/radio-D7n6YikR.js",
-      "sha256": "026994d1cf64fcb71a0775c6ba4f34fcd36ac82a2e79587f789dcfeedfd3aac0"
+      "arquivo": "frontend-dist/assets/radio-DWIrYWsf.js",
+      "sha256": "293a6d00445ceee5a4c70e7e8607986de6fa63c7c1889f6d6da44d3504c45eda"
     },
     {
-      "arquivo": "frontend-dist/assets/RankingChart-dMZoLeP9.js",
-      "sha256": "d24908711f794e85134dece85b8dfc9066590518d34926b52ffdaece81e0a553"
+      "arquivo": "frontend-dist/assets/RankingChart-DpdkdClb.js",
+      "sha256": "f8f0dc302472761f767b690fcc1872c2a3eb805c21b0582fa130ab9a4b3823e5"
     },
     {
-      "arquivo": "frontend-dist/assets/RankingCurvaAbcPage-v9YCv0En.js",
-      "sha256": "5cdadcb6510945be937ac5f637fdd86581f6ced45fae77ffebec5f5de814e36e"
+      "arquivo": "frontend-dist/assets/RankingCurvaAbcPage-By7KnK5a.js",
+      "sha256": "688f2edb5cdc4f4241164410c589b20ca46977097ddc766da29a7f46af668ff9"
     },
     {
-      "arquivo": "frontend-dist/assets/RankingProdutosPage-BUkqN7ia.js",
-      "sha256": "8a15bfa4f6da37b094e2d8ec9e9ecfbb3725c4897712c2822b30777da35c9115"
+      "arquivo": "frontend-dist/assets/RankingProdutosPage-sawRXQ4K.js",
+      "sha256": "c58584cd93bff2acc8516b93da73bd604d03ab275cd67971664e4dd1eeeb8583"
     },
     {
-      "arquivo": "frontend-dist/assets/RateioIgualModal-6PG4h8jq.js",
-      "sha256": "faa6581876af97b519eb599d1a779a8d8c860a938b1bd239cb060d18205e0728"
+      "arquivo": "frontend-dist/assets/RateioIgualModal-CjdvIhMm.js",
+      "sha256": "b4009160bc8a5936013f20a447fe1e779fdc189c6f74faebad7edf873ba99a98"
     },
     {
-      "arquivo": "frontend-dist/assets/RecorrenciasCustoPage-BBj1nJS5.js",
-      "sha256": "7ef845424a1b3f74acd2c71d28e5d01845ab2ca8d42f56de17f12012eaa273ab"
+      "arquivo": "frontend-dist/assets/RecorrenciasCustoPage-C6EBKMqc.js",
+      "sha256": "fe67d3396ab39da1eb209b9f6144f50a2b895b8dce2355005963b54f656f9397"
     },
     {
-      "arquivo": "frontend-dist/assets/ReformaProducaoAtivacaoPage-DO4LAljA.js",
-      "sha256": "30fecb506642bc7aafdbbc477aff33f695e46f9d9163b750aff65448444efecc"
+      "arquivo": "frontend-dist/assets/ReformaProducaoAtivacaoPage-DtFich26.js",
+      "sha256": "b74a9ea1fa6e3486020d495ca8a4fe996065d1c981092c736e45943061fa239b"
     },
     {
-      "arquivo": "frontend-dist/assets/RegisterPage-7laHCFtI.js",
-      "sha256": "015d6db34c8972f00b2b138ad14a61e54a91b4889f422f26b4ee2bbd63219819"
+      "arquivo": "frontend-dist/assets/RegisterPage-DFEcg2qj.js",
+      "sha256": "a730e47f0c37397006fc2adc949ce40f39705ecf6adbdfd8c8f6d658f6e23a7f"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioAcuraciaInventarioPage-BWrHjXPk.js",
-      "sha256": "c5d98662c5944458602d4f3b64e3e559a007a27d3517808a8695c7ff2fea73c0"
+      "arquivo": "frontend-dist/assets/RelatorioAcuraciaInventarioPage-DYeRamWo.js",
+      "sha256": "a6561c6f97a255208c79eb4ff4c0f285cb2d91bd4cd8861ae3737d494ad49177"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioAgingPage-pxygp4mF.js",
-      "sha256": "8d8793936a9fdb66d9ec5256b500a3e43d5b6a48a9251900ca5b8763cd43c493"
+      "arquivo": "frontend-dist/assets/RelatorioAgingPage-CR_HZymP.js",
+      "sha256": "37e5bf319056f84c62fa4dad9d03fa88d7002c984a0bebcec7d793459500e69a"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioAjustesEstoquePage-C1N5GfCL.js",
-      "sha256": "7ba753ea434f5e31a7dae1db53b69f65154a2f230af1a489669af82aaa4957c8"
+      "arquivo": "frontend-dist/assets/RelatorioAjustesEstoquePage-BFcvP0oC.js",
+      "sha256": "d5dcece71c9cdfdae96f6730fbda44e914185f096ed189d2b0485dfcbb0561d5"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioApuracaoNotaFiscalPage-BIIn9w5z.js",
-      "sha256": "d244c56a31dfc728792c25ee86d0c6e1e1c3b7613bb1bc047c9cd7a96fd2fbd6"
+      "arquivo": "frontend-dist/assets/RelatorioApuracaoNotaFiscalPage-HUaI1k44.js",
+      "sha256": "75210950316e00a5ce2f1c16d52d0d58aaa7e2021d311422791559233cb5433d"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioApuracaoPisCofinsPage-Dm1aJIJn.js",
-      "sha256": "6f84010a663258bd4801816ab4e0bd3d2a8503028fbd7ebb34924f9965f3c4ca"
+      "arquivo": "frontend-dist/assets/RelatorioApuracaoPisCofinsPage-tx0Kv0xR.js",
+      "sha256": "d6b9e8cb960810fb4efc7b797660de70dff6adee1acb43f03e274eaeeff396c3"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioApuracaoVendaMonofasicoPage-CETV6hzF.js",
-      "sha256": "c9b78b676ae68609dcc2e14b3cf63310c158082b6113aa887af4dc433a9ed062"
+      "arquivo": "frontend-dist/assets/RelatorioApuracaoVendaMonofasicoPage-DShP2JyW.js",
+      "sha256": "bf34e042301109bcfa33000e9fcd4c287be89b6be241058bc6c098c759bd7c62"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioAuditoriaInternaPage-B23ivCCt.js",
-      "sha256": "9e423eb77f57c95c56ebe0057288923efce5fb80b403900e7850866a60798aca"
+      "arquivo": "frontend-dist/assets/RelatorioAuditoriaInternaPage-Bo0wWdHM.js",
+      "sha256": "6f4d68ea7e731e1925dd5eb389fa496ecafc2179cf2d243268df31ccaebb79e0"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioBonificacaoRecebidaPage-BU_fCbu6.js",
-      "sha256": "78a911d911897f29e54b8d9d50aed3e326cdb8fab963f03b43fd20fa41a7eb08"
+      "arquivo": "frontend-dist/assets/RelatorioBonificacaoRecebidaPage-TBiu5f0p.js",
+      "sha256": "d3a0f89245f2f3d77d2096ad93a05924448acdaeb0d60bfaba2ed56efa55a78f"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioCancelamentosPage-bxDCgGXu.js",
-      "sha256": "8a2f41e0bc2848a0dc2325d30d326d9ad537be7f94f32ec196b2764b4780b5de"
+      "arquivo": "frontend-dist/assets/RelatorioCancelamentosPage-Czn0Xhu8.js",
+      "sha256": "96cc0c777fd69c1ec5f81b8b715b27ba848bb994bace2c9f5ef06c41fefb6293"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioCfopUnificadoPage-_YRJbEJM.js",
-      "sha256": "1444cc3cb8d4a665316139bf9b5fb9e79852c1d78fcbf37866186d538c7aa3e1"
+      "arquivo": "frontend-dist/assets/RelatorioCfopUnificadoPage-_4S1mIJY.js",
+      "sha256": "8434d27c6503b385d17fbd5c6197652dbd495096892b74064932ee6194e1fcc5"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioChequesCartaoPage-DkHf5Ivw.js",
-      "sha256": "f53e8112beb808e1181f5c12a2688cd6d2192340d51e883c08449b7cb9577e70"
+      "arquivo": "frontend-dist/assets/RelatorioChequesCartaoPage-CtCjTTDK.js",
+      "sha256": "f1dc3184edaa36bd22e46bedd876bc2f477db60f02d181148a65cf53101747e1"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioCoberturaIcmsStEntradaRealPage-BmmIBSXq.js",
-      "sha256": "5cf974f21a63b4e617cf5625557c77337794ca4c41f24bfceeaff65074493fad"
+      "arquivo": "frontend-dist/assets/RelatorioCoberturaIcmsStEntradaRealPage-Y4pzZR9W.js",
+      "sha256": "1eacc367a18e4db74c37cada4a2bef60f1f4c5445e1aa2b04e284a8c3a56224c"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioCoberturaIcmsStPage-CI6KVBG8.js",
-      "sha256": "55f914224325482f71ae91ad1d96ada193882f50eba86159b5ad4cd4868c5bce"
+      "arquivo": "frontend-dist/assets/RelatorioCoberturaIcmsStPage-qw8ST0HI.js",
+      "sha256": "ddf786e74e8a9d974c0232c1c82f8ddf2f6d1c95558ec6983d4029eccf0ea49b"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioCoberturaNcmProdutoPage-DVzHsg2Z.js",
-      "sha256": "62775e5b5c7b75aa78e43cbd3916c12d3643b8e2bad7b6bb56a671146747f9a9"
+      "arquivo": "frontend-dist/assets/RelatorioCoberturaNcmProdutoPage-CbK2J3cS.js",
+      "sha256": "b21793bb16ffced126237ea54dc4e743f6a4e84a9be5fbdd0db2ff5c8c52a5ee"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioComprasSemVendaPage-DcQliaye.js",
-      "sha256": "3ccec31bf10cdbe3529d61f27f6f9afae572a41c1a4186bd88b34928fe99d94e"
+      "arquivo": "frontend-dist/assets/RelatorioComprasSemVendaPage-Ci524lUA.js",
+      "sha256": "dfa996a1c76f83ce7ef697a1bd9e94b17127f04ee409167f6d6c8b2fe336ed93"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioConciliacaoCaixaPage-DWImUyIO.js",
-      "sha256": "156da0c1fa479080a5f5b74a1af32842f4e01419c571f9795eb99bcbb6224910"
+      "arquivo": "frontend-dist/assets/RelatorioConciliacaoCaixaPage-_wpf67Ic.js",
+      "sha256": "ae19ed5214c184a1cc82557e225e0da01bc7cbe4f6c5842d24e1f8c50e447e41"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioConferenciaXmlPage-CJ-g0WYd.js",
-      "sha256": "91ba0375dbb02a5e7b7d5af285b3109f84594c5a8868eee53b7bf62498f66177"
+      "arquivo": "frontend-dist/assets/RelatorioConferenciaXmlPage-0AFsZ8P3.js",
+      "sha256": "83db13519e674720fe50805cc6bb453cd3595199531eb9545f13286087fad1c5"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioContabilPage-Dxzt4g2V.js",
-      "sha256": "6cd9b0edccd89fc71546cbd6e50f2d4d75bc8c5878283a4b98dc19a27de1a30f"
+      "arquivo": "frontend-dist/assets/RelatorioContabilPage-B17lCR8a.js",
+      "sha256": "4c563ba73333eddadb22981b2ed39f65ee31c23a2bbc3786519f75b634454711"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioCupomNfceAnaliticoPage-CA97Mt3U.js",
-      "sha256": "ab715e00c9d363afe77e72c6b4543ec65b93e0daef637be05ad67691417f4570"
+      "arquivo": "frontend-dist/assets/RelatorioCupomNfceAnaliticoPage-B9JosdwY.js",
+      "sha256": "8d59ab197bbba3f4af7b1ad651670f18c817f54ec58e01f0f587f507314eb730"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioDescontosPage-DxmydtET.js",
-      "sha256": "45214ceb9b46e56f4c6a7efb63435a9e2d8ebfc05fa44b15502351ca77180abf"
+      "arquivo": "frontend-dist/assets/RelatorioDescontosPage-D76F7JRh.js",
+      "sha256": "c700bfe8c783a1c8a66662993ef49af64144c8a0f4fcd74bbe7068d48234031e"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioDescontoTitulosPage-DK77ZgAg.js",
-      "sha256": "1fd8eb619302128d0418ec2af9b78cbd51a0b6115a3687ab786a3a724f8aacdc"
+      "arquivo": "frontend-dist/assets/RelatorioDescontoTitulosPage-BFS6j3gp.js",
+      "sha256": "9c4edb89e9247c84de0649b0615ca57debe067582db12bac285111771fe9e92c"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioDiferencaPrecoPage-CN3xPwF4.js",
-      "sha256": "ceca4dcff53786adf72a2ad72ad6d9e73d6cc318bdfb9beac440634a1d01fa84"
+      "arquivo": "frontend-dist/assets/RelatorioDiferencaPrecoPage-BEQ6R7VP.js",
+      "sha256": "252e00bfd71dd2956fe111089cb4a8dedf0a6a97e1c0a681d162014656d45290"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioDinamicoPage-DWwhGB6b.js",
-      "sha256": "54de07157290b6573e1f6602e881769682a59f61efd925213e73222b20b14c6c"
+      "arquivo": "frontend-dist/assets/RelatorioDinamicoPage-DeYCOIbt.js",
+      "sha256": "8076a9a89898639e5f77cc98e405f28c12bc7d6d4c4354cf809f955dc3f17360"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioDocumentosCanceladosPage-CAKwjrTO.js",
-      "sha256": "8aecfc5c18dc8a7396d094054350248b28df9d05287c4c13a57c1193936c1a0d"
+      "arquivo": "frontend-dist/assets/RelatorioDocumentosCanceladosPage-DJ_sC1yJ.js",
+      "sha256": "c8aee1f0e99a0c52bfccff3e478b8dae1dfd47707d7488193015eea7edf5d3aa"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioDrePage-BPXILBHB.js",
-      "sha256": "5199b9255b8cfcfba5debed9a186d1b797325635eb3a1b75ce6fcc371a2d65b4"
+      "arquivo": "frontend-dist/assets/RelatorioDrePage-CIPPvG9u.js",
+      "sha256": "9d2186f67fbcfd1e440d2148efacf6747a6791467a3ab71ed15d6e441be5cad2"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioElasticidadePrecoPage-KasDfBhr.js",
-      "sha256": "8e9d0bf92ab8265d3dd477539fa6c1b715c9a025e2fa34ea8d6e611a302898e4"
+      "arquivo": "frontend-dist/assets/RelatorioElasticidadePrecoPage-BRRQ_oFX.js",
+      "sha256": "e8c09822ec5feec79b292bc255a1999322543432afc6316a24ea04d9839236f2"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioEstoqueBloqueadoPage-BFLiGfac.js",
-      "sha256": "ce81e87d850a0cbcc080da69260dee7d22fb59cec678ecec287ff569a714ae1a"
+      "arquivo": "frontend-dist/assets/RelatorioEstoqueBloqueadoPage-DmplYIXG.js",
+      "sha256": "b40e06d9f8994c34544d736042da4c2ce0806a579293053c706fa9926173ff3a"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioEstoquePage-BXmllAq8.js",
-      "sha256": "3b96e9a1a51c2a33b9e12a0201f6563b5680bf251bf0866d73dbc005f8d01e73"
+      "arquivo": "frontend-dist/assets/RelatorioEstoquePage-y78poJSb.js",
+      "sha256": "709196e41008f4d503f4deb068346d5cb018d41bb6de0c731d089ae6d091aab4"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioExecutivoPage-DArHpIR-.js",
-      "sha256": "9a9701eead54647b282bbba7c547ba2d9cc63e806f5c7481b1cf7d6948d9a8c1"
+      "arquivo": "frontend-dist/assets/RelatorioExecutivoPage-P7vN0IGG.js",
+      "sha256": "b7bfb02e52c345b044bcdacfd73275bb05d226ebc79e95b2675261bef1dd8cbe"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioFechamentoPage-BNWa3XX6.js",
-      "sha256": "adcb52ad3d4fa6611149eab4f7fde649d63f002217d8d7c562a7d23ba8c7ef5a"
+      "arquivo": "frontend-dist/assets/RelatorioFechamentoPage-BK4iw98U.js",
+      "sha256": "a1e5ec68ea5c5d9e0ddf2286018bff8da86e48d6bf7dcbe2c544e63867c9c399"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioIcmsStClassificacaoPendenciasPage-BvDeymRT.js",
-      "sha256": "09f20be77044e89d9968f613ce4e380ef97e9f3218ed59860e58121e401aea06"
+      "arquivo": "frontend-dist/assets/RelatorioIcmsStClassificacaoPendenciasPage-o_jSAh1B.js",
+      "sha256": "02481b4674552442424cbd2b45138f05b8fd3c2d891ac3d03f35dbfc982ae514"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioLeadTimeFornecedorPage-Cu_xJKW9.js",
-      "sha256": "33685f2a8ca17dd4d359e44518287909a9fab131d9995bec31fcbf99c58b933e"
+      "arquivo": "frontend-dist/assets/RelatorioLeadTimeFornecedorPage-BPHzDt1K.js",
+      "sha256": "3695fa01ba6ca65172c67eec34a036b611c78a0fc31ecda86f9e6b36f92ee3fd"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioMapaCfopCstPage-CPvxk-Db.js",
-      "sha256": "888feb7ee1b51b1f46f886c48d64bd36f579fe7144c3e8e1e3e58320cdb991d1"
+      "arquivo": "frontend-dist/assets/RelatorioMapaCfopCstPage-KYPVAFjt.js",
+      "sha256": "da67bc96740f530ede63db3d9dc46d0ee7ea446a5cf45a37c7a764f7e4d1a3c6"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioMaquinaCartaoPage-CloOHZEm.js",
-      "sha256": "a296a50fa763ed32795611cfa4d59da1e2dfc500f2b70d285410654cbf42a3a7"
+      "arquivo": "frontend-dist/assets/RelatorioMaquinaCartaoPage-CC5LqKnc.js",
+      "sha256": "a3b6ba99eeaf722c432140134c0efb9b5d3db488c21cb233f421f1097c4719bd"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioMargemBrutaLiquidaPage-DZkNYCZP.js",
-      "sha256": "b84593a48fab4474427c88104b1c84cf5ca91f8e88ad95109e8ffa8e7822e19d"
+      "arquivo": "frontend-dist/assets/RelatorioMargemBrutaLiquidaPage-Bx989CW4.js",
+      "sha256": "7bc2d52395aef4a951a9fd37b6de95483931aa3ae47268ab95a06009d39a5bd0"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioMetasVendedorPage-CRTxbLbB.js",
-      "sha256": "90c0961da58f805032ba56b7d9e1727b713ad3716c23f8f7dd46bb62572c4a0e"
+      "arquivo": "frontend-dist/assets/RelatorioMetasVendedorPage-C2gOBpNP.js",
+      "sha256": "64c0c56f437c5bb3808d4914f12977a1e833327870650e658ad86abb14886e96"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioMixVendasPage-CcjFW_e8.js",
-      "sha256": "f0f475ec88a9a80a033eafcaa26f96a04978c18b668b4be8dce516297cb7b16d"
+      "arquivo": "frontend-dist/assets/RelatorioMixVendasPage-DpoMj2Fg.js",
+      "sha256": "5252eed6752db21f5ba793374b1fc270e8dfcc7cdb6d1f5e9b58a5a79d4bdea2"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioMovimentacaoEstoquePage-DslItFVZ.js",
-      "sha256": "b35b2ffc708835b4dd2ff4d95ab19d1d9567699135afb5df869665b1e7bb9681"
+      "arquivo": "frontend-dist/assets/RelatorioMovimentacaoEstoquePage-CljKnpGG.js",
+      "sha256": "5efaa5c3a3f79a055f9a1ae5d87445743dfcf0a49cf1d822b1d8dbc5eaf30a4e"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioOrcamentoRealizadoPage-CabV_AQm.js",
-      "sha256": "7d66da51352d1425b99f43931ab42f2345a1a6b3729adf266928e934c9f7e352"
+      "arquivo": "frontend-dist/assets/RelatorioOrcamentoRealizadoPage-DdAzNJyb.js",
+      "sha256": "31f874196a8e480cad40425366e126e8b34658a1a1daa1aac275a4a56ab78d4f"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioOrcamentosConversaoPage-CjCH4viU.js",
-      "sha256": "31eebb63ca6ce7859fca876606147b67a00dd2e87653222e0baa14d4843d9eb5"
+      "arquivo": "frontend-dist/assets/RelatorioOrcamentosConversaoPage-CSesiljA.js",
+      "sha256": "43a75fcaecb910cd0393656b9248ebc61943c21fab44c77dbd7a8a3fc9a81c48"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioOrderEngineAnalyticsPage-z7KlN8bC.js",
-      "sha256": "1ff8851fe5dc1939a11e665cb4d8b229534957f27e78b63a937cc7a52a3967de"
+      "arquivo": "frontend-dist/assets/RelatorioOrderEngineAnalyticsPage-B3OERQoH.js",
+      "sha256": "9081014d5738ce44e2ac95a204644eee4d46ecaf9659cdd232f2d50f4279a6f1"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioParetoFornecedoresPage-C3ZQG-c0.js",
-      "sha256": "1e3700d7fad2763ebe88fa8aa0097e68f29f722e5797fd4f3da7576d410e7876"
+      "arquivo": "frontend-dist/assets/RelatorioParetoFornecedoresPage-DIHri2pw.js",
+      "sha256": "841aa27eab789ace693bb7ec8431c7d46bcdbac8557010177cad55585f37833d"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioPerdasEstoquePage-DA9B-pKI.js",
-      "sha256": "6a64a433f01dbaacb6b8a83f22d593457ef8633c796a1d68dab1041f88ed4ee2"
+      "arquivo": "frontend-dist/assets/RelatorioPerdasEstoquePage-BgwIEafa.js",
+      "sha256": "b2f52cb151ccbe9c02a5b832e9a8141508a87a4fabc2e4773391275576d86c37"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioPerformanceOperadorPage-DzpXdyFF.js",
-      "sha256": "f21d63d18a9e393e46f5079d8506c6cdb22377abc121081299f52a8941952165"
+      "arquivo": "frontend-dist/assets/RelatorioPerformanceOperadorPage-SITf7fKA.js",
+      "sha256": "c4400c583ee3529dc59a57566ac4757ad2e818dd6ed8f8684ca930a64d1a56a0"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioProdutividadeOperadorPage-BJY5TsPI.js",
-      "sha256": "0b9cfb7c698c662c729c9f529455ddd7dccbb342ae24680f0a80b2d7339bacd7"
+      "arquivo": "frontend-dist/assets/RelatorioProdutividadeOperadorPage-CPAf_2_C.js",
+      "sha256": "6f6f3490ec8d0f06b8ce388732ad52c2ab0b015fdcccd85c5431ffb7828f5b2f"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioProdutosMaisVendidosPage-BSaQS_hM.js",
-      "sha256": "b05ce45e26dfc62cca4fd297f19744b0c9eb844b00900912960bab7215e56bc9"
+      "arquivo": "frontend-dist/assets/RelatorioProdutosMaisVendidosPage-D_9ksWWK.js",
+      "sha256": "c033033de45c3e9da889d419e2544235a521e175a8c6923ba43aa87c6924aef2"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioProdutosNcmPage-Bwd4K5n0.js",
-      "sha256": "c42cb837bd16dd782ee72c2eb9ace62628bddc65ad769a5fa2f5c9003934d7c0"
+      "arquivo": "frontend-dist/assets/RelatorioProdutosNcmPage-OARAFMqU.js",
+      "sha256": "74feffb3fd4b3bd951860f53769c0eb11c453228596f178f8640e56ddec99504"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioProdutosPendenciasFiscaisPage-C3wb3SCs.js",
-      "sha256": "747e93e3ac1276f1b6051ed182d12877cc302526a65a4638d41c2dd6967d9e3a"
+      "arquivo": "frontend-dist/assets/RelatorioProdutosPendenciasFiscaisPage-DSf91OdM.js",
+      "sha256": "9d56538d5fc810a4962e8643c0cd8454869a17373775d39a1ef9691f3bbcb412"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioQuebraPerdaProducaoPage-Dwu7wKKA.js",
-      "sha256": "2dce104d0ca32cd4b9ac1b94c23db3287323c0870abbf50ef4df466b86a8a5fb"
+      "arquivo": "frontend-dist/assets/RelatorioQuebraPerdaProducaoPage-DwamQMlE.js",
+      "sha256": "80c31102d45a82296cf35ad565503a3f628b7c32052331094111bf214c6a5d98"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioRankingVendedoresPage-Ccjhu53b.js",
-      "sha256": "1aed36d60c028de68f9910b2f20c2c4c113c68e290118be3bea8972dcae54a8b"
+      "arquivo": "frontend-dist/assets/RelatorioRankingVendedoresPage-DNkkSvAe.js",
+      "sha256": "26316f78181a4bcb8fe80fd2db51b810d8e027ba6ab914f61bf46396a63446ca"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioReconciliacaoDifalStEntradaPage-BhKAS3Hc.js",
-      "sha256": "f400210fa37872883aa791d5058ef297aedacf5cb8832792a85c6491ee3d72f5"
+      "arquivo": "frontend-dist/assets/RelatorioReconciliacaoDifalStEntradaPage-CRSFSo2v.js",
+      "sha256": "bbd81ad9885d7f621799307bd12cf6e977c7b031ef2b42f0cc8fa632f73ab2b7"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioRegistroEntradaPage-DgaJuosd.js",
-      "sha256": "bb9e89db7afa29bb18062740c6fb8e9d36708bf9144ce6249f5877275c7fb9c6"
+      "arquivo": "frontend-dist/assets/RelatorioRegistroEntradaPage-gkINSMjR.js",
+      "sha256": "3d394ac55671fd3b7776fe9d663b7828442d35eab16371a69a9a305a4b565761"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioRegistroInventarioPage-C6w0oSu4.js",
-      "sha256": "44f2e503a72c6db07fc89b1cdba53938313d9fc381d47cdb4858340496db396d"
+      "arquivo": "frontend-dist/assets/RelatorioRegistroInventarioPage-72h0eROE.js",
+      "sha256": "5c6e541e7eb956898fa254b1aacad9a5d7ab13f3e59d0cb976edcecbdca30c6c"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioRegistroSaidaPage-HZLIN4Sb.js",
-      "sha256": "e619f20f9eb93de7a92b86de42bed69cb5ec4964de38a15c5a2fb8d831d9c5b7"
+      "arquivo": "frontend-dist/assets/RelatorioRegistroSaidaPage-CjNQrur1.js",
+      "sha256": "d8a0544bd0ba5b52346b1df68c8f1bcfe11c7df7c6a57c3fc95a673609dbf583"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioResultadoSetorPage-C9FRMSP6.js",
-      "sha256": "61e73be29b451048ebd1fb687060b11989c17f4b468ed6e3858da27a405c94d4"
+      "arquivo": "frontend-dist/assets/RelatorioResultadoSetorPage-qJmxPk43.js",
+      "sha256": "d005aa9219fde539e27f6437e6d133046ba25457f4645fe203a59b56ff92cbcd"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioRoiCampanhasPage-YY91_BJm.js",
-      "sha256": "5b2e58eb4b6d686de410a595ca2c1db1905c8ef0c59d247a1cdb55590b706579"
+      "arquivo": "frontend-dist/assets/RelatorioRoiCampanhasPage-Cu0EiNMM.js",
+      "sha256": "913771195c040a01ddb8f6ea3414524ed14369ed65e73a8a0625a5e2744d48d0"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioRupturaPage-DyUnDy7n.js",
-      "sha256": "e9b40e024c15f639eb28c1b555c597c8befd3dfc0c35f5838af1db28411339cc"
+      "arquivo": "frontend-dist/assets/RelatorioRupturaPage-CAMm-N2C.js",
+      "sha256": "8a98c3533bdcb2905a3acd9532b3a2297ffa42b6ac6810635a5b87178b0cb645"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatoriosHubPage-BCjU4e8v.js",
-      "sha256": "376a86e22c169f51020829778cf0c56a35fe8e7eab51aab9769697baa18af34b"
+      "arquivo": "frontend-dist/assets/RelatoriosHubPage-CvURxrCB.js",
+      "sha256": "0275ce96a5a9743250aca82fbbfb9809dcc0ad5ce0a358b1bdafd672632d3ce0"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioSintegraPage-DIEtRUxn.js",
-      "sha256": "738579ac580ee1a5520cf7ccf9516f810072a3c91d80a8754c5db2e0fc32e8c0"
+      "arquivo": "frontend-dist/assets/RelatorioSintegraPage-Q9lqtkDR.js",
+      "sha256": "bb2e1a16586b196289002eb0a949f1bcfaa73c0964a46c28172d12a9354a918a"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioTransferenciasLojasPage-DnKVlaSv.js",
-      "sha256": "a76fa92200327eb0beede4ab4c57e55dc6d0c0ba2a4ef611e2b753990d1c178d"
+      "arquivo": "frontend-dist/assets/RelatorioTransferenciasLojasPage-CVc9mnAY.js",
+      "sha256": "7bae4ba01f99d24f93c10f9dfeb82f2f780b04b0fceab63888f8f031d807f6ec"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioValidadePage-XU-kBl4T.js",
-      "sha256": "fb81111a7fcd1c997d066d1d072bf63405247993f408ab564ec7cabe9ea52999"
+      "arquivo": "frontend-dist/assets/RelatorioValidadePage-6Q-lKo65.js",
+      "sha256": "1aaabbe8fccce94ff77cfb75abcdb8199056daba0beda5c229439840d387638d"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioVendasEquipeTurnoPage-DPfWNJ4N.js",
-      "sha256": "17b92b387749aaf974982d1189eeaae10f8ee268e2d6b8cf9affc2d3f8428f6e"
+      "arquivo": "frontend-dist/assets/RelatorioVendasEquipeTurnoPage-DRyx92ws.js",
+      "sha256": "109bb66ab835965ecd4c79868a7e9351ae06877718252aa85c377c46c073450a"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioVendasMonofasicoM3Page-C5VL-zYL.js",
-      "sha256": "0d0f923b03963fe75dd09f3fb9bff39a8729d364267846e997bb1ba483e3d01f"
+      "arquivo": "frontend-dist/assets/RelatorioVendasMonofasicoM3Page-BKllyRbx.js",
+      "sha256": "84e91bb1db44edaa5efbbb3ab0c4fe471ed0984f4f4a7618c1b84b8ab7d496f0"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioVendasPorDiaSemanaPage-tLUsjgEg.js",
-      "sha256": "51e11e84e2b519a0c5aec4574c57b2831b903c7d4fd0c11c347de44515d8afbf"
+      "arquivo": "frontend-dist/assets/RelatorioVendasPorDiaSemanaPage-Bjri4pll.js",
+      "sha256": "47a59accbd8a3615f2bedf6913a94a06a433365af683d3da1661680274f7f3a1"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioVendasProdutoGrupoPage-CtLarPzU.js",
-      "sha256": "73e7084df09c3b59e7903172eb0497e3177a5a8b06f56fdfcf6c694571908ba5"
+      "arquivo": "frontend-dist/assets/RelatorioVendasProdutoGrupoPage-ByseMxgq.js",
+      "sha256": "dd922906c6bf26ff4ac5fc673a876306a0d705ffa1a4536df6ba31a82e4f8ba9"
     },
     {
-      "arquivo": "frontend-dist/assets/RelatorioVerbasComerciaisPage-DSquuwlh.js",
-      "sha256": "de4fa762a6b2bda2a6aa1c4d854cbe7e9baa25a9e54dfc07be1f33681f4854be"
+      "arquivo": "frontend-dist/assets/RelatorioVerbasComerciaisPage-LmRySia6.js",
+      "sha256": "592d7eb20998df2e748e2099c34e039c4f23e5bd9b2872800112b0a9e63eeb8f"
     },
     {
-      "arquivo": "frontend-dist/assets/ReportEntriesTable-jxk0Fm1q.js",
-      "sha256": "8dda45e6a9d58293613dacd0ce5fa7cd282c27e3205d6cb5a477e87f1f57121b"
+      "arquivo": "frontend-dist/assets/ReportEntriesTable-_CDtEMdj.js",
+      "sha256": "cdf469150738e867c2f6a66ec55e6ba0b705dd111add8f0cf877bec7513f936a"
     },
     {
-      "arquivo": "frontend-dist/assets/ReportsPage-c7MyypQ9.js",
-      "sha256": "b71f777453a61093e9279059b03e12cffa23649ce173c52d0997858b6e3aecda"
+      "arquivo": "frontend-dist/assets/ReportsPage-CXSC6hqY.js",
+      "sha256": "b21597f2d22b9c1b1780bdc629b4d5233bf78c047481fc3850d8947aada128e9"
     },
     {
-      "arquivo": "frontend-dist/assets/ResetPasswordPage-BXFZ_iuW.js",
-      "sha256": "7f8f70a8df9c1ab60c86fb62c3aef02e70946cd959584321c47b6d78a8978b9e"
+      "arquivo": "frontend-dist/assets/ResetPasswordPage-Clvm25Sf.js",
+      "sha256": "122a7f9a550a73fc1e99b9a6f3145952cade6a859fff0c68dfb7ade5a64da7b7"
     },
     {
-      "arquivo": "frontend-dist/assets/RetailAbcCompletoPage-Dk9F39Rv.js",
-      "sha256": "250580c31fb9c31ed6623261d73ec0484fead912aa2d04aa2fef3b83303f1ad3"
+      "arquivo": "frontend-dist/assets/RetailAbcCompletoPage-1z6mYR3s.js",
+      "sha256": "d898b1cb9b73ebaa6fe9f0c2143003e45bd0a63358117de0f919d170103303fb"
     },
     {
-      "arquivo": "frontend-dist/assets/RetailComprasPage-DgxisQG1.js",
-      "sha256": "aca5f1819ef35b573620cd81587b88bdc8db42e5dae854ee1162d420c7a2ede3"
+      "arquivo": "frontend-dist/assets/RetailComprasPage-wqZVwHpA.js",
+      "sha256": "c16a435dada37d60698121958e71e189182e1c947cbe539d7ff63ba0aaa0c4eb"
     },
     {
-      "arquivo": "frontend-dist/assets/RetailDashboardErpPage-lmIBZFtx.js",
-      "sha256": "30f2db187199f85e1b868175760252055b2d2cc376d6847f67bfb27362a95e75"
+      "arquivo": "frontend-dist/assets/RetailDashboardErpPage-DWe5Qn1c.js",
+      "sha256": "3249bcd816248c3026d3f152db72e641736b2b91501f865fd856fab4bc9659c0"
     },
     {
-      "arquivo": "frontend-dist/assets/RetailErpBanner-D9J2ia80.js",
-      "sha256": "bc25d9d0cfc93c4d8e60181ba252cb0d743ceb626fd72b14c913596fcdaf1c8a"
+      "arquivo": "frontend-dist/assets/RetailErpBanner-DHQxitH8.js",
+      "sha256": "3a5e3bb4be086bfdc89abde508841e88b62f0f7769e541f8c69fe320ea903315"
     },
     {
-      "arquivo": "frontend-dist/assets/RetailGiroPage-K6vIcDD1.js",
-      "sha256": "848f1d6a932c8f575f8a482a68b81f21dca0bf5327fbb514864e6de12908361d"
+      "arquivo": "frontend-dist/assets/RetailGiroPage-B2Evt86e.js",
+      "sha256": "76523912071fe2f6d9c6d21a559d3df2c498e0d781fc51b1788147a9aac1ea5a"
     },
     {
-      "arquivo": "frontend-dist/assets/RetailKardexPage-CAE-zeq-.js",
-      "sha256": "13f1e252f312eed4b066be22ed2bfcc0a0fbedb043feefdc8c0e5790529686fe"
+      "arquivo": "frontend-dist/assets/RetailKardexPage-CD38t3RN.js",
+      "sha256": "3b1229c587c7ef4613f8e64cde664673db203f9ac8d316e54de214345de2b369"
     },
     {
-      "arquivo": "frontend-dist/assets/RetailReportUi-C1LWA6QG.js",
-      "sha256": "38c77b578f4f70824948bf4d49e74c213e849dec8a8f4c8cc4f39d2b64950059"
+      "arquivo": "frontend-dist/assets/RetailReportUi-Cqa5SCgo.js",
+      "sha256": "e4ce027287b677ae11c87ed142a0656e3d0e9ed98666d11ec1b697d8bfba0279"
     },
     {
-      "arquivo": "frontend-dist/assets/RetailReposicaoPage-CQtNyeYj.js",
-      "sha256": "673537bc22cc79ee434487d77db5bb4d0b4ad76bade4050cf2a4a22da6d2b761"
+      "arquivo": "frontend-dist/assets/RetailReposicaoPage-B_mLFTij.js",
+      "sha256": "419ef716a03ca930bdb63d18018da20ebe1c63734ba148415d39657af669ea17"
     },
     {
-      "arquivo": "frontend-dist/assets/SalesPage-D0UbT-4H.js",
-      "sha256": "8ce01d57b68dca3774ac4b1d5b8e0b8cf67de3290130736d6de5b1ab6ab1a18a"
+      "arquivo": "frontend-dist/assets/SalesPage-DY7nBt1m.js",
+      "sha256": "2e8fd9321aa970c94b5786c53d7edb509def09bcf6954eb552d403876d69782c"
     },
     {
-      "arquivo": "frontend-dist/assets/save-BxW8gfDk.js",
-      "sha256": "937f897b21f2aea8d65fa30fb82e16e15ab9873603e40ae45957268a2d2a9c1c"
+      "arquivo": "frontend-dist/assets/save-CA2U0_az.js",
+      "sha256": "c0c24d4f114ddef7839c6f889a4eac5d0b1c691c5c0e08929c67475c316308bb"
     },
     {
-      "arquivo": "frontend-dist/assets/scan-barcode-ixbO9keh.js",
-      "sha256": "d9e98205a3ac63d7acabd8f5503f5fd47e91018ae9ae70a9b5e39a2fbd797a80"
+      "arquivo": "frontend-dist/assets/scan-barcode-Dy38gCfR.js",
+      "sha256": "751b6aa268cc7753e5e34ade091c3abe29578c4afa5bb408c16bd2e1b7d04cc8"
     },
     {
       "arquivo": "frontend-dist/assets/segmentImplantacao-ByAMobFb.js",
       "sha256": "f0555a0bea2347cecfe25a4b1ffc1b87695644f17ff0d3d5357a22c7a3448126"
     },
     {
-      "arquivo": "frontend-dist/assets/SeletorImpressoraLocal-CMdsFXtP.js",
-      "sha256": "26e2661c9b18a28413c2447f1a46ea304a509bae272b8806403c6bb13e3fa636"
+      "arquivo": "frontend-dist/assets/SeletorImpressoraLocal-DZov_M3y.js",
+      "sha256": "8399f6b33de7432590e214dde409393f43092b1682d267918d834a12f56169c3"
     },
     {
-      "arquivo": "frontend-dist/assets/send-B6k95o0K.js",
-      "sha256": "f3276bcc955ff0e319afd1394d5884c8d9bc976802b57ccdc552c95e7f0ed625"
+      "arquivo": "frontend-dist/assets/send-cfZIKeWI.js",
+      "sha256": "d015fa9f044eb44786c7e9bc2f3f85036e8a5c2ab5c62cc490a87026fd87fb48"
     },
     {
-      "arquivo": "frontend-dist/assets/SessionsPage-DhaWn6Fw.js",
-      "sha256": "b11686151b522aa1fd8ff423633d9e112b7d2fdc76ec0de39f4333d18281af59"
+      "arquivo": "frontend-dist/assets/SessionsPage-BXI5uWf3.js",
+      "sha256": "2ac6c189370869be2a516ff448b3b4b4c88b68bf2269583ba31a2de3c0f68426"
     },
     {
-      "arquivo": "frontend-dist/assets/settings-2-BKYIizxM.js",
-      "sha256": "d80cea05a2d68b8aa8af9bf1de457254325436ad20668a35bfa7e48597acecd2"
+      "arquivo": "frontend-dist/assets/settings-2-CoIu2PVQ.js",
+      "sha256": "732fb135b3f072983beefde130ec0911cc8636595d2c325c7e4f562717fa0745"
     },
     {
-      "arquivo": "frontend-dist/assets/SettingsPage-CdI_EHbc.js",
-      "sha256": "d093b9cdbf2bce9581bd7323a2d856349f7868e0f4b99554eaea242edb055bf6"
+      "arquivo": "frontend-dist/assets/SettingsPage-ft2_buQk.js",
+      "sha256": "1b44fab49fb81e942d002eaaaeb871497a620fd2309e357969efa258fa9b8e09"
     },
     {
-      "arquivo": "frontend-dist/assets/settingsService-Bf5f4GQe.js",
-      "sha256": "45bd225a921cb5365a290427940699aafaacd0801026b999122bc5c6ec6ed8e4"
+      "arquivo": "frontend-dist/assets/settingsService-puI0TkSx.js",
+      "sha256": "0440ba6e9ae27f7594ca4e8f5c1f4388f3b72c5077829a26bebfdc8bacf39a80"
     },
     {
-      "arquivo": "frontend-dist/assets/share-2-DrhDCTln.js",
-      "sha256": "4f668826493c7ce5200850df6b5eae3002e1cc220c4187aaf0d9316202028438"
+      "arquivo": "frontend-dist/assets/share-2-BxLBdxoY.js",
+      "sha256": "78e959f9af7def8fa82cf34c965ef9f046652895f413403ca89f829cdcfe7156"
     },
     {
-      "arquivo": "frontend-dist/assets/shield-alert-CiGU8Lxn.js",
-      "sha256": "5ee6bf5a64e07d271e696b9af1834bcc4d43795acf04f596749075af71a06042"
+      "arquivo": "frontend-dist/assets/shield-alert-v38ZSajp.js",
+      "sha256": "b243e5243482220544d5726e812ee959faee412cecf448a3a3f5effcce1c042a"
     },
     {
-      "arquivo": "frontend-dist/assets/shield-off-BxWlts97.js",
-      "sha256": "bc5c84e2c6a76a1a8a2f79844d6d3593e5022c823fcae50af3c51df1581b2917"
+      "arquivo": "frontend-dist/assets/shield-off-b-cf7OwA.js",
+      "sha256": "a6f2407b7640b97ad011cd3d5ed7a341bdb33b622b98c12835fb8af511164a7e"
     },
     {
-      "arquivo": "frontend-dist/assets/SimulationPage-DvwLScMG.js",
-      "sha256": "1a1381e2ab90b3222d00d809688843c5df69788172c3409e6e8f36ff0b49d68a"
+      "arquivo": "frontend-dist/assets/SimulationPage-0hQVVyfx.js",
+      "sha256": "1257697ec0f8816827adff88eb03b51f11bc810af35cadbf3d8f077ff4f37c67"
     },
     {
       "arquivo": "frontend-dist/assets/SkeletonChart-C2cttirY.js",
       "sha256": "0e74a2a7578a3a4e751c836702121e65b097bb1b6d03edf2e4a9233c0ac8798a"
     },
     {
-      "arquivo": "frontend-dist/assets/sliders-horizontal-mrznzqN8.js",
-      "sha256": "94f5e4b4232bf81f3e62f39a597ab129d8add5c6de51561d9d844a40dcd4bba7"
+      "arquivo": "frontend-dist/assets/sliders-horizontal-DPv8v019.js",
+      "sha256": "7b3917a377de627c64710a8ad28ddb644c611553a31b93a9020f6e198d585f8c"
     },
     {
-      "arquivo": "frontend-dist/assets/sliders-vertical-DlmhkPLj.js",
-      "sha256": "bd7d24f99870833a16d0eec9405a9f7e899a4a118b7f5dc2da2ea573e8ce5860"
+      "arquivo": "frontend-dist/assets/sliders-vertical-Bx-u4YIp.js",
+      "sha256": "27175f9792bf23219ae3a22bf611cf4733fef63b9bcf8e66afc592b029abc97b"
     },
     {
-      "arquivo": "frontend-dist/assets/smartphone-jEKaP7UZ.js",
-      "sha256": "f55c5ec2818fd4a106f00b72de949bd3010f469d0aa8b6ac53ff797db2475f2d"
+      "arquivo": "frontend-dist/assets/smartphone-C7v1phAK.js",
+      "sha256": "a4f55a790c5c4b9fa51c1c2671bb1fb7f9914158df7ae123ee0b16d7c0f8e431"
     },
     {
-      "arquivo": "frontend-dist/assets/sparkles-DJTHcMZY.js",
-      "sha256": "6c39342d3a621e9708b60e3ca4142ba5486ac3952487115022d056f26084ed25"
+      "arquivo": "frontend-dist/assets/sparkles-k_LoFjaN.js",
+      "sha256": "08e3b7d2fe8ec5aa3db4f321e11bfdbd6594fdd48e2ce9600781421cdd182b59"
     },
     {
-      "arquivo": "frontend-dist/assets/square-check-big-NRcs0gCZ.js",
-      "sha256": "0e752c4fc2ef032557d285632f67b2c47111a0e406559ab15e1b154e9b48c8e9"
+      "arquivo": "frontend-dist/assets/square-check-big-DEJ9LggH.js",
+      "sha256": "8197df18072184a6869c0eafb5282820a9c5dab7aca8c22dc622998800ea421f"
     },
     {
-      "arquivo": "frontend-dist/assets/star-Ciojaelg.js",
-      "sha256": "2626797f42e88772b23025ae7cb301f459f0c97e6c7452b01087ce7d130c4c27"
+      "arquivo": "frontend-dist/assets/star-uAaZFpQC.js",
+      "sha256": "546b9e404175dfe63c21293ead50e7f999e3770d6f6e78bb04fffa15b2669a3d"
     },
     {
       "arquivo": "frontend-dist/assets/stationRouteConsistency-CWXNpdm4.js",
       "sha256": "499cfded8dac7e7f9e6fe18989ad22f2696cdb794a3d979be4c875cac1177598"
     },
     {
-      "arquivo": "frontend-dist/assets/StatusBadge-xJUTBBIw.js",
-      "sha256": "aea6a4c0f6e565d2e895a4bfdd6e0fc6d91c2f631a4b354d5c15e70eddb6792b"
+      "arquivo": "frontend-dist/assets/StatusBadge-Dl5VicWW.js",
+      "sha256": "86b6867585bf96a226b134daf99e709dbd84cd1626ef7327099e11cbe0288bf0"
     },
     {
       "arquivo": "frontend-dist/assets/statusFiscalCaixa-OJRYHsXC.js",
       "sha256": "ca5847aa4f3a6bef593ed4cdc14840d30b0593f12fa2cd0b0d5094bcd784dad8"
     },
     {
-      "arquivo": "frontend-dist/assets/supervisorSelfAuth-CusF3FO-.js",
-      "sha256": "818f2310fc0d52170d693b7df428e0445b0d3a3786d96fac7ce92aed96f2a718"
+      "arquivo": "frontend-dist/assets/supervisorSelfAuth-xiQWucCu.js",
+      "sha256": "9e7d44f93a40f567c1aab081e61bc91ece3a7f27b260af451108f65c934096a7"
     },
     {
-      "arquivo": "frontend-dist/assets/tags-Cn13NS2k.js",
-      "sha256": "4e9e0bfd8d9b780885be7653fe936c924c0b80c225c7fc434e97495f8246bee2"
+      "arquivo": "frontend-dist/assets/tags-BwvBfA0V.js",
+      "sha256": "f0ec5a25d7b8f5294af6bd6b1a801e4948a7e34e50584afa277adf8aa9780b98"
     },
     {
-      "arquivo": "frontend-dist/assets/tenantAccessSummary-BPauvniP.js",
-      "sha256": "a3a1b1a28caad76fabbadaea5e1b450bb3d1ebeb70e20bacac59459676fdbe81"
+      "arquivo": "frontend-dist/assets/tenantAccessSummary-BQnVy3fE.js",
+      "sha256": "fb8381cd6f77da5fb148fdf34043f0d160f93c5a7fa51edd180feb5114742bfa"
     },
     {
-      "arquivo": "frontend-dist/assets/TenantAddonsPage-Ce8h5dM-.js",
-      "sha256": "46c7c293d8e6421c2fed4614f4d3ed8fb37c1d56fce109ae485e46e417f1ae0f"
+      "arquivo": "frontend-dist/assets/TenantAddonsPage-Dgs-qKUz.js",
+      "sha256": "ec3c1427f186af9f44267067412f696dd3adff5722ba91b33842f9737af39d8e"
     },
     {
-      "arquivo": "frontend-dist/assets/tenantFiscalService-BezNrUvZ.js",
-      "sha256": "5fa2b88c2705b7b3b46f9fd4a566c7d0ca862ff86f4ab54b0f8299c1f0783989"
+      "arquivo": "frontend-dist/assets/tenantFiscalService-gY6MMEJR.js",
+      "sha256": "622bb7f7a0a33abe939df814dccb7fb3e952df9122abf4ffcd9b925c4c2d15e3"
     },
     {
-      "arquivo": "frontend-dist/assets/tenantSelection-BHBYlu3U.js",
-      "sha256": "c731b6d2c1686b13c8215d277b3dd49e0e44f060ac6e09f9a393f4e9f88c0302"
+      "arquivo": "frontend-dist/assets/tenantSelection-DUiKf-PL.js",
+      "sha256": "990029fd633dfbd692f74af26bbcf336cedb27acea76c04cbf6d609640137f3d"
     },
     {
-      "arquivo": "frontend-dist/assets/TenantsPage-CevM4oYk.js",
-      "sha256": "2c013c8e7731eeb6adfcd3a46fd6857c415aa3eef545031b5c93bbc348850095"
+      "arquivo": "frontend-dist/assets/TenantsPage-EFWob1VD.js",
+      "sha256": "e87b6dadeb293fb90414f942de2d8fbfe9611e43435162a413f5bb95510554d7"
     },
     {
       "arquivo": "frontend-dist/assets/termosClausulaFiscal-BbGdF4Zh.js",
       "sha256": "99333b13c80ade36c6a2c13cdaec1c1146d0cea218700a08f3bd7d88b6ae0453"
     },
     {
-      "arquivo": "frontend-dist/assets/TermsAcceptanceGate-DTHLa_ns.js",
-      "sha256": "1bce1a0dfb55898dd80ddbf79b268ba82ce4245d2a046e7c375e5d1eb34da1a3"
+      "arquivo": "frontend-dist/assets/TermsAcceptanceGate-DDeXF7XL.js",
+      "sha256": "1169e34754ea67b506dbff56e443cff226c84505989d206136dc04c4fab5d050"
     },
     {
-      "arquivo": "frontend-dist/assets/TermsPage-BIW72BUD.js",
-      "sha256": "608d46fc004b029ff3eced088e634c45eba78ddd1a96257e8fb4a824f1089b66"
+      "arquivo": "frontend-dist/assets/TermsPage-CIRs7NX9.js",
+      "sha256": "aae5f86d9a84aa12e241b7d0f264cd3ef36bcce84e4e62ae79e821f37db475db"
     },
     {
-      "arquivo": "frontend-dist/assets/tesourariaContasCache-DLgo85fX.js",
-      "sha256": "119ef8a335e99c58a3489132d38dab06551602174f8b9c29a495eefff8be2cc5"
+      "arquivo": "frontend-dist/assets/tesourariaContasCache-CtmT7fkG.js",
+      "sha256": "78811d6437b4daf8666add943e07c4e31f5d08b8fefa016493866328953214d2"
     },
     {
-      "arquivo": "frontend-dist/assets/TesourariaModais-wEAS0UB4.js",
-      "sha256": "bd6ba4bc81e294b594d5e524193c94c3c95901472a7740b85d4f6810166cff0b"
+      "arquivo": "frontend-dist/assets/TesourariaModais-CPNWNjZy.js",
+      "sha256": "fea88eaab158ae3daf46cdfc41a7cc24236e5dfc4b29c811eaaf453d875f8df1"
     },
     {
-      "arquivo": "frontend-dist/assets/TesourariaPage-DgVYV1Q_.js",
-      "sha256": "0f03d7b9c9ab63b2e5bac1eab6434a5f73890aa631939b8f8fbc85c8bb8091ca"
+      "arquivo": "frontend-dist/assets/TesourariaPage-ClgAhve6.js",
+      "sha256": "665be6e130454a04978d83cfe0640c49562cf3373d3e12bc3817739a029dc2dd"
     },
     {
-      "arquivo": "frontend-dist/assets/TicketMedioPage-C6bYnayf.js",
-      "sha256": "179d9a562c4732d8d5a42fe8b8772c537318b36d1101aceba17ced967d8267a1"
+      "arquivo": "frontend-dist/assets/TicketMedioPage-DDMiirP2.js",
+      "sha256": "e830b402ac3a5725d4e0ccfd7104360914ad8aef325ff64ba366c4773a618c68"
     },
     {
-      "arquivo": "frontend-dist/assets/timer-BYHtzC2g.js",
-      "sha256": "073b51676f3d2a0f0b34c34cb72c4a1472742f3c840586fc8441711780fe6053"
+      "arquivo": "frontend-dist/assets/timer-zKCnoZiy.js",
+      "sha256": "33be9c8269d7b8b3c90a262c6acf0c759305ff4dcc5f1e1af4476b865112534b"
     },
     {
-      "arquivo": "frontend-dist/assets/toggle-right-BXZ532r8.js",
-      "sha256": "8c83ef73b151b94fb1c9c770be0b041f7a46564ae1d54ffe94094cd58bae1bb5"
+      "arquivo": "frontend-dist/assets/toggle-right-BNOSy1H6.js",
+      "sha256": "2c5bc2b9458bf9454ca3f09901c559fd186e5dde9013fa9b4289f6677ac140d9"
     },
     {
-      "arquivo": "frontend-dist/assets/trash-2-DXFzaGq1.js",
-      "sha256": "120accd66c81dd9f668cf1faa7f92dc3c763cd0bc85d65b931c5d62e06ada891"
+      "arquivo": "frontend-dist/assets/trash-2-CSMZrf2a.js",
+      "sha256": "739db7f763ba996635d2b905cabd002fbb940bb347ac8e7c2f872c6841d0bc95"
     },
     {
-      "arquivo": "frontend-dist/assets/trending-down-D04yNi0u.js",
-      "sha256": "ff41848054f13c3531f7935597c9746d11b0831c9f6b381eca2e0edfa5d40445"
+      "arquivo": "frontend-dist/assets/trending-down-DWxFsf7m.js",
+      "sha256": "ea7dbc378481529862b5b54ef175f6a86ecd1383ad2c81502aa2c4d88a8336c9"
     },
     {
       "arquivo": "frontend-dist/assets/UnidadeCadastroSelect-DwPtIwKv.js",
@@ -2479,64 +2479,64 @@
       "sha256": "17280ecb90f656c508c0703d714107a1842d743b6607a25365bbebcdc4b325cd"
     },
     {
-      "arquivo": "frontend-dist/assets/unplug-C13lq07S.js",
-      "sha256": "da011e08fb9e28a7cfc44259f33c6e838ea1293111a8bd3c518111d85642a788"
+      "arquivo": "frontend-dist/assets/unplug-YqhrcYdO.js",
+      "sha256": "8b8d5b140272ee610c80758f665376beffc95ba8cc8815528b5fc17bcf50de12"
     },
     {
-      "arquivo": "frontend-dist/assets/UpgradeBanner-CNZvFxlo.js",
-      "sha256": "6097335178a83ec3fae83170e5c705391cede65c613a9e7a50fa983897aad276"
+      "arquivo": "frontend-dist/assets/UpgradeBanner-CwdMnCsB.js",
+      "sha256": "fed1591cd72e50a9c192977298873c957a68d73f95bfd262caae7b4c09f4987a"
     },
     {
-      "arquivo": "frontend-dist/assets/upload-CjPpsLRF.js",
-      "sha256": "a3bc5c4b967f36f5209791e01974946fffa0aa520e43a93c70451447ba6c23eb"
+      "arquivo": "frontend-dist/assets/upload-DQMi0-94.js",
+      "sha256": "be50d0140332262f7a6cc20112359bddc42ce9ff7a23d2d1cc806c496b6640f0"
     },
     {
-      "arquivo": "frontend-dist/assets/useCategoriasPdv-GJZuD6oi.js",
-      "sha256": "2dc701cef81795e03764b31f35498ad9a8f2511e696b995a815e4385c67056df"
+      "arquivo": "frontend-dist/assets/useCategoriasPdv-rV8u0atq.js",
+      "sha256": "eb1f382a13017a03dfa10c5a6bc9d15f6ae37d3cae2681c339c094719286bcf9"
     },
     {
       "arquivo": "frontend-dist/assets/useCnpjLookup-kAIrahZ2.js",
       "sha256": "b95a72160f1211a86283494a24bb0ffa90c3d5a28924aada493984cc53230159"
     },
     {
-      "arquivo": "frontend-dist/assets/useDateRangeFilter-B7oO07Kl.js",
-      "sha256": "f216242a4714a1973a080af302020db375490b91efcea5673299fd0d0a8b3e38"
+      "arquivo": "frontend-dist/assets/useDateRangeFilter-Bkt5EsBy.js",
+      "sha256": "c70fdfd853e80db982c617498f78d557f49034c938c221d2dd0088d33762cc47"
     },
     {
       "arquivo": "frontend-dist/assets/useDebounce-Bkx_nIwU.js",
       "sha256": "24a98d5cc207dca29a22862bd52055944257d0770fa097f59df4fd0602a54ca0"
     },
     {
-      "arquivo": "frontend-dist/assets/useEanReconhecimentoRapido-C-aUWcg2.js",
-      "sha256": "b049c2e08261db39ba9ac781d62ddd0f86d61812ee265525c2a1c57f07e098c3"
+      "arquivo": "frontend-dist/assets/useEanReconhecimentoRapido-suwC89A2.js",
+      "sha256": "1fd848d8889d593f82e434a3bf6fbedfd7242d1c0cf26d90c6898b3d5dfd1a65"
     },
     {
-      "arquivo": "frontend-dist/assets/useFoodAccess-B3AYmQSK.js",
-      "sha256": "df3c07cc270e6b6315a4b5699f71aebce63e957516324cbbfb0c2b82ed97cac5"
+      "arquivo": "frontend-dist/assets/useFoodAccess-3a6M-K9C.js",
+      "sha256": "0a01cc18283432c2973bf27e21ac236e26c2936ec11c40a00799592b4aba436a"
     },
     {
       "arquivo": "frontend-dist/assets/useFormatacao-BXXwY3HA.js",
       "sha256": "11476adf296b893c4760397a3c2d63f6490cebf23e77c2731a0b60b866209db4"
     },
     {
-      "arquivo": "frontend-dist/assets/useLiberarArea-DF-sxK_B.js",
-      "sha256": "4af8c10fa339f34bc79d6b53026ae72bce210c857183082de3cb40602522a449"
+      "arquivo": "frontend-dist/assets/useLiberarArea-BRX4Dsgi.js",
+      "sha256": "46a82f8016b08c77580440f360465937bb7b971266ac7bfa1942287257fb2de3"
     },
     {
-      "arquivo": "frontend-dist/assets/useOperadoresTerminal-CD0ZJC5a.js",
-      "sha256": "d17dcc27d4b9d103c41bfbb3bbdd2ff8eee576e053a82d08de1f67a6efdad4b1"
+      "arquivo": "frontend-dist/assets/useOperadoresTerminal-D5SjrGxq.js",
+      "sha256": "0289d111b86daef49ce614b9160953ad3059e384dc69ad74eac1d8d4e908cffc"
     },
     {
-      "arquivo": "frontend-dist/assets/usePageSizePreference-B-agWxW5.js",
-      "sha256": "1a677621ab6441aa30745e723f7b1fae28eac04c8fdbf883fc27016bcb14dadc"
+      "arquivo": "frontend-dist/assets/usePageSizePreference-DbU0zoD4.js",
+      "sha256": "d179e37cebeee30eab15611bdb12c17fae50b524765fa2c9f774f653db294d56"
     },
     {
-      "arquivo": "frontend-dist/assets/usePdvConfiguracoes-BRGJ7vCf.js",
-      "sha256": "5ed19ad217e343ce6f2a42f587feec9a84ef8c4163014013c35b9dec2b7c7131"
+      "arquivo": "frontend-dist/assets/usePdvConfiguracoes-B4YHunBw.js",
+      "sha256": "7717b4cb7c081a4cedc1bf68323660b2d3d622806fd819a61828c1eebe370987"
     },
     {
-      "arquivo": "frontend-dist/assets/usePdvPixCheckout-ei9fMVH5.js",
-      "sha256": "f360817eb24702723769feb50ad21ba6566675045b31e3bb679ae4e80ab4b5d8"
+      "arquivo": "frontend-dist/assets/usePdvPixCheckout-D8DJ9PBD.js",
+      "sha256": "c040a9cd1bb01ecfcaf3f2e594c760884eb5e916f3db571becf3d20946a05d17"
     },
     {
       "arquivo": "frontend-dist/assets/usePdvToast-BjlI4-on.js",
@@ -2547,32 +2547,32 @@
       "sha256": "699e0dbf78ab6692454db49d574e1b157da26a6561cf8b94c5eefe1ef4ebc97f"
     },
     {
-      "arquivo": "frontend-dist/assets/user-C-CigEJM.js",
-      "sha256": "fab4553408ce3d055404ef89d4c7ebb4006455aa94776d716945f9edeefa6ca6"
+      "arquivo": "frontend-dist/assets/user-check-k3ThzAyX.js",
+      "sha256": "f4e3d9cfa06630f3c8edb943c1b873f20efa9e18fe39933c285eb810cba7b160"
     },
     {
-      "arquivo": "frontend-dist/assets/user-check-BUoT2c7e.js",
-      "sha256": "cace061cf43c28d3ab1114245953fdaed3d0718f9e22317dc4f1c167245298d5"
+      "arquivo": "frontend-dist/assets/user-cog-tWYPG0ve.js",
+      "sha256": "010d7acdb0dd3cd010a6b69b518676966af8a412a5c28dc6d7d5249588e39f43"
     },
     {
-      "arquivo": "frontend-dist/assets/user-cog-Dj2HW01m.js",
-      "sha256": "175aa0fe9a4157f441468ed4e181a6e28bd622b2a394f55d18f93f70dcf4d3a0"
+      "arquivo": "frontend-dist/assets/user-Dvuk12IY.js",
+      "sha256": "492218acc741d71d186ecea31902c748dadc26a6221bbcecc1fa8c5a360aeeb3"
     },
     {
-      "arquivo": "frontend-dist/assets/user-plus-CpXOwtrm.js",
-      "sha256": "bfe7a29cd89a1ed4f3adad75e4e1517dfc6e6cc73f79a95207ae473b380af43b"
+      "arquivo": "frontend-dist/assets/user-plus-CNyPIez2.js",
+      "sha256": "a807080d05334e1208dc065e829292f3409cfb304bdd321f8a9e24056eea0641"
     },
     {
-      "arquivo": "frontend-dist/assets/user-round-C3NFchVB.js",
-      "sha256": "863dc4342eb9a21eb17e41ef270b0a1584c5a26864f596bbc3a4f37fb981eb33"
+      "arquivo": "frontend-dist/assets/user-round-BImgi2Dj.js",
+      "sha256": "6ee8c4b256e9be48c731c8587b9f9f69e346767aa1a7a462029ea9107a007390"
     },
     {
-      "arquivo": "frontend-dist/assets/useReconnectingWebSocket-CfH-36SA.js",
-      "sha256": "7a2df5067d3cfc881a4cfc6e45dc4b8ac2de609182fea27330a91d7848b8d073"
+      "arquivo": "frontend-dist/assets/useReconnectingWebSocket-CsrI0te6.js",
+      "sha256": "6880a16449fd61470aeaec3372fe88f93cfe24ab8e57b9481800285b3bb56fc8"
     },
     {
-      "arquivo": "frontend-dist/assets/useReformaTributaria-89fqw3nz.js",
-      "sha256": "cb95e8eb3bb7b19dd71f6b211634a9cda8d4535f40d3768b70294ba787db1e48"
+      "arquivo": "frontend-dist/assets/useReformaTributaria-BUSbjaqP.js",
+      "sha256": "9cffd86c933890f5e52b52dac4d93f1c049f6521de3a64606067c3e5943b5d1f"
     },
     {
       "arquivo": "frontend-dist/assets/useReportDeepLink-CQ01CAJZ.js",
@@ -2583,36 +2583,36 @@
       "sha256": "46e7952840f97d8e541ea6b1d9a245e13e8825832e4707694f657e8a2f2ee1e7"
     },
     {
-      "arquivo": "frontend-dist/assets/userRolePlanAccess-S5siDpv8.js",
-      "sha256": "adfe3189096512a6ad4ef935f8e62ccc6d34e8cc1ad71910ec743528814e380e"
+      "arquivo": "frontend-dist/assets/userRolePlanAccess-NwU4jD-z.js",
+      "sha256": "19daf5ec45649748044a475348aed6548ca16568698c92f9acf7aa4a6e4b3def"
     },
     {
-      "arquivo": "frontend-dist/assets/userService-Dm2L_4M6.js",
-      "sha256": "a0d249c87e4ef6e78abd93140939c04c69adf6862cbdbd95586e40b13c92a11b"
+      "arquivo": "frontend-dist/assets/userService-BbLk4qij.js",
+      "sha256": "8b5738b9556725c697590855f361588e0e3bb93a50b23593c0172692195bc7d0"
     },
     {
-      "arquivo": "frontend-dist/assets/UsersPage-t9oBUC7S.js",
-      "sha256": "b83084e9bc0274054d4f68e315b8cc0c0a32887ccd1dd4e409b1a243a0130ae9"
+      "arquivo": "frontend-dist/assets/UsersPage-BKB6p1HR.js",
+      "sha256": "ccee8da4753fef4af231d902e55450d801fd93a28edddb000d4c9fb82a948cec"
     },
     {
       "arquivo": "frontend-dist/assets/useScrollHighlightedOption-BytFYI1V.js",
       "sha256": "6792a59e8b23bc18ce713124355adb91408b4b6df71b0208d43eca6b6c17991e"
     },
     {
-      "arquivo": "frontend-dist/assets/useSupervisorLocal-DNAqa1s6.js",
-      "sha256": "ca2317a5d598af20b0cfd67a68408e055b3111f07a928aab0aa35038e2e760f5"
+      "arquivo": "frontend-dist/assets/useSupervisorLocal-Bk5kRfGc.js",
+      "sha256": "937793f24605fae194314951fd050293688a383b1380955cdf6806d48985a3c4"
     },
     {
-      "arquivo": "frontend-dist/assets/utensils-crossed-CtGdSRf_.js",
-      "sha256": "94efa1e34c8acdd3fc1d5f2feb5d97a59dac41cf80d8a92ce7532b6c3f829478"
+      "arquivo": "frontend-dist/assets/utensils-crossed-D8ysG1e9.js",
+      "sha256": "c2565ede781109d187caf2354b6037629546b2f77abbe9b1f741e8b9e1173578"
     },
     {
-      "arquivo": "frontend-dist/assets/validadeReportApi-cMvxn2rd.js",
-      "sha256": "f8e8d3f6f7720603a49e5adc874ec1c15db3b465fe1c7ae8eb92cc7906b97831"
+      "arquivo": "frontend-dist/assets/validadeReportApi-D5kqtE3s.js",
+      "sha256": "323cbc18b4f9f00b30c94d80cc5b950d33d2050f5debbcc8aadfcae56d9addaf"
     },
     {
-      "arquivo": "frontend-dist/assets/VasilhamesPage-DY3L1K0h.js",
-      "sha256": "7107584d699a8695a1d078b4753c69963b6335b01188f894b6d9e42001cc698e"
+      "arquivo": "frontend-dist/assets/VasilhamesPage-D9EVijob.js",
+      "sha256": "26b3242ede8ebd98c332b585d28c163a9b0d93f18659909f65e66d00f92edd74"
     },
     {
       "arquivo": "frontend-dist/assets/vendor-charts-BXtE57j3.js",
@@ -2639,16 +2639,16 @@
       "sha256": "61eb4cc4bc8a38503b4e851bda0622b2ee388153b442959f58fe287222e57587"
     },
     {
-      "arquivo": "frontend-dist/assets/warehouse-CznRlg9p.js",
-      "sha256": "caecdce85269dea06b225b6cec70143381ce849f84314cf349bf77304770c917"
+      "arquivo": "frontend-dist/assets/warehouse-VHzDjHZs.js",
+      "sha256": "1da476d9aed43f8fe00a7866ba253a97f7e64fc7e089257f1bc72c3ee68f14ae"
     },
     {
       "arquivo": "frontend-dist/assets/webVitals-CZcQQ7Qa.js",
       "sha256": "e11978d132029c52bf8a923b8ef52a3c8dae5d15c286e6f1a6212bb25ed7891d"
     },
     {
-      "arquivo": "frontend-dist/assets/WhatsAppConnectPage-BZozol39.js",
-      "sha256": "5b2583ae8a17d3a704b8274a56b6c9baac7aa5b9ae2d3ad4bbb88ce5cd3cfc94"
+      "arquivo": "frontend-dist/assets/WhatsAppConnectPage-BOL0zZBw.js",
+      "sha256": "5448aa8f1d0da75cc544540267e29b59aaed0fedcc5546963bcf7f5692e46928"
     },
     {
       "arquivo": "frontend-dist/assets/whatsappOrderLink-BKyP13en.js",
@@ -2680,7 +2680,7 @@
     },
     {
       "arquivo": "frontend-dist/index.html",
-      "sha256": "cd68367e21885c82848f05296a59bccca1f3ee71661b2c5b24c2027c007b0927"
+      "sha256": "9baf397081364d1a19c384083c6c8731c1378c7ffafa4e16c67bc5e2429edc01"
     },
     {
       "arquivo": "frontend-dist/manifest.webmanifest",
@@ -2692,7 +2692,7 @@
     },
     {
       "arquivo": "frontend-dist/sw.js",
-      "sha256": "09dc0db5b60e649f2075d160f78bee2f79a343850ebc2a3a8e3e3c2767714669"
+      "sha256": "b4565c510b95343049ae1d1df1477c10e6597098a9642a8b43329adbda6e3108"
     },
     {
       "arquivo": "frontend-dist/templates/modelo_importacao_produtos.xlsx",
@@ -2700,7 +2700,7 @@
     },
     {
       "arquivo": "frontend-dist/version.json",
-      "sha256": "16bf59c19de591d7dafdeb0ecd181f26cc3c4b2c9bf96eb0903389a678dc550c"
+      "sha256": "003ba47d17279fd27e05770cf5718414629f1437939384f8afb526b24c0fca26"
     },
     {
       "arquivo": "frontend-dist/workbox-3147e214.js",
