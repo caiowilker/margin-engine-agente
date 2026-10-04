@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.39] - 2026-10-04
+
+### Fixed — Frente de caixa
+
+- Produto não cadastrado no bip aparece na hora (não espera mais o `/pdv/scan` do backend).
+
 ## [1.0.38] - 2026-10-04
 
 ### Added — Delivery Fase 2 (agendamento, recompra, checkout)
