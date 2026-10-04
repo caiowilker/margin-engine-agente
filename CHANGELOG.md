@@ -4,6 +4,12 @@ Todas as mudanças relevantes do Agente Local Margin Engine são documentadas ne
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
+## [1.0.41] - 2026-10-04
+
+### Chore — Release alignment
+
+- Alinha agente/instalador à versão do front 1.0.41 (temas Suave/Sol + F2).
+
 ## [Unreleased]
 
 ## [1.0.40] - 2026-10-04
