@@ -6,6 +6,52 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.37] - 2026-10-04
+
+### Added — Cardápio público Fase 1 (vitrine)
+
+- Backend/front: campos `novidade` e `servePessoas` no menu digital + dados públicos da loja no QR.
+- Front: busca instantânea, chips, layout desktop com sacola sticky, upsell, modal Mais informações e imagens responsivas.
+
+
+## [1.0.36] - 2026-10-04
+
+### Changed — UX sem flags
+
+- Front: remove flags `VITE_UX_*`; Central abas/card, `/pdv/home` e checkout journey ficam sempre ativos para produção.
+- Front: limpa scripts/envs/guard de rota ligados ao rollback por flag.
+
+## [1.0.35] - 2026-10-04
+
+### Changed — UX em produção (uso normal)
+
+- Front: UX disponível para uso normal (Central abas/card, `/pdv/home`, checkout journey).
+- Front: Delivery Hub logística (empty hero, colunas estreitas, métricas clicáveis) embutido no `frontend-dist` de produção.
+- Build `build:pdv-prod`/`homolog`/`local` gera o front de produção.
+
+## [1.0.34] - 2026-10-04
+
+### Improved — Delivery Hub (UX logística)
+
+- Front: topo 2 linhas com papel D6 + link para Central; empty hero quando não há entregas.
+- Front: colunas vazias estreitas, hints por etapa, totais R$, SLA legível e métricas clicáveis (fila/mapa/motoboys).
+
+## [1.0.33] - 2026-10-04
+
+### Improved — Programa UX P2–P11
+
+- Front: Central abas por tipo, card SLA.
+- Front: DS canônicos + catálogo `/pdv/dev/design-system`; home tiles `/pdv/home`.
+- Front: jornada checkout; polish KDS/mesas/dashboard/ERP/devolução; papéis D6 nos hubs.
+
+## [1.0.32] - 2026-10-04
+
+### Improved — Central de Pedidos (UX P1)
+
+- Front: status de pedido em pt-BR (`orderStatusLabel`); remove tag “Faturar” duplicada; 1 CTA preenchida.
+- Front: tempo com unidade (`12 min` / `1 h 05` / `desde DD/MM`); selo “De dias anteriores”.
+- Front: totais R$ por coluna; toast Desfazer 5s ao mover; label “Pedidos online (hoje)”.
+
 ## [1.0.31] - 2026-10-04
 
 ### Fixed — Soft PDV sólido (inputs, CTAs, tom)
