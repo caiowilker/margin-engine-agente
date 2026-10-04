@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.28] - 2026-10-03
+
+### Improved — Soft mid-solid no PDV
+
+- Front: Soft charcoal médio (referência M3Soft), seleção teal AA, CTA fill AA, Painel/Frente sem chips claros bugando.
+
 ## [1.0.27] - 2026-10-03
 
 ### Fixed — build Windows / TypeScript do front
