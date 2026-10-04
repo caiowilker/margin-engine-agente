@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.27] - 2026-10-03
+
+### Fixed — build Windows / TypeScript do front
+
+- Front: props JSX com tokens PDV, badge nav, donut do relatório dinâmico e data local no estoque — desbloqueia `build:pdv-prod` / sync Windows.
+
 ## [1.0.26] - 2026-10-03
 
 ### Improved — tema Soft Cool Graphite no PDV
