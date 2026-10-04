@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.31] - 2026-10-04
+
+### Fixed — Soft PDV sólido (inputs, CTAs, tom)
+
+- Front: tom Suave de PDV — canvas fosco + surfaces/inputs levantados (`#fbfcfd`) para campos legíveis sem glare.
+- Front: fallback de campos no shell/diálogos + autofill; `.input-base` e `pdvInputStyle` sem depender de `dark:`.
+- Front: CTAs com `textOnAccent` (não mais `surface` cinza no Soft); dashboard/EAN/crediário alinhados a tokens.
+
 ## [1.0.30] - 2026-10-04
 
 ### Changed — Soft vira claro suave (anti-reflexo), não dark
