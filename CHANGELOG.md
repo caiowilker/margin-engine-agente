@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.30] - 2026-10-04
+
+### Changed — Soft vira claro suave (anti-reflexo), não dark
+
+- Front: tema Suave agora é **claro um pouco mais fosco** que o Claro (canvas `#e2e6eb`, surfaces off-white) — PDV Frente/Painel não usam mais charcoal/OLED.
+- Front: classe `html.soft` (migra `theme=dark` legado); Tailwind `dark:` não ativa no Suave.
+- Claro permanece congelado como baseline brilhante.
+
 ## [1.0.29] - 2026-10-03
 
 ### Fixed — Soft mid-solid: leaks e contraste AA no PDV
