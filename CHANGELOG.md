@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.26] - 2026-10-03
+
+### Improved — tema Soft Cool Graphite no PDV
+
+- Front: paleta Soft (Cool Graphite) com tokens `--pdv-*` em shells, modais, overlays e Frente; Claro congelado; seletor compacto Claro|Suave no header.
+- Front: hub/auditoria de relatórios e testes alinhados à UI atual (abas `role=tab`, empty states, permissão Gerenciamento de Caixa).
+- Backend: catálogo de relatórios / auditoria interna (acompanha o front).
+
 ## [1.0.25] - 2026-10-03
 
 ### Improved — Campanha WhatsApp reativação (UX)
