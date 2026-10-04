@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.38] - 2026-10-04
+
+### Added — Delivery Fase 2 (agendamento, recompra, checkout)
+
+- Pedidos agendados (`AGENDADOS`), job de liberação, antecipar na Central e config de slots.
+- Recompra / carrinho salvo 24h, ViaCEP via backend, checkout mais curto e Pix copia-e-cola em destaque.
+- Alinha versão agente ↔ back ↔ front ↔ instalador em `1.0.38`.
+
 ## [1.0.37] - 2026-10-04
 
 ### Added — Cardápio público Fase 1 (vitrine)
