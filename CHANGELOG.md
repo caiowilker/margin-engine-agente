@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.29] - 2026-10-03
+
+### Fixed — Soft mid-solid: leaks e contraste AA no PDV
+
+- Front: fecha vazamentos claros restantes na Frente/Painel (modais, drawers, fila off-line, atalhos, pin pad, peso, suspensas).
+- Front: CTA/ícones usam `textOnAccent` (não `surface` cinza); chips de categoria e seleção alinhados ao teal Soft.
+- Front: header Soft mid-solid (sem OLED navy); `::selection` usa `--pdv-selection-muted`.
+
 ## [1.0.28] - 2026-10-03
 
 ### Improved — Soft mid-solid no PDV
