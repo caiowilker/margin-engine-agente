@@ -166,6 +166,7 @@ function iniciar(lerConfigFn) {
   }, RECOVERY_MS);
   setTimeout(() => executarRecovery().catch(() => {}), 10000);
   setTimeout(() => executarCiclo(lerConfigFn).catch(() => {}), 15000);
+  require("./drenoFiscal").iniciar(lerConfigFn);
 }
 
 function parar() {
@@ -177,6 +178,7 @@ function parar() {
     clearInterval(recoveryTimer);
     recoveryTimer = null;
   }
+  require("./drenoFiscal").parar();
 }
 
-module.exports = { iniciar, parar, executarCiclo, executarRecovery };
+module.exports = { iniciar, parar, executarCiclo, executarRecovery, recuperarDocumentoLocal };

@@ -387,6 +387,37 @@ async function run() {
     assert.ok(r.erro);
   });
 
+  await test("avaliarPaginaDist — 138 só com eventos avança NSU", () => {
+    const manifesto = require("../manifestoDestinatario");
+    const r = manifesto.avaliarPaginaDist({ cStat: "138", xmls: [], resumos: [], eventos: 2 });
+    assert.strictEqual(r.parar, false);
+    assert.strictEqual(r.erro, null);
+    assert.ok(!r.naoAvancarNsu);
+  });
+
+  await test("parseDistribuicaoDFeUltNsuResposta conta eventos XML/INI/JSON", () => {
+    const acbr = require("../acbr");
+    const xml = acbr.parseDistribuicaoDFeUltNsuResposta(
+      `cStat=138\nultNSU=7\n<resEvento><chNFe>${CHAVE}</chNFe></resEvento>` +
+        `<procEventoNFe versao="1.00"></procEventoNFe>`,
+      "0",
+    );
+    assert.strictEqual(xml.eventos, 2);
+    assert.strictEqual(xml.xmls.length, 0);
+    const ini = acbr.parseDistribuicaoDFeUltNsuResposta(
+      "[DistribuicaoDFe]\ncStat=138\nultNSU=8\n[ResEve001]\nchDFe=1\n[ProEve001]\ncOrgao=91\n",
+      "0",
+    );
+    assert.strictEqual(ini.eventos, 2);
+    const json = acbr.parseDistribuicaoDFeUltNsuResposta(
+      JSON.stringify({ DistribuicaoDFe: { CStat: 138, ultNSU: "9" }, ResEve001: { chDFe: CHAVE } }),
+      "0",
+    );
+    assert.strictEqual(json.eventos, 1);
+    const vazio = acbr.parseDistribuicaoDFeUltNsuResposta("cStat=137\n", "0");
+    assert.strictEqual(vazio.eventos, 0);
+  });
+
   await test("avaliarPaginaDist — 137 encerra sem erro", () => {
     const manifesto = require("../manifestoDestinatario");
     const r = manifesto.avaliarPaginaDist({ cStat: "137", xmls: [], resumos: [] });

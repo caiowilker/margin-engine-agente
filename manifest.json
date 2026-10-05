@@ -1,14 +1,14 @@
 {
-  "versao": "1.0.48",
-  "geradoEm": "2026-10-05T17:46:10.788Z",
+  "versao": "1.0.49",
+  "geradoEm": "2026-10-05T22:23:07.142Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
-      "sha256": "53626c2cebda5c7d8f8f3b1aa7179eae7cf46e5c92a66d8ee8294d174db45d21"
+      "sha256": "ad0062046f773dc93105253fd1e4817f933f691306d4ba6104e684ba3e89adf0"
     },
     {
       "arquivo": "acbrLibResposta.js",
-      "sha256": "a9b3a62634076f22c4518051ffef5f1533150c528dfb31a2875380eb6a806331"
+      "sha256": "022002118468393d7a7105224f6c5e8167dae904a7e308e5885bb5ff36c71d39"
     },
     {
       "arquivo": "acbrNfceSetup.js",
@@ -72,7 +72,11 @@
     },
     {
       "arquivo": "documentosFiscais.js",
-      "sha256": "281f65dfaf6d1cb0207736af92e0d5eee121507dbdde437fb0e070e3b49acba4"
+      "sha256": "2efa58a70ab05f502edfcbfb7e5ef440861fc48caafd96a30af5635865b47f34"
+    },
+    {
+      "arquivo": "drenoFiscal.js",
+      "sha256": "789b42443c75e48eae80d62ad9ddc8e020ba502655d94d1bbb243d5bc7b19387"
     },
     {
       "arquivo": "envFileUtils.js",
@@ -84,7 +88,7 @@
     },
     {
       "arquivo": "filaFiscal.js",
-      "sha256": "ac2241fe7e96226d87ca659ce933271706579527dbf6b8f06ea002b202f81beb"
+      "sha256": "d28e19653aff4dec7e6348b61f45215a3c26dd0d2311f8ebe9d7e85e7c22d2da"
     },
     {
       "arquivo": "fiscal/acbrLibCrypt.js",
@@ -96,7 +100,7 @@
     },
     {
       "arquivo": "fiscal/certProof.js",
-      "sha256": "284dc995900ebe2760f2427d0a8daa0b447e6f56a6a077c422125db973b90c4e"
+      "sha256": "daed0a60edde5debf7567f12bd50d9f2023cf646ad39aa6883733ec268c50c8d"
     },
     {
       "arquivo": "fiscal/contingenciaOffline.js",
@@ -112,7 +116,7 @@
     },
     {
       "arquivo": "fiscal/drivers/acbrLibDriver.js",
-      "sha256": "6431b83e4913300b9638f600b31adc510c81536ecc748c5acbb87ddc6a3266ae"
+      "sha256": "3118e508bbbae19b5c3565e27fb0badc73134922bd02274cecdcbc7b0592c3a3"
     },
     {
       "arquivo": "fiscal/drivers/acbrLibProcessRecycle.js",
@@ -168,7 +172,7 @@
     },
     {
       "arquivo": "fiscal/nfse/nfseLib.js",
-      "sha256": "756a4114af34296baad82eccdd617265d8ad4d8362911bd4f08fdc7609d934b5"
+      "sha256": "dbba402be47203c9d8280f126cf8d1894c44026f60125d397102b3bfb878ee35"
     },
     {
       "arquivo": "fiscal/nfse/nfseValidate.js",
@@ -224,7 +228,7 @@
     },
     {
       "arquivo": "fiscalNumeracao.js",
-      "sha256": "48e7ec42568bdfcb445e66ad2d19d702e43ef0b87f15e50bb62dcff5f819d19e"
+      "sha256": "e91c60ac09a67c8a7cb9d1f0960456577ec0a1b751172b84a789588e74a350dc"
     },
     {
       "arquivo": "fiscalPdfFormato.js",
@@ -260,7 +264,7 @@
     },
     {
       "arquivo": "fiscalService.js",
-      "sha256": "b92992f35ecf2206e09302f84325391deb2b171e469d51ddfe34174c137839d3"
+      "sha256": "cfbd5dc3b4ad9983283ce540b4c777eb5880be9b91b9aedc68209e19dc25e1de"
     },
     {
       "arquivo": "fiscalStorage.js",
@@ -268,7 +272,7 @@
     },
     {
       "arquivo": "fiscalTraceLog.js",
-      "sha256": "4b3e4b4dba9b6b1d58f4dbfa6b354f731b48bf47d76fce6951232241ae75e31e"
+      "sha256": "36f8df7e44d74ce14a0947f262efc7651b0b75a7a4415e114489889054da5108"
     },
     {
       "arquivo": "fiscalValidacao.js",
@@ -2788,7 +2792,7 @@
     },
     {
       "arquivo": "manifestoDestinatario.js",
-      "sha256": "0f5a3a8b83f66df60eadd46c4e2784ac1a6d2a75c117f34925b833348157f46b"
+      "sha256": "b0f02221ed3963b1cece77701d1ca941b65f87765954e8a8388d205562bd5cc7"
     },
     {
       "arquivo": "manifestUpdater.js",
@@ -2804,7 +2808,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "920e208d197aac12f7a36f778cb5335fe432dab9727b00d6c843c307669115b2"
+      "sha256": "bf4415c2082584972ceaacfc57c20b0dbb9872317203f18d9b76e8aa5ada65c0"
     },
     {
       "arquivo": "print/acbrPosExports.js",
@@ -3036,7 +3040,7 @@
     },
     {
       "arquivo": "reconciliacaoFiscal.js",
-      "sha256": "c7e09882764df2e2ca7370c82e9a97c1fb9eef9d90eba692ec8f51fde41212c9"
+      "sha256": "f411d03475624b080e53eeb5c0f452485df56f73502bfea1db69e47db4a83613"
     },
     {
       "arquivo": "runtime/acbrIniGenerator.js",

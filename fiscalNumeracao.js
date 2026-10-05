@@ -141,6 +141,7 @@ function sincronizarNumeroAutorizado(serie, numeroRetornado, modelo = MODELO_NFC
     definirUltimoNumeroInterno(conn, s, mod, disp, n);
   });
   sync();
+  elevarMaxXmlEmCache(s, mod, n);
 }
 
 /** Define ultimo_numero (sobe ou desce) — usado quando acbr/xml é fonte de verdade. */
@@ -201,18 +202,62 @@ function consultarUltimo(serie = SERIE_PADRAO, modelo = MODELO_NFCE) {
 }
 
 /**
- * Alinha contador local ao maior nNF com XML autorizado em acbr/xml (não usa backup).
- * Backup é cópia de arquivos já salvos — não reflete numeração SEFAZ sozinha.
+ * Varredura recursiva de acbr/xml custa O(histórico da loja) — rodava a cada nota.
+ * Cache curto por diretório+série+modelo; autorizações deste processo elevam o valor
+ * (sincronizarNumeroAutorizado), então o cache nunca fica abaixo do que este agente emitiu.
  */
-function bootstrapDesdeXmlCanonicos(serie = SERIE_PADRAO, modelo = MODELO_NFCE) {
-  const fs = require("fs");
-  const path = require("path");
+const XML_SCAN_TTL_MS = 5 * 60_000;
+const xmlScanCache = new Map();
+
+function chaveScanXml(xmlDir, serie, modelo) {
+  return `${xmlDir}|${serie}|${modelo}`;
+}
+
+function elevarMaxXmlEmCache(serie, modelo, numero) {
+  for (const [key, entry] of xmlScanCache) {
+    if (key.endsWith(`|${serie}|${modelo}`) && numero > entry.max) entry.max = numero;
+  }
+}
+
+function limparCacheScanXml() {
+  xmlScanCache.clear();
+}
+
+/** Maior nNF com procNFe em acbr/xml para série+modelo (modelo vem da chave, pos. 21-22). */
+function maiorNumeroXmlCanonico(serie, modelo) {
   const { PATHS } = require("./marginPaths");
-  const fiscalRetry = require("./fiscalRetry");
-  const s = normalizarSerie(serie);
   const xmlDir = PATHS?.xml;
   if (!xmlDir || !fs.existsSync(xmlDir)) return 0;
+  const key = chaveScanXml(xmlDir, serie, modelo);
+  const hit = xmlScanCache.get(key);
+  if (hit && Date.now() - hit.at < XML_SCAN_TTL_MS) return hit.max;
+  const max = varrerMaiorNumeroXml(xmlDir, serie, modelo);
+  xmlScanCache.set(key, { max, at: Date.now() });
+  return max;
+}
 
+/**
+ * Alinha contador local ao maior nNF com XML autorizado em acbr/xml (não usa backup).
+ * Backup é cópia de arquivos já salvos — não reflete numeração SEFAZ sozinha.
+ * `pisoNumero`: números já autorizados no índice SQLite ou presos em jobs abertos
+ * (INCERTO/PROCESSANDO…) — rebaixar abaixo disso reemitiria um nNF possivelmente na SEFAZ.
+ */
+function bootstrapDesdeXmlCanonicos(serie = SERIE_PADRAO, modelo = MODELO_NFCE, { pisoNumero = 0 } = {}) {
+  const s = normalizarSerie(serie);
+  const mod = String(modelo || MODELO_NFCE);
+  const maxNum = maiorNumeroXmlCanonico(s, mod);
+  const piso = Number.isFinite(pisoNumero) && pisoNumero > 0 ? pisoNumero : 0;
+
+  if (maxNum > 0) {
+    const alvo = Math.max(maxNum, piso);
+    const ultimo = consultarUltimo(s, mod);
+    if (alvo !== ultimo) definirUltimoNumero(s, alvo, mod);
+  }
+  return maxNum;
+}
+
+function varrerMaiorNumeroXml(xmlDir, s, modelo) {
+  const fiscalRetry = require("./fiscalRetry");
   let maxNum = 0;
   const visit = (dir) => {
     let entries;
@@ -229,22 +274,14 @@ function bootstrapDesdeXmlCanonicos(serie = SERIE_PADRAO, modelo = MODELO_NFCE) 
       }
       if (!/procNFe\.xml$/i.test(ent.name)) continue;
       const chave = ent.name.match(/^(\d{44})/)?.[1];
-      const parsed = chave ? fiscalRetry.extrairNumeroSerieDaChave(chave) : null;
+      if (!chave || chave.substring(20, 22) !== modelo) continue;
+      const parsed = fiscalRetry.extrairNumeroSerieDaChave(chave);
       if (!parsed?.numero) continue;
       if (parsed.serie && normalizarSerie(parsed.serie) !== s) continue;
       if (parsed.numero > maxNum) maxNum = parsed.numero;
     }
   };
   visit(xmlDir);
-
-  if (maxNum > 0) {
-    const ultimo = consultarUltimo(s, modelo);
-    if (maxNum < ultimo) {
-      definirUltimoNumero(s, maxNum, modelo);
-    } else if (maxNum > ultimo) {
-      sincronizarNumeroAutorizado(s, maxNum, modelo);
-    }
-  }
   return maxNum;
 }
 
@@ -254,6 +291,7 @@ module.exports = {
   sincronizarNumeroAutorizado,
   sincronizarNumeroDuplicidade539,
   bootstrapDesdeXmlCanonicos,
+  limparCacheScanXml,
   definirUltimoNumero,
   consultarUltimo,
   resolveDispositivoId,

@@ -175,6 +175,28 @@ function copiarLogAcbrStagingParaCanonico(runtime) {
   }
 }
 
+/**
+ * Sucesso: copia fora do hot path e coalescida — o log diário do ACBr cresce ao longo do dia
+ * e copyFileSync síncrono bloqueava o worker a cada nota. Falha continua usando a cópia imediata.
+ */
+const COPIA_LOG_ADIADA_MS = 10_000;
+let copiaLogPendente = null;
+
+function agendarCopiaLogAcbr(runtime) {
+  if (!runtime?.log) return;
+  if (copiaLogPendente) {
+    copiaLogPendente.runtime = runtime;
+    return;
+  }
+  copiaLogPendente = { runtime };
+  const t = setTimeout(() => {
+    const alvo = copiaLogPendente?.runtime;
+    copiaLogPendente = null;
+    copiarLogAcbrStagingParaCanonico(alvo);
+  }, COPIA_LOG_ADIADA_MS);
+  if (typeof t.unref === "function") t.unref();
+}
+
 function snapshot(n) {
   const limit = Math.min(MAX_LINES, Math.max(1, parseInt(n, 10) || MAX_LINES));
   const traceLines = tail(limit);
@@ -203,4 +225,5 @@ module.exports = {
   tailAcbrLib,
   snapshot,
   copiarLogAcbrStagingParaCanonico,
+  agendarCopiaLogAcbr,
 };

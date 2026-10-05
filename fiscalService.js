@@ -830,12 +830,13 @@ function reservarNumeracaoJob(payload, job) {
   const serie = payload.serieNfe
     || (isNfe55 ? fiscalNumeracao.SERIE_NFE_55 : fiscalNumeracao.SERIE_PADRAO);
   // XML canônico (acbr/xml) é fonte de verdade; backup não entra na numeração.
-  const maxXml = fiscalNumeracao.bootstrapDesdeXmlCanonicos(serie, modelo);
+  const maxAutorizadoDb = filaFiscal.maiorNumeroNfeSerie(serie, modelo);
+  const pisoNumero = Math.max(maxAutorizadoDb, filaFiscal.maiorNumeroReservadoAberto(serie, modelo));
+  const maxXml = fiscalNumeracao.bootstrapDesdeXmlCanonicos(serie, modelo, { pisoNumero });
   if (maxXml === 0) {
-    const maxAutorizadoDb = filaFiscal.maiorNumeroNfeSerie(serie);
     const ultimo = fiscalNumeracao.consultarUltimo(serie, modelo);
-    if (maxAutorizadoDb > ultimo) {
-      fiscalNumeracao.sincronizarNumeroAutorizado(serie, maxAutorizadoDb, modelo);
+    if (pisoNumero > ultimo) {
+      fiscalNumeracao.definirUltimoNumero(serie, pisoNumero, modelo);
     }
   }
   const res = fiscalNumeracao.reservarProximoNumero(serie, modelo);

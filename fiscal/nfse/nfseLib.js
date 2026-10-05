@@ -273,7 +273,7 @@ async function emitirNfseViaNativeLib(payload) {
         }
 
         const resultado = normalizarResultadoNfse(p, resposta);
-        fiscalTrace.copiarLogAcbrStagingParaCanonico(runtime);
+        fiscalTrace.agendarCopiaLogAcbr(runtime);
         fiscalTrace.trace("ACBrLibNFSe", "Emissão nativa concluída", {
           chave: resultado.chave,
           numero: resultado.numero,

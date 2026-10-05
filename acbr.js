@@ -12,11 +12,29 @@ const ACBR_IDLE_MS = parseInt(process.env.ACBR_IDLE_MS || "180", 10);
 const ACBR_TIMEOUT_EMISSAO = parseInt(
   process.env.ACBR_TIMEOUT_EMISSAO_MS || "120000",
 );
-/** MOC 5.2.3 — mínimo 15s entre envio assíncrono e consulta do recibo. */
-const FISCAL_CONSULTA_POS_104_MS = parseInt(
-  process.env.FISCAL_CONSULTA_POS_104_MS || "15000",
-  10,
-);
+/**
+ * Após cStat 104 sem protNFe: consulta por CHAVE (NfeConsultaProtocolo), não recibo —
+ * o intervalo mínimo do MOC 5.2.3 vale para retAutorizacao. Passos curtos destravam o caixa
+ * em ~1,5 s no caso comum; total ≤ 15,5 s mantém o teto antigo e poucas consultas (cStat 656).
+ * FISCAL_CONSULTA_POS_104_MS legado = espera única.
+ */
+function resolverPassosConsultaPos104() {
+  const passos = String(process.env.FISCAL_CONSULTA_POS_104_PASSOS_MS || "").trim();
+  if (passos) {
+    return passos
+      .split(",")
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => Number.isFinite(n) && n >= 0);
+  }
+  const legado = String(process.env.FISCAL_CONSULTA_POS_104_MS || "").trim();
+  if (legado) {
+    const n = parseInt(legado, 10);
+    return Number.isFinite(n) && n >= 0 ? [n] : [15000];
+  }
+  return [1500, 3000, 5000, 6000];
+}
+/** Respostas da consulta que significam "ainda não indexada / tente de novo". */
+const CSTAT_CONSULTA_REPETIR = new Set(["", "217", "137", "108", "109", "999"]);
 /** MOC AP03a — indSinc=1: uma NF-e por lote, resposta com protNFe (evita cStat 104). */
 const FISCAL_ACBR_SINCRONO =
   (process.env.FISCAL_ACBR_SINCRONO || "true").toLowerCase() !== "false";
@@ -1728,8 +1746,9 @@ function enrichParsePosEmissao(p, resposta) {
   const bruto = coalescerRespostaAcbr(resposta);
   let xml = p.xml;
   let prot = docs.extrairProtNFe(xml);
-  if (p.chave) {
-    const local = docs.localizarXmlPorChave(p.chave);
+  const respostaJaAutorizada = !!xml && isCStatAutorizado(prot.cStat) && !!prot.nProt;
+  if (p.chave && !respostaJaAutorizada) {
+    const local = docs.localizarXmlPorChave(p.chave, { varreduraRecursiva: false });
     if (local?.xml) {
       xml = local.xml;
       if (local.prot?.cStat || local.prot?.nProt) prot = local.prot;
@@ -1771,20 +1790,23 @@ async function enrichParsePosEmissaoAsync(p, resposta, opts = {}) {
   if (isCStatAutorizado(atual.cStat)) return atual;
 
   if (CSTAT_LOTE_OK.has(String(atual.cStat)) && atual.chave) {
-    const esperaMs = FISCAL_CONSULTA_POS_104_MS;
-    if (esperaMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, esperaMs));
-    }
-    try {
-      const consultar =
-        typeof opts.consultar === "function" ? opts.consultar : consultarChave;
-      const consulta = await consultar(atual.chave);
-      const cs = String(consulta.cStat || "");
-      if (
-        consulta.situacao === "AUTORIZADA" ||
-        cs === "100" ||
-        cs === "150"
-      ) {
+    const consultar =
+      typeof opts.consultar === "function" ? opts.consultar : consultarChave;
+    const dormir =
+      typeof opts.dormir === "function"
+        ? opts.dormir
+        : (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const passos = Array.isArray(opts.passosMs) ? opts.passosMs : resolverPassosConsultaPos104();
+    for (const esperaMs of passos) {
+      if (esperaMs > 0) await dormir(esperaMs);
+      let consulta;
+      try {
+        consulta = await consultar(atual.chave);
+      } catch (_) {
+        continue;
+      }
+      const cs = String(consulta?.cStat || "");
+      if (consulta?.situacao === "AUTORIZADA" || cs === "100" || cs === "150") {
         return {
           ...atual,
           cStat: cs || "100",
@@ -1795,9 +1817,8 @@ async function enrichParsePosEmissaoAsync(p, resposta, opts = {}) {
             atual.xml,
         };
       }
-      // 217/137 na consulta após lote 104 = chave ainda não indexada, não rejeição da nota
-    } catch (_) {
-      /* consulta indisponível — segue com parse enriquecido */
+      // 217/137 após lote 104 = chave ainda não indexada; resposta definitiva ou 656 encerra.
+      if (!CSTAT_CONSULTA_REPETIR.has(cs)) break;
     }
   }
   return atual;
@@ -2468,6 +2489,7 @@ function parseDistribuicaoDFeUltNsuResposta(resposta, nsuInicial) {
   for (const r of fromJsonDocs.resumos || []) {
     if (!resumos.includes(r)) resumos.push(r);
   }
+  const eventos = libResp.contarEventosDistribuicaoDFe(raw);
 
   const p = libResp.parseRespostaLib(raw);
   const ultNsuFinal =
@@ -2490,6 +2512,7 @@ function parseDistribuicaoDFeUltNsuResposta(resposta, nsuInicial) {
     maxNsu,
     xmls,
     resumos,
+    eventos,
     raw,
   };
 }

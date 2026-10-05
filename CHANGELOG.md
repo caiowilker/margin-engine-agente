@@ -4,6 +4,107 @@ Todas as mudanças relevantes do Agente Local Margin Engine são documentadas ne
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
+## [Unreleased]
+
+## [1.0.49] - 2026-10-05
+
+### Fixed — Ficha técnica, custos e baixa de estoque (backend + front)
+
+- **Crítico:** `estoque_movimento.tipo` era `varchar(20)` e `CONSUMO_FICHA_TECNICA` tem 21 caracteres — toda baixa por ficha técnica (venda/produção) falhava no Postgres. Migration `V20261096` amplia para `varchar(40)`.
+- Venda de fabricado consome primeiro o estoque acabado do depósito e explode a ficha só do restante (antes ignorava o acabado produzido). Packs usam a quantidade de estoque (qtd × fator). Adicionais (modifiers) sempre baixam suas MPs. Tudo em um lote `CONSUMO_FICHA_TECNICA` com `FOR UPDATE` ordenado (mesma ordem da produção — sem deadlock).
+- Cancelamento devolve exatamente o que o kardex registrou para a venda (acabado + MPs), não uma reexplosão da ficha atual.
+- Custo do fabricado em BigDecimal com rendimento e custos das MPs em lote; recalcula automaticamente quando o custo da MP muda (entrada de nota, estorno, edição do cadastro). Endpoint `POST /padaria/ficha-tecnica/recalcular-custos` + botão “Recalcular custos”.
+- CMV da venda de item com receita = consumo real da linha × custo atual das MPs (inclui adicionais).
+- Salvar ficha não zera mais o estoque do fabricado; edição do produto não mexe em estoque; ajuste de estoque de fabricado liberado (balanço do acabado). MP inativa é rejeitada na ficha.
+- Disponibilidade = estoque acabado + produção possível; alerta de estoque baixo filtrado por tenant.
+- Front: ficha valida quantidade/rendimento/MP repetida antes de enviar (não descarta linha inválida em silêncio), permite remover linha e mostra a mensagem real do backend.
+
+### Performance — Emissão NFC-e 65 / NF-e 55
+
+- Prova do certificado A1 (openssl/PowerShell) cacheada por arquivo+senha — não spawna processo a cada nota.
+- cStat 104 sem protocolo: consultas por chave em 1,5/3/5/6 s em vez de espera fixa de 15 s (teto mantido; 656 encerra).
+- Pós-emissão não varre recursivamente `xml/saida/backup` quando a resposta já traz o protocolo.
+- Cópia do log ACBr em sucesso sai do hot path (coalescida a cada 10 s); em falha continua imediata.
+- Numeração: varredura de `acbr/xml` cacheada (5 min, elevada a cada autorização).
+- Backend: prepare de NFC-e/NF-e com menos round-trips (job criado em 1 INSERT idempotente, listeners sem transação quando o agente local emite, config da reforma em cache).
+- Front: polling de conclusão a 500 ms nos primeiros 8 s também no painel/conversão; NF-e não espera `emissao-iniciada` para acompanhar.
+
+### Performance — Faturar pedido / mesa
+
+- Liberação da mesa: limpeza local (rascunho, IndexedDB, snapshot, mapa) imediata; confirmação de mesa livre no agente sai em segundo plano — a navegação não espera mais o ACK. Aviso de mapa local chega por toast global.
+- NFC-e disparada na hora mesmo com a checagem do agente ainda pendente (antes caía para o dreno, ~2 min); só não dispara quando o agente está comprovadamente indisponível.
+- Preflight do agente reaproveitado: se o agente foi confirmado com emissão ligada há menos de 20 s, a emissão pula o round-trip de verificação. Se o agente cair nesse intervalo, a venda fica pendente fiscal e o dreno emite — sem nota duplicada.
+
+### Fixed — Venda com emissão ligada que terminava sem NFC-e
+
+- Dreno fiscal no agente (a cada 60 s): busca no backend (`GET /pdv/agente/fiscal/pendentes-emissao`) as NFC-e devidas deste terminal (até 72 h, mín. 2 min de idade) e coloca na fila — cobre cupom de segurança no F12 (agente ocupado/offline), prepare que falhou, venda sincronizada do offline e cadastro corrigido depois.
+- Nunca gera segunda nota: job ativo é respeitado; INCERTO é só consultado; job em falha é reaberto com o mesmo nNF reservado (SEFAZ 539 recupera a chave existente); nota já autorizada localmente só reenvia o callback.
+- Consulta INCERTO esgotada (`ACBr_OFFLINE_TIMEOUT`) volta a consultar uma vez antes de qualquer reemissão; venda INCERTO/PROCESSANDO no backend (após 10 min) também é vista, mas só age com job local — nunca número novo.
+- Falha classificada por cStat: transitória (timeout, rede, 108/109/217/656/999) reabre o job com o próprio payload; rejeição só reabre com INI corrigido (senão aguarda o cadastro); duplicidade 539/204 fica para o operador.
+- Rodízio com cursor (`apos`) e cota só para trabalho real: vendas travadas no início da fila não impedem as mais novas. Backoff por venda 1→60 min; respeita ACBr ocupado e fila ativa.
+- Job concluído sem documento local reenvia o resultado ao backend.
+- Catálogo de config Java alinhado com o agente (`fiscalCallbackWorkerMs`, `fiscalPdfWorkerMs`, `fiscalJobStaleMin`).
+- Backend: autorização com correlation anterior em venda sem chave é adotada (antes era descartada e a venda ficava “sem NFC-e”).
+- Backend/front: sync automático não desbloqueia mais INCERTO/PENDENTE para `NAO_EMITIDA`; só ação explícita do operador (`?desbloquear=true`), e o front recusa desbloquear com job INCERTO/RECUPERANDO/FALHA_TEMPORARIA no agente.
+- Front: venda em modo offline com fiscal ligado mantém `emitirNfce=true` (emite quando sincronizar); recusa fiscal 400/422 na sincronização registra a venda sem NFC-e em vez de prendê-la na fila.
+
+### Fixed — Numeração fiscal
+
+- Varredura filtra pelo modelo da chave: NF-e 55 e NFC-e 65 da mesma série não contaminam o contador uma da outra.
+- Rebaixamento do contador nunca fica abaixo de nNF já autorizado no índice local ou reservado por job aberto (INCERTO/PROCESSANDO).
+
+### Fixed — Cardápio digital delivery (front embarcado)
+
+- Barra de categorias em abas fixa logo abaixo do menu, junto com a busca; a aba ativa acompanha a rolagem pela posição real das seções e o toque leva a seção exatamente abaixo da barra.
+- Menu superior cabe numa linha no celular (altura medida em tempo real; antes a barra fixa ficava por baixo quando o menu quebrava em duas linhas).
+- Busca única: não troca mais de campo ao rolar (teclado não fecha mais no meio da digitação); um só botão de limpar; resultado aparece no topo.
+- Produto sem foto não mostra caixa cinza vazia: mostra o botão "+" (ou a quantidade na sacola); item esgotado fica esmaecido e sem efeito de toque.
+- Nome do produto não é lido duas vezes pelo leitor de tela (imagem decorativa); botão de categorias sem seta "voltar" sem função.
+- Cardápio da mesa (QR) com o mesmo padrão: busca + abas fixas numa única barra no topo (antes o cabeçalho compacto e as abas grudavam no mesmo lugar, um cobrindo o outro, e a busca trocava de campo ao rolar); filtros rápidos acima da barra; sem caixa cinza em produto sem foto.
+
+### Fixed — Mapa de entregas (Delivery Hub)
+
+- Mapa real com marcadores: o iframe do OpenStreetMap era bloqueado pela CSP de produção (sem `frame-src`) e não marcava nada; agora o mapa é desenhado com tiles (permitidos em `img-src`), com pinos das entregas por status, motoboys com iniciais, arrastar, aproximar/afastar e "Ver todos". Clique na lista centraliza no item.
+- Motoboy com situação do GPS: "Ao vivo", "Atualizado há N min", "Sem sinal há…" (marcador esmaecido) ou "GPS desligado" com orientação; horário lido no fuso da loja. Mostra quantas entregas cada um leva.
+- "Abrir no mapa" vai para o Google Maps; entregas mostram cliente, endereço e motoboy.
+- Backend: `GET /order-engine/delivery/map` informa `sem_localizacao` (entregas prontas/em rota sem coordenadas); o Hub avisa e soma no total em vez de mostrar "Entregas (0)".
+- Sem coordenadas, a lista de motoboys continua visível (antes a tela inteira virava "Sem localização").
+
+### Fixed — App do entregador (link do motoboy)
+
+- GPS com estado visível (enviando / procurando / bloqueado / falha de envio / desligado) e horário do último envio; preferência ligada/desligada salva por loja no aparelho.
+- Envio de localização contínuo e econômico: 15 s parado, 6 s em movimento (≥ 80 m), uma requisição por vez, releitura ao voltar para a tela e a cada 45 s se o aparelho ficar mudo.
+- Tela mantida acesa durante entregas (Wake Lock) para o GPS não parar com o celular bloqueado.
+- Cartão do pedido mostra o que cobrar na porta: valor, forma (dinheiro/cartão/PIX), troco a levar e caução de vasilhame; confirmação de entrega cita o recebimento.
+- "Ir até o cliente" abre rota no Google Maps (coordenada ou endereço), botões Ligar e WhatsApp, observações com quebra de linha e conferência de itens.
+- Pedido novo atribuído chega destacado ("Nova") e vibra o celular; tempo desde que saiu/foi despachado.
+- Falha ao mudar status mantém a mensagem e ressincroniza com a loja (pedido cancelado/reatribuído some sem ficar travado); sair pede confirmação com entregas ativas.
+- "Saí para entrega com todos (N)": avisa a saída de todos os pedidos despachados da tela em uma requisição (`POST /public/delivery/driver/me/orders/em-rota`). Cada pedido avança na própria transação — um cancelado/reatribuído não trava os demais, cada cliente recebe o aviso e falhas parciais dizem qual pedido não saiu.
+- GPS mais rápido: 1º ponto imediato (posição em cache/rede) seguido do fix preciso; 3 s em movimento (≥ 25 m e acima da precisão, sem ruído parado), 10 s parado, releitura forçada a cada 20 s; envio imediato ao sair para entrega.
+- Delivery Hub: com a aba Mapa aberta, posição dos motoboys atualiza a cada 5 s (só o mapa, sem recarregar quadro/cadastro).
+- Botão WhatsApp do cartão não estoura mais em celular estreito (mantém a largura do texto; os demais botões cedem espaço).
+
+### Fixed — Central de Operações
+
+- Cabeçalho apagado no tema claro: a central usava o fundo do tema (branco) com textos para fundo escuro. Fundo e cabeçalho agora são escuros fixos.
+- Produção mostrava "00:00" sem número do pedido: os tickets chegavam em camelCase e a tela lia snake_case. Agora mostra pedido, estação e o tempo certo.
+- Cronômetros da fila e da produção andam em tempo real entre atualizações (antes congelavam até o próximo evento).
+- Alertas legíveis ("Pedido parado há 51d 17h — finalize ou cancele" em vez de "74513 min"); pedido esquecido há mais de 24 h não distorce mais o "Tempo médio" (continua em Atrasados).
+- Debounce do snapshot não perde mais o estado final: rajadas viram um rebuild a cada 500 ms, com execução final garantida e sem rebuilds paralelos do mesmo tenant (antes eventos na janela eram descartados e a tela ficava desatualizada).
+- Snapshot não é montado quando nenhuma central está aberta no tenant; ao conectar/atualizar, vai só para a tela que pediu.
+- Tela mostra "Carregando…" até o 1º snapshot (não mais zeros); se o WebSocket não conectar em 2,5 s busca por HTTP e, desconectado, atualiza a cada 20 s com rótulo "Reconectando…" em português.
+
+### Performance — Estações KDS (roteamento produto → estação)
+
+- Tela abre com uma requisição (`GET /order-engine/kitchen/stations/routing`): estações ativas + produtos ativos só com id/código/nome e a estação mapeada. Antes: 3 chamadas, incluindo o catálogo pleno (inclusive inativos, com dados fiscais) só para listar nomes.
+- `product-mappings` sem N+1: produtos buscados em uma consulta (antes `findById` por mapeamento — 100+ consultas). Acelera também a impressão automática de comandas Cozinha/Bar, que usa o mesmo endpoint.
+- Salvar roteamento em lote: estações e mapeamentos carregados uma vez, só o que mudou é gravado (`saveAll`); antes 2–3 consultas por produto.
+- Após salvar estações, a grade de produtos realinha com o servidor (estação removida remapeia produtos para a Cozinha).
+
+### Changed — Tema Escuro (front embarcado)
+
+- Tema "Suave" substituído por "Escuro" (grafite sólido); Claro e Sol inalterados.
+
 ## [1.0.48] - 2026-10-05
 
 ### Changed — Temas e campos (front embarcado)

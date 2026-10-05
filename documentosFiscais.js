@@ -599,8 +599,12 @@ function carregarXmlComProt(filePath, chave) {
   return { path: filePath, xml, prot };
 }
 
-/** Localiza XML da chave (índice SQLite → flat ou aninhado ACBr). */
-function localizarXmlPorChave(chave) {
+/**
+ * Localiza XML da chave (índice SQLite → flat ou aninhado ACBr).
+ * `varreduraRecursiva:false` no hot path de emissão: readdir recursivo de xml/saida/backup
+ * cresce com o histórico da loja.
+ */
+function localizarXmlPorChave(chave, { varreduraRecursiva = true } = {}) {
   const k = String(chave || "").replace(/\D/g, "");
   if (k.length !== 44) return null;
 
@@ -638,6 +642,7 @@ function localizarXmlPorChave(chave) {
     }
   }
 
+  if (!varreduraRecursiva) return null;
   for (const raiz of [PATHS.xml, PATHS.saida, PATHS.backup]) {
     const found = buscarArquivoXmlRecursivo(raiz, k);
     if (found) {

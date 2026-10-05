@@ -999,20 +999,59 @@ function buscarDocumentoPorSerieNumero(serie, numero) {
     .get(String(serie), String(numero));
 }
 
-/** Maior nNF autorizado (cStat 100/150) persistido localmente para a série. */
-function maiorNumeroNfeSerie(serie) {
+/**
+ * Maior nNF autorizado (cStat 100/150) persistido localmente para a série.
+ * `modelo` (65/55) filtra pela chave — séries iguais em 55 e 65 têm sequências independentes.
+ */
+function maiorNumeroNfeSerie(serie, modelo = null) {
   init();
+  const mod = modelo == null ? null : String(modelo);
   const row = db
     .prepare(
       `SELECT MAX(CAST(numero_nfe AS INTEGER)) AS maxNum
        FROM documentos_fiscais
        WHERE serie_nfe = ?
          AND numero_nfe GLOB '[0-9]*'
-         AND c_stat IN ('100', '150')`,
+         AND c_stat IN ('100', '150')
+         AND (? IS NULL OR substr(chave, 21, 2) = ?)`,
     )
-    .get(String(serie));
+    .get(String(serie), mod, mod);
   const n = parseInt(String(row?.maxNum || "0"), 10);
   return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Maior nNF reservado por job de emissão ainda aberto (pode estar na SEFAZ sem procNFe local).
+ */
+function maiorNumeroReservadoAberto(serie, modelo) {
+  init();
+  const rows = db
+    .prepare(
+      `SELECT payload FROM fila_fiscal
+       WHERE tipo = 'EMISSAO'
+         AND status IN ('PENDENTE','PROCESSANDO','INCERTO','FALHA_TEMPORARIA','RECUPERANDO')`,
+    )
+    .all();
+  const s = String(serie || "").replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  const mod = String(modelo || "65");
+  let max = 0;
+  for (const row of rows) {
+    let p;
+    try {
+      p = JSON.parse(row.payload);
+    } catch (_) {
+      continue;
+    }
+    const meta = p?._fiscalMeta || {};
+    const numero = parseInt(String(meta.numeroNfe || p.numeroNfe || ""), 10);
+    if (!Number.isFinite(numero) || numero <= 0) continue;
+    const serieJob = String(meta.serieNfe || p.serieNfe || "").replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+    if (serieJob !== s) continue;
+    const modJob = String(meta.modeloDocumento || p.modeloDocumento || (p.modelo != null ? p.modelo : "65"));
+    if (modJob !== mod) continue;
+    if (numero > max) max = numero;
+  }
+  return max;
 }
 
 function salvarResultadoEmissao(correlationId, numeroVenda, status, resultado, erro) {
@@ -1353,6 +1392,73 @@ function marcarFalhaConsultaTimeout(job, motivo = "ACBr_OFFLINE_TIMEOUT") {
   return { correlationId, numeroVenda, motivo };
 }
 
+function contarEmissoesAtivas() {
+  init();
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM fila_fiscal
+       WHERE tipo = 'EMISSAO'
+         AND status IN ('PENDENTE','PROCESSANDO','INCERTO','FALHA_TEMPORARIA','RECUPERANDO')`,
+    )
+    .get();
+  return row?.n || 0;
+}
+
+/**
+ * Consulta esgotada (ACBr_OFFLINE_TIMEOUT) volta para INCERTO: a nota pode estar autorizada,
+ * então só se consulta de novo — nunca reemite.
+ */
+function reabrirParaConsulta(jobId, motivo = "Reaberto para consulta (venda ainda sem NFC-e no backend)") {
+  init();
+  const job = db.prepare(`SELECT * FROM fila_fiscal WHERE id = ?`).get(jobId);
+  if (!job || job.status !== "FALHA_PERMANENTE") return false;
+  let payload = {};
+  try {
+    payload = JSON.parse(job.payload);
+  } catch (_) {}
+  db.prepare(
+    `UPDATE fila_fiscal SET status = 'INCERTO', erro = ?, tentativas_consulta = 0,
+       proximo_retry_at = datetime('now') WHERE id = ?`,
+  ).run(motivo, jobId);
+  salvarResultadoEmissao(
+    payload.correlationId || job.correlation_id,
+    payload.numeroVenda || job.numero_venda,
+    "INCERTO",
+    null,
+    motivo,
+  );
+  return true;
+}
+
+/**
+ * Reemissão de job em FALHA_PERMANENTE com payload novo do backend (cadastro corrigido etc.).
+ * Mantém `_fiscalMeta` (nNF/série reservados): rejeição não consome número na SEFAZ,
+ * e reaproveitar evita buraco de numeração.
+ */
+function reabrirJobEmissao(jobId, novoPayload) {
+  init();
+  const job = db.prepare(`SELECT * FROM fila_fiscal WHERE id = ?`).get(jobId);
+  if (!job || job.status !== "FALHA_PERMANENTE" || job.tipo !== "EMISSAO") return false;
+  let antigo = {};
+  try {
+    antigo = JSON.parse(job.payload);
+  } catch (_) {}
+  const payload = { ...novoPayload };
+  for (const campo of ["_fiscalMeta", "numeroNfe", "serieNfe", "modeloDocumento"]) {
+    if (antigo[campo] != null) payload[campo] = antigo[campo];
+  }
+  delete payload.cfg;
+  delete payload.backendToken;
+  const correlationId = payload.correlationId || job.correlation_id;
+  db.prepare(
+    `UPDATE fila_fiscal SET status = 'PENDENTE', erro = NULL, tentativas = 0, tentativas_consulta = 0,
+       payload = ?, correlation_id = ?, proxima_tentativa = datetime('now'),
+       proximo_retry_at = datetime('now') WHERE id = ?`,
+  ).run(JSON.stringify(payload), correlationId, jobId);
+  salvarResultadoEmissao(correlationId, payload.numeroVenda || job.numero_venda, "PENDENTE", null, null);
+  return true;
+}
+
 function resetProximoRetryRecovery() {
   init();
   return db
@@ -1581,6 +1687,10 @@ module.exports = {
   buscarDocumentoPorVenda,
   buscarDocumentoPorSerieNumero,
   maiorNumeroNfeSerie,
+  maiorNumeroReservadoAberto,
+  contarEmissoesAtivas,
+  reabrirParaConsulta,
+  reabrirJobEmissao,
   salvarResultadoEmissao,
   obterResultadoEmissao,
   obterResultadoPorVenda,

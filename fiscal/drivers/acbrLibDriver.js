@@ -640,7 +640,7 @@ async function emitirViaNativeLib(iniPath, modelo, numeracao) {
 
           const resultado = acbr.normalizarResultado(p, resposta, modelo);
           const artifacts = persistNativeEmissaoOutputs(inst, runtime, p.chave, modelo);
-          fiscalTrace.copiarLogAcbrStagingParaCanonico(runtime);
+          fiscalTrace.agendarCopiaLogAcbr(runtime);
           fiscalTrace.trace("ACBrLib", "Emissão nativa concluída", {
             chave: resultado.chave,
             cStat: resultado.cStat,

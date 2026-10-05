@@ -110,9 +110,51 @@ function inspectViaPowershell(pfxPath, password) {
 }
 
 /**
+ * Spawn de openssl/PowerShell custa 0,3–3 s; roda no worker a cada emissão.
+ * Chave = arquivo (caminho+tamanho+mtime) + fingerprint da senha: troca de PFX ou senha
+ * invalida sozinha. Falha fica cacheada só por pouco tempo (senha corrigida no cofre).
+ */
+const META_CACHE_MAX = 16;
+const META_NEGATIVE_TTL_MS = 60_000;
+const metaCache = new Map();
+
+function metaCacheKey(pfxPath, pwd) {
+  try {
+    const st = fs.statSync(pfxPath);
+    return `${path.resolve(pfxPath)}|${st.size}|${st.mtimeMs}|${senhaFingerprint(pwd)}`;
+  } catch (_) {
+    return null;
+  }
+}
+
+function lerMetaCache(key, ignorarNegativo) {
+  const hit = key ? metaCache.get(key) : null;
+  if (!hit) return null;
+  if (hit.expiresAt && (ignorarNegativo || hit.expiresAt < Date.now())) {
+    metaCache.delete(key);
+    return null;
+  }
+  return hit.meta;
+}
+
+function gravarMetaCache(key, meta, ok) {
+  if (!key) return;
+  if (metaCache.size >= META_CACHE_MAX) {
+    metaCache.delete(metaCache.keys().next().value);
+  }
+  metaCache.set(key, { meta, expiresAt: ok ? 0 : Date.now() + META_NEGATIVE_TTL_MS });
+}
+
+function comExpiradoAtual(meta) {
+  if (!meta.notAfter) return { ...meta };
+  const t = new Date(meta.notAfter).getTime();
+  return { ...meta, expired: Number.isNaN(t) ? meta.expired : t < Date.now() };
+}
+
+/**
  * Metadados públicos do PFX (requer senha para OpenSSL/PowerShell).
  */
-function inspectPfxMeta(pfxPath, password) {
+function inspectPfxMeta(pfxPath, password, { ignorarNegativo = false } = {}) {
   const empty = {
     subject: null,
     thumbprint: null,
@@ -123,11 +165,16 @@ function inspectPfxMeta(pfxPath, password) {
   };
   const pwd = normalizeCertPassword(password);
   if (!pfxPath || !fs.existsSync(pfxPath) || !pwd) return empty;
-  return (
-    inspectViaOpenssl(pfxPath, pwd) ||
-    inspectViaPowershell(pfxPath, pwd) ||
-    empty
-  );
+  const key = metaCacheKey(pfxPath, pwd);
+  const cached = lerMetaCache(key, ignorarNegativo);
+  if (cached) return comExpiradoAtual(cached);
+  const meta = inspectViaOpenssl(pfxPath, pwd) || inspectViaPowershell(pfxPath, pwd);
+  gravarMetaCache(key, meta || empty, !!meta);
+  return meta || empty;
+}
+
+function limparCacheMetaPfx() {
+  metaCache.clear();
 }
 
 /**
@@ -142,7 +189,7 @@ function validatePfxPassword(pfxPath, password) {
   if (!pwd) {
     return { ok: false, reason: "senha_ausente" };
   }
-  const meta = inspectPfxMeta(pfxPath, pwd);
+  const meta = inspectPfxMeta(pfxPath, pwd, { ignorarNegativo: true });
   if (meta.thumbprint || meta.notAfter || meta.subject) {
     return {
       ok: true,
@@ -210,6 +257,7 @@ module.exports = {
   sha256File,
   senhaFingerprint,
   inspectPfxMeta,
+  limparCacheMetaPfx,
   validatePfxPassword,
   buildCertProof,
   certProofForLog,

@@ -456,6 +456,10 @@ function avaliarPaginaDist(dist) {
   if (hasDocs) {
     return { parar: false, erro: null };
   }
+  if ((cStat === "138" || cStat === "139") && Number(dist?.eventos) > 0) {
+    // Página só de eventos (ciência/cancelamento/CC-e): não há NF-e a importar, mas NSU avança.
+    return { parar: false, erro: null };
+  }
   if (cStat === "138" || cStat === "139") {
     return {
       parar: true,

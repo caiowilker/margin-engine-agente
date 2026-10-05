@@ -148,6 +148,19 @@ function extrairDocsDistribuicaoDFe(resposta) {
 }
 
 /**
+ * Conta eventos (resEvento/procEventoNFe) de uma página DistDFe — XML, seções INI
+ * [ResEve001]/[ProEve001]/[InfEve001] ou chaves JSON equivalentes. Página só com
+ * eventos é conteúdo legítimo (cStat 138) e o NSU deve avançar.
+ */
+function contarEventosDistribuicaoDFe(resposta) {
+  const bruto = String(resposta || "");
+  const xml = (bruto.match(/<(?:resEvento|procEventoNFe)[\s>]/gi) || []).length;
+  const ini = (bruto.match(/^\s*\[(?:ResEve|ProEve|InfEve)\d+\]/gim) || []).length;
+  const json = (bruto.match(/"(?:ResEve|ProEve|InfEve)\d+"\s*:/gi) || []).length;
+  return Math.max(xml, ini, json);
+}
+
+/**
  * Extrai cStat/xMotivo de retConsStatServ (arquivo *-sta.xml salvo com SalvarWS=1).
  * ACBrLib 1.5.x às vezes devolve JSON Status com CStat=0 vazio mesmo com SEFAZ 107 no XML.
  */
@@ -254,4 +267,5 @@ module.exports = {
   parseRetConsStatServXml,
   isHollowStatusJson,
   extrairDocsDistribuicaoDFe,
+  contarEventosDistribuicaoDFe,
 };
