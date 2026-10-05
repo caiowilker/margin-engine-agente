@@ -15,7 +15,7 @@
 ; ============================================================
 
 #define MyAppName "Margin Engine"
-#define MyAppVersion "1.0.44"
+#define MyAppVersion "1.0.45"
 #define MyAppPublisher "Margin Engine"
 #define MyAppCompany "Margin Engine"
 #define MyAppURL "https://marginengine.com.br"

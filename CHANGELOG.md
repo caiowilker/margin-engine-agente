@@ -4,6 +4,16 @@ Todas as mudanças relevantes do Agente Local Margin Engine são documentadas ne
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
+## [1.0.45] - 2026-10-05
+
+### Fixed — Transferência PDV (caixa legado)
+
+- Transferência usa `caixaId` quando `dispositivoId` está ausente (caixa aberto legado).
+
+### Chore — Release alignment
+
+- Alinha agente/instalador à versão do front 1.0.45 (transferência caixa legado, KPIs histórico, DataTable Crediário, Clientes).
+
 ## [1.0.44] - 2026-10-05
 
 ### Chore — Release alignment
