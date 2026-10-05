@@ -4,6 +4,18 @@ Todas as mudanças relevantes do Agente Local Margin Engine são documentadas ne
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
+## [1.0.48] - 2026-10-05
+
+### Changed — Temas e campos (front embarcado)
+
+- Suave (quente, papel) e Sol (alto contraste, contornado) com identidades distintas; Claro inalterado.
+- Contorno de campos/botões no PDV, Portal Fiscal, ERP e modais; telas públicas sempre no Claro; impressão sai no Claro.
+- Central de Pedidos: itens do card só ao expandir.
+
+### Chore — Release alignment
+
+- Alinha agente/instalador à versão do front 1.0.48.
+
 ## [1.0.47] - 2026-10-05
 
 ### Changed — Central de Pedidos (front embarcado)
