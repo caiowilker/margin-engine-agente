@@ -4,6 +4,16 @@ Todas as mudanças relevantes do Agente Local Margin Engine são documentadas ne
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
+## [1.0.47] - 2026-10-05
+
+### Changed — Central de Pedidos (front embarcado)
+
+- Card mostra os itens do pedido; menu de ações dos três pontos refeito; inputs voltam a ter borda.
+
+### Chore — Release alignment
+
+- Alinha agente/instalador à versão do front 1.0.47.
+
 ## [1.0.46] - 2026-10-05
 
 ### Fixed — Operador em Movimentações/tesouraria
