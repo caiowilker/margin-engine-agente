@@ -8,6 +8,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [1.0.50] - 2026-10-05
 
+### Added — fechamento de pedidos (O1)
+
+- Central de Pedidos: selo "Pedido Rápido" no card e opção "Pedido Rápido" em "Filtrar origem", pelo `canal_entrada` já persistido (V20261098).
+- Pedidos Digitais: seção "Por canal de entrada" (`by_entry_channel` no dashboard); pedidos antigos sem canal aparecem como "Outros canais".
+- Telemetria: contador `order_engine.pedidos.criados` com tags `origem` e `canal`.
+- E2E: Pedido Rápido Retirada e Entrega; Central avançar, cancelar, antecipar agendamento, selo e filtro.
+
+### Removed
+
+- Código `FEATURE_DISABLED` (nunca emitido) do Pedido Rápido; o front usa `PLAN_REQUIRED` (402). `pedido_rapido_habilitado` no PUT de config passa a ser ignorado (coluna mantida; resposta continua `true`).
+
 ### Changed — modo noturno (2026-10-06)
 
 - Pedido Rápido sempre ligado: removidas a chave global `margin.pedido-rapido.habilitado` e as checagens de `pedido_rapido_habilitado` no front (coluna mantida, não lida). Temas Claro/Escuro/Sol sempre ligados (sem `VITE_THEME_STRATEGY_V1`).
