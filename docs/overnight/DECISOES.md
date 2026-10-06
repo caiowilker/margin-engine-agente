@@ -74,3 +74,12 @@ Ambiguidades resolvidas pela opção mais conservadora e reversível.
 - **WhatsApp:** pedido agendado recebe "Pedido agendado" no lugar de "Pedido recebido" (não as duas). Template editável (`ORDER_SCHEDULED`); vazio = texto padrão.
 - **Front:** "Agendar" só aparece quando a loja tem agendamento ligado (vem do `/cotar`). Horário do diálogo da Central usa o relógio do computador da loja (mesmo fuso na prática); o servidor valida contra o fuso configurado.
 - Sem migration em D.
+
+## F — variações de mensagem
+
+- **Formato compatível:** JSON da coluna continua `{chave: texto}`; com 2+ variações o valor vira lista. Uma variação volta a ser texto (leitores antigos e o resto do código não mudam). `templatesForTenant` segue devolvendo a 1ª variação (reativação de inativos usa essa).
+- **Leitura tolerante:** dado gravado com mais de 5 variações é cortado em 5 (não quebra envio); só a API recusa mais de 5.
+- **Hash:** FNV-1a 32 bits sobre unidades UTF-16, semente `"<pedidoId>|<chave>"` (chave = `ORDER_READY`, `ORDER_SCHEDULED` etc.). Mesmos vetores testados no Java e no TS.
+- **Menu Copiar:** as mensagens rápidas são locais (título + "---"); com pedido criado a semente é `"<pedido.id>|<título>"`. Sem pedido não há semente estável, então mantém a alternância antiga.
+- **Editor:** adicionar variação não grava (linha vazia); grava ao sair do campo, ao reordenar e ao remover. Variações vazias são descartadas ao gravar.
+- Sem migration em F.

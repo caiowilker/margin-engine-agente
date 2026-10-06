@@ -17,7 +17,7 @@ Tag de backup em todos: `backup/pre-overnight-20261006` (back `8e7f78d`, front `
 - [x] B2–B5 — sucesso ao vivo, impressão, Confirmar seguro (409), confirmação automática, E2E (front `45cb106`)
 - [x] C — central de conversas da IA (migration `V20261101` validada em Postgres local)
 - [x] D — agendamento e "Local" no Pedido Rápido (sem migration)
-- [ ] F — variações de mensagem
+- [x] F — variações de mensagem (sem migration)
 - [ ] E — endurecimento financeiro
 - [ ] ENCERRAMENTO — RELATORIO.md
 
@@ -31,10 +31,12 @@ Tag de backup em todos: `backup/pre-overnight-20261006` (back `8e7f78d`, front `
 | B2–B5 | — | `45cb106` | (docs) |
 | C | `5e916502` | `1f43970` | (docs) |
 | D | `0d5b0509` | `3d1d574` | (docs) |
+| F | `e1e763b6` | `f87af06` | (docs) |
 
 ## Próximo passo
 
-F — variações de mensagem do WhatsApp.
+E — endurecimento financeiro (publicar em `overnight/E-financeiro` se os gates falharem).
 
+Suíte E2E completa do front após F: 37 verdes. Back: suíte completa verde. Front: 3248 testes vitest.
 Suíte E2E completa do front após D: 36 verdes (inclui `e2e/agendamento.spec.ts`). Back: 7584 testes verdes. Front: 3241 testes vitest.
 Suíte E2E completa do front após C: 32 verdes. Antes: 27 testes, 26 verdes + `mesa-close-bill` instável (passa no retry; não tocado).

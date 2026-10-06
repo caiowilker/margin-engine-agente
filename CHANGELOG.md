@@ -27,6 +27,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - Front: "Quando: Imediato | Agendar" com as vagas do servidor (lotado desabilitado), horário no resumo, na conferência e na tela de sucesso; botão "Local" no tipo do pedido. Horário lotado ao criar limpa a escolha e pede outro.
 - WhatsApp: mensagem "Pedido agendado" (`ORDER_SCHEDULED`, variável `{scheduledFor}`) enviada no lugar de "recebido" para pedidos agendados; editável na tela do cardápio QR.
 
+### Added — variações das mensagens do WhatsApp
+
+- `whatsapp_status_templates` aceita, por mensagem, um texto (formato antigo, continua valendo) ou uma lista de até 5 variações; mais de 5 é recusado com 422. Uma variação é gravada e devolvida como texto.
+- Escolha determinística: `hash(pedido|tipo) mod N` (FNV-1a 32 bits, igual no back e no front) — o mesmo pedido sempre recebe a mesma variação.
+- Tela do cardápio QR: cada mensagem ganhou editor de variações (adicionar, remover, reordenar e prévia com valores de exemplo).
+- Pedido Rápido: o menu Copiar usa a mesma regra depois que o pedido é criado (antes de criar, continua alternando).
+
 ### Fixed — liberação de agendados no fuso da loja
 
 - O job de liberação comparava o horário agendado (hora local da loja) com o relógio do servidor; agora usa o fuso de cada loja.
