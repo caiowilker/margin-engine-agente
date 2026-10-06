@@ -12,6 +12,10 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 - Pedido Rápido sempre ligado: removidas a chave global `margin.pedido-rapido.habilitado` e as checagens de `pedido_rapido_habilitado` no front (coluna mantida, não lida). Temas Claro/Escuro/Sol sempre ligados (sem `VITE_THEME_STRATEGY_V1`).
 
+### Fixed — trava de status na Central
+
+- `POST /order-engine/central/orders/{id}/workflow` aceita `expected_workflow_status` opcional: se o pedido já mudou, responde `409 {code: WORKFLOW_STATUS_CHANGED, atual}` sem alterar nada. Sem o campo, comportamento anterior. Front: `orderEngineApi.moveWorkflow(id, destino, esperado?)`; erros HTTP passam a expor `code`/`payload`.
+
 ### Fixed — impressão enganosa
 
 - Agente: toda resposta `202` com `fila: true` agora traz `status: "ENFILEIRADO"` e `impresso: false`; só `200` sem fila é `IMPRESSO` (`print/printHttpResposta.js`).

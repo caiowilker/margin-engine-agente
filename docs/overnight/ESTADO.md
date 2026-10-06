@@ -9,7 +9,7 @@ Tag de backup em todos: `backup/pre-overnight-20261006` (back `8e7f78d`, front `
 
 - [x] INÍCIO — remoção de vestígios de flag (back + front + docs)
 - [x] A1 — impressão enganosa (fila ≠ impresso; consulta por pedido)
-- [ ] A2 — trava de status (`expected_workflow_status` → 409)
+- [x] A2 — trava de status (`expected_workflow_status` → 409)
 - [ ] A3 — PIX preserva agendamento
 - [ ] A4 — IA WhatsApp: janela de sessão após handoff
 - [ ] A5 — pendências pós-release documentadas
@@ -29,6 +29,6 @@ Tag de backup em todos: `backup/pre-overnight-20261006` (back `8e7f78d`, front `
 
 ## Próximo passo
 
-A2 — trava de status (`expected_workflow_status`).
+A3 — PIX preserva agendamento.
 
 Observação: 4 E2E do Pedido Rápido falham desde a fase 3.1 (PRICE_CHANGED, catálogo, matriz do painel, PiP) — escopo de B1.
