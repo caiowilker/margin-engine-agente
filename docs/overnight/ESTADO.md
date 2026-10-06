@@ -13,7 +13,8 @@ Tag de backup em todos: `backup/pre-overnight-20261006` (back `8e7f78d`, front `
 - [x] A3 — PIX preserva agendamento (back `4af88bb4`)
 - [x] A4 — IA WhatsApp: janela de sessão após handoff
 - [x] A5 — pendências pós-release documentadas (`margin-engine/docs/pendencias-pos-release.md`)
-- [ ] B1–B5 — fechamento do Pedido Rápido
+- [x] B1 — E2E do Pedido Rápido verde (front `89c6463`); canário delivery e mesa também corrigidos (specs desatualizados desde 1.0.49)
+- [ ] B2–B5 — fechamento do Pedido Rápido
 - [ ] C — central de conversas da IA
 - [ ] D — agendamento e "Local" no Pedido Rápido
 - [ ] F — variações de mensagem
@@ -26,9 +27,10 @@ Tag de backup em todos: `backup/pre-overnight-20261006` (back `8e7f78d`, front `
 |---|---|---|---|
 | INÍCIO | `964f9424` | `c72a130` | `72999d5` |
 | A1 | ver git log "fix(print)" | ver git log "fix(print)" | ver git log "fix(print)" |
+| B1 | — | `89c6463` | (docs) |
 
 ## Próximo passo
 
-B1 — E2E do Pedido Rápido (4 falhas herdadas da fase 3.1).
+B2 — tela de sucesso com status ao vivo e indicador de impressão.
 
-Observação: 4 E2E do Pedido Rápido falham desde a fase 3.1 (PRICE_CHANGED, catálogo, matriz do painel, PiP) — escopo de B1.
+Suíte E2E completa do front: 21/21 verde após B1.

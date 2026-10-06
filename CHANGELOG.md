@@ -12,6 +12,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 - Pedido Rápido sempre ligado: removidas a chave global `margin.pedido-rapido.habilitado` e as checagens de `pedido_rapido_habilitado` no front (coluna mantida, não lida). Temas Claro/Escuro/Sol sempre ligados (sem `VITE_THEME_STRATEGY_V1`).
 
+### Fixed — Pedido Rápido: E2E e tela estreita
+
+- Catálogo: Enter logo após digitar a busca adicionava o primeiro item da lista antiga (busca adiada); agora usa o termo atual.
+- Painel estreito: barra de total não vaza 8 px para fora (sem rolagem horizontal); botões pequenos com 44 px de altura; link "Não é nenhum destes? Buscar outro" quebra linha; atalhos de teclado e selos dos itens com 12 px e contraste AA nos três temas (selos usam os pares `*-bg`/`*-text`); aviso informativo não bloqueia o clique no que está por baixo.
+- E2E: PRICE_CHANGED (cotação seguinte já com o preço novo), catálogo (tipo como `radio`), canário delivery (sacola lateral, checkout em etapas, volta ao Hub) e mesa (botão "Faturar pedido") alinhados à UI atual.
+
 ### Fixed — IA do WhatsApp muda para sempre após handoff
 
 - Janela de sessão configurável (`openai.whatsapp-ai.session-window-hours`, padrão 12 h): sem mensagem do cliente nesse período, o contador de turnos zera e a IA volta a responder, inclusive depois de um handoff. Mensagens do cliente durante o atendimento humano renovam a janela. `0` desliga.

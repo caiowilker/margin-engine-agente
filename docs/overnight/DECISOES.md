@@ -36,3 +36,9 @@ Ambiguidades resolvidas pela opção mais conservadora e reversível.
 - **A4:** "última mensagem do cliente" = `updated_at` da conversa (renovado a cada mensagem, inclusive durante o
   handoff). Sem migration nesta etapa; a central de conversas (C) traz coluna própria de atividade.
 - **A5:** documento em `margin-engine/docs/` (back concentra os itens).
+
+## B1 — E2E do Pedido Rápido
+
+- Falhas eram defeitos reais de UI, não do teste: corrigido o CSS (barra sem margem negativa, `data-pequeno` 44 px no estreito, selos com pares `*-bg`/`*-text`, kbd 12 px, toast informativo com `pointer-events: none`) em vez de afrouxar a matriz.
+- Catálogo: Enter filtrava com `useDeferredValue` (lista velha) e adicionava o produto errado; passou a usar o termo atual.
+- `delivery-canary` e `mesa-close-bill` falhavam também no commit pré-noturno (`c15c0fd`): specs desatualizados com a UI da 1.0.49 (sacola lateral, checkout em etapas, botão "Faturar pedido", retorno ao Hub). Ajustados os specs, sem mudar produto.
