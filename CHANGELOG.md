@@ -6,6 +6,76 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.50] - 2026-10-05
+
+### Added — Pedido Rápido, fase 1 (backend, aditivo)
+
+- Novo namespace `/order-engine/pedido-rapido/*` (catálogo com ETag, cliente por telefone com repetição, cotação no servidor, criação idempotente de pedido, apelidos de produto, telemetria). Endpoints existentes sem alteração.
+- Flag por loja `pedido_rapido_habilitado` (padrão desligada) e `pedido_rapido_janela_duplicidade_min` (padrão 10) como campos opcionais de `GET/PUT /order-engine/config`.
+- Migration aditiva `V20261097` (coluna de apelidos, flag, tabelas de idempotência e auditoria) com rollback em `docs/rollback/`.
+- Agente local: sem mudança de comportamento; versão alinhada ao release.
+
+### Added — Pedido Rápido, fechamento da fase 1 (1.1)
+
+- Canal persistido `order_engine_order.canal_entrada` (`V20261098`, nulável, só metadado): `PEDIDO_RAPIDO` gravado pelo servidor; exposto como campo opcional `canal_entrada` em `OrderResponse`, `OrderSummaryResponse`, card do kanban (board e WebSocket) e `OrderBusPayload` — omitido quando nulo, JSON dos demais pedidos inalterado.
+- Índice de telefone em `V20261099` sem `CONCURRENTLY` no Flyway: criado só em tabela ≤ 100 mil linhas, repara índice INVALID; tabela grande usa procedimento manual `CREATE INDEX CONCURRENTLY` (runbook + `docs/pedido-rapido/sql/`).
+- `quoteHash` e hash de idempotência com codificação canônica própria + SHA-256 (sem `hashCode`/Jackson), estáveis entre reinícios; quoteHash ignora campos voláteis e complementos em outra ordem.
+- Falhas internas do Pedido Rápido não expõem mensagem interna (500 genérico).
+- Testes: PostgreSQL real (migrations com locks por comando, rollback/reaplicação, idempotência concorrente), regressão da ACL de sessão de piso em todas as rotas, contrato de origem (Hub, mensagens, KDS, relatórios).
+- Docs: `decisoes.md`, runbook de migração/rollback/carga, k6 de `/cotar` e `/pedidos`, divergências D-12 a D-14 e decisão do D-09 (paridade).
+
+### Added — Pedido Rápido, fase 2 (interpretador no front, sem rede)
+
+- Núcleo TypeScript puro em `margin-engine-front/src/modules/pedido-rapido/core/`: segmentação de conversas do WhatsApp (Web, Android, iOS, texto livre), extração de telefone/CEP/endereço/pagamento/tipo, matcher por trigramas com faixas ok/confirmar/ambíguo/não reconhecido, correções ("tira", "troca", "na verdade") e mapa de posições para destacar o texto original.
+- Golden tests com casos sintéticos, avaliação com baseline (`npm run eval:pedido-rapido`), cobertura ≥ 90 % (`npm run test:pedido-rapido:coverage`) e ESLint impedindo React/rede/imports de fora no núcleo.
+
+### Added — Pedido Rápido, fase 3 (tela no ERP)
+
+- Tela `/pdv/pedido-rapido` (mesmas guardas da Central): colar conversa (Ctrl+V em qualquer ponto ou botão de área de transferência), revisão com ✓/⚠/✖, busca de produto, "Lembrar este apelido", endereço com CEP, pagamento, cliente pelo telefone com "Repetir último pedido", botões de copiar e mensagens rápidas editáveis.
+- Valores só do servidor (`/cotar` com debounce de 300 ms, cancelamento e proteção contra resposta fora de ordem); catálogo em cache no IndexedDB com ETag; `Idempotency-Key` reaproveitada nas novas tentativas; diálogos para `PRICE_CHANGED`, duplicidade e loja fechada.
+- Rascunho só no navegador (por loja + usuário, 4 h); telemetria agregada em lote. Backend: tipos de evento aditivos em `/eventos` (`itens_ok`, `itens_confirmar`, `itens_ambiguos`, `itens_nao_reconhecidos`, `correcao_feita`, `repetir_pedido`).
+- Central de Pedidos: com a flag `pedido_rapido_habilitado` ligada, "Novo pedido" abre a tela nova e o menu antigo vira "Pedido manual (mesa/balcão)"; com a flag desligada, nada muda.
+- Módulo isolado (ESLint bloqueia `api/api`, `AuthContext`, `react-router`, `usePlanFeatures`); testes de unidade, componentes (Testing Library) e e2e (Playwright), com capturas nos temas Claro, Escuro e Sol.
+
+### Added — Pedido Rápido, fase 4 (modo painel ao lado do WhatsApp Web, só front)
+
+- "Abrir ao lado do WhatsApp": janela estreita (~440 px) à direita com altura útil, tamanho/posição lembrados por aparelho; `?painel=1` sem menus do ERP; pop-up bloqueado mostra como liberar.
+- "Janela flutuante" (Document Picture-in-Picture, Chrome/Edge 116+, só com suporte): mesma tela por portal, tema espelhado, atalhos, colar e clipboard funcionando; fechar mantém o rascunho.
+- Um rascunho ativo por vez entre janelas/abas (trava com `BroadcastChannel` + evento `storage`, "Continuar aqui"); painel com rascunho pergunta "continuar" ou "novo".
+- Layout por container queries (estreito < 480 px com rótulos curtos e ações no rodapé, médio, largo ≥ 900 px em duas colunas); chips de status a 12 px no módulo.
+- E2E com matriz 360–1280 px × zoom 90/100/125 % × 3 temas (sem rolagem horizontal, nada cortado, controles alcançáveis, contraste AA), capturas por largura e tema, roteiro de teste manual.
+- O painel não herda o id de aba da estação de impressão copiado pelo `window.open` (evita disputa de liderança — divergência legada D-15, não corrigida).
+
+### Changed — Pedido Rápido, fase 3.1 (redesenho UX/UI, sem mudar regras de cotação/criação)
+
+- Backend aditivo: `GET /order-engine/pedido-rapido/catalogo` traz `imagemUrl` (miniatura pública do cardápio, só URL http(s), sem base64) e `loja` (cidade/UF padrão); o ETag muda quando a foto ou a cidade mudam. `POST /cliente/buscar` traz `totalPedidos` (pedidos não cancelados do telefone).
+- Projetado primeiro para o painel (~400 px): uma coluna com barra fixa (total + "Criar pedido"); ≥ 900 px em duas colunas com resumo fixo de 340 px e rolagem interna; sem rolagem horizontal em 360–1280 px nos 3 temas.
+- Cartão "Cliente" no topo: selo Recorrente/Novo, nº de pedidos, último pedido, até 3 chips "Pediu antes" com miniatura (1 toque adiciona) e "Repetir último pedido"; cliente novo só precisa de telefone (nome opcional).
+- Itens com foto (lazy, dimensão fixa, esqueleto, ícone da categoria como fallback), stepper, subtotal e menu "⋯"; ambíguo com até 3 opções (clique ou teclas 1–3) e "Lembrar apelido" só após a escolha; não reconhecido com busca e "Ignorar item".
+- Catálogo em gaveta/folha ("/"), com busca, categorias, grade de fotos e "Pediu antes"; endereço com CEP primeiro e cidade/UF da loja; pagamento segmentado com troco só em dinheiro.
+- "Criar pedido · R$ X" nunca fica morto: com pendência leva o foco até ela; sem pendência abre a Conferência (Enter confirma; pode ser desligada neste computador), substituindo a caixa "Conferi". Duplicidade e loja fechada mantêm a 2ª confirmação.
+- Limpar sem diálogo, com "Desfazer" por 6 s. Sucesso mostra número, status, "Confirmação enviada ao cliente" (quando automática) ou "Copiar confirmação", "Ver na Central" e "Novo pedido".
+- Menu "Copiar": resumo, total com taxa, chave PIX, link do cardápio (definido neste computador) e mensagens rápidas com título e várias variações (não repete a última); aceita `{nome} {numero} {total} {pix} {cardapio}` e `{customerName} {orderNumber} {storeName}`.
+- Interpretação em Web Worker para textos longos (fallback na thread principal); números tabulares; animações de 120–180 ms respeitando movimento reduzido.
+
+### Fixed — Tema Escuro (só front; Claro e Sol inalterados)
+
+- Blocos brancos/ilegíveis no Escuro vinham de cores literais em `style={{…}}`, que não passam pelo remap de tokens. Nova rede gerada `src/styles/dark-inline-guard.css` (`npm run sync:dark-guard`, verificação `npm run check:dark-guard` + teste que falha se o CSS estiver desatualizado): só tela e só `html.soft`, troca fundo claro por superfície grafite/tinta do mesmo matiz, texto escuro por tom claro, borda clara (inclusive cor de borda usada em template), trilho cinza de toggle, sombra colorida clara, chip com texto de cor média e accent/accent-dark com texto branco. Corrige listas e tabelas (Clientes, Estoque, movimentações, Ranking, Curva ABC), abas/filtros (Gráficos, Comissões, Configurações, Trust Score, agendamentos/períodos da Locação), cards e stepper da Locação, “Como funciona” do KDS, toggle de Contas a Pagar na NF de entrada, Classificação/Categoria do produto.
+- Prévias de impressão (2ª via, DANFE, comprovante de locação) marcadas com `data-pdv-paper`: no Escuro continuam papel branco com tinta escura, como saem na impressora.
+- Painel “Funções” do header no PDV: hex arbitrários do Tailwind (`bg-[#E3F6EC]` etc.) mapeados para tokens no Escuro — o item em foco/hover não fica mais branco. Menu Funções da Frente de Caixa: item selecionado com fundo, borda e sombra escuros.
+- Logo da sidebar: `BrandLogo surface="auto"` segue o tema do app (antes dependia de `dark:` do Tailwind, que nunca liga); arte da sidebar com placa e “ENGINE” mais legíveis.
+- `PlanBadge` com os tons escuros previstos (antes chip lilás claro na sidebar).
+- `check:theme` volta a ler o bloco `:root` (o seletor do papel tinha quebrado a extração; falhas restantes são as mesmas de antes).
+
+### Added — Contas a Pagar: pagar com dinheiro do caixa (backend aditivo + front)
+
+- À vista e baixa agora escolhem a origem: "Conta da tesouraria" (como antes) ou "Dinheiro do caixa" (caixa aberto do PDV). Contrato aditivo: `origemPagamento` (`CONTA` padrão / `CAIXA`) e `caixaOrigemId` nos requests; resposta ganha `origemPagamento`, `caixaOrigemId`, `caixaOrigemNome`, `movimentoCaixaId`. Clientes antigos seguem iguais (sem `origemPagamento` = conta).
+- Saída do caixa vira SANGRIA vinculada ao título (`pdv_movimento_caixa.conta_pagar_id`): entra na conferência do fechamento e na fita ("Contas a pagar"); o fluxo de caixa financeiro ignora essa sangria porque o título pago já é a saída (sem contar duas vezes).
+- Regras: caixa travado e conferido como ABERTO; valor ≤ dinheiro em espécie do caixa (abertura + vendas em dinheiro + suprimentos − sangrias), erro "Dinheiro insuficiente no Caixa X. Disponível: R$ …"; forma sempre DINHEIRO; data de pagamento = hoje da loja; conta e caixa juntos é recusado; exige BAIXAR + GERENCIAR_TESOURARIA (caixa escolhido em tela gerencial, como a transferência). Falha não deixa título nem movimento pela metade.
+- Baixa trava a linha do título (PESSIMISTIC_WRITE) para conta e caixa: duplo clique / duas abas pagam uma vez só (a outra recebe 409). Índice único parcial `ux_pdv_mov_caixa_conta_pagar` como defesa extra.
+- `GET /finance/contas-pagar/caixas-pagamento`: caixas abertos com operador e dinheiro disponível. Migração `V20261100` só com colunas NULL (rollback em `docs/rollback/`); índice criado no Flyway só com ≤ 100 mil linhas, senão NOTICE + `CREATE UNIQUE INDEX CONCURRENTLY` manual.
+- Front: seletor de origem compartilhado (à vista e baixa), caixa pré-selecionado quando só há um, "Restará R$ … no caixa", aviso de falta, botão atualizar, data travada em hoje na baixa pelo caixa, proteção contra duplo envio, chip "Pago com …" nos títulos pagos (também na busca). A barra fixa de navegação deixa de cobrir o painel de lançamento/baixa aberto.
+
 ## [1.0.49] - 2026-10-05
 
 ### Fixed — Ficha técnica, custos e baixa de estoque (backend + front)
