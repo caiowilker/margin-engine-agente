@@ -6,6 +6,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.51] - 2026-10-06
+
+### Fixed — Produção parando de responder (hotfix)
+
+- Backend congelava logo após o deploy: com 1 vCPU o scheduler de virtual threads tem uma única carrier, e blocos `synchronized` com I/O dentro a fixavam. O principal era o singleflight da config do agente (`PdvDispositivoConfigService`): com o cache vazio pós-deploy, todos os PDVs pedem config ao mesmo tempo e cada SELECT (~1 s) segurava a carrier — requisições ficavam com conexão presa (Hikari "connection leak") e o processo parava de responder, inclusive o `/actuator/health`.
+- `synchronized` com I/O trocado por `ReentrantLock`: config do agente, detecção de dialeto da idempotência de venda, rate limit do geocoding (`sleep`) e todos os envios de WebSocket (Central, cozinha, impressão, operações), agora centralizados em `WebSocketSessions.enviar` (lock por sessão, desiste após 5 s em vez de esperar indefinidamente).
+- Defesa adicional: o scheduler de virtual threads sobe com pelo menos 16 carriers (`MARGIN_VT_PARALLELISM` sobrescreve; `-D` explícito na JVM tem precedência) e `jdk.tracePinnedThreads=short` registra no log qualquer pinning restante.
+- Alerta de venda sem NFC-e falhava a cada 5 min com `No argument for named parameter ':5'`: a fatia de array `[1:5]` (e `[1:3]` nas pendências fiscais) virava parâmetro nomeado no Hibernate; colon escapado.
+- Sync de venda offline: diagnóstico do advisory lock falhava com `syntax error at or near ":"` (cast `::bigint`); trocado por `CAST(... AS bigint)`.
+- Pedido agendado nunca era liberado pelo job: `ScheduledOrderReleaseService` passava `(tenantId, orderId)` para um método que recebe `(id, tenantId)`, a busca não achava o pedido e o job saía em silêncio. Validado em Postgres real.
+- Testes: SQL nativo real passado pelo parser do Hibernate (sem parâmetros fantasmas, fatias intactas), envio de WebSocket serializado e com desistência, configuração do scheduler e liberação do agendado.
+
 ## [1.0.50] - 2026-10-05
 
 ### Added — Pagamento dividido no pedido (O5)

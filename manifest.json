@@ -1,6 +1,6 @@
 {
-  "versao": "1.0.50",
-  "geradoEm": "2026-10-05T23:21:10.795Z",
+  "versao": "1.0.51",
+  "geradoEm": "2026-10-06T19:28:31.624Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -2780,7 +2780,7 @@
     },
     {
       "arquivo": "index.js",
-      "sha256": "4f70f52f140b943e173406ce321b5df76a75da666ddc0f0da228fa17ade8a9fb"
+      "sha256": "5581fe5eb777fe3942cb27cbf1b18d1dbbb577f1798e98208cf4c342ab855cbf"
     },
     {
       "arquivo": "install-service.js",
@@ -2816,7 +2816,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "b664fdd28510c787919a1b5072487dd3d13a0f2a516e508f9fe1e44f773baec2"
+      "sha256": "bf51f7fa4c113ae47e42627b74e7d079b623d2239d66253a9aad4cdb5762ae73"
     },
     {
       "arquivo": "print/acbrPosExports.js",
@@ -2912,11 +2912,11 @@
     },
     {
       "arquivo": "print/pedidoLayout.js",
-      "sha256": "4011cf46fd5136720e33dea9aea378c2aac45a165dbcd948f901b99b59a37962"
+      "sha256": "81e33b4b4f0c569902f116930fb8c71f58902bf4c33d49c000618ae5cf56d93e"
     },
     {
       "arquivo": "print/pedidoPrint.js",
-      "sha256": "ef11fa7c3224b48230098665f15c98df7aba3a877fb61408ea8820f8cb3018c7"
+      "sha256": "302c650d2581b427981efd2a7110827693861d9c61003e40cbec0a7fd7f05aa3"
     },
     {
       "arquivo": "print/posPrinterIniDefaults.js",
@@ -2957,6 +2957,10 @@
     {
       "arquivo": "print/printFiscalCoordination.js",
       "sha256": "e668df264988f922d8d71a63ad7ad34b810165d797ec31f5c00122293a7983c4"
+    },
+    {
+      "arquivo": "print/printHttpResposta.js",
+      "sha256": "8d5639aced042d7fb3e116487ae25a6f799a627272ad2c5743d6c5194f5b0d29"
     },
     {
       "arquivo": "print/printIdempotency.js",
