@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.53] - 2026-10-06
+
+### Fixed — Auditoria final dos pedidos (O6)
+
+- **Impressão:** o ack da estação (WebSocket ou `POST /order-engine/print/jobs/{id}/ack`) não encontrava o job. `PrintDispatchService` atribuía um UUID à entidade com `@GeneratedValue`; o `save` virava `merge` e a linha ganhava outro id, enquanto o payload guardava o primeiro. Resultado: comandas ficavam `DISPATCHED`, eram reenviadas pelo recovery e terminavam `FAILED` por abandono. Agora o id é gerado no `persist` e gravado no payload; ao ler a fila, o id da linha sempre prevalece (corrige também jobs antigos ainda pendentes).
+- **Mesa:** `close-bill` sem itens no corpo zerava a comanda (o `update` tratava `items` nulo como lista vazia). Sem `items`, a comanda é mantida.
+- Auditoria em Postgres real (`scripts/pedidos-auditoria/`): ciclo completo por canal 62/62 e resiliência 23/23 (queda do backend no meio da criação, perda de rede, WebSocket, impressora offline, catálogo desatualizado, dois operadores, JVM em outro fuso).
+
 ## [1.0.52] - 2026-10-06
 
 ### Fixed — Queda do banco não derruba mais tokens de agente (hotfix)
