@@ -15,7 +15,7 @@ Tag de backup em todos: `backup/pre-overnight-20261006` (back `8e7f78d`, front `
 - [x] A5 — pendências pós-release documentadas (`margin-engine/docs/pendencias-pos-release.md`)
 - [x] B1 — E2E do Pedido Rápido verde (front `89c6463`); canário delivery e mesa também corrigidos (specs desatualizados desde 1.0.49)
 - [x] B2–B5 — sucesso ao vivo, impressão, Confirmar seguro (409), confirmação automática, E2E (front `45cb106`)
-- [ ] C — central de conversas da IA
+- [x] C — central de conversas da IA (migration `V20261101` validada em Postgres local)
 - [ ] D — agendamento e "Local" no Pedido Rápido
 - [ ] F — variações de mensagem
 - [ ] E — endurecimento financeiro
@@ -29,9 +29,10 @@ Tag de backup em todos: `backup/pre-overnight-20261006` (back `8e7f78d`, front `
 | A1 | ver git log "fix(print)" | ver git log "fix(print)" | ver git log "fix(print)" |
 | B1 | — | `89c6463` | (docs) |
 | B2–B5 | — | `45cb106` | (docs) |
+| C | `5e916502` | `1f43970` | (docs) |
 
 ## Próximo passo
 
-C — central de conversas da IA (migration aditiva + endpoints + job + painel).
+D — agendamento e "Local" no Pedido Rápido.
 
-Suíte E2E completa do front: 27 testes, 26 verdes + `mesa-close-bill` instável (passa no retry; não tocado).
+Suíte E2E completa do front após C: 32 verdes. Antes: 27 testes, 26 verdes + `mesa-close-bill` instável (passa no retry; não tocado).

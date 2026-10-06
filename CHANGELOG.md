@@ -19,6 +19,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - Botão "Confirmar" (Recebido → Confirmado) envia `expected_workflow_status`; se o pedido já mudou, mostra "O pedido já mudou para <status>" e atualiza sem mover.
 - Envio automático da confirmação: "Confirmação enviada ao cliente"; sem WhatsApp vinculado, "Copiar confirmação".
 
+### Added — Central de conversas da IA do WhatsApp
+
+- Conversas têm estado (Ativa, Precisa de você, Pausada, Resolvida), última atividade e quem pausou/retomou/resolveu e quando (migration aditiva `V20261101`; sem texto de mensagem).
+- API `/order-engine/central/whatsapp-ai/conversas`: lista com filtro, busca por telefone e paginação; `POST {id}/pausar|retomar|resolver` idempotentes, auditados (`whatsapp_ai_conversa_auditoria`) e restritos à loja do token. Perfis Contador, Vendedor e Fiscal não acessam (403).
+- Conversas pausadas voltam para a IA depois de `margin.whatsapp-ai.conversas.auto-retomar-horas` (padrão 12 h; job com ShedLock a cada 5 min).
+- Evento `whatsapp_ai_conversa` no WebSocket da Central e alerta aos operadores (`WHATSAPP_IA_AGUARDANDO_HUMANO`) quando o cliente precisa de alguém.
+- Limpeza LGPD do log de mensagens por `margin.whatsapp-ai.message-log.retencao-dias` — **sem padrão** (vazio = não apaga); também limpa o último texto da conversa.
+- Central de Pedidos: botão "Conversas" com contador de quem precisa de você; painel com filtros (Precisam de você, Ativas, Pausadas, Todas), busca, ações Ajuda / Retomar IA / Resolver, som opt-in com botão mudo e "Abrir pedido" (abre o Pedido Rápido com o telefone; só preenche rascunho vazio).
+
 ### Fixed — Pedido Rápido: E2E e tela estreita
 
 - Catálogo: Enter logo após digitar a busca adicionava o primeiro item da lista antiga (busca adiada); agora usa o termo atual.

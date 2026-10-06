@@ -51,3 +51,14 @@ Ambiguidades resolvidas pela opção mais conservadora e reversível.
 - "Confirmar" só aparece com status `recebidos`. O 409 atualiza o status com o `atual` da resposta (é o refresh).
 - B4 já existia (`confirmacaoAutomatica` = WhatsApp vinculado ativo); só ganhou E2E.
 - `mesa-close-bill` instável (espera 15 s pela mesa "livre"): passa sozinho e no retry; fluxo não tocado por B.
+
+## C — central de conversas da IA
+
+- **Permissão:** não existe permissão granular para "atender WhatsApp"; usado bloqueio por papel (CONTADOR, VENDEDOR, FISCAL_COMPLIANCE_ADMIN → 403), como outras rotas da Central. Front esconde o botão no 403.
+- **Estado x status legado:** `estado` novo convive com `status` (ACTIVE/HANDED_OFF/…); `mudarEstado` sincroniza os dois para não quebrar o banner antigo nem `/handoffs`. Backfill a partir de `status`/`updated_at`.
+- **Retenção LGPD sem padrão:** propriedade vazia = nada é apagado (decisão do negócio pendente, ver RELATORIO). Quando configurada, apaga em lotes o `whatsapp_ai_message_log` e zera `last_user_text` das conversas mais antigas que o prazo.
+- **Resolver:** conversa resolvida reabre como Ativa quando o cliente volta a escrever.
+- **"Ajuda" = pausar** (o operador assume, a IA para de responder). "Abrir pedido" não sobrescreve um rascunho com conteúdo: avisa e mantém.
+- **Som opt-in** por usuário (`localStorage`), toca só quando o número de "Precisam de você" aumenta (nunca no primeiro carregamento).
+- **Visibilidade do botão:** modo balcão ou qualquer conversa existente — lojas sem IA não ganham botão vazio. Banner antigo mantido.
+- Migration validada em Postgres local (`margin_pr_carga`): aplicada em 0,079 s, app subiu (valida JPQL).
