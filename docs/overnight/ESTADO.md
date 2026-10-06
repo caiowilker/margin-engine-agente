@@ -20,8 +20,8 @@ Tag de backup em todos: `backup/pre-overnight-20261006` (back `8e7f78d`, front `
 - [x] F — variações de mensagem (sem migration)
 - [x] E1 — desconto/preço autorizados no servidor + token one-time (back `c1f5ab17`, front `049420b`)
 - [x] E3 — `vTroco` reproduzido (`@Disabled`) + proposta (back `c1f5ab17`)
-- [ ] E2 — troca de forma de pagamento no faturamento
-- [ ] ENCERRAMENTO — RELATORIO.md
+- [x] E2 — troca de forma de pagamento no faturamento (sem migration)
+- [x] ENCERRAMENTO — `RELATORIO.md`
 
 ## Hashes
 
@@ -35,10 +35,13 @@ Tag de backup em todos: `backup/pre-overnight-20261006` (back `8e7f78d`, front `
 | D | `0d5b0509` | `3d1d574` | (docs) |
 | F | `e1e763b6` | `f87af06` | (docs) |
 | E1+E3 | `c1f5ab17` | `049420b` | (docs) |
+| E2 | `c32d7e85` | `e686dbd` | (docs) |
 
 ## Próximo passo
 
-E2 — troca de forma de pagamento no faturamento (log, bloqueio sem permissão, relatório diário). Depois ENCERRAMENTO.
+Nenhum. Noite encerrada; ver `docs/overnight/RELATORIO.md`.
+
+Após E2: back suíte completa verde; front 3248 vitest; E2E completo 41 (40 verdes + 1 instável que passou no retry; repetido sem retry: `pedido-rapido-sucesso` instável, passa sozinho, não tocado); lint 0 erros; theme 36; release alinhada.
 
 Após E1+E3: back suíte completa verde; front 3248 vitest, 39 E2E verdes (inclui `e2e/desconto-supervisor.spec.ts`); lint 0 erros; theme 36 (baseline); release alinhada.
 

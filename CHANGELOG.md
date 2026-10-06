@@ -42,6 +42,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - Auditoria do caixa usa a autorização validada no servidor (`DESCONTO_SUPERVISOR` só com token/supervisor) e registra descontos que o PDV não declarou. Pedidos (`/order-engine/orders`, mesa `sync`/`ops`, pedido manual da Central) gravam todo aumento de desconto em auditoria (`DESCONTO_MANUAL`, origem `order-engine`).
 - Front: a frente de caixa envia o token do supervisor no ajuste e não usa o checkout instantâneo quando há desconto ou preço negociado (se o servidor recusar, o cupom continua na tela).
 
+### Security — troca de forma de pagamento no faturamento de entrega
+
+- `POST /order-engine/orders/{id}/faturar`: se nenhum pagamento usa a forma combinada com o cliente na entrega (dinheiro, cartão ou PIX na entrega), o faturamento exige a nova permissão `ALTERAR_FORMA_PAGAMENTO` (livre para supervisor de caixa, SUPERVISOR para operador), perfil gestor ou token one-time de supervisor (`supervisor_token`). Sem isso: 422 `PAYMENT_FORM_SUPERVISOR_REQUIRED` (ou `PAYMENT_FORM_BLOCKED` no modo BLOQUEADO). Crédito e débito contam como cartão; pagamento dividido que inclui a forma combinada não é troca.
+- Toda troca vai para a auditoria do caixa (`ALTERACAO_FORMA_PAGAMENTO`: pedido, antes, depois, autorização, supervisor). Faturamentos internos (mesa com abatimentos, pedido pago online) não bloqueiam e ficam como `SEM_AUTORIZACAO`.
+- Relatório diário: `GET /pdv/auditoria/divergencias-pagamento?data=AAAA-MM-DD` (`VER_AUDITORIA`) com totais por troca e por operador.
+- Front: o faturamento pede a senha do supervisor quando o servidor exige e reenvia com o token; nova permissão no cadastro de acessos e rótulo na trilha de auditoria.
+
 ### Fixed — liberação de agendados no fuso da loja
 
 - O job de liberação comparava o horário agendado (hora local da loja) com o relógio do servidor; agora usa o fuso de cada loja.
