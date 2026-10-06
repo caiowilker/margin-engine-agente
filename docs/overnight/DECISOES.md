@@ -83,3 +83,14 @@ Ambiguidades resolvidas pela opção mais conservadora e reversível.
 - **Menu Copiar:** as mensagens rápidas são locais (título + "---"); com pedido criado a semente é `"<pedido.id>|<título>"`. Sem pedido não há semente estável, então mantém a alternância antiga.
 - **Editor:** adicionar variação não grava (linha vazia); grava ao sair do campo, ao reordenar e ao remover. Variações vazias são descartadas ao gravar.
 - Sem migration em F.
+
+## E — endurecimento financeiro
+
+- **E1, onde bloqueia:** só venda direta online com usuário humano (`/pdv/vendas`, `/pdv/sales/checkout`). Não bloqueia sync offline, token de agente (`AGENTE_PDV`), faturamento de pedido/mesa (`vinculo`) nem o fallback offline do faturamento (`ORDER-`/`PEDIDO-`): nesses casos a venda já foi paga e recusar perderia o registro. Ficam auditados como `SEM_AUTORIZACAO`.
+- **E1, pedidos:** `/order-engine/orders`, `tables/{id}/sync`/`ops` e `central/manual-orders` não exigem token: o desconto da mesa vem da mesma tela da frente e o salão reenvia pela fila offline (bloquear quebraria replays). Todo aumento de desconto vai para a auditoria do caixa depois do commit. Bloqueio nesses endpoints fica como pendência (exige o front repassar token nos fluxos de mesa).
+- **E1, regra por permissão:** permissão própria vale só dentro do limite do tenant (`Tenant.descontoMaximoItemPercent`, o mesmo do front); acima do limite vale perfil que pode auto-autorizar (SUPER_ADMIN/OWNER/ADMIN/SUPERVISOR_PDV, mesma lista de `/autorizar-supervisor/auto`) ou token. Desconto no total = `desconto − Σ desconto dos itens − Σ promoções` com folga de R$ 0,05.
+- **E1, token expirado:** aceito se nunca foi usado (prova que o supervisor autorizou a tempo; a venda pode ter ficado na fila). Expurgo de tokens com mais de 1 dia continua; depois disso a venda da fila é recusada (fica visível em ERRO na fila).
+- **E1, todos os tokens do ajuste são consumidos** para a mesma permissão — sobra não pode ser reaproveitada em outra venda. Consumo dentro da transação da venda: se a venda falhar, o token volta.
+- **E1, checkout instantâneo:** com desconto/preço negociado a frente espera a resposta do servidor antes de limpar o cupom (antes, um 422 no modo instantâneo perdia a venda já impressa). Custo: alguns décimos de segundo nessas vendas.
+- **E1, 422 e não 403:** o front trata 401/403 como sessão inválida; o agente marca o token como inválido em 403.
+- **E3:** `vTroco` reproduzido em `JavaNfeXmlBuilderTest#dinheiroComTrocoGeraVTroco` (`@Disabled`, falha se habilitado). Correção proposta em `margin-engine/docs/fiscal/proposta-vtroco-nfce-nuvem.md`, não publicada (XML fiscal sem homologação).

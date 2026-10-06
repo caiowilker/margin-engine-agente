@@ -34,6 +34,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - Tela do cardápio QR: cada mensagem ganhou editor de variações (adicionar, remover, reordenar e prévia com valores de exemplo).
 - Pedido Rápido: o menu Copiar usa a mesma regra depois que o pedido é criado (antes de criar, continua alternando).
 
+### Security — desconto e preço autorizados no servidor (PDV)
+
+- `POST /pdv/vendas` e `/pdv/sales/checkout` (venda direta, online, usuário humano) recusam com 422 desconto por item, desconto no total ou preço alterado sem autorização: permissão própria dentro do limite do tenant (`descontoMaximo`), perfil supervisor/gestor, ou token one-time de supervisor enviado no ajuste (`ajustesAuditoria[].supervisorToken`). Modo BLOQUEADO recusa sem consumir o token.
+- As exigências são calculadas pelos valores da venda (não pelas flags do PDV); token já usado, de outra ação ou de outro tenant não vale. Token emitido e não usado é aceito depois do TTL (venda paga offline) e fica marcado `TOKEN_EXPIRADO` na auditoria.
+- Sync offline, agente local e fallback de faturamento (`ORDER-`/`PEDIDO-`) não bloqueiam: só auditam (`SEM_AUTORIZACAO`).
+- Auditoria do caixa usa a autorização validada no servidor (`DESCONTO_SUPERVISOR` só com token/supervisor) e registra descontos que o PDV não declarou. Pedidos (`/order-engine/orders`, mesa `sync`/`ops`, pedido manual da Central) gravam todo aumento de desconto em auditoria (`DESCONTO_MANUAL`, origem `order-engine`).
+- Front: a frente de caixa envia o token do supervisor no ajuste e não usa o checkout instantâneo quando há desconto ou preço negociado (se o servidor recusar, o cupom continua na tela).
+
 ### Fixed — liberação de agendados no fuso da loja
 
 - O job de liberação comparava o horário agendado (hora local da loja) com o relógio do servidor; agora usa o fuso de cada loja.

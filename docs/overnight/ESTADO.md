@@ -18,7 +18,9 @@ Tag de backup em todos: `backup/pre-overnight-20261006` (back `8e7f78d`, front `
 - [x] C — central de conversas da IA (migration `V20261101` validada em Postgres local)
 - [x] D — agendamento e "Local" no Pedido Rápido (sem migration)
 - [x] F — variações de mensagem (sem migration)
-- [ ] E — endurecimento financeiro
+- [x] E1 — desconto/preço autorizados no servidor + token one-time (back `c1f5ab17`, front `049420b`)
+- [x] E3 — `vTroco` reproduzido (`@Disabled`) + proposta (back `c1f5ab17`)
+- [ ] E2 — troca de forma de pagamento no faturamento
 - [ ] ENCERRAMENTO — RELATORIO.md
 
 ## Hashes
@@ -32,10 +34,13 @@ Tag de backup em todos: `backup/pre-overnight-20261006` (back `8e7f78d`, front `
 | C | `5e916502` | `1f43970` | (docs) |
 | D | `0d5b0509` | `3d1d574` | (docs) |
 | F | `e1e763b6` | `f87af06` | (docs) |
+| E1+E3 | `c1f5ab17` | `049420b` | (docs) |
 
 ## Próximo passo
 
-E — endurecimento financeiro (publicar em `overnight/E-financeiro` se os gates falharem).
+E2 — troca de forma de pagamento no faturamento (log, bloqueio sem permissão, relatório diário). Depois ENCERRAMENTO.
+
+Após E1+E3: back suíte completa verde; front 3248 vitest, 39 E2E verdes (inclui `e2e/desconto-supervisor.spec.ts`); lint 0 erros; theme 36 (baseline); release alinhada.
 
 Suíte E2E completa do front após F: 37 verdes. Back: suíte completa verde. Front: 3248 testes vitest.
 Suíte E2E completa do front após D: 36 verdes (inclui `e2e/agendamento.spec.ts`). Back: 7584 testes verdes. Front: 3241 testes vitest.
