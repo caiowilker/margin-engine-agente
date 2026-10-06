@@ -8,6 +8,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [1.0.50] - 2026-10-05
 
+### Added — integridade do ciclo do pedido (O2)
+
+- Permissões `MOVER_PEDIDO` e `CANCELAR_PEDIDO` (Vendas), concedidas por padrão a operador, supervisor, admin e vendedor; contador fica sem. Valem na Central (REST e WebSocket), no antecipar e em `POST /orders/{id}/cancel`; sem permissão = 403 `ORDER_PERMISSION_DENIED`. Movimentos automáticos (cozinha, entrega, auto-confirmação) não passam pela checagem.
+- Cancelamento exige motivo (`motivo_codigo` entre Cliente desistiu, Item indisponível, Fora da área, Pagamento não confirmado, Pedido duplicado, Loja sem condição, Outro + texto até 300); sem motivo = 422 `CANCEL_REASON_REQUIRED`. Lista em `GET /order-engine/central/motivos-cancelamento`. Modal "Cancelar pedido" na Central.
+- Histórico do pedido registra quem, quando, etapa anterior → nova, "recuo de etapa" e o motivo do cancelamento.
+- Preço no servidor em `POST /order-engine/orders`, `central/manual-orders` e `central/whatsapp-orders`: itens repreçados pelo catálogo (variação + complementos). Preço diferente só com `ALTERAR_PRECO_VENDA` (ou papel que autoriza sozinho) ou `X-Supervisor-Token` da ação, auditado em `ALTERACAO_PRECO`; sem isso, 422 `PRICE_DIVERGENT` com `divergencias[]` (preço de catálogo). O token de supervisor é por ação (não há vínculo a valor/venda). Os modais aplicam o preço devolvido e pedem nova revisão.
+- Pedido manual de telefone/delivery soma a taxa de entrega da loja (como QR e Pedido Rápido) no total e no troco; o modal mostra "Inclui taxa de entrega de R$ X". Não há zonas de entrega.
+- `Idempotency-Key` opcional nos três criadores: a repetição devolve o mesmo pedido (sem nova cobrança/impressão); itens diferentes com a mesma chave = 409 `IDEMPOTENCY_KEY_REUSED`. Os modais geram uma chave por abertura e a mantêm nas novas tentativas. Sem o header, nada muda.
+- Teste de consistência: o mesmo pedido por QR, Pedido Rápido, modal manual e PDV tem itens, taxa e total iguais em centavos (entrega e retirada).
+- Pedido guarda `criado_por_nome` (operador logado; nulo em QR e integrações), exposto como `criado_por` no pedido, no card e no bus; o detalhe do card mostra "Criado por". Migration aditiva V20261102 (rollback em `docs/rollback/`).
+
 ### Added — fechamento de pedidos (O1)
 
 - Central de Pedidos: selo "Pedido Rápido" no card e opção "Pedido Rápido" em "Filtrar origem", pelo `canal_entrada` já persistido (V20261098).
