@@ -12,6 +12,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 - Pedido Rápido sempre ligado: removidas a chave global `margin.pedido-rapido.habilitado` e as checagens de `pedido_rapido_habilitado` no front (coluna mantida, não lida). Temas Claro/Escuro/Sol sempre ligados (sem `VITE_THEME_STRATEGY_V1`).
 
+### Fixed — IA do WhatsApp muda para sempre após handoff
+
+- Janela de sessão configurável (`openai.whatsapp-ai.session-window-hours`, padrão 12 h): sem mensagem do cliente nesse período, o contador de turnos zera e a IA volta a responder, inclusive depois de um handoff. Mensagens do cliente durante o atendimento humano renovam a janela. `0` desliga.
+
+### Docs
+
+- `margin-engine/docs/pendencias-pos-release.md`: vTroco na NFC-e em nuvem, forma de pagamento trocável no faturamento, mensagens fixas no código, resposta humana pelo celular do atendente.
+
 ### Fixed — PIX perdia o agendamento
 
 - Pedido do cardápio QR agendado e pago por PIX (Asaas ou manual) agora guarda `agendado`/`agendadoPara` enquanto aguarda pagamento e entra em `AGENDADOS` (não `RECEBIDOS`) quando o PIX é confirmado.

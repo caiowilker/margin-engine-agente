@@ -11,8 +11,8 @@ Tag de backup em todos: `backup/pre-overnight-20261006` (back `8e7f78d`, front `
 - [x] A1 — impressão enganosa (fila ≠ impresso; consulta por pedido)
 - [x] A2 — trava de status (`expected_workflow_status` → 409)
 - [x] A3 — PIX preserva agendamento (back `4af88bb4`)
-- [ ] A4 — IA WhatsApp: janela de sessão após handoff
-- [ ] A5 — pendências pós-release documentadas
+- [x] A4 — IA WhatsApp: janela de sessão após handoff
+- [x] A5 — pendências pós-release documentadas (`margin-engine/docs/pendencias-pos-release.md`)
 - [ ] B1–B5 — fechamento do Pedido Rápido
 - [ ] C — central de conversas da IA
 - [ ] D — agendamento e "Local" no Pedido Rápido
@@ -29,6 +29,6 @@ Tag de backup em todos: `backup/pre-overnight-20261006` (back `8e7f78d`, front `
 
 ## Próximo passo
 
-A4 — IA WhatsApp: janela de sessão.
+B1 — E2E do Pedido Rápido (4 falhas herdadas da fase 3.1).
 
 Observação: 4 E2E do Pedido Rápido falham desde a fase 3.1 (PRICE_CHANGED, catálogo, matriz do painel, PiP) — escopo de B1.

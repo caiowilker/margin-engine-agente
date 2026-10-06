@@ -22,3 +22,17 @@ Ambiguidades resolvidas pela opção mais conservadora e reversível.
 - **Benchmark `interpret.test.ts` (< 50 ms)** pode falhar quando roda junto com a suíte Maven (CPU disputada);
   passa isolado. Reexecutado isolado quando isso acontece.
 - **Versão** fica em 1.0.50 (não lançada); só CHANGELOG atualizado.
+
+## A — correções
+
+- **A1:** a fila do agente (202) gera ack `queued` → servidor mantém `DISPATCHED` e só renova o prazo do recovery.
+  A estação consulta o job local do agente (`GET /impressora/jobs/:id`) a cada 3 s por até 10 min e só então
+  confirma IMPRESSO/FALHOU. Sem desfecho no prazo, nada é confirmado (o recovery reenvia; o agente deduplica).
+  `SEM_ESTACAO` = nenhum job ativo para o pedido **ou** pendente sem estação conectada por WebSocket.
+  Impressão LAN de mesa (`mesaComandaLanPrint`) continua contando 202 como "enviado à estação" para não duplicar
+  comanda — ela não informa IMPRESSO ao servidor.
+- **A2:** `expected_workflow_status` divergente → 409 mesmo quando o pedido já está no destino (outro operador
+  confirmou antes): o operador precisa ver que mudou.
+- **A4:** "última mensagem do cliente" = `updated_at` da conversa (renovado a cada mensagem, inclusive durante o
+  handoff). Sem migration nesta etapa; a central de conversas (C) traz coluna própria de atividade.
+- **A5:** documento em `margin-engine/docs/` (back concentra os itens).
