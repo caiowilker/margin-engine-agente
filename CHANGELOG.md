@@ -8,6 +8,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [1.0.50] - 2026-10-05
 
+### Added — Pagamento dividido no pedido (O5)
+
+- Pedido Rápido e edição de pedido: botão "Dividir pagamento" (até 3 formas: PIX, dinheiro, cartão) com o saldo pendente sempre visível ("Falta R$ …" / "Total fechado"), atalho "Restante", "troco para" só no dinheiro e "Usar uma forma só". Com uma forma, a tela e o corpo da requisição ficam iguais aos de antes.
+- Servidor: tabela aditiva `order_engine_order_pagamento` (pedido, forma, valor, troco, usuário, horário, origem; histórico com `substituido_em`, nada é apagado) e migration V20261105 (rollback em `docs/rollback/`). Regras: soma(valor − troco) = total em centavos inteiros, uma linha por forma, troco só em dinheiro e menor que o valor entregue; mesma lista é no-op (idempotência); índice único parcial impede duas gravações concorrentes; pedidos antigos continuam lendo a forma única (`origem` = `LEGADO`).
+- Troco acima de `troco_limite_centavos` (`/order-engine/config`, 0 = sem limite; campo em QR › Configurações) exige a permissão `TROCO_ACIMA_LIMITE` ou senha de supervisor (token one-time); bloqueio explícito retorna `CHANGE_BLOCKED`. Toda autorização vai para a auditoria do caixa depois do commit.
+- `GET /order-engine/orders/{id}/pagamentos` devolve a lista (ou o fallback legado). Faturamento: pedido dividido abre o checkout já preenchido com as formas combinadas (cartão por último, para o caixa escolher débito/crédito); faturar com outras formas continua exigindo `ALTERAR_FORMA_PAGAMENTO` e registro.
+- Comanda: pagamento dividido sai uma forma por linha (agente) e a nota do pedido traz o resumo ("Dinheiro R$ 30,00 (troco p/ R$ 50,00) + Cartão R$ 20,00").
+- NFC-e em nuvem: sem mudança de código; um `detPag` por forma já era gerado (teste novo). `vTroco` segue pendente (`docs/pendencias-pos-release.md`).
+- Testes: soma exata, troco, permissão negada, concorrência, idempotência, regressão da forma única e dos dados antigos (backend), regras e componente da divisão, rascunho/edição e pré-preenchimento do faturamento (vitest), comanda dividida (agente).
+
 ### Added — Central de Pedidos operação rápida (O4)
 
 - Busca global no topo (atalho `/`): telefone com e sem DDI 55 e com e sem o 9º dígito, nome e entregador sem acento, número do pedido. Filtra o quadro na hora e consulta `GET /order-engine/central/busca?q=` (hoje + ontem, até 20) com debounce e cancelamento da requisição anterior; ↑/↓ e Enter abrem o pedido. Mesmas regras no servidor (`BuscaPedidos`) e no front (`centralBusca.ts`).

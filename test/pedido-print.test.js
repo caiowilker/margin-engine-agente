@@ -135,6 +135,25 @@ test("renderPedidoTags entrega: tel, endereco, pagto, troco, TOTAL", () => {
   assert.ok(!tags.includes("Levar"));
 });
 
+test("comanda entrega com pagamento dividido imprime uma forma por linha", () => {
+  const tags = renderPedidoTags({
+    printType: "entrega",
+    eventType: "ORDER_CREATED",
+    orderNumber: "ORD-8",
+    customerName: "Bia",
+    deliveryAddress: "Rua D, 10 — Centro, Campinas — SP",
+    paymentForm: "Dinheiro R$ 30,00 (troco p/ R$ 50,00) + Cartão R$ 20,00",
+    cashChangeFor: 50,
+    changeAmount: 20,
+    total: 50,
+    items: [{ name: "Pizza", quantity: 1, unit: "un" }],
+  });
+  const linhas = tags.split("\n");
+  assert.ok(linhas.some((l) => l.includes("DINHEIRO R$ 30,00 (TROCO P/ R$ 50,00)") && !l.includes("CARTAO")));
+  assert.ok(linhas.some((l) => l.includes("CARTAO R$ 20,00") && !l.includes("DINHEIRO")));
+  assert.ok(tags.includes("Troco para"));
+});
+
 test("comanda entrega inclui motoboy e horario legivel", () => {
   const tags = renderPedidoTags({
     printType: "entrega",

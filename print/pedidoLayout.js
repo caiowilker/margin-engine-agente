@@ -205,7 +205,11 @@ function layoutEntrega(p, cancelado, showTotal) {
     lines.push({ kind: "blank" });
     lines.push({ kind: "text", text: "PAGAMENTO", bold: true });
     if (pagto) {
-      lines.push({ kind: "text", text: pagto, bold: true });
+      for (const parte of pagto.split(" + ")) {
+        for (const pl of wrapThermalLines(parte, cols)) {
+          lines.push({ kind: "text", text: pl, bold: true });
+        }
+      }
     }
     if (p.cashChangeFor != null && Number.isFinite(Number(p.cashChangeFor))) {
       lines.push({
