@@ -12,6 +12,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 - Pedido Rápido sempre ligado: removidas a chave global `margin.pedido-rapido.habilitado` e as checagens de `pedido_rapido_habilitado` no front (coluna mantida, não lida). Temas Claro/Escuro/Sol sempre ligados (sem `VITE_THEME_STRATEGY_V1`).
 
+### Added — Pedido Rápido: tela de sucesso ao vivo
+
+- Status do pedido atualiza sozinho pelo WebSocket da Central (`/ws/order-central`); sem WebSocket, consulta o board a cada 5 s com backoff até 30 s (para após 15 min).
+- Indicador de impressão via `GET /order-engine/print/orders/{id}`: Enfileirado (fila ou despachado), Impresso (só com confirmação da impressora), Falhou, Sem impressora.
+- Botão "Confirmar" (Recebido → Confirmado) envia `expected_workflow_status`; se o pedido já mudou, mostra "O pedido já mudou para <status>" e atualiza sem mover.
+- Envio automático da confirmação: "Confirmação enviada ao cliente"; sem WhatsApp vinculado, "Copiar confirmação".
+
 ### Fixed — Pedido Rápido: E2E e tela estreita
 
 - Catálogo: Enter logo após digitar a busca adicionava o primeiro item da lista antiga (busca adiada); agora usa o termo atual.

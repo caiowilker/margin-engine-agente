@@ -42,3 +42,12 @@ Ambiguidades resolvidas pela opção mais conservadora e reversível.
 - Falhas eram defeitos reais de UI, não do teste: corrigido o CSS (barra sem margem negativa, `data-pequeno` 44 px no estreito, selos com pares `*-bg`/`*-text`, kbd 12 px, toast informativo com `pointer-events: none`) em vez de afrouxar a matriz.
 - Catálogo: Enter filtrava com `useDeferredValue` (lista velha) e adicionava o produto errado; passou a usar o termo atual.
 - `delivery-canary` e `mesa-close-bill` falhavam também no commit pré-noturno (`c15c0fd`): specs desatualizados com a UI da 1.0.49 (sacola lateral, checkout em etapas, botão "Faturar pedido", retorno ao Hub). Ajustados os specs, sem mudar produto.
+
+## B2–B5 — tela de sucesso
+
+- Módulo do Pedido Rápido continua desacoplado: o host injeta `acompanharPedido` e `confirmarPedido` (`src/lib/acompanhamentoPedidoRapido.ts`); sem host, a tela fica como antes.
+- Polling usa `GET /order-engine/central/board` (não existe GET de um pedido só); mesmo endpoint que a Central já consulta a cada 15 s. Backoff 5→10→20→30 s, volta a 5 s quando algo muda, encerra após 15 min.
+- `DESPACHADO` aparece como "Enfileirado" (entregue ao agente ≠ impresso). `SEM_ESTACAO` = "Sem impressora" e continua consultando (o job pode ser criado logo depois).
+- "Confirmar" só aparece com status `recebidos`. O 409 atualiza o status com o `atual` da resposta (é o refresh).
+- B4 já existia (`confirmacaoAutomatica` = WhatsApp vinculado ativo); só ganhou E2E.
+- `mesa-close-bill` instável (espera 15 s pela mesa "livre"): passa sozinho e no retry; fluxo não tocado por B.
