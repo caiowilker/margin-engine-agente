@@ -8,6 +8,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [1.0.50] - 2026-10-05
 
+### Added — edição de pedido lançado (O3)
+
+- `GET/PATCH /order-engine/central/orders/{id}/edicao` (+ `POST …/previa` sem gravar e `GET …/historico`). Versão otimista: `If-Match` (ou `versao` no corpo) obrigatório (428 `ORDER_VERSION_REQUIRED`); divergência = 409 `ORDER_VERSION_CONFLICT` com `versaoAtual`, sem gravar.
+- Níveis: Agendado/Recebido/Confirmado editam cliente, endereço, tipo entrega↔retirada (taxa recalculada; só delivery/balcão/telefone), observação, horário do agendamento (validação compartilhada), pagamento e itens (adicionar, remover, quantidade, observação; preço, disponibilidade e regras de complemento no servidor, erro com `indice` da linha). Produção/Pronto/Entrega: só contato e observação, com aviso. Finalizado, cancelado e mesa: nada (422 `ORDER_NOT_EDITABLE` / `ORDER_EDIT_FIELD_LOCKED`). Pagamento já pago/pendente/cobrança ativa trava forma, tipo e total (422 `ORDER_EDIT_PAYMENT_LOCKED`).
+- Permissão `EDITAR_ITENS_PEDIDO` (padrão: operador, supervisor, admin, Central) para mexer em itens/tipo; o resto exige `MOVER_PEDIDO`.
+- Auditoria imutável `order_engine_order_edicao` (antes/depois em JSON com telefone mascarado, quem, quando, versões, campos, resumo; trigger bloqueia UPDATE/DELETE) e linha "Pedido editado: …" no histórico. Migration aditiva V20261103 (rollback em `docs/rollback/`).
+- Evento `ORDER_EDITED` no bus: a cozinha atualiza as linhas do mesmo pedido (sem duplicar); mudança de itens, endereço ou tipo reimprime a comanda nas mesmas estações com "ALTERADO: resumo" (não reimprime agendado). Agente: selo `ALTERADO` no cabeçalho da comanda.
+- WhatsApp ao cliente só se a loja preencher o modelo "Pedido alterado" (`ORDER_EDITED`, exige `{resumoAlteracao}`); sem modelo, telefone ou WhatsApp vinculado, nada é enviado.
+- Central: "Editar pedido" no menu e no detalhe do card abre a folha com os componentes do Pedido Rápido (miniaturas, busca no cardápio, endereço em resumo, totais da prévia do servidor), Desfazer local (Ctrl+Z), conferência com o resumo, reimpressão e aviso ao cliente antes de salvar; 409 mostra "Outro operador alterou" e recarrega.
+
 ### Added — integridade do ciclo do pedido (O2)
 
 - Permissões `MOVER_PEDIDO` e `CANCELAR_PEDIDO` (Vendas), concedidas por padrão a operador, supervisor, admin e vendedor; contador fica sem. Valem na Central (REST e WebSocket), no antecipar e em `POST /orders/{id}/cancel`; sem permissão = 403 `ORDER_PERMISSION_DENIED`. Movimentos automáticos (cozinha, entrega, auto-confirmação) não passam pela checagem.

@@ -80,6 +80,22 @@ test("renderPedidoTags bar usa badge ADICIONAL em update", () => {
   assert.ok(tags.includes("1x") && tags.includes("SUCO"));
 });
 
+test("renderPedidoTags cozinha usa badge ALTERADO na edicao do pedido (lista completa, obs ALTERADO)", () => {
+  const tags = renderPedidoTags({
+    printType: "cozinha",
+    eventType: "ORDER_EDITED",
+    orderNumber: "ORD-2",
+    notes: "ALTERADO: Itens: Pizza 1->2",
+    items: [
+      { name: "Pizza", quantity: 2, unit: "un" },
+      { name: "Suco", quantity: 1, unit: "un" },
+    ],
+  });
+  assert.ok(tags.includes("ALTERADO"));
+  assert.ok(!tags.includes("ADICIONAL"));
+  assert.ok(tags.includes("PIZZA") && tags.includes("SUCO"));
+});
+
 test("renderPedidoTags entrega: tel, endereco, pagto, troco, TOTAL", () => {
   const tags = renderPedidoTags({
     printType: "entrega",
