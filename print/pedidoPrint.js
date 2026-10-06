@@ -25,6 +25,7 @@ const EVENT_TYPE_LABELS = Object.freeze({
   BILL_REQUESTED: "Pre-conta - cobranca",
   SEGUNDA_VIA: "2a via - comanda",
   ORDER_REPRINT: "2a via - comanda",
+  ORDER_REPRINTED: "Reimpressao - comanda",
 });
 
 /** Badge curto no topo da comanda (cozinha/entrega) — legível a 1 metro. */
@@ -32,6 +33,7 @@ const EVENT_BADGES = Object.freeze({
   ORDER_CREATED: "NOVO",
   ORDER_UPDATED: "ADICIONAL",
   ORDER_EDITED: "ALTERADO",
+  ORDER_REPRINTED: "REIMPRESSAO",
   ORDER_CANCELLED: "CANCELADO",
   ORDER_CONFIRMED: "CONFIRMADO",
   ORDER_PREPARING: "EM PREPARO",

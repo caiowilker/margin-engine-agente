@@ -96,6 +96,19 @@ test("renderPedidoTags cozinha usa badge ALTERADO na edicao do pedido (lista com
   assert.ok(tags.includes("PIZZA") && tags.includes("SUCO"));
 });
 
+test("renderPedidoTags cozinha usa badge REIMPRESSÃO na reimpressão da central", () => {
+  const tags = renderPedidoTags({
+    printType: "cozinha",
+    eventType: "ORDER_REPRINTED",
+    orderNumber: "ORD-3",
+    notes: "REIMPRESSÃO por Ana às 12:00:00",
+    items: [{ name: "Pizza", quantity: 1, unit: "un" }],
+  });
+  assert.ok(tags.includes("REIMPRESSAO"));
+  assert.ok(!tags.includes("NOVO"));
+  assert.ok(tags.includes("PIZZA"));
+});
+
 test("renderPedidoTags entrega: tel, endereco, pagto, troco, TOTAL", () => {
   const tags = renderPedidoTags({
     printType: "entrega",

@@ -8,6 +8,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [1.0.50] - 2026-10-05
 
+### Added — Central de Pedidos operação rápida (O4)
+
+- Busca global no topo (atalho `/`): telefone com e sem DDI 55 e com e sem o 9º dígito, nome e entregador sem acento, número do pedido. Filtra o quadro na hora e consulta `GET /order-engine/central/busca?q=` (hoje + ontem, até 20) com debounce e cancelamento da requisição anterior; ↑/↓ e Enter abrem o pedido. Mesmas regras no servidor (`BuscaPedidos`) e no front (`centralBusca.ts`).
+- Filtros de canal (Pedido Rápido, QR/cardápio, manual, WhatsApp), tipo (entrega, retirada, local, agendado), pagamento (dinheiro, cartão, PIX, online) e atrasados, guardados por usuário neste navegador, com visões salvas (até 8).
+- Cartão: entregador, forma de pagamento e estado da impressão (`entregador`, `pagamento_forma`, `impressao` no card do quadro; o evento do WebSocket chega sem eles e o front mantém o último valor), até 3 itens principais com "+N", faixa de espera com ícone e texto. Detalhe em gaveta lateral (Esc fecha, foco preso e devolvido).
+- Atraso por loja: `central_atraso_minutos` em `/order-engine/config` (5–240; 0 volta ao prazo por tipo), campo em QR › Configurações; "Atenção" começa em 2/3 do atraso. Migration aditiva V20261104 (rollback em `docs/rollback/`).
+- Alerta de novo pedido: contador "Novos" no cabeçalho (zera ao abrir o pedido ou marcar como vistos), som de novos opt-in e botão Silenciar por usuário; um toque por pedido, sem tocar para pedidos lançados pelo próprio operador nem para eventos de conversa.
+- Ações em lote: modo Selecionar, Reimprimir (`POST /order-engine/central/orders/reimprimir`, 1–50, exige `MOVER_PEDIDO`, comanda marcada "REIMPRESSÃO por <nome> às HH:mm:ss") e Avançar etapa (cada pedido com `expected_workflow_status`), com resultado por pedido e Desfazer dos avanços reversíveis. Agente: selo `REIMPRESSAO` no cabeçalho da comanda.
+- Desempenho: quadro carrega até 500 pedidos; cada coluna monta 12 cartões e cresce ao rolar (sem biblioteca de virtualização), com `content-visibility`; filtros em transição. Medido com 300 pedidos: INP 40 ms e CLS 0,024 no build de produção. Linhas de abas e filtros em uma linha com rolagem e placeholder até o primeiro quadro, para não deslocar a tela.
+- Testes: busca, filtros, lote, SLA, cartão, gaveta e alertas (vitest); E2E de busca, filtros/visões, lote, novos pedidos, teclado, desempenho e regressão visual em 400/768/1280 px × Claro/Escuro/Sol.
+
 ### Added — edição de pedido lançado (O3)
 
 - `GET/PATCH /order-engine/central/orders/{id}/edicao` (+ `POST …/previa` sem gravar e `GET …/historico`). Versão otimista: `If-Match` (ou `versao` no corpo) obrigatório (428 `ORDER_VERSION_REQUIRED`); divergência = 409 `ORDER_VERSION_CONFLICT` com `versaoAtual`, sem gravar.
