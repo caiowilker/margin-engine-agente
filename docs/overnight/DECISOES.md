@@ -62,3 +62,15 @@ Ambiguidades resolvidas pela opção mais conservadora e reversível.
 - **Som opt-in** por usuário (`localStorage`), toca só quando o número de "Precisam de você" aumenta (nunca no primeiro carregamento).
 - **Visibilidade do botão:** modo balcão ou qualquer conversa existente — lojas sem IA não ganham botão vazio. Banner antigo mantido.
 - Migration validada em Postgres local (`margin_pr_carga`): aplicada em 0,079 s, app subiu (valida JPQL).
+
+## D — agendamento e "Local"
+
+- **Validação única:** `AgendamentoPedidoService` envolve `DeliveryScheduleSupport` sem mudar regras nem mensagens do QR; a exceção é subclasse de `OrderNegocioException`, então o handler global responde igual ao de antes. Só `OrderController` (e o Pedido Rápido) expõem `code` SCHEDULE_INVALID/SCHEDULE_FULL.
+- **Reagendar na Central** (RECEBIDOS→AGENDADOS) usa as mesmas regras do agendamento novo (janela de preparo, expediente, limite por horário) e zera `agendadoLiberadoEm`, senão o job ignoraria o pedido.
+- **Job de liberação:** busca global com horizonte "agora em UTC+14 + 60 min" e filtra por loja com "agora no fuso da loja + preparo" (40 min se não configurado). Conservador: nunca libera antes do horário da loja.
+- **LOCAL** = origem BALCAO + nota "Consumo no local" (sem coluna nova, sem migration); o resumo do pedido reconhece a nota.
+- **Hash de idempotência:** `agendadoPara` entra no hash só quando presente, para não invalidar chaves de pedidos imediatos já em voo durante o deploy.
+- **Loja fechada:** pedido agendado não pede confirmação de loja fechada (o horário já é validado contra o expediente).
+- **WhatsApp:** pedido agendado recebe "Pedido agendado" no lugar de "Pedido recebido" (não as duas). Template editável (`ORDER_SCHEDULED`); vazio = texto padrão.
+- **Front:** "Agendar" só aparece quando a loja tem agendamento ligado (vem do `/cotar`). Horário do diálogo da Central usa o relógio do computador da loja (mesmo fuso na prática); o servidor valida contra o fuso configurado.
+- Sem migration em D.

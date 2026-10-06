@@ -16,7 +16,7 @@ Tag de backup em todos: `backup/pre-overnight-20261006` (back `8e7f78d`, front `
 - [x] B1 — E2E do Pedido Rápido verde (front `89c6463`); canário delivery e mesa também corrigidos (specs desatualizados desde 1.0.49)
 - [x] B2–B5 — sucesso ao vivo, impressão, Confirmar seguro (409), confirmação automática, E2E (front `45cb106`)
 - [x] C — central de conversas da IA (migration `V20261101` validada em Postgres local)
-- [ ] D — agendamento e "Local" no Pedido Rápido
+- [x] D — agendamento e "Local" no Pedido Rápido (sem migration)
 - [ ] F — variações de mensagem
 - [ ] E — endurecimento financeiro
 - [ ] ENCERRAMENTO — RELATORIO.md
@@ -30,9 +30,11 @@ Tag de backup em todos: `backup/pre-overnight-20261006` (back `8e7f78d`, front `
 | B1 | — | `89c6463` | (docs) |
 | B2–B5 | — | `45cb106` | (docs) |
 | C | `5e916502` | `1f43970` | (docs) |
+| D | `0d5b0509` | `3d1d574` | (docs) |
 
 ## Próximo passo
 
-D — agendamento e "Local" no Pedido Rápido.
+F — variações de mensagem do WhatsApp.
 
+Suíte E2E completa do front após D: 36 verdes (inclui `e2e/agendamento.spec.ts`). Back: 7584 testes verdes. Front: 3241 testes vitest.
 Suíte E2E completa do front após C: 32 verdes. Antes: 27 testes, 26 verdes + `mesa-close-bill` instável (passa no retry; não tocado).

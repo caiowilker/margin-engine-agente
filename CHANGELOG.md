@@ -19,6 +19,19 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - Botão "Confirmar" (Recebido → Confirmado) envia `expected_workflow_status`; se o pedido já mudou, mostra "O pedido já mudou para <status>" e atualiza sem mover.
 - Envio automático da confirmação: "Confirmação enviada ao cliente"; sem WhatsApp vinculado, "Copiar confirmação".
 
+### Added — Agendamento e tipo "Local" no Pedido Rápido
+
+- `/order-engine/pedido-rapido/cotar` e `/pedidos` aceitam `agendadoPara` (horário local da loja); a cotação devolve `agendamento` com as vagas do dia e quantas restam por horário. Erros `SCHEDULE_INVALID` (422) e `SCHEDULE_FULL` (409). Pedido agendado não pede confirmação de loja fechada.
+- Validação de agendamento unificada em `AgendamentoPedidoService` (mesmas mensagens do cardápio QR); `POST /order-engine/orders` valida `scheduled_for` (422 com `code`).
+- Novo tipo `LOCAL` (consumo no local, origem Balcão, sem endereço nem taxa).
+- Front: "Quando: Imediato | Agendar" com as vagas do servidor (lotado desabilitado), horário no resumo, na conferência e na tela de sucesso; botão "Local" no tipo do pedido. Horário lotado ao criar limpa a escolha e pede outro.
+- WhatsApp: mensagem "Pedido agendado" (`ORDER_SCHEDULED`, variável `{scheduledFor}`) enviada no lugar de "recebido" para pedidos agendados; editável na tela do cardápio QR.
+
+### Fixed — liberação de agendados no fuso da loja
+
+- O job de liberação comparava o horário agendado (hora local da loja) com o relógio do servidor; agora usa o fuso de cada loja.
+- Voltar um pedido para Agendados na Central exige data e hora (diálogo novo); antes o pedido podia ficar parado para sempre.
+
 ### Added — Central de conversas da IA do WhatsApp
 
 - Conversas têm estado (Ativa, Precisa de você, Pausada, Resolvida), última atividade e quem pausou/retomou/resolveu e quando (migration aditiva `V20261101`; sem texto de mensagem).
