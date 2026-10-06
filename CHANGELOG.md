@@ -8,6 +8,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [1.0.50] - 2026-10-05
 
+### Changed — modo noturno (2026-10-06)
+
+- Pedido Rápido sempre ligado: removidas a chave global `margin.pedido-rapido.habilitado` e as checagens de `pedido_rapido_habilitado` no front (coluna mantida, não lida). Temas Claro/Escuro/Sol sempre ligados (sem `VITE_THEME_STRATEGY_V1`).
+
+### Fixed — impressão enganosa
+
+- Agente: toda resposta `202` com `fila: true` agora traz `status: "ENFILEIRADO"` e `impresso: false`; só `200` sem fila é `IMPRESSO` (`print/printHttpResposta.js`).
+- Estação de impressão (front): fila do agente não confirma o job como impresso — envia ack `queued` (servidor mantém `DISPATCHED`) e só confirma quando o job local do agente chega a `IMPRESSO` (ou falha).
+- Back: `GET /order-engine/print/jobs` inclui `orderId`; novo `GET /order-engine/print/orders/{orderId}` → `ENFILEIRADO | DESPACHADO | IMPRESSO | FALHOU | SEM_ESTACAO`; ack aceita `queued`.
+
 ### Added — Pedido Rápido, fase 1 (backend, aditivo)
 
 - Novo namespace `/order-engine/pedido-rapido/*` (catálogo com ETag, cliente por telefone com repetição, cotação no servidor, criação idempotente de pedido, apelidos de produto, telemetria). Endpoints existentes sem alteração.

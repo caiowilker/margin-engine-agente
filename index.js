@@ -3850,6 +3850,7 @@ function iniciarServidor() {
 
   // ── Impressora ────────────────────────────────────────────────────────────────
   const { formatarErroHttpImpressao } = require("./print/printOperador");
+  const { responderImpressao } = require("./print/printHttpResposta");
   function responderErroImpressao(res, err) {
     res.status(500).json(formatarErroHttpImpressao(err));
   }
@@ -3857,17 +3858,10 @@ function iniciarServidor() {
   async function imprimirCupomHandler(req, res) {
     try {
       const resultado = await impressora.imprimirCupom(req.body);
-      if (resultado?.queued || resultado?.async) {
-        return res.status(202).json({
-          ok: true,
-          fila: true,
-          mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
-          jobId: resultado.jobId,
-          job: resultado.job,
-          deduplicado: !!resultado.deduplicado,
-        });
-      }
-      res.json({ ok: true, jobId: resultado.jobId, ...resultado });
+      responderImpressao(res, resultado, {
+        extraFila: { job: resultado?.job, deduplicado: !!resultado?.deduplicado },
+        extraImpresso: { jobId: resultado?.jobId, ...resultado },
+      });
     } catch (err) {
       responderErroImpressao(res, err);
     }
@@ -3883,6 +3877,8 @@ function iniciarServidor() {
         return res.status(202).json({
           ok: true,
           fila: true,
+          status: "ENFILEIRADO",
+          impresso: false,
           mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
           jobId: resultado.jobId,
         });
@@ -3900,6 +3896,8 @@ function iniciarServidor() {
         return res.status(202).json({
           ok: true,
           fila: true,
+          status: "ENFILEIRADO",
+          impresso: false,
           jobId: resultado.jobId,
           mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
         });
@@ -3921,6 +3919,8 @@ function iniciarServidor() {
           return res.status(202).json({
             ok: true,
             fila: true,
+            status: "ENFILEIRADO",
+            impresso: false,
             jobId: resultado.jobId,
             mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
           });
@@ -3939,6 +3939,8 @@ function iniciarServidor() {
         return res.status(202).json({
           ok: true,
           fila: true,
+          status: "ENFILEIRADO",
+          impresso: false,
           jobId: resultado.jobId,
           mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
         });
@@ -3952,22 +3954,12 @@ function iniciarServidor() {
   app.post("/impressora/pedido", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       const resultado = await impressora.imprimirPedido(req.body);
-      if (resultado?.queued || resultado?.async) {
-        return res.status(202).json({
-          ok: true,
-          fila: true,
-          mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
-          jobId: resultado.jobId,
-          deduplicado: !!resultado.deduplicado,
-          job: resultado.job ? { id: resultado.job.id } : undefined,
-        });
-      }
-      res.json({
-        ok: true,
-        jobId: resultado.jobId,
-        deduplicado: !!resultado.deduplicado,
-        job: resultado.job ? { id: resultado.job.id } : undefined,
-      });
+      const extra = {
+        jobId: resultado?.jobId,
+        deduplicado: !!resultado?.deduplicado,
+        job: resultado?.job ? { id: resultado.job.id } : undefined,
+      };
+      responderImpressao(res, resultado, { extraFila: extra, extraImpresso: extra });
     } catch (err) {
       responderErroImpressao(res, err);
     }
@@ -4006,6 +3998,8 @@ function iniciarServidor() {
         return res.status(202).json({
           ok: true,
           fila: true,
+          status: "ENFILEIRADO",
+          impresso: false,
           mensagem:
             resultado.message ||
             "Etiqueta na fila — será enviada à impressora de etiquetas.",
@@ -4044,6 +4038,8 @@ function iniciarServidor() {
         return res.status(202).json({
           ok: true,
           fila: true,
+          status: "ENFILEIRADO",
+          impresso: false,
           mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
           jobId: resultado.jobId,
           deduplicado: !!resultado.deduplicado,
@@ -4068,6 +4064,8 @@ function iniciarServidor() {
         return res.status(202).json({
           ok: true,
           fila: true,
+          status: "ENFILEIRADO",
+          impresso: false,
           mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
           jobId: resultado.jobId,
           deduplicado: !!resultado.deduplicado,
@@ -4097,6 +4095,8 @@ function iniciarServidor() {
         return res.status(202).json({
           ok: true,
           fila: true,
+          status: "ENFILEIRADO",
+          impresso: false,
           jobId: resultado.jobId,
           forced: force,
         });
@@ -4189,6 +4189,8 @@ function iniciarServidor() {
         return res.status(202).json({
           ok: true,
           fila: true,
+          status: "ENFILEIRADO",
+          impresso: false,
           jobId: resultado.jobId,
           mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
         });
@@ -4294,6 +4296,8 @@ function iniciarServidor() {
         return res.status(202).json({
           ok: true,
           fila: true,
+          status: "ENFILEIRADO",
+          impresso: false,
           segundaVia: true,
           jobId: resultado.jobId,
           mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
