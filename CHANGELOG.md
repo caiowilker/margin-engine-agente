@@ -67,6 +67,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 - Catálogo: Enter logo após digitar a busca adicionava o primeiro item da lista antiga (busca adiada); agora usa o termo atual.
 - Painel estreito: barra de total não vaza 8 px para fora (sem rolagem horizontal); botões pequenos com 44 px de altura; link "Não é nenhum destes? Buscar outro" quebra linha; atalhos de teclado e selos dos itens com 12 px e contraste AA nos três temas (selos usam os pares `*-bg`/`*-text`); aviso informativo não bloqueia o clique no que está por baixo.
+- Painel estreito: o menu "⋯" do item fica na linha do nome (topo à direita); quantidade e subtotal ficam na linha de baixo.
 - E2E: PRICE_CHANGED (cotação seguinte já com o preço novo), catálogo (tipo como `radio`), canário delivery (sacola lateral, checkout em etapas, volta ao Hub) e mesa (botão "Faturar pedido") alinhados à UI atual.
 
 ### Fixed — IA do WhatsApp muda para sempre após handoff
