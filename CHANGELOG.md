@@ -6,6 +6,21 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.54] - 2026-10-06
+
+### Fixed — Auditoria final dos pedidos (O6): desempenho e permissões
+
+- **Busca global da Central:** p95 caiu de 1,8 s para ~170 ms com 100 mil pedidos. Antes, a busca carregava os 5.000 pedidos mais recentes já com itens e montava os cards de todos (cerca de 84 milhões de linhas lidas sob carga). Agora uma projeção leve (número, nome, telefone) e os telefones/entregadores da entrega pré-filtram os candidatos; só os que batem viram card. O resultado é o mesmo.
+- **Migration `V20261106`** (aditiva): índice de telefone legado em `pdv_cliente` (`telefone_normalizado IS NULL`) para a busca de cliente do Pedido Rápido (5 ms → 0,08 ms). Até 100 mil linhas é criado na migration; acima disso, a migration registra um aviso e o índice deve ser criado com `CONCURRENTLY`, conforme `docs/pedidos/runbook.md`. Rollback em `docs/rollback/`.
+- **Permissões** (matriz completa em `docs/pedidos/matriz-acesso.md`):
+  - `CONTADOR` e `FISCAL_COMPLIANCE_ADMIN` (somente leitura) não fazem mais nenhuma escrita em `/order-engine/**`: 403 em `POST/PUT/PATCH/DELETE`.
+  - `PUT /order-engine/config` passa a exigir `MOVER_PEDIDO`. Antes, qualquer perfil podia, por exemplo, desligar a impressão de pedidos.
+  - Chaves de API e webhooks (`/order-engine/integrations/**`) ficam restritos a administradores, como a tela já fazia.
+  - `PATCH /order-engine/orders/{id}`, que grava preços do corpo sem repreçar, passa a exigir `EDITAR_ITENS_PEDIDO` e `ALTERAR_PRECO_VENDA`. Nenhum cliente nosso usa essa rota: a Central usa `/edicao`.
+  - Tirar pedido do quadro (`/central/orders/{id}/dismiss`) passa a exigir `MOVER_PEDIDO`.
+- **Cardápio público:** um pedido com o UUID de um produto de outra loja respondia "Produto indisponível: <nome do produto da outra loja>". Agora a resposta não traz o nome.
+- **Documentação:** em `docs/pedidos/` ficam `README.md` (fluxos, estados, regras, permissões), `openapi.json`, `runbook.md` (operação e reversão), `matriz-acesso.md` e `PRONTIDAO-PEDIDOS.md` (GO/NO-GO).
+
 ## [1.0.53] - 2026-10-06
 
 ### Fixed — Auditoria final dos pedidos (O6)
