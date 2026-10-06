@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.52] - 2026-10-06
+
+### Fixed — Queda do banco não derruba mais tokens de agente (hotfix)
+
+- **Backend:** com o pooler do Supabase rejeitando conexões (`ENOTFOUND tenant/user`), `AgentTokenValidator` engolia a falha e respondia **401** em `/pdv/agente/config`, `/heartbeat`, `/pdv/vendas` etc. O agente trata 401 como token revogado (`tokenInvalido`, "Reative o agente"). Agora a falha de banco vira `AgentTokenValidationUnavailableException` e o `JwtAuthenticationFilter` responde **503** + `Retry-After: 5`; token já validado segue aceito pelo cache.
+- **Backend:** `CannotCreateTransactionException` e `DataAccessResourceFailureException` (ex.: `/auth/refresh` com banco fora) passam a responder **503 `database_unavailable`** em vez de 500 genérico — o front já trata 503 como erro operacional (não desloga).
+- Testes: `AgentTokenValidatorTest` (banco fora, cache, claims malformadas), `JwtAuthenticationFilterBancoIndisponivelTest`, `DatabaseUnavailableExceptionHandlerTest` (inclui garantia de que erro de SQL não é mascarado como 503).
+
 ## [1.0.51] - 2026-10-06
 
 ### Fixed — Produção parando de responder (hotfix)
