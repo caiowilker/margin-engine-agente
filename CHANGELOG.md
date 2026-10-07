@@ -6,6 +6,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.65] - 2026-10-07
+
+### Changed — Ficha técnica que ensina a medir cada ingrediente
+
+- Cadastro do produto: a ficha técnica abre com a pergunta "Quanto de cada ingrediente vai em 1 unidade de {produto}?" e exemplos prontos para sólidos (200 g ou 0,200 kg), líquidos (30 ml ou 0,030 L) e contáveis (1 un ou 0,5 un).
+- Cada ingrediente vira um cartão: só aparecem as unidades que o estoque do insumo aceita (g/kg, ml/L ou un), com a unidade dentro do campo, uma dica de como digitar e atalhos de toque (ex.: 50 g, 100 g, 0,5 un).
+- Trocar g ↔ kg ou ml ↔ L converte o número sozinho; vírgula ou ponto funcionam.
+- Avisa o erro de escala mais comum ("80 kg por unidade é muito. Você quis dizer 80 g?") e corrige com um toque.
+- Mostra em tempo real quanto sai do estoque e o custo de cada linha, além do custo estimado de 1 unidade antes de salvar. Rendimento no preparo com explicação de perda.
+- "Dá para vender" usa vírgula decimal.
+
 ## [1.0.64] - 2026-10-07
 
 ### Changed — Margin Go premium: cores com significado e telas mais claras
