@@ -6,6 +6,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.64] - 2026-10-07
+
+### Changed — Margin Go premium: cores com significado e telas mais claras
+
+- Visual novo em todo o Margin Go (tela cheia, ao lado do WhatsApp e janela flutuante; temas Claro, Escuro e Sol): marca no topo, área "Cole a conversa do WhatsApp" em destaque, ícones em Entrega/Retirada/Local e PIX/Dinheiro/Cartão com a cor de cada escolha, botão "Criar pedido" com seta e total.
+- Itens: tamanho em pílula, adicionais e observação como selos (a observação abre ao tocar), texto do cliente só quando acrescenta algo. Conferência mostra quantidade, tamanho, adicionais e observação de cada item.
+- Cor por tipo de produto em todas as miniaturas (bebidas azul, lanches âmbar, salgados/pizzas laranja, doces violeta, saladas verde). Catálogo com cartões maiores, preço em destaque e botão "+".
+- Lista de Pedidos com cor por etapa (Novo, Em produção, Pronto, Saiu para entrega, Agendado, Finalizado, Cancelado), busca com lupa e "Editar" em destaque.
+- Leitura: "dois x tudo um sem cebola" (sem vírgula) vira 1 X-Tudo + 1 X-Tudo sem cebola; "centro belo horizonte mg" separa bairro, cidade e UF usando a cidade da loja; o aviso "Tamanho não informado" some ao escolher o tamanho.
+
 ## [1.0.63] - 2026-10-07
 
 ### Changed — Margin Go: leitura de conversa colada mais forte e telas sem transbordo
