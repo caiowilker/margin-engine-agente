@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const http = require("http");
+const https = require("https");
 const { EventEmitter } = require("events");
 
 const {
@@ -78,109 +79,316 @@ test("resolverBackendUrlPadrao respeita DEFAULT_BACKEND_URL e normaliza app→ap
   }
 });
 
+/** Upstream real em 127.0.0.1; handler recebe (req, res, corpo, socketReqIndex). */
+async function subirUpstream(handler) {
+  const chamadas = [];
+  const server = http.createServer((req, res) => {
+    const socket = req.socket;
+    socket.__reqs = (socket.__reqs || 0) + 1;
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => {
+      const corpo = Buffer.concat(chunks);
+      chamadas.push({
+        method: req.method,
+        url: req.url,
+        headers: req.headers,
+        corpo,
+        porta: socket.remotePort,
+        indiceNoSocket: socket.__reqs,
+      });
+      handler(req, res, corpo, socket.__reqs);
+    });
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const url = `http://127.0.0.1:${server.address().port}`;
+  return {
+    url,
+    chamadas,
+    fechar: () =>
+      new Promise((r) => {
+        server.closeAllConnections?.();
+        server.close(r);
+      }),
+  };
+}
+
+/** Proxy num http.Server com o mínimo de Express que ele usa (status/json + express.json). */
+async function subirProxy(backendUrl, { parseJson = true } = {}) {
+  const proxy = criarApiProxy({ lerConfigSync: () => ({ backendUrl }) });
+  const server = http.createServer(async (req, res) => {
+    res.status = (code) => {
+      res.statusCode = code;
+      return res;
+    };
+    res.json = (obj) => {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify(obj));
+    };
+    req.url = req.url.replace(/^\/api-proxy/, "");
+    const ct = String(req.headers["content-type"] || "");
+    if (parseJson && ct.includes("application/json")) {
+      const chunks = [];
+      for await (const c of req) chunks.push(c);
+      req.body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {};
+    }
+    await proxy(req, res);
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  return {
+    url: `http://127.0.0.1:${server.address().port}/api-proxy`,
+    fechar: () =>
+      new Promise((r) => {
+        server.closeAllConnections?.();
+        server.close(r);
+      }),
+  };
+}
+
 test("criarApiProxy encaminha POST /auth/login para API (não SPA app.*)", async () => {
   const calls = [];
-  const originalFetch = global.fetch;
-  global.fetch = async (url, init) => {
-    calls.push({ url, init });
-    return new Response(JSON.stringify({ accessToken: "a", refreshToken: "r" }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
+  const originalRequest = https.request;
+  https.request = (opts) => {
+    calls.push(opts);
+    const req = new EventEmitter();
+    req.reusedSocket = false;
+    req.end = (body) => {
+      calls[calls.length - 1].body = body;
+      const res = new (require("stream").PassThrough)();
+      res.statusCode = 200;
+      res.headers = { "content-type": "application/json" };
+      res.complete = true;
+      setImmediate(() => {
+        req.emit("response", res);
+        res.end('{"accessToken":"a"}');
+      });
+    };
+    req.destroy = () => {};
+    return req;
   };
 
   const proxy = criarApiProxy({
     lerConfigSync: () => ({ backendUrl: "https://app.marginengine.com.br" }),
   });
-
-  const req = {
-    method: "POST",
-    url: "/auth/login",
-    headers: {
-      "content-type": "application/json",
-      accept: "application/json",
-    },
-    body: { email: "a@b.com", password: "x" },
-  };
-
+  const { PassThrough } = require("stream");
+  const res = new PassThrough();
   let statusCode = 0;
-  const res = {
-    status(code) {
-      statusCode = code;
-      return this;
-    },
-    setHeader() {},
-    send() {},
-    json() {},
-    end() {},
+  res.status = (code) => {
+    statusCode = code;
+    return res;
   };
-
+  res.setHeader = () => {};
+  res.json = () => {};
+  const body = { email: "a@b.com", password: "x" };
   try {
-    await proxy(req, res);
+    await proxy(
+      {
+        method: "POST",
+        url: "/auth/login",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body,
+      },
+      res,
+    );
     assert.equal(statusCode, 200);
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].url, "https://api.marginengine.com.br/auth/login");
-    assert.equal(calls[0].init.method, "POST");
-    assert.equal(calls[0].init.body, JSON.stringify(req.body));
+    assert.equal(calls[0].hostname, "api.marginengine.com.br");
+    assert.equal(calls[0].path, "/auth/login");
+    assert.equal(calls[0].method, "POST");
+    assert.equal(calls[0].body, JSON.stringify(body));
+    assert.equal(calls[0].agent.keepAlive, true);
   } finally {
-    global.fetch = originalFetch;
+    https.request = originalRequest;
   }
 });
 
 test("criarApiProxy encaminha body bruto multipart (importar-xml)", async () => {
-  const calls = [];
-  const originalFetch = global.fetch;
-  global.fetch = async (url, init) => {
-    calls.push({ url, init });
-    return new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  };
-
-  const proxy = criarApiProxy({
-    lerConfigSync: () => ({ backendUrl: "https://api.marginengine.com.br" }),
+  const up = await subirUpstream((_req, res) => {
+    res.setHeader("content-type", "application/json");
+    res.end('{"ok":true}');
   });
-
+  const px = await subirProxy(up.url, { parseJson: false });
   const boundary = "----BoundForm";
   const raw = Buffer.from(
     `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="n.xml"\r\n\r\n<xml/>\r\n--${boundary}--\r\n`,
   );
-
-  async function* gen() {
-    yield raw;
-  }
-
-  const req = {
-    method: "POST",
-    url: "/pdv/notas-entrada/importar-xml",
-    headers: {
-      "content-type": `multipart/form-data; boundary=${boundary}`,
-      authorization: "Bearer tok",
-    },
-    readableEnded: false,
-    complete: false,
-    [Symbol.asyncIterator]: gen,
-  };
-
-  const res = {
-    status() {
-      return this;
-    },
-    setHeader() {},
-    send() {},
-    json() {},
-    end() {},
-  };
-
   try {
-    await proxy(req, res);
-    assert.equal(calls.length, 1);
-    assert.ok(Buffer.isBuffer(calls[0].init.body));
-    assert.ok(calls[0].init.body.includes(Buffer.from("<xml/>")));
-    assert.equal(calls[0].init.headers.authorization, "Bearer tok");
+    const r = await fetch(`${px.url}/pdv/notas-entrada/importar-xml`, {
+      method: "POST",
+      headers: {
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+        authorization: "Bearer tok",
+      },
+      body: raw,
+    });
+    assert.equal(r.status, 200);
+    assert.equal(up.chamadas.length, 1);
+    assert.ok(up.chamadas[0].corpo.equals(raw));
+    assert.equal(up.chamadas[0].headers.authorization, "Bearer tok");
   } finally {
-    global.fetch = originalFetch;
+    await px.fechar();
+    await up.fechar();
+  }
+});
+
+test("criarApiProxy repassa Idempotency-Key, X-Supervisor-Token, If-Match e If-None-Match", async () => {
+  const up = await subirUpstream((_req, res) => {
+    res.setHeader("content-type", "application/json");
+    res.setHeader("etag", '"7"');
+    res.end('{"ok":true}');
+  });
+  const px = await subirProxy(up.url);
+  try {
+    const r = await fetch(`${px.url}/pdv/crediario/parcelas/abc/receber`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer tok",
+        "idempotency-key": "chave-1",
+        "x-supervisor-token": "sup-1",
+        "if-match": '"3"',
+        "if-none-match": '"2"',
+        "x-current-refresh-token": "rt-1",
+      },
+      body: JSON.stringify({ valor: 10 }),
+    });
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get("etag"), '"7"');
+    const h = up.chamadas[0].headers;
+    assert.equal(h["idempotency-key"], "chave-1");
+    assert.equal(h["x-supervisor-token"], "sup-1");
+    assert.equal(h["if-match"], '"3"');
+    assert.equal(h["if-none-match"], '"2"');
+    assert.equal(h["x-current-refresh-token"], "rt-1");
+    assert.equal(up.chamadas[0].corpo.toString(), '{"valor":10}');
+    assert.equal(h["content-length"], "12");
+  } finally {
+    await px.fechar();
+    await up.fechar();
+  }
+});
+
+test("criarApiProxy reaproveita a conexão com o backend (keep-alive)", async () => {
+  const up = await subirUpstream((_req, res) => res.end("ok"));
+  const px = await subirProxy(up.url);
+  try {
+    for (let i = 0; i < 3; i++) {
+      const r = await fetch(`${px.url}/pdv/caixa/status`);
+      assert.equal(await r.text(), "ok");
+    }
+    assert.equal(up.chamadas.length, 3);
+    assert.equal(new Set(up.chamadas.map((c) => c.porta)).size, 1);
+    assert.equal(up.chamadas[2].indiceNoSocket, 3);
+  } finally {
+    await px.fechar();
+    await up.fechar();
+  }
+});
+
+test("criarApiProxy faz streaming: primeiro pedaço chega antes do backend terminar", async () => {
+  let terminar;
+  const up = await subirUpstream((_req, res) => {
+    res.setHeader("content-type", "text/plain");
+    res.write("parte-1;");
+    terminar = () => res.end("parte-2");
+  });
+  const px = await subirProxy(up.url);
+  try {
+    const r = await fetch(`${px.url}/pdv/relatorios/grande`);
+    const leitor = r.body.getReader();
+    const primeiro = await leitor.read();
+    assert.equal(Buffer.from(primeiro.value).toString(), "parte-1;");
+    terminar();
+    let resto = "";
+    for (;;) {
+      const { value, done } = await leitor.read();
+      if (done) break;
+      resto += Buffer.from(value).toString();
+    }
+    assert.equal(resto, "parte-2");
+  } finally {
+    await px.fechar();
+    await up.fechar();
+  }
+});
+
+test("criarApiProxy repete uma vez GET em socket velho; POST sem Idempotency-Key não", async () => {
+  const up = await subirUpstream((req, res, _corpo, indice) => {
+    if (indice > 1) {
+      req.socket.destroy();
+      return;
+    }
+    res.end(`ok-${req.method}`);
+  });
+  const px = await subirProxy(up.url);
+  try {
+    assert.equal(await (await fetch(`${px.url}/a`)).text(), "ok-GET");
+    const r = await fetch(`${px.url}/b`);
+    assert.equal(r.status, 200);
+    assert.equal(await r.text(), "ok-GET");
+    assert.equal(up.chamadas.filter((c) => c.url === "/b").length, 2);
+
+    const post = await fetch(`${px.url}/pdv/caixa/sangria`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    assert.equal(post.status, 502);
+    assert.equal(up.chamadas.filter((c) => c.url === "/pdv/caixa/sangria").length, 1);
+
+    assert.equal(await (await fetch(`${px.url}/c`)).text(), "ok-GET");
+    const postIdem = await fetch(`${px.url}/pdv/caixa/abrir`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "idempotency-key": "k" },
+      body: "{}",
+    });
+    assert.equal(postIdem.status, 200);
+    assert.equal(up.chamadas.filter((c) => c.url === "/pdv/caixa/abrir").length, 2);
+  } finally {
+    await px.fechar();
+    await up.fechar();
+  }
+});
+
+test("criarApiProxy cancela a chamada ao backend quando o cliente desiste", async () => {
+  let upstreamFechou;
+  const fechou = new Promise((r) => {
+    upstreamFechou = r;
+  });
+  const up = await subirUpstream((req) => {
+    req.socket.on("close", upstreamFechou);
+  });
+  const px = await subirProxy(up.url);
+  try {
+    const ctrl = new AbortController();
+    const pend = fetch(`${px.url}/pdv/lento`, { signal: ctrl.signal }).catch((e) => e);
+    while (up.chamadas.length === 0) await new Promise((r) => setTimeout(r, 10));
+    ctrl.abort();
+    await pend;
+    await Promise.race([
+      fechou,
+      new Promise((_, rej) => setTimeout(() => rej(new Error("upstream não foi cancelado")), 2000)),
+    ]);
+  } finally {
+    await px.fechar();
+    await up.fechar();
+  }
+});
+
+test("criarApiProxy responde 504 quando o backend estoura API_PROXY_TIMEOUT_MS", async () => {
+  const prev = process.env.API_PROXY_TIMEOUT_MS;
+  process.env.API_PROXY_TIMEOUT_MS = "150";
+  const up = await subirUpstream(() => {});
+  const px = await subirProxy(up.url);
+  try {
+    const r = await fetch(`${px.url}/pdv/caixa/status`);
+    assert.equal(r.status, 504);
+    assert.match((await r.json()).erro, /não respondeu a tempo/);
+  } finally {
+    if (prev === undefined) delete process.env.API_PROXY_TIMEOUT_MS;
+    else process.env.API_PROXY_TIMEOUT_MS = prev;
+    await px.fechar();
+    await up.fechar();
   }
 });
 

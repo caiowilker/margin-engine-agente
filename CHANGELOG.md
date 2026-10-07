@@ -6,6 +6,85 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.62] - 2026-10-07
+
+### Changed — Proxy da nuvem mais rápido e seguro (Fase 5)
+
+- `/api-proxy` mantém a conexão com a nuvem aberta entre as chamadas (keep-alive real, conexão ociosa fechada aos 50 s): o poll do caixa a cada 30 s não paga mais TCP+TLS de novo.
+- Resposta repassada enquanto chega (sem bufferizar o corpo inteiro); compressão do backend passa direto ao navegador.
+- Front desistiu → a chamada ao backend é cancelada. Teto de 95 s (`API_PROXY_TIMEOUT_MS`, acima do maior timeout do front) com 504 "Servidor não respondeu a tempo".
+- Conexão reaproveitada que o servidor já tinha fechado: repete uma vez só GET/HEAD ou pedidos com `Idempotency-Key` — POST sem chave nunca é repetido.
+
+## [1.0.61] - 2026-10-06
+
+### Fixed — Edição de pedido: lista de produtos abaixo do campo
+
+- Ao buscar produto para adicionar na edição, a lista aparecia no meio da tela. A posição fixa agora compensa o contêiner real (o `.pr-app` usa contenção de layout e, na edição, fica dentro do modal), então a lista abre logo abaixo do campo — ou acima, se faltar espaço — também no pedido rápido embutido e na janela flutuante.
+
+## [1.0.60] - 2026-10-06
+
+### Added — Central de pedidos: opções de impressão nos detalhes
+
+- Ao abrir os detalhes do card, a seção **Impressão** mostra cada comanda (setor, evento, horário) com o status real do servidor — falhas primeiro — e avisa quando não há estação de impressão conectada.
+- Comanda que falhou: **Tentar de novo** (reenfileira) e **Descartar**; com mais de uma falha, **Tentar todas**. **Reimprimir comanda** usa a mesma regra da Central (uma via por setor já impresso, marcada REIMPRESSÃO; permissão validada no backend) e mostra quantas vias saíram ou o motivo da recusa.
+- Carrega só quando os detalhes abrem, bloqueia clique duplo e atualiza o status após cada ação.
+
+## [1.0.59] - 2026-10-06
+
+### Fixed — Pedido rápido: lista de "Buscar outro" por cima
+
+- Sem mudança no agente: versão alinhada ao front e ao backend (correção só no front).
+
+## [1.0.58] - 2026-10-06
+
+### Fixed — Fita de turno só em dinheiro e campos monetários (Fase 4)
+
+- Sem mudança no agente: versão alinhada ao backend e ao front.
+- A fita impressa usa o relatório térmico já existente (`/impressora/relatorio`):
+  - mostra só dinheiro, com as saídas em negativo;
+  - imprime os últimos 80 movimentos (limite do layout) e o resumo do turno inteiro por categoria;
+  - "Formas de pagamento" traz apenas dinheiro, e o TOTAL é o dinheiro em caixa.
+- Detalhes nos CHANGELOGs de `margin-engine` e `margin-engine-front`.
+
+## [1.0.57] - 2026-10-06
+
+### Added — Lançamento instantâneo em Contas a Pagar (Fase 3)
+
+- Sem mudança no agente: versão alinhada ao backend e ao front.
+- O backend ganha `POST /finance/contas-pagar/lancar` (à vista em dinheiro do caixa, à vista pela conta ou com data/parcelas, com `Idempotency-Key`). O front ganha o modal "Novo título" com inserção otimista.
+- Detalhes nos CHANGELOGs de `margin-engine` e `margin-engine-front`.
+
+## [1.0.56] - 2026-10-06
+
+### Fixed — Receber crediário (Fase 2)
+
+- Sem mudança no agente: versão alinhada ao backend e ao front.
+- No backend, o recebimento de crediário passa a lançar o dinheiro no lugar certo:
+  - DINHEIRO entra no caixa aberto como `RECEB_CREDIARIO` e conta no fechamento e na fita.
+  - PIX e cartão entram na conta da tesouraria escolhida.
+- Detalhes nos CHANGELOGs de `margin-engine` e `margin-engine-front`.
+
+## [1.0.55] - 2026-10-06
+
+### Fixed — Troca de operador e passagem de caixa (Fase 1)
+
+- **Proxy do agente (porta 9100):** passa a repassar `Idempotency-Key`, `X-Supervisor-Token`, `If-Match`, `If-None-Match` e `X-Current-Refresh-Token`. Antes, operações com chave de idempotência pelo agente voltavam 400. O `ETag` da resposta já era repassado.
+- **Passagem de caixa:**
+  - Um supervisor com token passa o caixa de outro operador. Sem token e sem ser dono: 403, e a tela abre o pedido de supervisor. Antes, era 422 com "Só o operador do turno ou um supervisor".
+  - A senha do próximo operador é conferida antes de travar o caixa.
+  - O resumo do turno é calculado uma vez só, e a auditoria entra na mesma transação: uma falha no meio não deixa auditoria órfã.
+  - Medição (H2, 300 vendas): de 19 para 17 comandos SQL; mediana de 65 para 53 ms.
+- **Idempotência da passagem** (migration aditiva `V20261107`, tabela nova `pdv_passagem_turno_idempotencia`): repetir com a mesma chave devolve o mesmo resultado (mesmo `novoCaixaId`) com uma sessão nova. A repetição exige o mesmo solicitante e a senha do mesmo próximo operador. A tela repete sozinha após timeout, erro de rede, 5xx ou 409, mostrando "Confirmando a passagem…". Rollback em `margin-engine/docs/rollback/`.
+- **Fechar caixa:** exige ser o dono do turno ou supervisor (permissão de tesouraria ou token). Em 403, a frente abre o pedido de supervisor e reenvia.
+- **Sessão no front:**
+  - Uma resposta atrasada de `/auth/refresh` não restaura mais o operador anterior: cada sessão nova tem uma geração, e respostas de gerações antigas são descartadas.
+  - A troca de operador numa aba atualiza as outras (BroadcastChannel).
+  - O status do caixa pedido com a sessão anterior é descartado.
+- **Permissões:**
+  - `/pdv/permissoes/minhas` é buscado uma vez por troca (antes, duas requisições).
+  - Suprimento e sangria autorizados por supervisor na frente enviam o token (antes era descartado).
+  - O cabeçalho avisa quando o caixa aberto é de outro operador.
+
 ## [1.0.54] - 2026-10-06
 
 ### Fixed — Auditoria final dos pedidos (O6): desempenho e permissões

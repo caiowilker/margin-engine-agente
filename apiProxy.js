@@ -137,6 +137,70 @@ async function lerBodyBruto(req) {
   return Buffer.concat(chunks);
 }
 
+/** Teto do proxy: acima do maior timeout do front (faturar pedido, 90 s) e do servidor (pool 3 s + query 8 s). */
+const PROXY_TIMEOUT_PADRAO_MS = 95_000;
+
+/**
+ * Conexões persistentes até a nuvem: sem isso cada poll (30 s) paga TCP+TLS de novo
+ * (o fetch embutido descarta a conexão ociosa em ~4 s). Ociosa por mais de 50 s é fechada
+ * aqui antes que o balanceador (60 s típico) a derrube por baixo.
+ */
+const OPCOES_KEEP_ALIVE = {
+  keepAlive: true,
+  keepAliveMsecs: 15_000,
+  maxSockets: 32,
+  maxFreeSockets: 8,
+  timeout: 50_000,
+};
+const agenteHttp = new http.Agent(OPCOES_KEEP_ALIVE);
+const agenteHttps = new https.Agent(OPCOES_KEEP_ALIVE);
+
+const OMITIR_HEADERS_RESPOSTA = new Set([
+  "transfer-encoding",
+  "connection",
+  "keep-alive",
+  "access-control-allow-origin",
+]);
+
+/** Socket reaproveitado que o servidor já fechou: seguro repetir só o que é idempotente. */
+const ERROS_SOCKET_VELHO = new Set(["ECONNRESET", "EPIPE", "ECONNABORTED"]);
+
+function podeRepetir(method, headers) {
+  return method === "GET" || method === "HEAD" || Boolean(headers["idempotency-key"]);
+}
+
+function timeoutProxyMs() {
+  const n = Number(process.env.API_PROXY_TIMEOUT_MS);
+  return Number.isFinite(n) && n > 0 ? n : PROXY_TIMEOUT_PADRAO_MS;
+}
+
+/**
+ * @returns {{ resposta: Promise<import('http').IncomingMessage>, upstreamReq: import('http').ClientRequest }}
+ */
+function enviarUpstream(target, method, headers, body) {
+  const url = new URL(target);
+  const isHttps = url.protocol === "https:";
+  const upstreamReq = (isHttps ? https : http).request({
+    protocol: url.protocol,
+    hostname: url.hostname,
+    port: url.port || (isHttps ? 443 : 80),
+    path: `${url.pathname}${url.search}`,
+    method,
+    headers,
+    agent: isHttps ? agenteHttps : agenteHttp,
+  });
+  const resposta = new Promise((resolve, reject) => {
+    upstreamReq.once("response", (r) => {
+      r.on("error", () => {});
+      resolve(r);
+    });
+    upstreamReq.on("error", reject);
+  });
+  if (body != null) upstreamReq.end(body);
+  else upstreamReq.end();
+  return { resposta, upstreamReq };
+}
+
 function criarApiProxy({ lerConfigSync }) {
   const resolverBackendUrl = criarResolverBackendUrl(lerConfigSync);
 
@@ -144,6 +208,7 @@ function criarApiProxy({ lerConfigSync }) {
     "authorization",
     "content-type",
     "accept",
+    "accept-encoding",
     "accept-language",
     "x-request-id",
     "x-correlation-id",
@@ -151,12 +216,32 @@ function criarApiProxy({ lerConfigSync }) {
     "x-store-floor-session",
     "x-margin-floor-session",
     "x-agent-token",
+    "idempotency-key",
+    "x-supervisor-token",
+    "if-match",
+    "if-none-match",
+    "x-current-refresh-token",
   ];
 
   return async function proxyApiParaBackend(req, res) {
     if (req.method === "OPTIONS") {
       return res.status(204).end();
     }
+
+    let upstreamAtual = null;
+    let clienteSaiu = false;
+    let expirou = false;
+    const aoFecharCliente = () => {
+      if (!res.writableFinished) {
+        clienteSaiu = true;
+        if (upstreamAtual) upstreamAtual.destroy();
+      }
+    };
+    if (typeof res.on === "function") res.on("close", aoFecharCliente);
+    const timer = setTimeout(() => {
+      expirou = true;
+      if (upstreamAtual) upstreamAtual.destroy(new Error("timeout"));
+    }, timeoutProxyMs());
 
     try {
       const backend = resolverBackendUrl();
@@ -171,60 +256,85 @@ function criarApiProxy({ lerConfigSync }) {
       }
 
       const method = req.method.toUpperCase();
-      const init = { method, headers };
+      let body = null;
       const ct = String(req.headers["content-type"] || "").toLowerCase();
 
       if (!["GET", "HEAD"].includes(method)) {
         if (ct.includes("application/json") && req.body != null) {
           // express.json já parseou — re-serializa.
-          init.body =
-            typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+          body = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
         } else if (Buffer.isBuffer(req.body) || typeof req.body === "string") {
-          init.body = req.body;
+          body = req.body;
         } else {
           // Multipart / octet-stream: stream ainda legível (json middleware pulou).
           const raw = await lerBodyBruto(req);
           if (raw && raw.length) {
-            init.body = raw;
-            if (!headers["content-length"]) {
-              headers["content-length"] = String(raw.length);
-            }
+            body = raw;
           } else if (req.body != null && typeof req.body === "object") {
             // Fallback: objeto já parseado (urlencoded etc.)
-            init.body = JSON.stringify(req.body);
+            body = JSON.stringify(req.body);
             headers["content-type"] = headers["content-type"] || "application/json";
           }
         }
+        headers["content-length"] = String(body == null ? 0 : Buffer.byteLength(body));
       }
 
-      const timeoutMs = Number(process.env.API_PROXY_TIMEOUT_MS || 60_000);
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      let upstream;
-      try {
-        upstream = await fetch(target, { ...init, signal: controller.signal });
-      } finally {
-        clearTimeout(timer);
+      let upstreamRes;
+      for (let tentativa = 0; ; tentativa++) {
+        const envio = enviarUpstream(target, method, headers, body);
+        upstreamAtual = envio.upstreamReq;
+        try {
+          upstreamRes = await envio.resposta;
+          break;
+        } catch (err) {
+          const socketVelho =
+            envio.upstreamReq.reusedSocket && ERROS_SOCKET_VELHO.has(err.code);
+          if (
+            tentativa === 0 &&
+            socketVelho &&
+            !expirou &&
+            !clienteSaiu &&
+            podeRepetir(method, headers)
+          ) {
+            continue;
+          }
+          throw err;
+        }
       }
-      res.status(upstream.status);
-      const omitir = new Set([
-        "transfer-encoding",
-        "connection",
-        "content-encoding",
-        "access-control-allow-origin",
-      ]);
-      upstream.headers.forEach((value, key) => {
-        if (!omitir.has(key.toLowerCase())) {
+
+      res.status(upstreamRes.statusCode || 502);
+      for (const [key, value] of Object.entries(upstreamRes.headers)) {
+        if (value != null && !OMITIR_HEADERS_RESPOSTA.has(key.toLowerCase())) {
           res.setHeader(key, value);
         }
+      }
+      await new Promise((resolve) => {
+        upstreamRes.once("end", resolve);
+        upstreamRes.once("error", resolve);
+        upstreamRes.once("close", resolve);
+        upstreamRes.pipe(res);
       });
-      const body = Buffer.from(await upstream.arrayBuffer());
-      res.send(body);
+      if (!upstreamRes.complete && !res.writableEnded && typeof res.destroy === "function") {
+        res.destroy();
+      }
     } catch (err) {
+      if (clienteSaiu) return;
+      if (res.headersSent) {
+        if (typeof res.destroy === "function") res.destroy();
+        return;
+      }
+      if (expirou) {
+        console.warn("[Agente] api-proxy: timeout", req.method, req.url);
+        res.status(504).json({ erro: "Servidor não respondeu a tempo. Tente novamente." });
+        return;
+      }
       console.warn("[Agente] api-proxy:", err.message);
       res.status(502).json({
         erro: `Proxy para backend falhou: ${err.message}`,
       });
+    } finally {
+      clearTimeout(timer);
+      if (typeof res.off === "function") res.off("close", aoFecharCliente);
     }
   };
 }
@@ -354,4 +464,5 @@ module.exports = {
   isPrivateLanHostname,
   lerBodyBruto,
   PRODUCTION_API_URL,
+  PROXY_TIMEOUT_PADRAO_MS,
 };
