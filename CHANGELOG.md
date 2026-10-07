@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.63] - 2026-10-07
+
+### Changed — Margin Go: leitura de conversa colada mais forte e telas sem transbordo
+
+- Menus, folhas e diálogos do Margin Go abrem numa camada própria no topo da página: nada mais "estoura" para cima ou para fora da tela (ex.: "Copiar" na conferência). Menus escolhem o lado com espaço, respeitam as bordas e rolam por dentro.
+- Leitura de conversa: "coca de dois litros pra entregar na…", "kibe não, troca por pastel", "dois pastéis um de carne outro de queijo", "pizza família/broto/gigante", "com granola banana e leite condensado" (sem vírgula), "pfv/obrigado" no fim e "dois litros de coca" agora saem certos. Nenhum item reconhecido errado no eval (69 corretos, antes 58).
+- Margin Go no menu lateral e botão "Pedidos" ao lado do WhatsApp para editar pedidos da Central sem sair da tela.
+
 ## [1.0.62] - 2026-10-07
 
 ### Changed — Proxy da nuvem mais rápido e seguro (Fase 5)

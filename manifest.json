@@ -1,6 +1,6 @@
 {
-  "versao": "1.0.62",
-  "geradoEm": "2026-10-07T03:57:45.845Z",
+  "versao": "1.0.63",
+  "geradoEm": "2026-10-07T20:51:12.533Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -287,6 +287,2526 @@
       "sha256": "ab131cd81ced1ea38b0ddeb3be31a458dc52f5cb7f660ca669dd49d9cbb09b81"
     },
     {
+      "arquivo": "frontend-dist/api-backend.json",
+      "sha256": "f74fbb3316bc87b15b5b19dcf31a548c506ffa5dcd78e83fa1345d9ab8bfe794"
+    },
+    {
+      "arquivo": "frontend-dist/apple-touch-icon.png",
+      "sha256": "aeef2ab0a3509d9324c1b955747e79718ced9cf40a6053c6642fba92bb0183fd"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ActivationGatePage-CkDMvDHk.js",
+      "sha256": "72a581029f7f58950a39b554f296ec374ad1833d4f53fb63fe5352d1d2f34ad7"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ActivationPage-Dr0-Somf.js",
+      "sha256": "68232b9ea7cb8565af0a9b1f8387c7fd59c615a70d602679ffd76de307d9f90d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/addonTipoCatalogo-CbLS3Njg.js",
+      "sha256": "5c443a02dc51b89d7c3e77dabf062c11b980a980a73085780a6b32570dbd5cea"
+    },
+    {
+      "arquivo": "frontend-dist/assets/agenteFiscalPreflight-D7Zr077l.js",
+      "sha256": "a83bc4c64b75388add8eaa33f05171e0a37375d9abe3317be7b8796765ef5c64"
+    },
+    {
+      "arquivo": "frontend-dist/assets/AgenteLocalIndisponivel-CmfPjLPI.js",
+      "sha256": "33fd18996834809168825979e1b679a34d1e6813343e4d537a3f1b0c22b04db8"
+    },
+    {
+      "arquivo": "frontend-dist/assets/AjusteMonetarioCampo-Bnv9JrDV.js",
+      "sha256": "cf6e9c37710070e9e540923dd15026c00b7df0055ff678d6917969999959d725"
+    },
+    {
+      "arquivo": "frontend-dist/assets/AlcadasAprovacaoPage-2buIey3h.js",
+      "sha256": "b47997ed52a45b1b57fd0df19ef0d9a4b6c77b21bb88236b254f66e0849e032b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/AlertsPage-IKC8-GNK.js",
+      "sha256": "1c793be2b5af9457f60618cac7402d19ab093922251d3611f896e4bd62c6c4ad"
+    },
+    {
+      "arquivo": "frontend-dist/assets/aliquotaVigenciaErro-5VYBn_fE.js",
+      "sha256": "6a114742223ffe6e54b8782e3b169c7e1785281763361e6afa2613dde96b84b3"
+    },
+    {
+      "arquivo": "frontend-dist/assets/AnalyticsPage-DbOjdg1a.js",
+      "sha256": "aadf6ed601a07e8bd2b80e957b31c29b32f086c5baa5eacef6f8c08559e8b04d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/apiError-BeZlHiPV.js",
+      "sha256": "8492cad6f8e62a07e5bb4932b685dee9f864674932244f8ca7314ecc5ccfe4b2"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ApontamentoProducaoPage-B_txwrpE.js",
+      "sha256": "ce71a30abb3e4b2ddb7b37367107d9a45959ac03cfcb123a3e1ad8e4e4e4dd9b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/arrow-down-right-Dst-C6IY.js",
+      "sha256": "a8b6e72f84a30a08234fa98604d9d238ebfc0148bf578c3c6e4e5c939408d847"
+    },
+    {
+      "arquivo": "frontend-dist/assets/arrow-down-to-line-JXNIJbmV.js",
+      "sha256": "cc4a8dbde3b7f2003ec6254d4ec9f434ec7114f70651e31768e8c0534efaabfa"
+    },
+    {
+      "arquivo": "frontend-dist/assets/arrow-left-BwQudKZd.js",
+      "sha256": "49c6cdeca7aa4098d851d26c029aed344623ba6509ca7098a5431473976f4923"
+    },
+    {
+      "arquivo": "frontend-dist/assets/arrow-left-right-jw4HupL6.js",
+      "sha256": "d531777f60a4cde5fddeb53db06314ca746e88c8324b26c408efbb64c9b88d74"
+    },
+    {
+      "arquivo": "frontend-dist/assets/arrow-right-Dz0Yg4VJ.js",
+      "sha256": "2c520b93757d5cd90de3e31a24d6d9eb69a79f1756f9d1e2060ac605c83d145e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/arrow-up-DIj3cB2V.js",
+      "sha256": "fceba27dd76c1385b08958d3ed9f0dbded15caf38d53367d27cb03d477642939"
+    },
+    {
+      "arquivo": "frontend-dist/assets/arrow-up-from-line-Dha4umS0.js",
+      "sha256": "2e9ae4c4291be815fc50ef40f70d532d679d9da37b3083f6b697ed605b09a75a"
+    },
+    {
+      "arquivo": "frontend-dist/assets/arrow-up-right-zgxSBGRs.js",
+      "sha256": "4b1f1fcd3c4efa0b2c47682552bc6fa8019b04e794f091733708d7ade10b62c2"
+    },
+    {
+      "arquivo": "frontend-dist/assets/AtivacaoPdvPage-D3HBFblc.js",
+      "sha256": "433dec57a332072455d4f0fe1323826e4147a28a228a2a380676c554a8e9cb92"
+    },
+    {
+      "arquivo": "frontend-dist/assets/AuthLegalLinks-BCTST677.js",
+      "sha256": "a8c62b460fdd4f0109ac6c54ac6e92cca71cfaff24dd56aa444124a8733d0f6c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/baixarXmlFiscalVenda-C7uufBdK.js",
+      "sha256": "fd992ff9eb98c0219336a592f367d3dfcf537980db9a4bb977d9bf34d9770b08"
+    },
+    {
+      "arquivo": "frontend-dist/assets/BalancaCargaPage-3-tdjVcc.js",
+      "sha256": "f202013d0c3e9bdaa2fc224dd9309e1537629cd4f3e19aa047c8d360b7490e6f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/balancaParser-BDAcJrY6.js",
+      "sha256": "32f875f642b92cb682ac0f167bb9636565b6eb0c7fbba89f8e88215b0b79db4a"
+    },
+    {
+      "arquivo": "frontend-dist/assets/BalancoPage-BF_cfRFD.js",
+      "sha256": "b24c23e596ead874ce884fbb166a8f3adf5b6b7fff0925ac4d79cead9f8cfafd"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ban-DX-DgnMo.js",
+      "sha256": "def10f30c65b1c50cede9cca1327b3703ce271508241d3aee8d876771c7fe374"
+    },
+    {
+      "arquivo": "frontend-dist/assets/banknote-BVjG_Q4C.js",
+      "sha256": "6208292f4fe729b19f88173fc19d9f80f6b4517d615849c2e5c583c57d0ef189"
+    },
+    {
+      "arquivo": "frontend-dist/assets/barcode-CkVCXdAc.js",
+      "sha256": "3e8d921e8e79f2949339f8d2df135aff1e9eaeabe7c256c3afeccd2effa06b08"
+    },
+    {
+      "arquivo": "frontend-dist/assets/BarraRetornoCaixa-ddzktKjc.js",
+      "sha256": "8bb8619b8f3377a9bdbb5a74449c2feafbf7827b263dea2695d6898305edd210"
+    },
+    {
+      "arquivo": "frontend-dist/assets/beef-CqaHmY81.js",
+      "sha256": "4da117b196512caee378c2d77e21778be22ff7f717a2df0255dd9316ca13bbd7"
+    },
+    {
+      "arquivo": "frontend-dist/assets/bell-off-Cp1Dhkmj.js",
+      "sha256": "07cfe56532cbf4caf77e186710bcfeecebcbca841de3cf880b0bcb6317cbafb1"
+    },
+    {
+      "arquivo": "frontend-dist/assets/bike-D26SjIkG.js",
+      "sha256": "33e045dea98f9cfc833974818d6a26855ccad6b7226d8afd5a5c543846aa9b08"
+    },
+    {
+      "arquivo": "frontend-dist/assets/BillingCancelPage-DhgJicdq.js",
+      "sha256": "ab086f01b474bd75b559a8c0477ef429807fb291b70ef28df140632820467e63"
+    },
+    {
+      "arquivo": "frontend-dist/assets/BillingManagePage-B96pPc0o.js",
+      "sha256": "21f3538ffdfb8c208792e6c6effeb81a7e34aaf8a40faec203bae701efb8b57f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/BillingPage-C-0lxh2D.js",
+      "sha256": "09ebf91193c4fb7d795d47d30bf80e8672151cc5427399bb595c0a762855f1e5"
+    },
+    {
+      "arquivo": "frontend-dist/assets/BillingSuccessPage-DkNdEKyR.js",
+      "sha256": "fdbc022c2989aaba845ceb410e822b047329b3cb1d7c2d014a05c38879d7c84b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/bookmark-CY7geCVP.js",
+      "sha256": "7fcbd9de0f523072fabc36bd08d0080826b6e43ba7f8c244eb22ce1897173b26"
+    },
+    {
+      "arquivo": "frontend-dist/assets/CadastroProdutosPage-C7Yt1sjt.js",
+      "sha256": "d96f64e0ff9b356ee61e5778af27b2a2be2724f8946c5baf54c1286063378321"
+    },
+    {
+      "arquivo": "frontend-dist/assets/caixaImpressaoTermica-BqKXIoeq.js",
+      "sha256": "b9d294d7f6f67042d07ed349efc2c77fa8373134e9310fc00b21fff74a0367a0"
+    },
+    {
+      "arquivo": "frontend-dist/assets/CaixaPage-DeM_5D5r.js",
+      "sha256": "7e25df7fc2c2a57408c5d74388d2b286147654bae5ce9f2ebb2ae6f999be8d66"
+    },
+    {
+      "arquivo": "frontend-dist/assets/calendar-clock-B9_of0zz.js",
+      "sha256": "bd164bca42c2f95676182ba76b73a83a723bb0e60080144b3ec34933f4ed5bdc"
+    },
+    {
+      "arquivo": "frontend-dist/assets/calendar-CVwOU0Vj.js",
+      "sha256": "8f7437ec94bb261092541bb4394fa33027f3d305fd418d643abe94ab8d9003e7"
+    },
+    {
+      "arquivo": "frontend-dist/assets/calendar-days-Ci06J_Qp.js",
+      "sha256": "46d5ddcb0a4dd30334c6ac30b792061b8007bf277ea4b8905eaea32b4b31528e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/calendar-range-INZBkxCQ.js",
+      "sha256": "8562c38fa7ebea549fd92bdff2e2c3b9e5008f0397154b70f500f4168d95c59d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/CamposInscricaoEstadual-Bed8AcuP.js",
+      "sha256": "cff94a3a3ce33c5720f3d7848b24ed8292f8d7134bbb63283974905fd4ccf6bb"
+    },
+    {
+      "arquivo": "frontend-dist/assets/cardapioApi-Co3HL6n1.js",
+      "sha256": "da45016501a3907688b4eef7850f63bbf36662fc8c819b99cc5c49edd2b07547"
+    },
+    {
+      "arquivo": "frontend-dist/assets/CardapioDigitalPage-CY9Hao0U.js",
+      "sha256": "e481b6b9c69b0f2b7d7a5f8e284d3abe0aa392be81f2c93fd7db3bb14dc5921f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/cardapioReadiness-D-tMFmPK.js",
+      "sha256": "bb1c05ac0cc4d670c7a54b1816ed6677104733ccf3f6c2c552264f1eada421f1"
+    },
+    {
+      "arquivo": "frontend-dist/assets/CargaInicialCatalogoPage-Q5Ntl_Pm.js",
+      "sha256": "d9db2973f0f2796ebeaa4115b8bcb8fc072703fc0b60c10415c7e1fd68a270b5"
+    },
+    {
+      "arquivo": "frontend-dist/assets/CategoriaCustoSelect-DrTz9Io0.js",
+      "sha256": "1032cb5c1fa28bb423bec2113410679d37e3bd1626b6499079f4c2c2e5932b0d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/categoriasCustoApi-C2QguxXG.js",
+      "sha256": "00944b34088e62cf08baae3e1bd59e3782e92d6c275e079f5906b1e662da56ef"
+    },
+    {
+      "arquivo": "frontend-dist/assets/CategoriasCustoPage-DSb3eUpz.js",
+      "sha256": "3131b345016a1b596de272be80f406e8024b875a2c7ad146c12719e21d12f842"
+    },
+    {
+      "arquivo": "frontend-dist/assets/CategoriaSelect-BhTyOTN6.js",
+      "sha256": "21e636452361c9b33220b45b60b849a0697f1abf67eb72db50f332d99ec30ef1"
+    },
+    {
+      "arquivo": "frontend-dist/assets/CategoriasPage-DCeP32RO.js",
+      "sha256": "3e57396c3eda89278ddd84ed74c5a82ba253802575860200150f81c963075f30"
+    },
+    {
+      "arquivo": "frontend-dist/assets/categoriasPdvService-BrCYS74z.js",
+      "sha256": "0fbc6ae44fc187c405aa19c24d239eb7a916239b2be0f3ff4ae311b280296047"
+    },
+    {
+      "arquivo": "frontend-dist/assets/CentralPedidosPage-BKKG-QqN.js",
+      "sha256": "addef97657ec7bb5aaf8835110f684fe42268807bfb66098616f53a4c264c40d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/CentroCustoFormModal-BbMlDM6-.js",
+      "sha256": "15ad526f6fcb8b6d614f87d3449237b1a043cb3ae8f36dc63082ddbaa5489fb9"
+    },
+    {
+      "arquivo": "frontend-dist/assets/CentrosCustoPage-Bqjx68B_.js",
+      "sha256": "84dab4b17d331654394e497e5e5561f46d89f1634484ea1f6e0468620a573efb"
+    },
+    {
+      "arquivo": "frontend-dist/assets/chartFormat-BErYiLqD.js",
+      "sha256": "b5f0d131d45781b1de0df286491e0912af8462e33690ce838eed51f151138f5d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/check-Bhw7oW0c.js",
+      "sha256": "ca79b5dcfb0bf41d92df9fc9cad0065588036c28aae2ccd35d6d8e60cecc365f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/checkoutScale-EGJ_ZLRE.js",
+      "sha256": "997092757e2f4bbb51f90b3ba5bdd8f34a7853b5ee8c5526632bc1b8f6452d6a"
+    },
+    {
+      "arquivo": "frontend-dist/assets/chevron-up-Bo__jekK.js",
+      "sha256": "75148720e194926143330053cb75f74f3696c2ae6f9ff76bbcdfe5d4e3229dd9"
+    },
+    {
+      "arquivo": "frontend-dist/assets/circle-check-big-BN9DPcSg.js",
+      "sha256": "34edd30108673a1cfa0d5b7584141735d042078be48da2cc27e333aa40645db1"
+    },
+    {
+      "arquivo": "frontend-dist/assets/circle-CsqBtyv7.js",
+      "sha256": "d11ff5119dac762c6dab8bd41ac94e997448c734e3e8e451403cb8ac97dbfe1c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/circle-pause-DPXGjYhs.js",
+      "sha256": "44cf479d117ac80b487f3210425743c4da7cd6b1e67690a1484c7b5467016b97"
+    },
+    {
+      "arquivo": "frontend-dist/assets/circle-plus-s7-0vuMj.js",
+      "sha256": "5840d8214cbf56aff1c45e51ef1a314b2ad0c932dea8e228d8086d2a81b12f8e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/circle-question-mark-D6emLLGE.js",
+      "sha256": "69fe8bfb28ee95fbf9426f9b798fbef37196172291955b9bc379b634832736b0"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ClampedNumberInput-BejNIABz.js",
+      "sha256": "7a43ff0c758f56fe25425b612faa324c738656b298956c612f5b61a2acdcd883"
+    },
+    {
+      "arquivo": "frontend-dist/assets/clienteBusca-muQUuR51.js",
+      "sha256": "24fa1c81df6421d11f2f6fe5fac6ed763dcce1adcd0508b71ac9c2c72b4c298e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/clienteOfflineCache-DupixF8C.js",
+      "sha256": "d47a342270fe12ecf9b6e5afa47b1ec353a6b665ff0e6f3625fe2a674003a292"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ClienteSelector-Do5oHvoX.js",
+      "sha256": "0af69551021697ed5cb8952de629b2963ab331796342e9cca43b7a3bfb5a6f3e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/clienteService-CN0DxWJQ.js",
+      "sha256": "ba48b7bfdd9be51498d6f107cf50ec5be26f7fd5d72595643f1d675793183bbc"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ClientesPage-U8qPmJ8n.js",
+      "sha256": "39e33c8483b620421f7c344d51c147413c0139d2d493cae44805119542446ef4"
+    },
+    {
+      "arquivo": "frontend-dist/assets/clipboard-check-CuqPNw9B.js",
+      "sha256": "9d3be987440ecf92b478f01ac30eb11e0cc657215e889a647d3a1b1d4f894591"
+    },
+    {
+      "arquivo": "frontend-dist/assets/clock-3-CXh2Emk0.js",
+      "sha256": "9d1a31117c24f82797263141a01769e5056e596fcafe79f95498f71eb2ddb11d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/colaboradoresApi-BCbNWo9u.js",
+      "sha256": "be7665c9223691c42a8c29ae2090c0ceaddd4e3e87b6e9a8779666d71c023599"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ColaboradoresPage-DYnrDqcH.js",
+      "sha256": "b0d7e56c0862c541c2a4f038441f159f2d1cc3ca24364af5134fc081ebb97217"
+    },
+    {
+      "arquivo": "frontend-dist/assets/CollapsibleSection-BnBwtM09.js",
+      "sha256": "5d2a06a1029a209aa94070367673bb6a0ee620f84adb4dc5026d842f2d532c56"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ComissoesPage-CJSgI3EZ.js",
+      "sha256": "a4a7f1fab326f63feb19e824414529d7e3e3ff674961486999e1b1521785a48a"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ComissoesSubNav-yE6pcQQE.js",
+      "sha256": "6644c3f452fbfd2870173d1e0d359b613c604113b9bcd4e0b08809bde6902ff4"
+    },
+    {
+      "arquivo": "frontend-dist/assets/commercialUx-3440W0Mp.js",
+      "sha256": "5feafa1e6429558cf316648589a2fbfe813428da350581267c3e17e5b6ac7334"
+    },
+    {
+      "arquivo": "frontend-dist/assets/compraApi-D0eikeCw.js",
+      "sha256": "af82193fb8ffbbd10ed29a8e3692595455ce77f87354280379188a8cf0a599f9"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ComprasLayout-CvpM-PLF.js",
+      "sha256": "acd7a2dcd9363733e21c20752fe79ab4c737fb9e4654e07568dd84801ca1ab11"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ConfiguracoesFiscaisPage-DoLxtVI4.js",
+      "sha256": "e088f150eb88bd7a2d2f6af7d92eb31b808f8b9d8fc2043044440c7e5027eb2c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ConfiguracoesPdvPage-C7Hr6lvi.js",
+      "sha256": "6286cfb5748a2811f361d8811d3f2a06c00967b505264bbef751cfc8d15fe884"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ConfiguracoesTerminalPdvPage-DsZ7gzq3.js",
+      "sha256": "aec320aacc813c1f710522bfbd4d76030a7c754563526789e17df8a889b27ac0"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ConfirmActionModal-_ZhcVRJh.js",
+      "sha256": "a61965a2cb317113bd2ec299d99936a9e01b17016dfc544489c035a36f4dd5f0"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ConfirmModal-CRbBYVJh.js",
+      "sha256": "21c95900a855ee23efc43ba3e6f159e3626aca2b1dcd191b5f38c05e9b8ca296"
+    },
+    {
+      "arquivo": "frontend-dist/assets/constants-Ct9oLAmO.js",
+      "sha256": "51c1fe7f482e4fcdd0a33237a2e636163b2818fb3b01940b2757ebf5a55d4c2f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ContadorApuracaoFiscalPage-alvjOK0R.js",
+      "sha256": "9a96ae449f7cceed21cb901ada537269c4c9080e01db5f7272a62bc44ee2dcbd"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ContadorBlocoKPage-qNc6BTDc.js",
+      "sha256": "9d8eb8af9d5105020f2cca3a3bfd52623ae9075f05ad6fa128d8ec87176a28d0"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ContadorCClassTribOrfaosPage-B4tq_I_F.js",
+      "sha256": "8599cda63635155c64f8c15e9ef4e6e7287b57afa32cc73ae4b8636fd82ef761"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ContadorDocumentosPage-CpguVQmk.js",
+      "sha256": "d40ff36d0ddaa46608169a4eda43f8ff2d69caf417cbd6222abd0e62f46bba24"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ContadorEmpresasPage-BcBu_5v4.js",
+      "sha256": "acfd61baf71e72346951c1b8b58ce1a0387c05409113e1b17ddeae92918f57a8"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ContadorExportacoesPage-G1NsYnop.js",
+      "sha256": "fc13add4b851ea3e4c29c01ff4d12b920c0333d81d4dabbaefec63335f8c259c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ContadorFechamentoPage-CGMDLO1-.js",
+      "sha256": "daf29b5303db603fea0dea16d76ebe3e8d69f32675a64a91bf2c3d06c87b3640"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ContadorInventarioPage-DvwlLSKX.js",
+      "sha256": "306f4dc558db747ff9f0153807f4298fc5a0bcf06c9767b5d52ff8096b904b5d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ContadorLayout-CpM1TO4K.js",
+      "sha256": "bc1e63f25b375673357952ef212b23eaa1a9ce68fe6a814dd7fdf53bb31b858f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ContadorObservabilidadePage-QG9J4h7y.js",
+      "sha256": "6386d42333506b2814e7c3f21e0714cc2360896611a8e06742f8897e40b1eb1a"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ContadorPainelPage-BIBX2c4R.js",
+      "sha256": "62c1740df8899222a77caa7c3c2abc9219732f9ceb6e51c13f5fbf78df58ef9b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ContadorPerfilPage-C9GthxIM.js",
+      "sha256": "2238c0a710609c232b2fbab3d25de948e9c5081175befddee271adf8f97f7d11"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ContadorReprocessamentoTributarioPage-DjJ7Uats.js",
+      "sha256": "806e3c9faf2bbdf5dc7bb259ebe9c6da9022d48cf77e7f5df594329c5de72328"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ContadorSplitPaymentPage-CsTjp5_-.js",
+      "sha256": "459f23592a4b1110d07a37525cfba883062efed153dd487fdf7bae6670c5b4d1"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ContadorUi-r_V6V_T1.js",
+      "sha256": "0faa89e944c4e971d5b70c94e0d35819f915282715eaa0cb30f1e22f7cfe0c28"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ContasPagarPage-YUnaxcDd.js",
+      "sha256": "ec5ec2b44324e83fa900ef6be41840a9e01527ad9eb72290f7a078a46d15cd7b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ContingenciaPage-C9yNFlbG.js",
+      "sha256": "4510f2cd9c19391c1b6ceabe5d2269f85ef5a7ffd078b1e436837e9b946b3aa1"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ContratosComerciaisPage-Cm_UVMlK.js",
+      "sha256": "52b11c660d6e1b8eccee25cdba9c7a1668eb7003683c9a65ac47bfd9fd44bcd7"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ConversaoNfePage-Cw8U7FPY.js",
+      "sha256": "2f60e3727792d9e7ef56c29b8949dff45b2584a20f536f4563b76798dc5cb2b3"
+    },
+    {
+      "arquivo": "frontend-dist/assets/CookiesPage-CpFxSea_.js",
+      "sha256": "6c8ab4d5ed672842e17eab83085edcd1310163aee687913f6e339b8c58d00fc9"
+    },
+    {
+      "arquivo": "frontend-dist/assets/copiarTexto-iY2zJSY7.js",
+      "sha256": "0f2e64fffe5c462f916e489e7373c472d0b19382c435aba3745ea55a3de87790"
+    },
+    {
+      "arquivo": "frontend-dist/assets/copy-Cnh4G-X9.js",
+      "sha256": "119646c6215d8e023fd711c43992623ff510d73b1f318fbf3911b1a313b4fbd3"
+    },
+    {
+      "arquivo": "frontend-dist/assets/CotacaoComparativaPage-Bh_nDGHS.js",
+      "sha256": "87310c8ef964983a44e222ac33e86503436f58258346acf2cff65f4027d7e27f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/cozinhaComandaAuto-Bi5HcF5E.js",
+      "sha256": "ebe45230bce2007519ed562ffde21c5de619a7aa0b7246b332f8a0df93a28a5a"
+    },
+    {
+      "arquivo": "frontend-dist/assets/cpfCnpj-Bja0DPCm.js",
+      "sha256": "ea3753a13e345b97ab6c92bf6fd49f00f2e68cb5c771288e4293c1a36fa2530e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/CreateUserPage-CZsPUX2-.js",
+      "sha256": "ed4069958bfbc2eac174365ae76474cc5e46633092eeaacd18e26dd9d2cafea4"
+    },
+    {
+      "arquivo": "frontend-dist/assets/CrediarioPage-DA259R24.js",
+      "sha256": "78464b0fb184346b03db929d878621693e68870cbb8c6fddf26dc8fbec6a839a"
+    },
+    {
+      "arquivo": "frontend-dist/assets/crediarioRecebimento-D6pwdWQZ.js",
+      "sha256": "e42f31afa72e33856053bad25ee8d5457765a38196226fc385719c49b1b998c3"
+    },
+    {
+      "arquivo": "frontend-dist/assets/crediarioService-B9B2M6LS.js",
+      "sha256": "d4003a914aab17ec240cf7df5a864421007bafc3e8620f5a98ded8ebf67d38e8"
+    },
+    {
+      "arquivo": "frontend-dist/assets/cupomFiscalFormat-Cei3Dj8q.js",
+      "sha256": "e967193b3ce6bab9c276e9628eb59cf7fc9b9fe34e505f83872ee187e94bd8e8"
+    },
+    {
+      "arquivo": "frontend-dist/assets/cupomImpressaoPolicy-DZpNPuBA.js",
+      "sha256": "c6ce8a6ebdfcf7c7a005e1006f04fbfed4aab93f341619e45b27f5e87efe81c7"
+    },
+    {
+      "arquivo": "frontend-dist/assets/cupomLogoPreview-CYX1IHW6.js",
+      "sha256": "8f1b927a609e6c6fc78a44eafbd7ee259d09a05e0b5ab376cefd16d260f393e7"
+    },
+    {
+      "arquivo": "frontend-dist/assets/cupomPreviewFit-CL5K5g0n.js",
+      "sha256": "ac0b60aed2996fd6b8584cf25d294b6bcafc484336a058d90799545210d0ab5b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/CutsPage-DSauYRaH.js",
+      "sha256": "e995324843647fdee3320f9aa5eca500f919bb2863fa5971e6dfac2f6fc7714e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/cutsService-D2e32LSv.js",
+      "sha256": "15a61504ffc37942bb0b51a71cb1619fbf038e03f8be413f67d6718580547623"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DashboardLayout-D-lDJGjR.js",
+      "sha256": "5849a28f8ac0b7d9565bb16c1124f934ee72799d6524256db5ef0bc7f565acd7"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DashboardPage-jsWdbUcF.js",
+      "sha256": "afad1b2e78a879fd1a8c2c5c8914fecad19aa7cfac33eaf52a5b475495b79307"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DashboardPdvPage-8-jv_EYC.js",
+      "sha256": "eb269cc9d7a62b9d7d778d0d5cf2ec4321e21ec74e4c74482f30f3a8bcf756de"
+    },
+    {
+      "arquivo": "frontend-dist/assets/dashboardService-zs7xW3td.js",
+      "sha256": "0e2bb73a26df8d258859aa227db4654f2ac7d1081e013a6ba148189ae7451595"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DataTable-DNYVChSy.js",
+      "sha256": "9686e055d70518b664ff162e910c4d52419384aded13bd576957cdd7c5a73fc9"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DataTable-LyxDPJ28.js",
+      "sha256": "c01dfe53dacac9138359600458a94a99f9fdf594b258a602b11a781e5cf881fc"
+    },
+    {
+      "arquivo": "frontend-dist/assets/dateRange-CS7iYibC.js",
+      "sha256": "d65b3344d99f8503dc7c70afbe5ff68feb8c7e17c302f54b8f1932352e692386"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DateRangePicker-DAEBLUL2.js",
+      "sha256": "4f125bab5920ef280fd55f271741bcac81cc365329bdd958f2e7677a58cc4523"
+    },
+    {
+      "arquivo": "frontend-dist/assets/delete-CQh9jngA.js",
+      "sha256": "22b23d119eaeb68a20279838e07a4b434e3f59af92bd601776b36e8a4f16e52b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/delivery.types-kMa3db1w.js",
+      "sha256": "ab600029f950c01054c1bf251c4b63263314c3275692f17a7e7369198d7dcb8c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/deliveryHours-Di2kRclx.js",
+      "sha256": "1e4efb6b296dd01dd3700e4c923c2b86abc0da233feaf37359baf058f83c54e8"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DeliveryHubPage-BGJuDn-u.js",
+      "sha256": "63a349dbf74beaf1f75c84e648d61072023fb053f8eba68116c09f2e52318262"
+    },
+    {
+      "arquivo": "frontend-dist/assets/deliveryMapGeo-EQA1Zizy.js",
+      "sha256": "fb3ad901c183e3cc367a3cef8b315cb8f78fb8456ed50ee3d0f50ed1abc3d3d9"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DepositoSelect-Cpkch33D.js",
+      "sha256": "e9751321e367ea1d0c384bfd8f5629175d1ad5a1083af2ddf1e2b4ae6e1c1bfa"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DepositosPage-COIyEWeS.js",
+      "sha256": "638ad873ffc5d319090ed9b144d3b49f548ffda1c3d6e9395e28a698bc1155d3"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DesignSystemCatalogPage-BeAFE_zf.js",
+      "sha256": "af4878597df847dd7bf6acf56bfa8d6b23306ba9fed9eb7ab3ff9cbb4fcd3554"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DesktopRecommendedGate-DPoNfTUB.js",
+      "sha256": "d1529c2c309f253e0fcfa333422b151d1cc8517514792f27c973960d857b94d9"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DesossaAutoChip-EqysA7WV.js",
+      "sha256": "18b2ac0c6b98cabec1f6b1d9c651e7c47a3f88c3775725a18b4f064175be6735"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DevolucaoCompraPage-B1jRZdaU.js",
+      "sha256": "6e5b3051177dff94a6d7bd6d2f830aa881db515c44c03026be8479454ffdb602"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DevolucaoVendaPage-PAUTUZcY.js",
+      "sha256": "619611ae0c058cd755c36ec1de12d51443865933a787f3781adda79565457ebe"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DiagnosticoPage-C_hIP0F6.js",
+      "sha256": "6f7da0ca357edf77e9f6ace8d41aff39bb3ce568b21d917dca3fbecffbf7ac7d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/documentoConsumidor-B9h8JWK7.js",
+      "sha256": "4f5e3964db5e1c979a1b47a3bec788fc2e5c9236833d1762de7cf04112b8e42f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/dollar-sign-2XL8ccP6.js",
+      "sha256": "58fa7f8d39f0b70499ee1df57b628c24466e6a86ecd3147dac586eb40a29fa15"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DrawerConfigTerminal-I6nL4r5v.js",
+      "sha256": "61942e87cf2535886f72f1aa33952d901852124f0b30942e531a66db22828fd1"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DrawerMinhasVendas-C8XKMHh_.js",
+      "sha256": "26dfe0d8b0fdec4505709f8ce6a7e9051da4c58dfbdaf8fd909a8dc77e7f2ef6"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DrawerProdutoRapido-DTAurwWs.js",
+      "sha256": "b62b5b17f3effbfbb6adffce96053e33a93acf280624d14b994a70cf16aca5a0"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DriverLoginPage-BRMkNXdy.js",
+      "sha256": "1dd62df238e61305e5a9666a2d569c7faa34c1064d2a1a155e2addfdb298a6b8"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DriverOrdersPage-DF6A9i0y.js",
+      "sha256": "8a4d60883bf98c7f0eefa4078c9b77b77181080a79a550170bbfa194bed99390"
+    },
+    {
+      "arquivo": "frontend-dist/assets/driverSession-Bmv7IRm_.js",
+      "sha256": "425d0ee23632687b3c2dac5686f06fe45e247d8d4f76179f00d51c92fdbc1014"
+    },
+    {
+      "arquivo": "frontend-dist/assets/DsKpiDelta-CwnruC39.js",
+      "sha256": "be7889fbae16b14770290dc25cc41471897522c7883949ef04945843ac8470ab"
+    },
+    {
+      "arquivo": "frontend-dist/assets/eanScannerDetector-5SwqrrVb.js",
+      "sha256": "505c78d88153a0a177d2cb32dd8b5be3a43129de803ef747da4b0b483b41aa77"
+    },
+    {
+      "arquivo": "frontend-dist/assets/EdicaoPedidoCentral-Cr7G7E6D.js",
+      "sha256": "57ab953577f65c3a490048978f4d20c9b09ebd79c5b1e79a4c1d34c32301d63b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/EdicaoPedidoCentral-D4T6y4__.css",
+      "sha256": "bdd588efd12f873c56c2fcebdf2c053bbe11035f8f127f3e26142f50dfcb3fd2"
+    },
+    {
+      "arquivo": "frontend-dist/assets/empresaOfflineCache-CdiBvQjY.js",
+      "sha256": "7d6bc90a52ae5ba42ac3ac01a48ecff8cdcc39bd55773e6c9b4eb715d22f68e8"
+    },
+    {
+      "arquivo": "frontend-dist/assets/EmptyState-D5o-_mOE.js",
+      "sha256": "dfd6856be1dfb7c44e7900946a81b447452cb45a05815478e871ac1aa972969a"
+    },
+    {
+      "arquivo": "frontend-dist/assets/entregaComandaReimpressao-C7D0NVcj.js",
+      "sha256": "e87ebe6106d3a1404ccfc691c698ced38b1cd8bb2d8d2d50632c032d8a0aa0a7"
+    },
+    {
+      "arquivo": "frontend-dist/assets/equalSplitMoney-B2q2QxIO.js",
+      "sha256": "bba8337bd8eac1812fe836b3b2d7cbfd60024380bd988d730982576963138673"
+    },
+    {
+      "arquivo": "frontend-dist/assets/EscopoFiscalPage-gTwPrWIJ.js",
+      "sha256": "291abd8e210a4b7824acb63edc80db59ef0a7b91fb0c0a48f9f650feb03eb150"
+    },
+    {
+      "arquivo": "frontend-dist/assets/EstoqueMinimoComprasPage-CNTyrb1W.js",
+      "sha256": "b0f359d5c7d23667b20a19aa51f17b842d77d74d2f2829290deb7109335d5243"
+    },
+    {
+      "arquivo": "frontend-dist/assets/estoqueOperacaoUx-BU55Gx-h.js",
+      "sha256": "3699874d74757a7e2352bc6835461900f2f34e4a84f75ac6a54015afff700d8f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/EstoqueOperacoesPage-BRzFsOzQ.js",
+      "sha256": "b6d5ec986577542c0d064380d2c969690ed8786e1ceb0aedbaedd704b4849ce5"
+    },
+    {
+      "arquivo": "frontend-dist/assets/estoqueValorRelatorio-B5NRaVg5.js",
+      "sha256": "43ac6cc43806225d57f691e64d940322a9e4e3258c3046e39762c455c4863c49"
+    },
+    {
+      "arquivo": "frontend-dist/assets/EtiquetaPage-DVJD6Cdl.js",
+      "sha256": "a58643a7a98def32630729f534dc370aeb3cee9af9439651ee09152558d5b9ec"
+    },
+    {
+      "arquivo": "frontend-dist/assets/executiveReportCharts-DcVL_yv7.js",
+      "sha256": "9ed96364a74723729f21990408a02b7ff4a97a0e26f9f61e4c446cb40400e999"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ExecutiveReportCharts-idiW09e6.js",
+      "sha256": "aba787bbf7d785fc29d93939eb1299cf48af4d4e42b5cdc3d24897973e6267ce"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ExportButton-BdrK6B2v.js",
+      "sha256": "dcf58a45202fdc20e848e37644363c87dba2dbef8afd5e7bccf1a03d1bb776fe"
+    },
+    {
+      "arquivo": "frontend-dist/assets/eye-Dcb7JZy1.js",
+      "sha256": "282c3f81961cafc3f9fc6d2ff297440555e9177b243548f37eb9d2f9c88f870c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/eye-off-C-vmb1U3.js",
+      "sha256": "5ab81d9e5de0b3d1fcbdf6bf1b1329092dcda613791a28ce79b1e96d63f1dbd9"
+    },
+    {
+      "arquivo": "frontend-dist/assets/factory-RPdT2g8A.js",
+      "sha256": "6f780c8ab607a2841b355f8a047faa82586b1b695d8264a448bee911e9df31a7"
+    },
+    {
+      "arquivo": "frontend-dist/assets/FaturarPedidoPage-DFkJEHvJ.js",
+      "sha256": "01f5a80b6335554e4139951ff72a167ecc7ac57b2d336924f88a58d7a017a5e2"
+    },
+    {
+      "arquivo": "frontend-dist/assets/featureFlags-FIQwCo7E.js",
+      "sha256": "016b2adcc6e3283fa8b1f6e2cbcca9425040e3f2eac238fe6fb512343aeff1e7"
+    },
+    {
+      "arquivo": "frontend-dist/assets/file-check-corner-B60doN5L.js",
+      "sha256": "70267e5c0aea11b94ff60bb820e5fe33e29639d95336153ffcfc2721cadef329"
+    },
+    {
+      "arquivo": "frontend-dist/assets/file-search-yJ_0JOCQ.js",
+      "sha256": "03c8739d25646f472d8fdcdda986339ea7f2a15c1a9b240cf5066d90d482dd03"
+    },
+    {
+      "arquivo": "frontend-dist/assets/file-up-BugYjLO8.js",
+      "sha256": "94c210b6ab2cd5b3422274194b40ac3614dc9283a035c20c89baa22122decac8"
+    },
+    {
+      "arquivo": "frontend-dist/assets/file-x-ClJxtCVe.js",
+      "sha256": "a4a0d6ecfcb965d7f2d172871feeac882e5cd791c1778d848b4096921bafe16e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/FilterBar-D4UQnOJm.js",
+      "sha256": "d37fee4d043157a3a15e653e71e2ed381d99a92e99a4350dd5aaa3d69ec4a118"
+    },
+    {
+      "arquivo": "frontend-dist/assets/FinanceFormChrome-DSzBw2dN.js",
+      "sha256": "55b4235c8429bb130d3b153185b8b5c61dcdbea6d44493a8a88dc0b5bd2ed403"
+    },
+    {
+      "arquivo": "frontend-dist/assets/financeRelatoriosApi-DNvhsvhS.js",
+      "sha256": "cc580bee707d69b589f0c08234bec1438a199b427d91bc928bbfd05142f41c4e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/FiscalCrt3EscopoBanner-DCwcJTtv.js",
+      "sha256": "a72af70d7ae6ad96ba7ca08a2eaf9a1b5c8de8c15e2cd3f7ec3ed752373c0edb"
+    },
+    {
+      "arquivo": "frontend-dist/assets/FiscalDataRepositoryAdminPage-BbzNQyhE.js",
+      "sha256": "9997aab4e0862560489f8a9aaed973558a95c597c96824ed9ec6da284b7265f0"
+    },
+    {
+      "arquivo": "frontend-dist/assets/fiscalDataRepositoryAdminService-BPHtVCRX.js",
+      "sha256": "7eab4ee67ba70913f354f9adea624f6b0c4a128f14970dbab04ea39dda100418"
+    },
+    {
+      "arquivo": "frontend-dist/assets/fiscalDocumento-U3zktb25.js",
+      "sha256": "5497b91c0a9ced5ac5f9449004c8e15921ee815f7c171b88d36bf0136013e58b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/fiscalEntradaRelatoriosApi-DsSqwccU.js",
+      "sha256": "99e920d32c7e1719e1d31f21da6f8ea47aa3e03bca17a24af7744716feb71307"
+    },
+    {
+      "arquivo": "frontend-dist/assets/fiscalEscrituracaoRelatoriosApi-YVt45hVe.js",
+      "sha256": "5e0cfea889614576082627d72dc94677da17ad8fc156e4bc39fe4aa2f8acda8c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/FiscalLogoUploadPanel-BMzszvZ5.js",
+      "sha256": "bee73c0bdf5bcf7ccc6eb2872f299a8e5c38f19c9381462dc5ddb84c90dcb5e2"
+    },
+    {
+      "arquivo": "frontend-dist/assets/FiscalOnboardingPage-CU_ZzGBc.js",
+      "sha256": "65dc1cbd957a7756d91c6278f718a812cc6c4b8447b907b06f4aacd205b02c04"
+    },
+    {
+      "arquivo": "frontend-dist/assets/fiscalProfileService-CscRJts7.js",
+      "sha256": "ddf445c97af6acc39bbe5d4611dfa33082e6a825eadbe933e8e5d56690f17092"
+    },
+    {
+      "arquivo": "frontend-dist/assets/FiscalProfilesPage-BW1xpC8q.js",
+      "sha256": "1c3fcb78b2f8fb7eeb075ea13be01994e47ca1a6d5211866cdc1ec0e4e6899e3"
+    },
+    {
+      "arquivo": "frontend-dist/assets/fiscalResponsabilidade-MOVoeM0R.js",
+      "sha256": "2bedb20643006aba65d3a4a2eb3745de71a99a17036e9032e2c6487b4205c2f6"
+    },
+    {
+      "arquivo": "frontend-dist/assets/fiscalSpedApi-DdPyJzV_.js",
+      "sha256": "62681471bf4dd69bd83cea609dae2fa08bbff6642bb91f3d63963182ac462f73"
+    },
+    {
+      "arquivo": "frontend-dist/assets/fiscalStatusMap-CAYSoCZd.js",
+      "sha256": "65e6eb251882ce47850d1c6cdef139348b155180c328582fdd3b81b283c5699d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/fitaTurno-MkU_ObpK.js",
+      "sha256": "af65267055738923e365d04637a9bee8bd310f07edb042bcd5cfacf57badcaed"
+    },
+    {
+      "arquivo": "frontend-dist/assets/flask-conical-CO9lDOgk.js",
+      "sha256": "83e27caa0ba452454accceafbf60c0ed1f5ffe13f6cb5313e1bd19602d9e8b16"
+    },
+    {
+      "arquivo": "frontend-dist/assets/floorQrStability-DWLVHO6g.js",
+      "sha256": "313452acab9d4f904cb0f7a0ce928228f02d0b064bef25365897bf7e3c235a3d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/fluxoCaixaApi-DnPbtj8h.js",
+      "sha256": "f80875012ad06028a5647ae134b7bb7c2b1cab9818b43cc1fee62f558c7d4185"
+    },
+    {
+      "arquivo": "frontend-dist/assets/FluxoCaixaPage-BlR0BN5R.js",
+      "sha256": "620c0d4917b0f395fb53f13868e0d71e2da3684399d35def75812d80ca562e97"
+    },
+    {
+      "arquivo": "frontend-dist/assets/FoodKanbanViewport-C7sUrgNC.js",
+      "sha256": "c887d610a6046d250cf5c7321ef6b3843bceccbe2b8e79444d59ac96ffb4b5c6"
+    },
+    {
+      "arquivo": "frontend-dist/assets/FoodServiceGate-32HFldSw.js",
+      "sha256": "ddcefb86dc6fbf78c64b4ce64d30865fc6bb428ed7026b2d076abe63f6a404be"
+    },
+    {
+      "arquivo": "frontend-dist/assets/FoodServicePageShell-IdMXzoR7.js",
+      "sha256": "08e9a54356502f22e017b5c65bbb81c51b5c37cbb4653606930db98f932bf023"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ForgotPasswordPage-CLJ-o76k.js",
+      "sha256": "f507d0e2a0c68948520715850953ebda2856dfa4a50a65107c1498231c979bce"
+    },
+    {
+      "arquivo": "frontend-dist/assets/formatarDataExibicao-CP_nBzKz.js",
+      "sha256": "736130d849ec03e2739a684990d675c0f152046342d675f47e98fec3b571d71d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/formatPlanPrice-CrD8LUIW.js",
+      "sha256": "f2b77c59086bf684ebf62b6ee50ce529b0e47fa8f0c71289f9081542cf8085ab"
+    },
+    {
+      "arquivo": "frontend-dist/assets/FornecedoresComprasPage-BWA-4QwX.js",
+      "sha256": "966fc8d5b222ef2f463bb685de3c128611441cd47473f60d0781133f52aa3eaf"
+    },
+    {
+      "arquivo": "frontend-dist/assets/FrenteCaixaPage-DHRC6JNP.js",
+      "sha256": "d74c43b4accde59d317a7041f382dafd3155963eef0d24e463b0e8c521cf2854"
+    },
+    {
+      "arquivo": "frontend-dist/assets/funnel-CnmzXRQJ.js",
+      "sha256": "5b3cb71661ef0f99836982b4f93452dfdcb746689faff9d57b211b60af0cbfd9"
+    },
+    {
+      "arquivo": "frontend-dist/assets/gavetaCaixa-C2EsyNqf.js",
+      "sha256": "e384dccaaf515be37e9773bce8f91a2ec27b5336534f0a77cac6df4e96f57fcd"
+    },
+    {
+      "arquivo": "frontend-dist/assets/globe-DvCq8y9p.js",
+      "sha256": "4e1a5c404ca895aa834a369d40736282901815fda24b08d4d960f45c09a6b00c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/HistoricoVendasPage-CXkKqHWU.js",
+      "sha256": "beb2cc04182bbecebb75f6d78f7c2c7fc3400123918fb4e7f37141a2b561bffa"
+    },
+    {
+      "arquivo": "frontend-dist/assets/IbptAdminPage-DGGyBDPX.js",
+      "sha256": "66ecdb89cbc43949f06c10be0e022b5dd2dfb9916e8cfd6796beb822a44d8bb9"
+    },
+    {
+      "arquivo": "frontend-dist/assets/icmsStClassificacaoApi-BI4Maoh5.js",
+      "sha256": "0cad4f59e2e58dbd2fa12bd9d906f82ab348dbdada5aa985386876256c12e6be"
+    },
+    {
+      "arquivo": "frontend-dist/assets/idempotencia-CYjns_mx.js",
+      "sha256": "94a1e0fd53b21c7bd484cdc8007c317e767dcb18257127e90dd814e500ee2fcf"
+    },
+    {
+      "arquivo": "frontend-dist/assets/image-C1xGLyUz.js",
+      "sha256": "4508aaa024c70f6c7e381cf929bfb2394c8db7bb0f204b552d46b07951afda60"
+    },
+    {
+      "arquivo": "frontend-dist/assets/image-plus-DOEdE_eT.js",
+      "sha256": "90def0f23127212658d142feb13388855d972bb66701af3f6cb47baea80d3168"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ImplantacaoBlockedBanner-CinwhJna.js",
+      "sha256": "a3f575884122708bae39038fd17b7b2beabd7988a192f079504f664b5b2bdc89"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ImportacaoProdutosPage-Dlvv-SO7.js",
+      "sha256": "44658fdfef4b8b82eda231f857b6f7d24c08e1bb5bf130d2b304e5fda8813056"
+    },
+    {
+      "arquivo": "frontend-dist/assets/imprimirCupomAposQuitadoMesa--amsU5WA.js",
+      "sha256": "6068f5807cfefa6c5da088b00d9040e1d3517e2f3dd936634dc7feff21d789b6"
+    },
+    {
+      "arquivo": "frontend-dist/assets/imprimirCupomFiscalAgente-DZR_8a5A.js",
+      "sha256": "3f0e50779b7d94dca4f7dc6195c9d95e047911b3ffae7589dd49ff84b8e0f2e2"
+    },
+    {
+      "arquivo": "frontend-dist/assets/index-BcABBqRZ.css",
+      "sha256": "fcf150186cf895fd326494e932889b16f4a217e72ff96e1f595cd46aa937f2b7"
+    },
+    {
+      "arquivo": "frontend-dist/assets/index-DdJ3D8cn.js",
+      "sha256": "e72cff02b1e699ec6e5a0e446ae131410d908a4e4b3fb4aedaefc60b1f84d296"
+    },
+    {
+      "arquivo": "frontend-dist/assets/index-DsamWpZt.js",
+      "sha256": "97ca501e611f128f5e790f8a1d4bc2ba97f04ecf9a21ed74315747f37f335abe"
+    },
+    {
+      "arquivo": "frontend-dist/assets/info-BM1AAZIi.js",
+      "sha256": "741700f95311b1390a5793e42ba900f0cf649c19e3a40064af3b1fc59253b66d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/inputDecimalFixo-BmDkWl8w.js",
+      "sha256": "6c2803cec2008e354709290828e7e8e2578e36ab243ae0cd4f6f880c27748a48"
+    },
+    {
+      "arquivo": "frontend-dist/assets/InputDecimalFixoCampo-B1jiY-bw.js",
+      "sha256": "858d4207a7e7aae3060229de0dfa12978a94c6f0dbaa118fe837f41e15ddcac3"
+    },
+    {
+      "arquivo": "frontend-dist/assets/InputQuantidadeFixa-uErDFBJU.js",
+      "sha256": "b8b6fe3cf9b3d5ffbfbb630309d5f06e24e6d1ac641b54b2f54d4cac8b0fd781"
+    },
+    {
+      "arquivo": "frontend-dist/assets/IntegracoesPage-CTaURT54.js",
+      "sha256": "07fdfaa8a5df6700b7f1bfdc9aecf28dfe3a265f2d34671d87d2565703672ca2"
+    },
+    {
+      "arquivo": "frontend-dist/assets/interpretar.worker-BA2qjTmq.js",
+      "sha256": "67c8bfb3cc9e3e013eec72b6efc42f459cab9ae6cabe135aabc2f98ed62b42ed"
+    },
+    {
+      "arquivo": "frontend-dist/assets/InutilizacaoFiscalPage-BdC3_RYG.js",
+      "sha256": "bfb0b099cd82e8f03c6a8c66e87a74ea8e40be634c244faf9da41017c2f17c18"
+    },
+    {
+      "arquivo": "frontend-dist/assets/key-round-CPu-Y0TZ.js",
+      "sha256": "c7ce2be51f9807ca405dd0175d0f4132de37506ca60cb686780c24ad6ed56c76"
+    },
+    {
+      "arquivo": "frontend-dist/assets/kitchenApi-s_IwQ9QM.js",
+      "sha256": "0741339c1036511ec18135a96c2e8e849bcd8767b438e369ae21079584f995bf"
+    },
+    {
+      "arquivo": "frontend-dist/assets/KitchenDisplayPage-DRiR2UkX.js",
+      "sha256": "759600bbd32cb0e9117e96e9564f4e21012c3628b527685e4b4fd8d867c10dc5"
+    },
+    {
+      "arquivo": "frontend-dist/assets/kitchenStationApi-BmUgSAm7.js",
+      "sha256": "c922941da9a862b31da29910d3b1f609722e68e3470e86763aba57fd2c662989"
+    },
+    {
+      "arquivo": "frontend-dist/assets/KitchenStationsConfigPage-Dlu3BSq7.js",
+      "sha256": "584a65aca9ca69244833bd4f117f10e9c52f3f53c61485f3742e2f9333d70446"
+    },
+    {
+      "arquivo": "frontend-dist/assets/layers-BSBghJQf.js",
+      "sha256": "2ef3fa509338371c8b6fec943be217a33354f39c7851d56b8d00284f47c62d4e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/LegalPageShell-bqt1PzZB.js",
+      "sha256": "bb941b2ee3743f5f1cf9f16a3f4b64559cdad83d09dba86043b6ffa584a0a469"
+    },
+    {
+      "arquivo": "frontend-dist/assets/link-2-BKi55eJL.js",
+      "sha256": "e979985a94a89bb2ff87ca36cc70d41ea8cebb31ad14c56ffeb8ff574df1a4fd"
+    },
+    {
+      "arquivo": "frontend-dist/assets/LoadingSkeleton-Ypu6iuxu.js",
+      "sha256": "487a53f5696774db5e9f758132579556678ad6659fea3b751003bfae1708cccc"
+    },
+    {
+      "arquivo": "frontend-dist/assets/LocacaoDashboardPage-Sx40MmfP.js",
+      "sha256": "c296b4e85e3dc5727e5791ca47df87535036837bc35b66b54b19ac6724c788d1"
+    },
+    {
+      "arquivo": "frontend-dist/assets/locacaoEnderecoCliente-O_Hi8qUr.js",
+      "sha256": "491c4ccd2ee124f4e412f7918d881227542ca16c8c9d539bb9c2fb130b92b7d8"
+    },
+    {
+      "arquivo": "frontend-dist/assets/locacaoEquipamentoApi-Ct131UmO.js",
+      "sha256": "bdc913b600ce71afc97327f5102ebfc987b3e688c975a8ee2c40c6a77769b0a5"
+    },
+    {
+      "arquivo": "frontend-dist/assets/locacaoEquipamentoApi-DIvHdmFk.css",
+      "sha256": "ca61f7fad3dfaf1e3bf5393f3a60b678409f03f218ada9dcab2fe294b32dd27c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/locacaoIdentidade-CxX8UDDW.js",
+      "sha256": "cb69b2885aa3bedd227ec68717e00023ab2e0d8462c97d746ee0a6068b47c047"
+    },
+    {
+      "arquivo": "frontend-dist/assets/LocacoesEquipamentoPage-C18tp0ex.js",
+      "sha256": "f6bc2dd4955e8c072366b3891215c291ca2490df19859f910e7bb7301137e531"
+    },
+    {
+      "arquivo": "frontend-dist/assets/lock-open-DwFRj236.js",
+      "sha256": "81fda1616d14da620623179ecf68da0ae632d67ab08b9d57ee1903aed1926a13"
+    },
+    {
+      "arquivo": "frontend-dist/assets/log-in-YEESlm-A.js",
+      "sha256": "b695e65d46f95cce6d08fc6b7557504cb0e9b908775e196645a3d057718a38d9"
+    },
+    {
+      "arquivo": "frontend-dist/assets/LoginPage-BSI6AICR.js",
+      "sha256": "64a49b345120d69aa5592a90b45790194775f8f1a6f322210dde7a6aaa92f5e2"
+    },
+    {
+      "arquivo": "frontend-dist/assets/LojaSelect-BknWQVnh.js",
+      "sha256": "9f24e6ef4a2720428c39ce2127b6f9cb8ef1dc27021fbc0e8dfd03337172bc2b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/LojasPage-Da4To4Ve.js",
+      "sha256": "0078461474c9dbc498d9e6369c7c9f2ddd94534730128481c617d42ad554fa72"
+    },
+    {
+      "arquivo": "frontend-dist/assets/mail-RDRBYIhk.js",
+      "sha256": "c78ef86d68389bd64e95fa6aff0d598978c570b7cfcab27a8ebbf4e102e4f187"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ManifestoDestinatarioPage-C1eOcxIc.js",
+      "sha256": "434b41e013bc9a703785e7cda9a2a824d275bcd67fb6d41b19ee379bad8fd92b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ManifestoDestinatarioPanel-CEvFyTQN.js",
+      "sha256": "6458c354d432e7c1779a5a3f6a737ce8aad7a00e53364d7961892be867f17cc8"
+    },
+    {
+      "arquivo": "frontend-dist/assets/map-CKTZNIbq.js",
+      "sha256": "c71f219ff513cad366f2695609c565a124e9ad38d224fe428d0e29491687fd9b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/map-pin-Gn-et-6U.js",
+      "sha256": "0977c5f7f48c67cbef1420912356a0686ee3bdde32d934176a602da208339f58"
+    },
+    {
+      "arquivo": "frontend-dist/assets/map-pinned-HC43s7Ri.js",
+      "sha256": "49812d42cd326fa3ecf5ebd4f5a4d22640c624ff89e64e83225e307ca3182ff3"
+    },
+    {
+      "arquivo": "frontend-dist/assets/mapCardapio-CDrO8kUx.js",
+      "sha256": "dbac3765e662ee341baa5fda149adce6439849cbbe87355ab64e1f70c8430850"
+    },
+    {
+      "arquivo": "frontend-dist/assets/margemBrutaLiquidaReportApi-CeRjgXW0.js",
+      "sha256": "5c2abf4a7c01444ed054d166776518a0aecff56575bd3f8b7afda8ee8b2c78e1"
+    },
+    {
+      "arquivo": "frontend-dist/assets/MargemSkuPage-B6nNkpph.js",
+      "sha256": "0a4efd2862dc5ee5a8db65e27d99164097fc33f581a324ffbd44fe87c14fdbdf"
+    },
+    {
+      "arquivo": "frontend-dist/assets/marginWhatsAppApi-CBEe0KSd.js",
+      "sha256": "326d03267c164b27fff7ecadf166b2493b3569270f25578af8d1c690d229eb74"
+    },
+    {
+      "arquivo": "frontend-dist/assets/mensagensOperador-CAPRH52M.js",
+      "sha256": "f1316011515f6095db3fbf11d5326f3841b9cbfb47dc747de1ee42d0cd66e297"
+    },
+    {
+      "arquivo": "frontend-dist/assets/mensagensOperadorFiscal-rXLspjLZ.js",
+      "sha256": "5f2b63ead4f25e7982070fb52d84babefe5b343db19a3f7f6ea4fb3357a81ff4"
+    },
+    {
+      "arquivo": "frontend-dist/assets/MenuAreasCaixa-BNausXzn.js",
+      "sha256": "1350aebeee96fb0df8480cb3edcc8b22c1c7ab2ae74e323e3f2d246d8d63dd10"
+    },
+    {
+      "arquivo": "frontend-dist/assets/MenuTrocarOperador-52_PcpxI.js",
+      "sha256": "08628534cd7bc5c86bb48398c97882c078bbe6f64b8c196f32a6ee44ef7cf1c2"
+    },
+    {
+      "arquivo": "frontend-dist/assets/MesaAbrirPorQrPage-DP2IKeUy.js",
+      "sha256": "b02f762ce87f6b4de0b92bd44c0015d31574bfb4ebd687dee2c05b51aae8d33f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/mesaComandaLanPrint-BjUqwGPB.js",
+      "sha256": "3e4c1fa266c2533b533e0bbe5db4b8b436df66ab5dd6a1da660dce4a39fe554e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/mesaOfflineOps-BO3mErc7.js",
+      "sha256": "d3e96367974f8a7df3a9a8cd54d78576c587ecf06b989e6622ce76d004374f17"
+    },
+    {
+      "arquivo": "frontend-dist/assets/MesasPage-C-ErQ5CA.js",
+      "sha256": "5a060f4a70494b1d34b04d8f78d21dc8439685049c1034da0f78a147e0032b54"
+    },
+    {
+      "arquivo": "frontend-dist/assets/mesaStaffQr-GfDGWa-C.js",
+      "sha256": "53fbbde331849e83f6a5fbac16ba84a366e1cd7b735bddf4bdab7f7f3efd6539"
+    },
+    {
+      "arquivo": "frontend-dist/assets/MesaToolbar-IyLNfpea.js",
+      "sha256": "d750b9860e3d97077f8f2f367c3dd657fe0c2fd76390e9037f0e13ec5bc7bf5b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/message-square-DQTDpDuU.js",
+      "sha256": "bab16e8a160bdd7426ad343eb454fa0827b3cc60dd1919cb89c0e29271e2169d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/metasComerciaisApi-Dk-bIbE0.js",
+      "sha256": "27d0e44bd2a8b25267a32a6abdda2d427fa06ff121682e8e43d65bcb90f4050b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/MetasComerciaisPage-_v_9LMtK.js",
+      "sha256": "abc127b2e57fbbae9118032011ef3c2dee111701c64d276ed3ef35723067e5dd"
+    },
+    {
+      "arquivo": "frontend-dist/assets/MfaSetupPage-DOhd2oUd.js",
+      "sha256": "5b2a8380ee791cbbaf6d25eeb06a341528f43254c6661ed93f9cd26f96f2bfb8"
+    },
+    {
+      "arquivo": "frontend-dist/assets/minimize-2-BMLB0YOE.js",
+      "sha256": "50a5cc1ecec91aba0e1ffb690baa801e989c91ea7be2cf71f84f7868e14d776f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/minus-DENB4KiJ.js",
+      "sha256": "3e4bebcb0cb0d3427a1239ab4ec89ff515fa1371eb3a982282964496f5d90160"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalAbrirCaixa-Ba3OW2Zc.js",
+      "sha256": "f4bac26ef5b69281efad4d37f6d84de43e79419cbef6903af6eea977a71c8d59"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalAjusteVenda-DBp58VPP.js",
+      "sha256": "2c1378f0af61c18dd5d9696951173554077ff75474ede2b276d74989bb5687c6"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalApresentacaoVenda-jwvSy6r1.js",
+      "sha256": "1a68f14bddbd0390c13150882d804555cae1c7224ba33a01e176b4c94e2c4e46"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalBarcodeNotFound--MNeDWLz.js",
+      "sha256": "f080f07facaba968d9cf482c8fff2baee7c0b595cf8d2555698a3d7f3d3d6cc1"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalCameraScanner-iUUzYG0f.js",
+      "sha256": "2c2f8120c6a013520702b7bd4fc4e3d18ec5596b17d89975da0a64a2b97bbde3"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalCancelarVenda-Ro77Qwq6.js",
+      "sha256": "497a2cdc0c896523592953857c225f66da3eeef3964f4d7eac6fe5c832b2e72a"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalConfirmarImpressaoCupom-2haAq5lF.js",
+      "sha256": "90d1ffb7ae28a58c6338780f6a7b0be4fed55f40b9eb2ab106e9a905344eb34c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalCorrecaoRetroativaMassa-CNhW38ZO.js",
+      "sha256": "ea116b7afcfc75e7a68bbc3170bf3d5fd1f9dbdd36dd50241fcdeb18dee6df88"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalFechamentoCaixa-DqCbKslR.js",
+      "sha256": "0871ac0219caca795f53cb8a85a6d4c08a47c7912cf4cbe69becd27e8d0a7eb6"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalFitaTurno-NrDPz_38.js",
+      "sha256": "ed3a1052f7f3d7d977c3747f0db5449d631da440e16199e35f584a818bad1324"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalMovimentacoesContas-Bp33zkNH.js",
+      "sha256": "eea652d1eff6c62807b8b3a520b613364a4a7730110f4bb184a0c9021b9835c1"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalMovimentoCaixa-ZKzCnCUj.js",
+      "sha256": "3f1fcf03d93539024bb66deddc5841aa8060f47a41def1501f20bdacc6cfb30b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalPagamentoMobile-B-zZRa9C.js",
+      "sha256": "9a088eee5a0c5befd9e67aebd54de0005c7e91190a108b227b0fb152eef271a6"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalPesoInline-3IG_EejV.js",
+      "sha256": "b2d9f3b77b1207a34dfc6ae5e2d03d1106475013abf11665625d6fc06ca296d5"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalReceberCrediario-GorCG29C.js",
+      "sha256": "9fe9470d2e31a644e2aa8bfa47f397e3d83cb3ef5f297fa95f7627d6aea6c931"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalSegundaVia-DUwbvrby.js",
+      "sha256": "6e3902b4c88e716af0c3867badde3279bec58c435759f29f7eadc47355cb09f6"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalSupervisor-DQ5H0OVX.js",
+      "sha256": "1250d9ed1ee8298cc23be63432d9075a2c1e024132ed9703cf9426680424f3e9"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalTransferenciaCaixa-D2wi9EYG.js",
+      "sha256": "f0f048e018cfa374c507e7d7423b0b387a5b4f77782069ae7bd2ec22c90af2c5"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalTrocarOperador-Dm43Wj3F.js",
+      "sha256": "6240c7d496a4c799edfd5e212426a956545ccae91c5b9e28e6d051e9aa87fb31"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModalVendasSuspensas-DuzBrDPq.js",
+      "sha256": "89ebbd8835cc07fa1844c6fcec796e84304fa177896c00abfe78638016834b9b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ModifierBomPanel-Cvk95VnT.js",
+      "sha256": "d4cb88ede69143dae5735f5ac8c786c065dee4ad239b2e028b4d7b43c51db46a"
+    },
+    {
+      "arquivo": "frontend-dist/assets/MoneyFixedInputs-Yr7YL9KK.js",
+      "sha256": "a56c3e6ea9913df47c9eeb88cb3c7dcb7b2c37a5400f81c4a8b2861a2ca3d89f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/monitor-smartphone-BQ9XF3h2.js",
+      "sha256": "deb926c8ae06a6dc4721b7362c41d4557852e0882a5f1105f7579280aad0c705"
+    },
+    {
+      "arquivo": "frontend-dist/assets/MostSoldChart-DR0HrCaX.js",
+      "sha256": "346589caf08e53f4951121f40adf3e9ba219747b566b45a56a35940111e2612c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/MultiCaixaPage-C0v161Cx.js",
+      "sha256": "6b0ce9c88ba12ead21b04553cafecbbc5231051ebf214ccf8a1296fdb7c4c897"
+    },
+    {
+      "arquivo": "frontend-dist/assets/MvaMgAnexoXvAdminPage-vJhrPYFn.js",
+      "sha256": "c3090c13a0b983b7ba20eda611171182bd0f362cf01b03c6755b0aa72eaae311"
+    },
+    {
+      "arquivo": "frontend-dist/assets/network-D2alQL7o.js",
+      "sha256": "647a039d07a2eb8036fc436ccc2237782d8949c7a60cb078e0a9c3d44e2af6cf"
+    },
+    {
+      "arquivo": "frontend-dist/assets/NfseConfigPage-CJgaRSbk.js",
+      "sha256": "822c0d018bfb60188d9abc1de3f8f46c50743701a070512c533bdd7c620eb077"
+    },
+    {
+      "arquivo": "frontend-dist/assets/NfseEmissaoPage-C1fKIJXS.js",
+      "sha256": "f219ace5bdf0a4dbd16efc7290478451f9bbcab66e21b021dbb5eca5128de561"
+    },
+    {
+      "arquivo": "frontend-dist/assets/NfseFeatureGate-iqW6BIDm.js",
+      "sha256": "56b28801cd5fd4084bbc187658aaedfe4dc32d0fcca34776f2deb8dad481508c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/NfseListaPage-0A7P3EnP.js",
+      "sha256": "d2c861fdb754b6a75157eb32608edee8c873fc145d93f44cbca4243e927ae6a9"
+    },
+    {
+      "arquivo": "frontend-dist/assets/nfseMappers-B-IMWz7K.js",
+      "sha256": "5aa8ac24a07914ebe737d8114705e9586e65a2a76d8c112a824adf80f4da7b44"
+    },
+    {
+      "arquivo": "frontend-dist/assets/nfseService-mUeI33i6.js",
+      "sha256": "5178efb7d7ee7eba86a893175703b60ed855443138114165d51c3157538ed161"
+    },
+    {
+      "arquivo": "frontend-dist/assets/NoCutsEmptyState-DROodNOE.js",
+      "sha256": "793058cb12e571d42d360868836fd97cefb955223d96491e19908f50f6c1e13a"
+    },
+    {
+      "arquivo": "frontend-dist/assets/notaEntradaApi-CDBE5bGg.js",
+      "sha256": "599f71b1c1d8231edc715e16c48c46854a79d9f57e8ac4e2def925f55d119c01"
+    },
+    {
+      "arquivo": "frontend-dist/assets/NotaEntradaDetalhePage-BgcW_Ixm.js",
+      "sha256": "06e7b03e2472960eff3d7c2e5d64ab08e49507f661044e9ecce1ee01bea83a47"
+    },
+    {
+      "arquivo": "frontend-dist/assets/notaEntradaListagemFiltros-CW0wQl_C.js",
+      "sha256": "420e15d27782b0c39629563442413a9c1917dbffd1c95268f845c73675dd2c5b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/NotasEntradaPage-DTmzeWEU.js",
+      "sha256": "feda20f9edb65d28aadca52de7341b5e36f4a09c899d389c6eb4f7618b0cbc45"
+    },
+    {
+      "arquivo": "frontend-dist/assets/NotFoundPage-CwmmBoHc.js",
+      "sha256": "df2e06b32632fbc7ad7f5b5d0364eeeae397a4f6cf591e4360ddaf7362e3ba6a"
+    },
+    {
+      "arquivo": "frontend-dist/assets/NotificationProvidersPage-DExZU6-c.js",
+      "sha256": "c9ca4efc46e79f6a823a65df0739b394c26988ee966029fe0475fb6be3f57573"
+    },
+    {
+      "arquivo": "frontend-dist/assets/novaEmpresaApiError-ClLpFirB.js",
+      "sha256": "a22fbf04180409221d546bc921bcf059069638c3d6d7c9070259f9e1bd21e5aa"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ObservabilidadePage-DMucv08b.js",
+      "sha256": "ed2b3951828babc51da166d8295304fdc899586ee39576aa36ff53ab5b36513e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/octagon-alert-BzldOnbv.js",
+      "sha256": "540e8d3900508854ea143bc7bcede3310bc05fafd0cafc15616bea26b7b08396"
+    },
+    {
+      "arquivo": "frontend-dist/assets/OperationsCentralPage-BX3EKpu6.js",
+      "sha256": "e889544f69e5c07cb083be0c7e9f8fc0d75f739d098c1a09575a3500d831ad57"
+    },
+    {
+      "arquivo": "frontend-dist/assets/OrcadoRealizadoCategoriaPage-BWqLQv1e.js",
+      "sha256": "38a31fe41aa9fa278a336da63d1b7e4753b1141f6a97891f8b0561c4aa22803a"
+    },
+    {
+      "arquivo": "frontend-dist/assets/OrcamentoPagamentoSection-B826yLo8.js",
+      "sha256": "921e3f01a6ae75d4c644d75ca9508344d16c3e448ae9354eb8509f49e78775fe"
+    },
+    {
+      "arquivo": "frontend-dist/assets/orcamentoRealizadoApi-DW44xQjz.js",
+      "sha256": "5e55ba870cf2112d250a5b9d8d52937848b409c30c87bc0e3f96f1f80160eb4a"
+    },
+    {
+      "arquivo": "frontend-dist/assets/OrcamentosClientePage-B9PHLpae.js",
+      "sha256": "c8ea135c2c3c42a980ffaee082bb8e2c1e77a855d1354dc7f1a74b6068ce3534"
+    },
+    {
+      "arquivo": "frontend-dist/assets/OrdensCompraPage-B-wxSqpt.js",
+      "sha256": "5c2e925128c11ae6e28144c8f07a4f2e3bfc61bb04a2f3150a5a1140c8867f49"
+    },
+    {
+      "arquivo": "frontend-dist/assets/orderCentral.types-BL_6a0vH.js",
+      "sha256": "ff11342afe25616acccdf3d7a66b4dabcda11bd9c57df3448fc5295590784831"
+    },
+    {
+      "arquivo": "frontend-dist/assets/orderCentralBoardCache-WVYeMV4M.js",
+      "sha256": "fdba56536b7e320de99a6a2020e1180af7015a08f481ab6b7681be922d671d34"
+    },
+    {
+      "arquivo": "frontend-dist/assets/OrderCobrancaStatusBadge-BWyGtNxQ.js",
+      "sha256": "42eb4c1bcf451ada211525e73ee6a053fabaf177b2b96d87ec13aea31f859cd4"
+    },
+    {
+      "arquivo": "frontend-dist/assets/orderEngineApi-xqYUbo4G.js",
+      "sha256": "636a0df6688c529ecce20680dbcc1de56d76fd10e568c09abf0c98e8eec4c846"
+    },
+    {
+      "arquivo": "frontend-dist/assets/orderEngineConfigApi-D5WJZsG7.js",
+      "sha256": "5d3a79cfe933709bc4ffea831f67040daab93a8aa15b99c569e1e50db39e319f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/OwnerPage-CL0X1YNF.js",
+      "sha256": "e23393c1c562fbc695fad2e3cf6c91b7e8d4d7486099c14170a848f06776602f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/package-check-BHq84HC5.js",
+      "sha256": "99a7c076914645b746f87581a3ed4ccac9bfcb8ba18a569b4605a500c48781a4"
+    },
+    {
+      "arquivo": "frontend-dist/assets/package-minus-DHAh9G9-.js",
+      "sha256": "578c8ac7de1af9237df082e8fefd5dd735cd4441451cc030c09ccd003019467e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/package-search-DoFFpMbx.js",
+      "sha256": "1cd2d0865d7739b00c4ce1c63f15f70f315d5c2df69bfb2f65726af4df1bd955"
+    },
+    {
+      "arquivo": "frontend-dist/assets/padariaCusto-DF3_ooBL.js",
+      "sha256": "bb509438dcf723b03edb6f862e7751a2e16bfec099dba356d9b30f11467c1db3"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PadariaMargemPage-BTzjYNV2.js",
+      "sha256": "8954e430551c7d38cf0a8379918077a73d4bdd3a419b6647dd6a08fd24afd6e8"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PadariaPerdasPage-BplStI02.js",
+      "sha256": "ed41bd7a456da105c46013080e3db3284d50a01b422cf59606b23abd67c99476"
+    },
+    {
+      "arquivo": "frontend-dist/assets/padariaService-B_7VgpVB.js",
+      "sha256": "f4385659a6dbed3fa160b6a481f1fa9740bbe4b8a1658ef4a02bdeda3ea30eb0"
+    },
+    {
+      "arquivo": "frontend-dist/assets/pagamentoVenda-CKsKmlBc.js",
+      "sha256": "df9b4494c927488273591fbb9c1aad20f6ca3374986b43b3d33b54bc8d209f99"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PageHeader-MwqTjL54.js",
+      "sha256": "e02fcf82967b1572edf7a2c44cf6391f0793c3cf22bd6664154ea712693536ce"
+    },
+    {
+      "arquivo": "frontend-dist/assets/Pagination-SzQferTr.js",
+      "sha256": "6eb6f8fb112b25ffb9341b945417b571f4ff4665cf8f24010c290b363241c4b2"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PainelImplantacaoPage-3mH9EDrS.js",
+      "sha256": "87962350e7ea52f790eb72b939628181618eacb04929ff9eb383c578aca4dd87"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PainelTotais-C_ALYbRq.js",
+      "sha256": "a9a6b161e8d8700f4c5726591f71c7a84cc9b8e16fa5f6e1a171fa2bdc675888"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ParticipacaoDonutChart-BKxGuHQ-.js",
+      "sha256": "e00835d7669993067bd0909089781bd90646b7e77905622d263f4cf87fb52b94"
+    },
+    {
+      "arquivo": "frontend-dist/assets/pdfReimpressao-7PVGpkeZ.js",
+      "sha256": "5ac71961378875d8ba5d1ce02a7d4b27c88175d57c008460ee00c9c28f226ab1"
+    },
+    {
+      "arquivo": "frontend-dist/assets/pdvAgenteLanOrigin-CkH6nz9G.js",
+      "sha256": "b86e4a63d80b4654df7036c946c9f347a4168f3398a329551d9c90ca2f50e2d5"
+    },
+    {
+      "arquivo": "frontend-dist/assets/pdvAjustesValor-l1OA56JE.js",
+      "sha256": "229f4091400971daf38d0a15856b8a2afcc780e629fba0509cf18394f23681ed"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PdvAnalyticsPage-Cs6bEZ_M.js",
+      "sha256": "ad742fe3383d7e956ad6be9b217efa3453ff677aba5e8b65f6bd6a71082473f1"
+    },
+    {
+      "arquivo": "frontend-dist/assets/pdvAtivacaoService-ByULBAB1.js",
+      "sha256": "841cba4a5a4a44e50931e2a4616c776549a0569c3e676476a37d03f3ca80e64f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/pdvChartChrome-DnRQOndP.js",
+      "sha256": "2af1e01cedb669039334b029602ee597c143d62690fa274339e8534d72b52e3c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PdvChartsHubPage-CdrGB-AF.js",
+      "sha256": "ef748123e979a4b8baa9b7a84b597324a4e0c6c2e8c90ca9735ff0b3e4bbf148"
+    },
+    {
+      "arquivo": "frontend-dist/assets/pdvErpApi-BTG7LYUO.js",
+      "sha256": "4e899d375e177202c02552781a40fa8f97a1a977dd532ceabac3909a4a97b320"
+    },
+    {
+      "arquivo": "frontend-dist/assets/pdvErroSupervisor-DfC19nzL.js",
+      "sha256": "714fcb40ecbdf47d8590d2dab0568aee31ef4e7c47c84127ef724568adc8a60e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PdvFrenteDrawerShell-BuLDZ97_.js",
+      "sha256": "ab51e8b7e307dc1b0cf5788003246588861f5f5c828c58366fa24fb530b50231"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PdvGraficoAreaDual-C9VJTUV_.js",
+      "sha256": "9e1d71180f38755ad53efdae0276206138f6ab0468fff9e5fca4d50dfd9f20b2"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PdvGraficoBarrasHorizontais-CTV0M_Uv.js",
+      "sha256": "73ae47df9ed94e321805a758fd6784523a1687874ee67639def2d533007c4a3e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PdvGraficoDonut-CPHSKIyl.js",
+      "sha256": "ebea48bf9a60239387a387db1330d6c8de0d762a85a0f3dbad58df32f3891535"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PdvGraficoLinha-zzYrwKzM.js",
+      "sha256": "69c096bebff435981ca4c67d1a0be684dbd240d3b2a704e9f1b0693e0867f995"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PdvHomePage-BswVBcLe.js",
+      "sha256": "dcf5a4178747cca20be8d00efd14a321c734a852fb80d6d5c08b5b604c370a3c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PdvMobileUi-DG_PpGgB.js",
+      "sha256": "49012db8960b897bdc1447efba5e979cc5148436ca9695c1c6b8430417cdff74"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PdvPageState-ClqupwXC.js",
+      "sha256": "144bf2c82f5adc253da03d61e618985a18fde7c2e7520b2f702f7d59936a971c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PdvPinPad-C_28Np0j.js",
+      "sha256": "0325629270b3993d757bae1dd4528f429306b695ccb48f07ebb3c2d59f91673c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PdvPixQrPanel-gbXeFqT9.js",
+      "sha256": "ed53295f91422e2d8588734c4b8559b16c0d438a1635df3af3ee9a95ebf4287c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PdvReportChartBand-CrTGyOy_.js",
+      "sha256": "f66cfff7bd7d3c47ac1a0a9086ae79550168808175018b1b60c5c492892b2d12"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PdvStatusChip-sI_jnsrj.js",
+      "sha256": "d877dab03c1c4dbcf705af1ef6f69309ef96ae46ba409b42a7b07558fe237faf"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PdvTerminaisPage-CPw7cWiE.js",
+      "sha256": "beb893ced0540706064249d164531cf576507cc54db735bb58a3921680faee11"
+    },
+    {
+      "arquivo": "frontend-dist/assets/pdvTerminalConfig-BEBG1s1Z.js",
+      "sha256": "6aa03f965c6cecb803633da199169dc526cb800e2983e916ec1d528a0526d584"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PdvTerminalConfigPanel-BY3300-o.js",
+      "sha256": "54c6d086f30bdac5f428db42ae39f5330d3a01caa23fb60f3cb18298d07a35e0"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PdvTerminalLockGate-BR4BuxAO.js",
+      "sha256": "6a95e7d17c8b80871c1dd2a7cd669c19939a87bd4815b04620f7a43167e721ea"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PdvUpgradePage-Dd316jzt.js",
+      "sha256": "03cd65f54adf07f5bf2cdffbc0a33c57acac1c3f6a489cd704552f867cc12184"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PdvVendasPorHoraChart-DM9-CgC5.js",
+      "sha256": "64b89f93fd7ac6691f9998118336acc7aed13eb8fc21816bb80d91010b73eca5"
+    },
+    {
+      "arquivo": "frontend-dist/assets/pedidoRapidoApi-CLq8g34Z.css",
+      "sha256": "b29bc853d40dc9544626148a72d1b7398ccbc96435b8a297445dfcb30c6dcbe8"
+    },
+    {
+      "arquivo": "frontend-dist/assets/pedidoRapidoApi-V0SdwZAp.js",
+      "sha256": "5facf01759c0d80d6e263472b6a26729459860b4727e0c19917ee817fc2329f3"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PedidoRapidoPage-DoV7bIJP.js",
+      "sha256": "672e71cee51c30f56e660d5978d1fa9aa980ff13059b0115f79f290ee1511ac5"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PedidosDigitalPage-Bs61zHp6.js",
+      "sha256": "e431166353ab40e99723ee91f8fba254e0b7048423687c61dc6ecdee112ccc25"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PedidosHistoricoPage-DN0I7_dF.js",
+      "sha256": "a2207d7c9282095bcdfcdef4f526f5beaa4f5973d010a4d1b00759a87cd1fa66"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PedidosPendentesPage-D-TBArdw.js",
+      "sha256": "9a0b9d4d7fd74114cbd9b4d8e948ebc4317c30c4b45b31a8b315cbbb054efc14"
+    },
+    {
+      "arquivo": "frontend-dist/assets/pencil-CrwetXvg.js",
+      "sha256": "52e347ae5c08b4984641536c98fcdbbcdcaed5c1c80d6aa52dbe746682ceb7da"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PeriodSelector-B_3dUWfL.js",
+      "sha256": "58bce18a102361d5462b95e38da7f1e1fecc6d194cd75bbcba581befd2b747b0"
+    },
+    {
+      "arquivo": "frontend-dist/assets/phone-CEBrW8TL.js",
+      "sha256": "24292b07c953d84c415e4fecbb83d9de70c85e50aceb26ee8b818cde04c3d9f4"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PlanLimitInlineNotice-BW1eZTjI.js",
+      "sha256": "3e3a3b3751b71827bda2320e4b19c380b330848a6747238e8d29a263f7e71031"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PlanLimitModal-CBc5DEGx.js",
+      "sha256": "b43052994fc4b3ba8de51776890f604faf782b4538a5aeb758c86563b0ccfbee"
+    },
+    {
+      "arquivo": "frontend-dist/assets/planPricingDefaults-nT9KaW9h.js",
+      "sha256": "574f40b78a8a95c048643550d1f7abd537b266ec7729c82957006b58244090eb"
+    },
+    {
+      "arquivo": "frontend-dist/assets/play-WfdR9Wgo.js",
+      "sha256": "a3ac9fa14d1188fc2656f4f2d570d763ca9d2812621c43c036e9672a2499a108"
+    },
+    {
+      "arquivo": "frontend-dist/assets/plus-Dx_8pnIn.js",
+      "sha256": "824de1bc04f561b18138527ea109c2cbc9df3aa03bb61132cd0d9b3f58824523"
+    },
+    {
+      "arquivo": "frontend-dist/assets/power-Dg6mSuxv.js",
+      "sha256": "e5e83308714c62edd6de77d6b3f380a7ad2572e77c6b013c661d580890cc3228"
+    },
+    {
+      "arquivo": "frontend-dist/assets/priceService-exY3QIT0.js",
+      "sha256": "543b4ad0344c4d0baf0568e8f6c660552d3043e209b7469a7f7e0f800250a877"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PriceSimulationPage-CC4f_c0-.js",
+      "sha256": "e379f8a5c272b5c8449777ba037721d037e045e366ca4fbb22af6137fcdf7629"
+    },
+    {
+      "arquivo": "frontend-dist/assets/print.types-C4tvUnlY.js",
+      "sha256": "67efec6ab1b2cd836fd80831b937a8b9162347e7b40564640c3c8da8ea8bb1ea"
+    },
+    {
+      "arquivo": "frontend-dist/assets/printApi-EKW9VGld.js",
+      "sha256": "038b89e23269024cf17605d6d6c9faf45139789ec7c45705f07afb9dc859bff1"
+    },
+    {
+      "arquivo": "frontend-dist/assets/printJobQueue-Cmq6tOHR.js",
+      "sha256": "033f634cc8c128b44f19bf66ecba8673d60ae97aa78538022be2f0462fc742f7"
+    },
+    {
+      "arquivo": "frontend-dist/assets/printPresentation-C-UZscFD.js",
+      "sha256": "c9a75c4f7b29a3699f02b292b1bef7efd89a2a8dd82fa7e4cde4d09f372eb939"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PrintRulesPage-CHw4YCju.js",
+      "sha256": "3df9614b5315430a91b5dc5cd14289f6b512fdab40a57d163bc5c18a10354344"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PrintStationBridge-BOJk2-Jh.js",
+      "sha256": "90003250a9f4b7d738393d122a75ca993d27a9c1434bac6de701ac404ea77bdf"
+    },
+    {
+      "arquivo": "frontend-dist/assets/printStationHotpath-CBk4vUUq.js",
+      "sha256": "53d731fbc3a8afcf24327129489fda32de8e9ed41847201e85969629fd0dc2a0"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PrivacyPage-DNtpDkdj.js",
+      "sha256": "5d9c8e5319490db47256c09d9c88b9c32df37bc175cdbc4477ac2d540d61cf47"
+    },
+    {
+      "arquivo": "frontend-dist/assets/producaoApontamentoApi-BCulxDjn.js",
+      "sha256": "3c42ed972d25abad5318cb825cd8e3f5c7607693ab2ffe3533f1ecaaf7ebd941"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ProdutoBuscaNfe-BJHRMTYe.js",
+      "sha256": "e121ec4bee50212a5471e9483fe76564d1f5e16c4d8003dc669cc19d3d523f2d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ProdutoGlobalCatalogoPage-C_FYGTRU.js",
+      "sha256": "6fd9824816e42934f5a17708fdc2cd1b8b3aee516b06f84cbf946bd7a6ae3c0e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ProdutoGlobalCorrecaoRetroativaPage-C-Nqm-nZ.js",
+      "sha256": "3b176e5eab436f23206af0c0284c6ca603f3c529324aa8d1ca471c9da9612cec"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ProdutoGlobalDashboardPage-DF7z3N7t.js",
+      "sha256": "9cd375f8a72e93edf46bc26fa410cd26f8eecccddb36cde025dfa8df5ae0063c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ProdutoGlobalDivergenciasPage-CjTaeXUb.js",
+      "sha256": "cb249d0afb9d2162917e3ad113af6f5b7bf12fd3faf98e5a4b7a45bd6b0adfc2"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ProdutoGlobalEtlBootstrapPage-BllGKmvt.js",
+      "sha256": "ff697fdc1ca7f9fa8db0cf95d207fc10673c0db5e45aee3fa1ac45f188bdf296"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ProdutoGlobalFontesExternasPage-DRlTcksJ.js",
+      "sha256": "aa4e1630435f965296f81ff2d400159ac279b920a034c369fea2b4f9cab03c61"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ProdutoGlobalHeader-CZCPa2k6.js",
+      "sha256": "c0ae0d6e369669285950b1c83ce4eed0a4b5c15bc58e91cad0feda5dcc3ae597"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ProdutoGlobalThresholdsPage-Ye4wFexM.js",
+      "sha256": "1ec98eb4b8558733da542912ea0b4897fb4cc94fd5cf621c21c0914e93e0b177"
+    },
+    {
+      "arquivo": "frontend-dist/assets/produtoImagem-0WgyGNpu.js",
+      "sha256": "9b807ad6ce5c1e203b8f39a181efa2fe51ee167942206764b790b33eb9126857"
+    },
+    {
+      "arquivo": "frontend-dist/assets/produtosCodigoIndex-C1tXoWO0.js",
+      "sha256": "4ada984031299697a873fc474115b0f63df7c3a2b4cb2def72d2ffb35d077320"
+    },
+    {
+      "arquivo": "frontend-dist/assets/produtosEstoqueUtils-BZzQu2xR.js",
+      "sha256": "fdfd0edf83008018810e9c53348d4af9c27cd64e330232507581e8b60eeab9c4"
+    },
+    {
+      "arquivo": "frontend-dist/assets/produtosMaisVendidosReportApi-Bzfgm75w.js",
+      "sha256": "6a81bdac370b3564d1a880a3e64f7f536fb56504c40d567fceae08b0459a36b8"
+    },
+    {
+      "arquivo": "frontend-dist/assets/produtoVendavelCaixa-BVmbGKE2.js",
+      "sha256": "8ff0358d0f83445eb1cf8773de691e5a3eda4095f659207bb1dbca75502219a7"
+    },
+    {
+      "arquivo": "frontend-dist/assets/promocaoApi-ObaE2z27.js",
+      "sha256": "05e7ed95745ca29c10294301bb09813d433360efe5656b3b094dfb58c9708975"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PromocoesPage-CtQ1a9PZ.js",
+      "sha256": "15f6ee66505e99a4fd795e11ac32aa930dfe6d52734bf85243e5c4e3524a18f6"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PromotionPage-MRYnejHf.js",
+      "sha256": "d74749bf9cfd16cbf2d59899d205d55f61ae55d3ac9238b70ae701b7342c5ba0"
+    },
+    {
+      "arquivo": "frontend-dist/assets/provisionTenantHelpers-DVBuxLHL.js",
+      "sha256": "6088a18eac9a3effbb39ef07370e3e19d053fe279ded4db0cf76b6bda7293828"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PurchaseDetailsPage-Dznk7DmW.js",
+      "sha256": "b017e31e1157dbddfe74c57c0e7a25aeaa1a0d1132d16de9611d0b3a1a3dd059"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PurchasePlanningPage-B-LTQTfx.js",
+      "sha256": "2cb14dcfc6a2de8dead60bfe1f67a8ed644afc14027192b8d08c31802ce8385d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/purchaseService-BXeNnf6v.js",
+      "sha256": "b78ec517845658d3545b40ed69777f1b3c04bb1f7f38408a947a1faa782cae74"
+    },
+    {
+      "arquivo": "frontend-dist/assets/PurchasesPage-DQUZzIkZ.js",
+      "sha256": "303743f03b57d5bdd1fb66aed79f5424cb7dec4cb1de548617a2bb83c6972b80"
+    },
+    {
+      "arquivo": "frontend-dist/assets/qr-critical-BiK4v4M5.js",
+      "sha256": "724b48d1f8d59cc7e2a31693a9e5858b1d811550e0d7cd5fcfa86a5e31628ac5"
+    },
+    {
+      "arquivo": "frontend-dist/assets/qr-critical-DuENKJvT.css",
+      "sha256": "7536310f3468d536158f527641234975bfbd6e767480e672947d2dc96ebdfacc"
+    },
+    {
+      "arquivo": "frontend-dist/assets/QrCartDrawer-De4lCXIc.js",
+      "sha256": "f8310e9b60a9f465ab6fca0f53fb7a90fdd9721c7f4a0df70510e50e06674478"
+    },
+    {
+      "arquivo": "frontend-dist/assets/qrCartModel-Dl23_6u_.js",
+      "sha256": "9b96594bc3e8004825f837c5f7c3c0b438cc75267cea13f043317f73106aa16d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/qrDeliveryForm-P4J8YcaJ.js",
+      "sha256": "d0de250fd2b3046de7b8edcb93fbb9b9dc14fe2445405204d4876d59aa9b0785"
+    },
+    {
+      "arquivo": "frontend-dist/assets/QrDeliveryPage-DDTxpgoP.js",
+      "sha256": "add5d2562fad87e330c02468aa3da569c81894eb6554b677f5f826653106ad87"
+    },
+    {
+      "arquivo": "frontend-dist/assets/QrGerenciarPage-u7yXTxf8.js",
+      "sha256": "3bb80a0a5986b18f99c4cde48eb05115540467dd3cb503aa20235ce94f59b07c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/QrLojaPage-DynYunGY.js",
+      "sha256": "89d1161819afe3f21138d7b31b01f14f3e0b8bd15a3e0f45af2158269953ba10"
+    },
+    {
+      "arquivo": "frontend-dist/assets/QrMesaPage-CzwuJN6a.js",
+      "sha256": "b54d3fef2c09750742f529a45f79413c638f337980f92df9cc37a754d0cd131d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/QrPageState-ASmmqUsO.js",
+      "sha256": "be795cb9a8916251fc34c5899bbaaf7b4c28d0815356a9e5df0c4dfb944acca3"
+    },
+    {
+      "arquivo": "frontend-dist/assets/QrPedidoAvaliacaoPage-Cs6AsVck.js",
+      "sha256": "6460bf50051f8f419dd53aa20b25649e2a58e4a17b8cef99b45c2b3fce486593"
+    },
+    {
+      "arquivo": "frontend-dist/assets/QrPedidoShortLinkPage-CK2Bwp8b.js",
+      "sha256": "c8af0363ee6a42d6744d98eedf866f613a222fd43a28e2c290bf6e0770133289"
+    },
+    {
+      "arquivo": "frontend-dist/assets/QrPedidoStatusPage-BVKxkGoc.js",
+      "sha256": "f1f06b98984ce4d0199f7e2b69226c18ff2ac75a96995199a514263d2108c44e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/QrProductSheet-C64Bizl6.js",
+      "sha256": "02c6e68cdc95fb9e3133b4f7ca4cacc8ba39d037e30a586ead89d6e3fab46b08"
+    },
+    {
+      "arquivo": "frontend-dist/assets/qrReorder-BwxsDZJI.js",
+      "sha256": "8653631d26827348567015b661c56f6aa3829a57d2191932ae6a28a992925a76"
+    },
+    {
+      "arquivo": "frontend-dist/assets/QrStoreHeader-C9rq7aDV.js",
+      "sha256": "73584520ee2533cce2303059f36202cd1e8333571e047c1b630db2d1343ae259"
+    },
+    {
+      "arquivo": "frontend-dist/assets/qrUx-CDzVgVgF.js",
+      "sha256": "c2e7d4fce7434388404da6ae337b8c5058a0342adc039f9c615e0503b1276db6"
+    },
+    {
+      "arquivo": "frontend-dist/assets/radio-BFYBmmXE.js",
+      "sha256": "04a7a9d604542f8bc89be592dc9b46081dacc64a472c7c71b071f41bcfaf4bd9"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RankingChart-HSVDZ3hP.js",
+      "sha256": "9ebab0558e1c7a9eebba22855c5e74a1ac9e310b4d4a7d5e3c50e5a22e1292d2"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RankingCurvaAbcPage-CucCPH1O.js",
+      "sha256": "a2bba73b0c22abcfb836466f47eea51c6d75833bbe0ccfd14f48b8f6896d2fd3"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RankingProdutosPage-CeU2Ky6a.js",
+      "sha256": "650eed74e8e11fdc74cf90daee1cc835773463c0d03f70a76091c041f4d40ebc"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RateioIgualModal-CoMGv7pS.js",
+      "sha256": "239ce935f4b1483aceb3a6f01b1a53c7bfde8a2f253eb3a09b1d3c16a11d847f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RecorrenciasCustoPage-BzNN32oE.js",
+      "sha256": "5ca23bacea251f571ce13872574c415ec9c7e1f92cd186cac641db01e1a2fe2a"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ReformaProducaoAtivacaoPage-s2VqgmQh.js",
+      "sha256": "2b3363af8def629085107a6a9c67c9a8d4f62ece3a796c15bb29ee0877434184"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RegisterPage-CbhZnN3M.js",
+      "sha256": "fcab6bb8d24f998a92bacb92b274e323a6b0a065ba9f2a404a9f37b8cf88705c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioAcuraciaInventarioPage-Cp1CAM_1.js",
+      "sha256": "74c48f5a5c27bdd5886802896366b882e8e70e1e66f706d891cd1d003393b103"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioAgingPage-QWRuokLU.js",
+      "sha256": "9c53a7877de8efb460accafe91188221c65f6b2b792ce92ef92b6a84108ab9ff"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioAjustesEstoquePage-BJOhatEJ.js",
+      "sha256": "c2fc76f69493f0224d9378482140f0503877f8f1d6c57cf5f0db8a4cf42adb18"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioApuracaoNotaFiscalPage-zVkP_oGQ.js",
+      "sha256": "c06ef7b857e17c04f70e98580b684442a50b71503b765f524353e4bcc7c1bfe8"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioApuracaoPisCofinsPage-PmLunl1M.js",
+      "sha256": "015c3e623b48221da30eb21a42ad7e6edee0b1f3f48ed5350f0c209164b35300"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioApuracaoVendaMonofasicoPage-DPVpV2VM.js",
+      "sha256": "29cc2009fbfad40d9ad63ad3df806065d2b6a78de9002b2327d370ab128ca796"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioAuditoriaInternaPage-Co-KdZVx.js",
+      "sha256": "d90ee358220b35822d939ee56b49a7363c89436a8e454edd6bc00ab8482fea1f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioBonificacaoRecebidaPage-j_SxVTAj.js",
+      "sha256": "f98c36cfed01d5ae20455bc34b36157136a45c6cfe7c6cdc933e2a8a28d03622"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioCancelamentosPage-Cl9bUm4E.js",
+      "sha256": "60ae631aa4157cf52d6fe6bcbd34effaacc5b99983f34f5788c5661400c24885"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioCfopUnificadoPage-VBkEmveo.js",
+      "sha256": "1e4837c1091d41d6e52a6ada94545ce04b27b3fe98749989e744028a3bedb1ea"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioChequesCartaoPage-DgUREEXq.js",
+      "sha256": "28771fb7b2236cd99536c8cb34cbe8f2426883842105b03fbf888a7f57d4127a"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioCoberturaIcmsStEntradaRealPage-3NYuIYYy.js",
+      "sha256": "f08bc764ac44231352da43b652f649cbfee827c33e899ed83bb320a1b9076b12"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioCoberturaIcmsStPage-BOq0NFsa.js",
+      "sha256": "28eb4269b89849b271bc02a1d9fef65d3c6e639879bef42399c48609503aba68"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioCoberturaNcmProdutoPage-B-YV72Xt.js",
+      "sha256": "a07415c6c40dfbd15489ec1d2faf54e982be0cddcd1d7b87b9c7c88df4529291"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioComprasSemVendaPage-mO1IJ1RG.js",
+      "sha256": "52a0c0bda805cf1db3a8fed316217cfdde5e5c99541011e99168448af63ef6f2"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioConciliacaoCaixaPage-D5T350u3.js",
+      "sha256": "9631943a47074be78c7971604caa5e2b2bdfefb05dfa2b32fa22f7933f54c089"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioConferenciaXmlPage-DKftpCr6.js",
+      "sha256": "71bb0a752e56d71b0dae5b89123fbf82a4f6c210c859c8b9ab9b64142aac5012"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioContabilPage-CmKDphQH.js",
+      "sha256": "23d2e4f0253588be5c18b8cf810dcff17182e26d7b67758b55520b0a54716376"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioCupomNfceAnaliticoPage-CN0v3iwO.js",
+      "sha256": "17f21357b85bca1b02956b4f6bb8b9a11d65c5c3e855d45800f856132afd7f9b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioDescontosPage-BP1zq3Cf.js",
+      "sha256": "8da9f75673c98e7824b610a86630f1daa61ee4ccdd1651bd28c02bbf0ac9b010"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioDescontoTitulosPage-o7qlcUxd.js",
+      "sha256": "d6656e522f4c9cfd19f98f5bd0e7b0e853a57535e977199161762c198589b242"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioDiferencaPrecoPage-ZVxT5C31.js",
+      "sha256": "9fee307a3320d316654525b265ad443d75133e97f233823fe2b492072af389e3"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioDinamicoPage-D5J6_CBD.js",
+      "sha256": "9856e686a8978a9eb93f7e6a8cd6af786ca0841d1b6ab13d2fab2d211a9410ea"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioDocumentosCanceladosPage-CNjuJAAZ.js",
+      "sha256": "6616cb5d63eb0db4fc33e6763952ad4bdeb3666218c594e5306963b1a57e35f9"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioDrePage-BKAROZQP.js",
+      "sha256": "16c10447c308444e62196a0ff4184b0f09e7b92d790c01b39528bdfd2d073851"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioElasticidadePrecoPage-BWe3JlMy.js",
+      "sha256": "9bec78d25e775025dc22da00c1c3646dce3bd44c2218f8dbbeaf44f0516f08ae"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioEstoqueBloqueadoPage-Cq4NOyHH.js",
+      "sha256": "fb3de1be81cc60a2aa034c7b638f62d2cd4611e3dd60cd5f3d1e4c94cc928977"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioEstoquePage-DevmP_m0.js",
+      "sha256": "f33635e5747ee194bfec75e072c9f909b89cd112bebadb3f564d290944bc8210"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioExecutivoPage-C2FgfVp7.js",
+      "sha256": "8a021fd5b8e361bce4f2a4f4ff1eb119d9ba4dace3b267896493e57e5e774fb3"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioFechamentoPage-Cb5fKLZ3.js",
+      "sha256": "4f43e43560f8b431ff0a8db51ec101d625c6316898a8d80c29f6e15498682d3d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioIcmsStClassificacaoPendenciasPage-BOOt8xR5.js",
+      "sha256": "30343c0f3bc7d5809a594e992649ad867913dba1a1be40110522b76bb141aeda"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioLeadTimeFornecedorPage-3wuzQbsR.js",
+      "sha256": "f442f75100e3bb34f99832bebed60bde82cc24826411e74eb948b803b145ea1c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioMapaCfopCstPage-DBQve1bM.js",
+      "sha256": "b85643bc676ac643569b8789edb8e492971d0ab61e8049b873eab0d5ee5ec440"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioMaquinaCartaoPage-CklcM5Zh.js",
+      "sha256": "ca68d70e50dafd308b85c41317a6f36997286f643cce42060114ba357be5f1bd"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioMargemBrutaLiquidaPage-CeVdvZh4.js",
+      "sha256": "ff6bdc88bfc8902b0abd82b41a43d6e02a4c60b5ee154affb8e2937a3acaf2ca"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioMetasVendedorPage-CyCeSQQO.js",
+      "sha256": "556af65db7335cc6b853b717d66182a30faaf22ac4e9da8758788a3c7743866b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioMixVendasPage-BRl3_8HI.js",
+      "sha256": "a0799ad0435305c45406287f637f02cbf956dbace81ebd141734b359db4864b3"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioMovimentacaoEstoquePage-D25vHwpe.js",
+      "sha256": "d9b43e2b93e02075e2a1931b6e2b926b5a97e8c70b55f02fa514a429ab0aa7b2"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioOrcamentoRealizadoPage-Dsri26s3.js",
+      "sha256": "2819de7f4c55ce4f0fc303ea6fb3dfbd68bdbff43cae9e8052950bce34864110"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioOrcamentosConversaoPage-DGCr7lfB.js",
+      "sha256": "4c0a128fca73244aafa852a1131d84f02a42e830c2431db9bf8fd4b0ca3f2a7e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioOrderEngineAnalyticsPage-CaZYZV7x.js",
+      "sha256": "6a6d8d873961e421d2aa264af7abec76cfd1e09f2a400cf128b8c89634e43c6a"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioParetoFornecedoresPage-J7pA5mGD.js",
+      "sha256": "16100663fd117e6fe86b56d7417f571126cdfc05af002f351c2f96fb3697a826"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioPerdasEstoquePage-CdwaGWX3.js",
+      "sha256": "8793ec8f6e4fd4d5a1b47ef0bd14662f3c458eb94feeffddf8474dfbefe76c96"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioPerformanceOperadorPage-BukbUOrz.js",
+      "sha256": "09490dc78e1c4afa6d23621373ca5dd3449bb512ea56cb8f223ac708bcb7d3cb"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioProdutividadeOperadorPage-CgAusHsp.js",
+      "sha256": "45fc6a6cacf367a2bc25d36d6da24ba751c4ffc728ccc1c82a9c1acc80d829c0"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioProdutosMaisVendidosPage-DNkbuS8H.js",
+      "sha256": "568781b7938788ac33898eccebcfd9596945ec683897f8c5b322ad4506fa6516"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioProdutosNcmPage-CSJ1EIQz.js",
+      "sha256": "57a3a0cb1ce8b8fddf9c247820671fb4b9898c9799bc05ecc3dc52771d7ff0b6"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioProdutosPendenciasFiscaisPage-CeVnuDMK.js",
+      "sha256": "fa8c465ce4daf0a639d8b292a52568b88762d581ac3e0b1de94248abe09a5a97"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioQuebraPerdaProducaoPage-DdrnwWO5.js",
+      "sha256": "6bf4f3834be2a36c99b30ee53b34f0ab41fd690667adefe23441ecda7e089153"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioRankingVendedoresPage-tK3uCK4G.js",
+      "sha256": "c417edd0cbb33f23541a1a1d2584cfd1731d99f95f28e792f64276e81e8a3b1b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioReconciliacaoDifalStEntradaPage-CsqN0XLh.js",
+      "sha256": "bd019c87061b08b93082947d7f11a9ff2797f9d76655927ff11e71654ecd5132"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioRegistroEntradaPage-BKl-ilVX.js",
+      "sha256": "e10487cf9b2d37fffc8b96b4d4625e08d366066e18737156a1d6840097adb106"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioRegistroInventarioPage-25HEq7bz.js",
+      "sha256": "6e8cd1b266a8972315bea087c8b9dad91ae207a0ccc9a4591d1d152d2d1a95bc"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioRegistroSaidaPage-DyojpLr-.js",
+      "sha256": "a81abe6e11f58e44c6af780f00bc0349d0cd64dbdffd9b2a2f785e94f143737d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioResultadoSetorPage-7uR7dM_9.js",
+      "sha256": "42a75722ed1263eaf8e4e78ed41aac259c6a6b677a9203c313e54d3612eca7ce"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioRoiCampanhasPage-NESJHLzy.js",
+      "sha256": "391ab3feeb95567df96c5c153f196e24a4a24d8fbc10a0cbaed8d0ce38eceeee"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioRupturaPage-DeDlSMpQ.js",
+      "sha256": "8a689bb10691faffaff1d929b9f6c26e3c3a432e62415f74eb7b8407e663fb55"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatoriosHubPage-3ocn1kjl.js",
+      "sha256": "6eafdb9f6a77d7b4ce064775b70f250fc742d3598ca01e99a74c3fc4e01734b2"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioSintegraPage-CfVX65PV.js",
+      "sha256": "21816eadc066b181d4d700e1dfaa30fc2c0a6ad3550e6ce593b6b8bc0977a580"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioTransferenciasLojasPage-BAt-lPuv.js",
+      "sha256": "45f0ea690a098a5de4eb51c25e83c8a3b1c44ef8fcd342b47d9d35a0de5c5acd"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioValidadePage-CsYBx4V5.js",
+      "sha256": "812b5a2eeaae45199268a01ec4952042317dc5405f9441c38af5cf281bb5cfac"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioVendasEquipeTurnoPage-2cXl47Nw.js",
+      "sha256": "663c1d6b7287d80147c395e0ecf63e55a94e1d4eb33cb10364ad1b2183033f04"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioVendasMonofasicoM3Page-D7C7Icw2.js",
+      "sha256": "8815ea96c76d2b9ab964fb6adeeec498e31a1f38735b470f3298f0df2d56b89c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioVendasPorDiaSemanaPage-JPBT-a10.js",
+      "sha256": "ea87e71946b9deffc8c209d8f05bf96122c70a48d560bd202e47045f55c30064"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioVendasProdutoGrupoPage-CRFqMXU9.js",
+      "sha256": "a4dafbc9cc9b352f6b53540fedaba68a581af787de6576d4b80b280677b50a88"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RelatorioVerbasComerciaisPage-DmjrJ1WF.js",
+      "sha256": "450c4969ee68f5c67d581e18db231078b5b942c38adf4e2a6014803cf3d8313b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ReportEntriesTable-DgCWn-pD.js",
+      "sha256": "f07ad7b0e85ab13226e3311aa7d53ea56d6fde787ff685183a336b9212304109"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ReportsPage-CMr-j3Ea.js",
+      "sha256": "7112373f7268728fc33eb0c85962da8b753bee6a17c15d51b351059b3c0e49b9"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ResetPasswordPage-cX6vsPLI.js",
+      "sha256": "26429d8b16e436929c49b56ec0bedb2525cfa2a35e22ed60afa198b7f33adef6"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RetailAbcCompletoPage-B9iH_0Os.js",
+      "sha256": "d8aae5d77d301f0db5808485f63e365a1ac65a1d8eae8a72c5ee223554cc3b74"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RetailComprasPage-B5CFvxHa.js",
+      "sha256": "d609f38c81fd0b9f69e5146d198072ccc2e7569e3559014f85ec08bf98cccecd"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RetailDashboardErpPage-A5YSBiVW.js",
+      "sha256": "9f29d434c37d550138f1379d5f5f470ca0997f39af47b8552f2e73c2129999f5"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RetailErpBanner-GoJhjNuL.js",
+      "sha256": "4c881346679f5404de3aebe3708d01c4aa19ad9e7fab5b520aef5c781dedd77b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RetailGiroPage-D0PNBlsO.js",
+      "sha256": "79a6f5e93d15e437af226f60b421952fa34fac80ab6d1088f440c057eb1d4c9b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RetailKardexPage-D-FkmU8d.js",
+      "sha256": "8ae9fa48755081ad1c2212c7c22f36849baede26b2f4e68bbb30fee1ece1ca1e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RetailReportUi-CnEn_MD6.js",
+      "sha256": "41313e314526faf7ba0c1662bed469693b49bc3588bc2b54b8f98b98fd50dfd6"
+    },
+    {
+      "arquivo": "frontend-dist/assets/RetailReposicaoPage-Cv-VTZwT.js",
+      "sha256": "f7743e85c43497f97ed4a7a97449f728375619d65aa1fcc729b79494615d5ba3"
+    },
+    {
+      "arquivo": "frontend-dist/assets/SalesPage-dZlafAaL.js",
+      "sha256": "388dfcbd8a65f1a6090cb70928d4c42f3fa06b77b4208aadf2d8123881bb624c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/sandwich-CQubj6ls.js",
+      "sha256": "b9084dc7cca243e8ec5d00837dd57e75fe358076cffb3ad52ac79d46fe341052"
+    },
+    {
+      "arquivo": "frontend-dist/assets/save-CkiukisJ.js",
+      "sha256": "f5f4d155b39b5dc7f2e7970737e05f08fe628dfc9635fbf857ca80906137ffd2"
+    },
+    {
+      "arquivo": "frontend-dist/assets/scan-barcode-BVByYlCM.js",
+      "sha256": "de189a22c3088a757022449089ea05f61c5a2d7ad3d0c6ebc5ef2edd93b72217"
+    },
+    {
+      "arquivo": "frontend-dist/assets/segmentImplantacao-ByAMobFb.js",
+      "sha256": "f0555a0bea2347cecfe25a4b1ffc1b87695644f17ff0d3d5357a22c7a3448126"
+    },
+    {
+      "arquivo": "frontend-dist/assets/SeletorImpressoraLocal-j5z4HywX.js",
+      "sha256": "7f07df8843f0bc1614af8ef3bb0f0975546f1be2f4a7ece17510a5a678ff7f88"
+    },
+    {
+      "arquivo": "frontend-dist/assets/send-uaKAbYJs.js",
+      "sha256": "0638f0d5f80a6215396c164b0aa96aafa162f63696fcdb501e2194e566313bdb"
+    },
+    {
+      "arquivo": "frontend-dist/assets/SessionsPage-By2iK_oZ.js",
+      "sha256": "0ea85c999ed1a68a2592a5c491066d0360f0aab2dedc406fc2faa7f774929e57"
+    },
+    {
+      "arquivo": "frontend-dist/assets/settings-2-DpiA2YCt.js",
+      "sha256": "8a0a7a499e4c235834b3c3c45067b50cc050f660d133abfeef13abab248d6d2c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/SettingsPage-BQVb536P.js",
+      "sha256": "7d894f154f6d3c60257b6398e48ca7d533faf958310715daf3830eaef373144a"
+    },
+    {
+      "arquivo": "frontend-dist/assets/settingsService-BKot9eUX.js",
+      "sha256": "c32d6bd7489fb2032f60d9add9b058a2234e10d34e559f74666b376237879607"
+    },
+    {
+      "arquivo": "frontend-dist/assets/share-2-IXZeti5K.js",
+      "sha256": "7305b25689d66d086bf9fcaaf086fec6665f9d5d5488f8787778124c07178eb8"
+    },
+    {
+      "arquivo": "frontend-dist/assets/shield-alert-Dz7C8lju.js",
+      "sha256": "0b43c4ad0a3166973e9b5a82b61e7f2c02361f552df7d84e9d02f25c42189cd2"
+    },
+    {
+      "arquivo": "frontend-dist/assets/shield-off-DRrxIH8T.js",
+      "sha256": "56dca2e6865e5832c8f824e64d28e408d0c28940a24b52545fab828389fb4e2e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/SimulationPage-B--uh8uQ.js",
+      "sha256": "aeec0a7898cbd0f623a024925f1f4d0247a50ee7af3408c98ad65fffc26d60ec"
+    },
+    {
+      "arquivo": "frontend-dist/assets/SkeletonChart-C2cttirY.js",
+      "sha256": "0e74a2a7578a3a4e751c836702121e65b097bb1b6d03edf2e4a9233c0ac8798a"
+    },
+    {
+      "arquivo": "frontend-dist/assets/sliders-horizontal-BV_XEV_2.js",
+      "sha256": "23cd1634956ed1815f8b9d2c905f3a79f670cb9676dd425c9760f4f525b717fd"
+    },
+    {
+      "arquivo": "frontend-dist/assets/sliders-vertical-BW31yqMQ.js",
+      "sha256": "bc347b76ee8a47d46bb70b0e2ec46012374e7530666fb9840568e0679feed224"
+    },
+    {
+      "arquivo": "frontend-dist/assets/smartphone-5z0MuKSL.js",
+      "sha256": "5e72a0a0d5d4df00dc0ef952da866ce7ce97d5dbc2c4d77378d4341d560b053f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/sparkles-Bm0JoHpf.js",
+      "sha256": "d363e5aad2ece7b494d07fee691e7876a7f22ba9c98cdcce412fb8dbb3d537a1"
+    },
+    {
+      "arquivo": "frontend-dist/assets/square-check-big--SSvl-c_.js",
+      "sha256": "a434d21675c2f86374cbd4b43e4e10e861f5db7c43171c690de71fff0ceec274"
+    },
+    {
+      "arquivo": "frontend-dist/assets/star-DJ8vcj3Z.js",
+      "sha256": "1f1ae7f9318e01d5732f57d7edfff78c4b77837728256709b6f4dd0943b07240"
+    },
+    {
+      "arquivo": "frontend-dist/assets/stationRouteConsistency-CWXNpdm4.js",
+      "sha256": "499cfded8dac7e7f9e6fe18989ad22f2696cdb794a3d979be4c875cac1177598"
+    },
+    {
+      "arquivo": "frontend-dist/assets/StatusBadge-CxvlX5Bm.js",
+      "sha256": "1499e9b69e96a70a0a1712ae077893c1d33209a6f73d0df3bbeec6808b9ace87"
+    },
+    {
+      "arquivo": "frontend-dist/assets/statusFiscalCaixa-OJRYHsXC.js",
+      "sha256": "ca5847aa4f3a6bef593ed4cdc14840d30b0593f12fa2cd0b0d5094bcd784dad8"
+    },
+    {
+      "arquivo": "frontend-dist/assets/supervisorSelfAuth-C9jY9jBQ.js",
+      "sha256": "190cf5659f4cc1b0c5bdfb09ca907930332512d6db6b0797ac8ff79932b14192"
+    },
+    {
+      "arquivo": "frontend-dist/assets/tags-mUPYCSTY.js",
+      "sha256": "72ba01fdfa3f3fd0f6d295b63f3cd75ccc309b50c168234c6f8573053d8ecde6"
+    },
+    {
+      "arquivo": "frontend-dist/assets/tenantAccessSummary-DmQtt1jo.js",
+      "sha256": "947860f55dc93f34805d290542454df616e2f17b228560f5bf297274030b2a07"
+    },
+    {
+      "arquivo": "frontend-dist/assets/TenantAddonsPage-CwTztJwf.js",
+      "sha256": "5e8e794c87ec8792d2a1cee672f34a038c50c0043949cb8bdb648c1f1c64f849"
+    },
+    {
+      "arquivo": "frontend-dist/assets/tenantFiscalService-fS0hnvJK.js",
+      "sha256": "3d9e7afdbe8f73c195875b4a624a7de8a6e7bd01a7b9f70f9d98ca0a096cd4d0"
+    },
+    {
+      "arquivo": "frontend-dist/assets/tenantSelection-BCAWqlUD.js",
+      "sha256": "71cf8d09ecfbec093d159253c6b333e9c4875f29796622b7331494d73b5d93a6"
+    },
+    {
+      "arquivo": "frontend-dist/assets/TenantsPage-fvI45gIw.js",
+      "sha256": "59b1ea7c3988b82ea4b516d987a027202ea3447d7c928811d1a0c8c580846caa"
+    },
+    {
+      "arquivo": "frontend-dist/assets/termosClausulaFiscal-BbGdF4Zh.js",
+      "sha256": "99333b13c80ade36c6a2c13cdaec1c1146d0cea218700a08f3bd7d88b6ae0453"
+    },
+    {
+      "arquivo": "frontend-dist/assets/TermsAcceptanceGate-BjGx-eCR.js",
+      "sha256": "aaf30a08adbed639bad3b9cd0aa7d5bf21747feaaad0816230152563352c03bb"
+    },
+    {
+      "arquivo": "frontend-dist/assets/TermsPage-QXvMNcrP.js",
+      "sha256": "83a5dec5bd9952b669227efa8629f90aa78a410127c01f33a8230cd9709f6502"
+    },
+    {
+      "arquivo": "frontend-dist/assets/tesourariaContasCache-BuVWIrI4.js",
+      "sha256": "a0c779c9d11f198b93f2157ea6128ceb31fe53e86bd208dbba8e8f8dee0903df"
+    },
+    {
+      "arquivo": "frontend-dist/assets/TesourariaModais-DZrbyjYo.js",
+      "sha256": "53ed886c9b095eeecafa2c234e305cc49b6f1bb262723bb18bf373ce9675c70e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/TesourariaPage-DqyRtnYu.js",
+      "sha256": "31a4872a2d045a35e2f066028c31ec419d230fe686b267fdb33f7a8e66f02a90"
+    },
+    {
+      "arquivo": "frontend-dist/assets/ticket-Dxcm0YID.js",
+      "sha256": "4dcdd5eb00657db3272e729beac017d71505a3a40e44d72f32166a11fc53b1ca"
+    },
+    {
+      "arquivo": "frontend-dist/assets/TicketMedioPage-DyXxYGFa.js",
+      "sha256": "7c49831a873b87e93599966c8b9bf725d8b43459cd4818263dd99387a9848bd8"
+    },
+    {
+      "arquivo": "frontend-dist/assets/timer-COMOVtTx.js",
+      "sha256": "779be4743f0ff681a1df96224ed02be46a06ac7d3ded9ff0f01ba76f4b694665"
+    },
+    {
+      "arquivo": "frontend-dist/assets/toggle-right-B2AU-8mU.js",
+      "sha256": "99e5e55f3c643e316a21e5e80e59a7e97a926dc4e69a8636a7d765ffd5188532"
+    },
+    {
+      "arquivo": "frontend-dist/assets/trash-2-Bh9P_0UO.js",
+      "sha256": "5ce71c00cb69a095b11e98e7399bc7755585c1c0860ffd3cda295310aa0540ca"
+    },
+    {
+      "arquivo": "frontend-dist/assets/trending-down-wJUJn22a.js",
+      "sha256": "1b55e9e738c49fd41ae33aa06edeba9010be2c4ae12c077ce2f4e61106615b57"
+    },
+    {
+      "arquivo": "frontend-dist/assets/UnidadeCadastroSelect-DwPtIwKv.js",
+      "sha256": "5e67fbdb56bb3bb969739eee610b27c1aac98074e8fdfb2b9a1ec125afd391af"
+    },
+    {
+      "arquivo": "frontend-dist/assets/unidadeMedida-PyqL4_pH.js",
+      "sha256": "17280ecb90f656c508c0703d714107a1842d743b6607a25365bbebcdc4b325cd"
+    },
+    {
+      "arquivo": "frontend-dist/assets/unplug-C2MUBFQ2.js",
+      "sha256": "3e18897d5d5d608a409ace3496cd919154d0070d4650d6b21581006a36541c03"
+    },
+    {
+      "arquivo": "frontend-dist/assets/UpgradeBanner-BOFhrdme.js",
+      "sha256": "491a71f6672a9c5fa4d65606aa69c7e4c397c745dc8c0321ed4da8237476da27"
+    },
+    {
+      "arquivo": "frontend-dist/assets/upload-DTxQt2us.js",
+      "sha256": "c0628907e31f0b5a4c1390fad773eed2ad149d2e2fb275135c5cb30470c2e998"
+    },
+    {
+      "arquivo": "frontend-dist/assets/useCategoriasPdv-CoCyTJ4k.js",
+      "sha256": "9a7aa4fdf9c805ee80d9703b26fe63c2706a5bfa781d6b9db9d563e7b8ca3599"
+    },
+    {
+      "arquivo": "frontend-dist/assets/useCepLookup-CUeKsKv6.js",
+      "sha256": "557668a272d2d6b9dd584ddb470487514c524b56cc78d7b87542c52d05856013"
+    },
+    {
+      "arquivo": "frontend-dist/assets/useCnpjLookup-kAIrahZ2.js",
+      "sha256": "b95a72160f1211a86283494a24bb0ffa90c3d5a28924aada493984cc53230159"
+    },
+    {
+      "arquivo": "frontend-dist/assets/useDateRangeFilter-iJYHJbbo.js",
+      "sha256": "064818f5a6b7909716fded9a78567b2117359de245c8548051d9396313c17594"
+    },
+    {
+      "arquivo": "frontend-dist/assets/useDebounce-Bkx_nIwU.js",
+      "sha256": "24a98d5cc207dca29a22862bd52055944257d0770fa097f59df4fd0602a54ca0"
+    },
+    {
+      "arquivo": "frontend-dist/assets/useEanReconhecimentoRapido-DuL5MxkW.js",
+      "sha256": "b8affcdf757d61fcea7020033a11e2f4745711c5ed89955a41d797b154c7120f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/useFoodAccess-2gBh46Tf.js",
+      "sha256": "01e7652ef9cd86c4b641c502fcb798aa1e03ea67b06f470d42e64d72d7923698"
+    },
+    {
+      "arquivo": "frontend-dist/assets/useFormatacao-BXXwY3HA.js",
+      "sha256": "11476adf296b893c4760397a3c2d63f6490cebf23e77c2731a0b60b866209db4"
+    },
+    {
+      "arquivo": "frontend-dist/assets/useLiberarArea-CypM_tF9.js",
+      "sha256": "1f9543ff543f245cc54424a0e89b5b6bfcdd5d8876a01a867d2efc0fc36c18f9"
+    },
+    {
+      "arquivo": "frontend-dist/assets/useOperadoresTerminal-Bgv2cE22.js",
+      "sha256": "59d48436ad4f873fa2e05b15e61289bb7f416d50d5b9aa9a0083da58b8348a73"
+    },
+    {
+      "arquivo": "frontend-dist/assets/usePageSizePreference-SV0o_Nwl.js",
+      "sha256": "e6d87860d8ab3233530cfd5250d9ad12aa080e8cf13ce6c82264e1e4f9a2f7e8"
+    },
+    {
+      "arquivo": "frontend-dist/assets/usePdvConfiguracoes-E7rOXYtT.js",
+      "sha256": "3374bc9187dc1aaf11ec6718c5ceb43cb3b41394bc376318ff074a447f77bd1b"
+    },
+    {
+      "arquivo": "frontend-dist/assets/usePdvPixCheckout-BxguW_WF.js",
+      "sha256": "3e91286c127fcec21689196adb958bfdd2e08baf6cfd11fe71fe812c39c19a07"
+    },
+    {
+      "arquivo": "frontend-dist/assets/usePdvToast-BsPnizRp.js",
+      "sha256": "7d25f2d2db9512d0f3b81c3637da7d495409f1805277f84628c9a0bfa650b5fd"
+    },
+    {
+      "arquivo": "frontend-dist/assets/usePdvUrlState-2Q4ev4Xq.js",
+      "sha256": "699e0dbf78ab6692454db49d574e1b157da26a6561cf8b94c5eefe1ef4ebc97f"
+    },
+    {
+      "arquivo": "frontend-dist/assets/useQrSession-n2-ow_YH.js",
+      "sha256": "622154647aeb55ab24cf308ea536f5a2d7335cf88d80303dbce00a17724031b1"
+    },
+    {
+      "arquivo": "frontend-dist/assets/user-check-DAatulNH.js",
+      "sha256": "68dbc9575c78f82b1c23c69ded9f3f6d2144f5479fd2d692ea308dd40cbea26e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/user-cog-DLmvyR-l.js",
+      "sha256": "43875257174b2cb31eb19c002f8f45f20a5c1fe6cf19d370647e9c3bf14251bf"
+    },
+    {
+      "arquivo": "frontend-dist/assets/user-LyDBkApN.js",
+      "sha256": "b8dd54ae54bc1e9b5508adcc7f5433dedf60a03543069dc4746685c1b5a8f0e5"
+    },
+    {
+      "arquivo": "frontend-dist/assets/user-plus-CVWDp5VZ.js",
+      "sha256": "4042386fe736c40f27c9b9d3f061101b616eed953c1326c37e96a9ecebdb3429"
+    },
+    {
+      "arquivo": "frontend-dist/assets/user-round-DaiMTh5m.js",
+      "sha256": "c0b4fc26dd4cd22bbe2e256bded69ae56debd7b57d0647132e868b62c8d22b62"
+    },
+    {
+      "arquivo": "frontend-dist/assets/useReconnectingWebSocket-GhR4YA8X.js",
+      "sha256": "529b73815d21e918f607f65763e7a3072249a7b222eb17b94a6718651c0a5f45"
+    },
+    {
+      "arquivo": "frontend-dist/assets/useReformaTributaria-CElaLUjm.js",
+      "sha256": "613a08e0e7d3cd0af7814cf08de4e40d0386ae74f097155a8808f4da9453d1ce"
+    },
+    {
+      "arquivo": "frontend-dist/assets/useReportDeepLink-CQ01CAJZ.js",
+      "sha256": "7272620b3cd6b0343dc4f812941862b0d99f4e0087930374981d00b41599c534"
+    },
+    {
+      "arquivo": "frontend-dist/assets/userRoleDisplay-6wrCpXYj.js",
+      "sha256": "46e7952840f97d8e541ea6b1d9a245e13e8825832e4707694f657e8a2f2ee1e7"
+    },
+    {
+      "arquivo": "frontend-dist/assets/userRolePlanAccess-jx079ziY.js",
+      "sha256": "dfab10500ff11202edc99979cd6bc0000961328ef8e3506503cdeb00b62e024d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/userService-Bypte8Wo.js",
+      "sha256": "370af48ce0c2a442a4464e14016012fe73916dea6657e338b1317bebf2c039ee"
+    },
+    {
+      "arquivo": "frontend-dist/assets/UsersPage-DaponIzZ.js",
+      "sha256": "53341f92f9e6b8861ab9a84119ffc0e637116beb547cee1e87eba7ebc4562a80"
+    },
+    {
+      "arquivo": "frontend-dist/assets/useScrollHighlightedOption-BytFYI1V.js",
+      "sha256": "6792a59e8b23bc18ce713124355adb91408b4b6df71b0208d43eca6b6c17991e"
+    },
+    {
+      "arquivo": "frontend-dist/assets/useSupervisorLocal-CPSCLJyO.js",
+      "sha256": "76d300bc88b46a86b069911889e23bd98b8ab172ba634592b43f99c9fd3fe3d5"
+    },
+    {
+      "arquivo": "frontend-dist/assets/utensils-crossed-BqJQpEB4.js",
+      "sha256": "2c5cdb0c5001c48c8fed37509f08f4505fa0fb70743496b072ea29630f853de3"
+    },
+    {
+      "arquivo": "frontend-dist/assets/validadeReportApi-B-S7adao.js",
+      "sha256": "1d81c6658f5fcae1f2852f01106d23a2b03ef30d7bfcec1a299cee3ab1be4348"
+    },
+    {
+      "arquivo": "frontend-dist/assets/VasilhamesPage-DYQFKjou.js",
+      "sha256": "7e6f186494243e447cf8e313e2370e7c0c1054b106861fa02dff3562d07ee4d5"
+    },
+    {
+      "arquivo": "frontend-dist/assets/vendor-charts-BXtE57j3.js",
+      "sha256": "136a1d5068d10e43f619d40f92472f688c796875d28bcdb285b651812c54a737"
+    },
+    {
+      "arquivo": "frontend-dist/assets/vendor-google-oauth-D4V7QJm2.js",
+      "sha256": "10084d26836612f3b70c079787a35675ec4d9e3a4511cea6f3cb9a59a80ccbd9"
+    },
+    {
+      "arquivo": "frontend-dist/assets/vendor-query-CTYwkgsO.js",
+      "sha256": "ea7f67352be9632fe1c8b3308e71b87f7a5d7e463f1a92f51f19382909e41e92"
+    },
+    {
+      "arquivo": "frontend-dist/assets/vendor-react-Cag8aBUS.js",
+      "sha256": "8a9750c49c037fa3a54d614d36b3216764b92f204297aa41cdadd9322215bba7"
+    },
+    {
+      "arquivo": "frontend-dist/assets/vendor-toast-CkEWlM0z.js",
+      "sha256": "a979cb3fd1cd36cca7a94260df1c0612faa20ac1b1d7faab3ec66c61a283a60c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/vendor-zxing-C6AHlKYc.js",
+      "sha256": "61eb4cc4bc8a38503b4e851bda0622b2ee388153b442959f58fe287222e57587"
+    },
+    {
+      "arquivo": "frontend-dist/assets/warehouse-DO3_WUDS.js",
+      "sha256": "c34ff85a30bea0e9fe0cfa0065c84c26c387493aa40ebd0bf34e25a54b410d9c"
+    },
+    {
+      "arquivo": "frontend-dist/assets/webVitals-CZcQQ7Qa.js",
+      "sha256": "e11978d132029c52bf8a923b8ef52a3c8dae5d15c286e6f1a6212bb25ed7891d"
+    },
+    {
+      "arquivo": "frontend-dist/assets/WhatsAppConnectPage-B48AdvS-.js",
+      "sha256": "20aad9adc52b99192a2e54a67e3e12702e8d5d60ae367cebd460f7a0a527b217"
+    },
+    {
+      "arquivo": "frontend-dist/assets/whatsappOrderLink-BKyP13en.js",
+      "sha256": "8e984e3c7f6d4b6702e7ceb187804f5b657f8a1093180fb078c31b172d240585"
+    },
+    {
+      "arquivo": "frontend-dist/assets/wsConnectionDisplay-CbH1x8A7.js",
+      "sha256": "bb8b169de5738598285232012ac0f8a36071fc7bae8cab0a83b2e1e715122e27"
+    },
+    {
+      "arquivo": "frontend-dist/favicon-32.png",
+      "sha256": "158b1e1aa3a5fa5ac5c53f8f0efbeefeb2cb64c1f3816a6f4fef88723bba4a59"
+    },
+    {
+      "arquivo": "frontend-dist/favicon.svg",
+      "sha256": "f3e838fbfa9119cf8ac2bf6ef33734adb06ec1ddd26a43a9ef66c36de5f03016"
+    },
+    {
+      "arquivo": "frontend-dist/icons/icon-192.png",
+      "sha256": "dd7749507d1ef98e00f70f402ff9b4a682174c7f24f585f7c67fa585710b44ed"
+    },
+    {
+      "arquivo": "frontend-dist/icons/icon-32.png",
+      "sha256": "158b1e1aa3a5fa5ac5c53f8f0efbeefeb2cb64c1f3816a6f4fef88723bba4a59"
+    },
+    {
+      "arquivo": "frontend-dist/icons/icon-512.png",
+      "sha256": "f54fb268c13bc7784c27f833a1320a916cc4b5555e5abffc1144aeac0c6cf3b8"
+    },
+    {
+      "arquivo": "frontend-dist/index.html",
+      "sha256": "8469bf87fbafac62523c2c745ea31c459319c404550b5048a662304382b73cd3"
+    },
+    {
+      "arquivo": "frontend-dist/manifest.webmanifest",
+      "sha256": "2af9b43eeb2740001711c9d66e92d22c6dbc5033f390a4d803551516adeb3a08"
+    },
+    {
+      "arquivo": "frontend-dist/registerSW.js",
+      "sha256": "9742073ef7fc795e7673d98f272992843298426a0ffd8cb3507784df5143608b"
+    },
+    {
+      "arquivo": "frontend-dist/sw.js",
+      "sha256": "35b521379f211198fc7acb32258c9184089774acce369e8134e1b6351bc16018"
+    },
+    {
+      "arquivo": "frontend-dist/templates/modelo_importacao_produtos.xlsx",
+      "sha256": "dea26624c467e0155115508ecaf9ecdf17d270b380c283a6fc8050ce224c5fee"
+    },
+    {
+      "arquivo": "frontend-dist/version.json",
+      "sha256": "d00ac6436291712116d44a8e2895ff3ab0d912dd4c17610a7a081e3b7d4be78e"
+    },
+    {
+      "arquivo": "frontend-dist/workbox-3147e214.js",
+      "sha256": "ea1216f5e09dc6a3377471eeb873d72f9e610bd5e36fad623ac25521c8ff75e5"
+    },
+    {
       "arquivo": "frontVersion.js",
       "sha256": "aed0c9a38a6efe23c239c403cfbd7053de2e669bf5ca37b99ea0cb3ed2f98a6a"
     },
@@ -348,7 +2868,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "9cd57c97fb10549cae05adfab0a6af864898dfe09db8356400793dd87f9ec3c6"
+      "sha256": "e1e4ebe4fc3ccd1ac805766b7d281df1af5a22c4e8334aa0d9805633844851dc"
     },
     {
       "arquivo": "print/acbrPosExports.js",

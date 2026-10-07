@@ -15,7 +15,7 @@
 ; ============================================================
 
 #define MyAppName "Margin Engine"
-#define MyAppVersion "1.0.62"
+#define MyAppVersion "1.0.63"
 #define MyAppPublisher "Margin Engine"
 #define MyAppCompany "Margin Engine"
 #define MyAppURL "https://marginengine.com.br"
@@ -88,7 +88,7 @@ Name: "repairmode"; Description: "Reparar instalação (serviço, atalhos, firew
 ; Excludes data\* = só app\data; Schemas excluídos explicitamente (vão no ZIP).
 ; PosPrinter/DLLs: sem skipifsourcedoesntexist — compile falha se o prepare-build não rodou.
 Source: "dist\node\*"; DestDir: "{app}\node"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression; Excludes: "CHANGELOG.md,README.md,install_tools.bat,node_modules\npm\docs\*,node_modules\npm\man\*"
-Source: "dist\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "node_modules\*,vendor\*,data\*,daemon\*,frontend-dist\*,templates\*,.env,homolog-acbrlib\*,test\*,.git\*,RESULTADO-*.md,*.log,*.db,*.db-shm,*.db-wal,acbrlib\lib\*,acbrlib\data\Schemas\*,posprinter\lib\*"
+Source: "dist\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.off\*,node_modules\*,vendor\*,data\*,daemon\*,frontend-dist\*,templates\*,.env,homolog-acbrlib\*,test\*,.git\*,RESULTADO-*.md,*.log,*.db,*.db-shm,*.db-wal,acbrlib\lib\*,acbrlib\data\Schemas\*,posprinter\lib\*"
 Source: "dist\app\vendor\node_modules.zip"; DestDir: "{app}\app\vendor"; Flags: ignoreversion nocompression
 Source: "dist\app\vendor\node_modules.stamp"; DestDir: "{app}\app\vendor"; Flags: ignoreversion
 Source: "dist\app\vendor\schemas.zip"; DestDir: "{app}\app\vendor"; Flags: ignoreversion nocompression
