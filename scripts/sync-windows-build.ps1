@@ -48,7 +48,7 @@ function Sync-Tree([string]$Source, [string]$Dest, [string[]]$ExcludeDirNames, [
 # /XD data — relativo à raiz do Source — NÃO remove acbrlib\data
 $ExcludeDirs = @(
     "node_modules", "data", "daemon", ".git", ".ai", ".github",
-    "test", "homolog-acbrlib", "frontend-dist"
+    "test", "homolog-acbrlib", "frontend-dist", "*.off"
 )
 $ExcludeFiles = @(".env", "*.log", "RESULTADO-*.md")
 

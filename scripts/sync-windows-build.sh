@@ -37,6 +37,8 @@ RSYNC_EXCLUDES=(
   --exclude .github
   --exclude 'C:\ProgramData'
   --exclude frontend-dist
+  # pastas desativadas localmente (node_modules.off tem symlinks que o ISCC não lê)
+  --exclude '*.off'
   --exclude '*.log'
   --exclude 'RESULTADO-*.md'
   # cert/log/notas/pdf locais — Schemas XSD VÃO no payload (fonte: repo)
