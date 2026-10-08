@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.70] - 2026-10-08
+
+### Added
+
+- Comanda de pedido imprime as escolhas das listas de complementos (uma por linha, abaixo do item e antes da observação), aceitando lista ou texto separado por linha.
+
 ## [1.0.69] - 2026-10-08
 
 ### Changed

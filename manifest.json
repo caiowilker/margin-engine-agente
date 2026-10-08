@@ -1,6 +1,6 @@
 {
-  "versao": "1.0.69",
-  "geradoEm": "2026-10-08T22:16:40.802Z",
+  "versao": "1.0.70",
+  "geradoEm": "2026-10-08T23:00:12.152Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -2872,7 +2872,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "0f05f0a4e86be2a3481fdcaa9e2e5fd0cd57bbb00ea524263316cbc4f92f285f"
+      "sha256": "e02781b05088ae95d8a5806ff5de56d5f1c6dc2c8e9f2a3cf32aa78100f37a94"
     },
     {
       "arquivo": "print/acbrPosExports.js",
@@ -2968,11 +2968,11 @@
     },
     {
       "arquivo": "print/pedidoLayout.js",
-      "sha256": "81e33b4b4f0c569902f116930fb8c71f58902bf4c33d49c000618ae5cf56d93e"
+      "sha256": "95aa4bc366c26f6e016f5a8de1e1899f1b44fbd74cc225c25634489cba0ed2fb"
     },
     {
       "arquivo": "print/pedidoPrint.js",
-      "sha256": "302c650d2581b427981efd2a7110827693861d9c61003e40cbec0a7fd7f05aa3"
+      "sha256": "786ceeb7f5c25e92e9cc412c856d14e4b279a5e513e9f287a78b6e81fe99d69f"
     },
     {
       "arquivo": "print/posPrinterIniDefaults.js",
