@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.69] - 2026-10-08
+
+### Changed
+
+- Versão alinhada ao release 1.0.69 (operação e checkout do cardápio digital no servidor e no front). Sem mudança no agente.
+
 ## [1.0.68] - 2026-10-08
 
 ### Changed
