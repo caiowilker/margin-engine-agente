@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.67] - 2026-10-08
+
+### Changed
+
+- Versão alinhada ao release 1.0.67 (consentimento e opt-out de ofertas pelo WhatsApp no servidor e no front). Sem mudança no agente.
+
 ## [1.0.66] - 2026-10-08
 
 ### Added — Relatório Financeiro Completo
