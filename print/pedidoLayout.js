@@ -130,6 +130,14 @@ function layoutEstacao(p, cancelado) {
   return lines;
 }
 
+function appendEscolhas(lines, item, cols) {
+  for (const escolha of item.escolhas || []) {
+    for (const nl of wrapThermalLines(`> ${tx(escolha)}`, cols - 2)) {
+      lines.push({ kind: "text", text: `  ${nl}` });
+    }
+  }
+}
+
 function appendItensEstacao(lines, items) {
   if (!items.length) {
     lines.push({ kind: "text", text: "(sem itens)", center: true });
@@ -140,6 +148,7 @@ function appendItensEstacao(lines, items) {
     const nome = tx(item.name || item.code || "Item").toUpperCase();
     // "2x  X-BURGER" — qty alinhada à esquerda, nome em destaque
     lines.push({ kind: "text", text: `${qty}  ${nome}`, bold: true, size: "md" });
+    appendEscolhas(lines, item, getThermalCols());
     if (item.notes) {
       for (const nl of wrapThermalLines(`* ${tx(item.notes)}`, getThermalCols() - 2)) {
         lines.push({ kind: "text", text: `  ${nl}` });
@@ -365,6 +374,7 @@ function appendItensComPreco(lines, items, showPrices, showUnitPrice) {
     } else {
       lines.push({ kind: "text", text: head, bold: true });
     }
+    appendEscolhas(lines, item, cols);
     if (item.notes) {
       for (const nl of wrapThermalLines(`* ${tx(item.notes)}`, cols - 2)) {
         lines.push({ kind: "text", text: `  ${nl}` });

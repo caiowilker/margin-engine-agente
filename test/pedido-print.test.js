@@ -250,5 +250,31 @@ test("normalizarPedidoPayload preserva notes do item", () => {
   assert.strictEqual(p.items[0].notes, "sem cebola");
 });
 
+test("escolhas das listas: lista ou texto por linha, impressas abaixo do item", () => {
+  const p = normalizarPedidoPayload({
+    orderNumber: "ORD-4",
+    printType: "cozinha",
+    items: [
+      { name: "Pizza G", quantity: 1, escolhas: ["Sabores: 1/2 Calabresa, 1/2 Frango", " ", "Borda: Catupiry"] },
+      { name: "Suco", quantity: 1, escolhas: "Fruta: Laranja\n" },
+      { name: "Agua", quantity: 1 },
+    ],
+  });
+  assert.deepStrictEqual(p.items[0].escolhas, ["Sabores: 1/2 Calabresa, 1/2 Frango", "Borda: Catupiry"]);
+  assert.deepStrictEqual(p.items[1].escolhas, ["Fruta: Laranja"]);
+  assert.deepStrictEqual(p.items[2].escolhas, []);
+
+  const { lines } = buildPedidoLayout({
+    printType: "cozinha",
+    orderNumber: "4",
+    items: [{ name: "Pizza G", quantity: 1, escolhas: ["Borda: Catupiry"], notes: "bem assada" }],
+  });
+  const textos = lines.map((l) => l.text || "");
+  const iEscolha = textos.findIndex((t) => t.includes("Borda: Catupiry"));
+  const iObs = textos.findIndex((t) => t.includes("bem assada"));
+  assert.ok(iEscolha > 0, "escolha impressa");
+  assert.ok(iObs > iEscolha, "observação depois das escolhas");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

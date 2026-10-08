@@ -106,9 +106,15 @@ function mapItem(raw) {
     quantity: qty,
     unit: item.unit != null ? String(item.unit) : item.unidade != null ? String(item.unidade) : null,
     notes: notesRaw != null && String(notesRaw).trim() ? String(notesRaw).trim() : null,
+    escolhas: mapEscolhas(item.escolhas),
     unitPrice,
     lineTotal,
   };
+}
+
+function mapEscolhas(raw) {
+  const lista = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.split("\n") : [];
+  return lista.map((l) => String(l ?? "").trim()).filter(Boolean).slice(0, 30);
 }
 
 function normalizarPedidoPayload(raw) {
