@@ -30,6 +30,7 @@ module.exports = {
   imprimirPedido: async (payload) => record("pedido", payload),
   imprimirRelatorio: async (payload) => record("relatorio", payload),
   imprimirVasilhame: async (payload) => record("vasilhame", payload),
+  imprimirCupomPromocional: async (payload) => record("cupom_promocional", payload),
   imprimirCrediario: async (payload) => record("crediario", payload),
   imprimirRaw: async (payload) => record("etiqueta_raw", payload),
   abrirGaveta: async () => record("gaveta", {}),

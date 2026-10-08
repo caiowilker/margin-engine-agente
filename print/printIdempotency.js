@@ -154,6 +154,14 @@ function resolveIdempotencyKey(op, args, opts = {}) {
     return `${op}:${tipo}:fp:${fingerprintCupom(payload)}`.slice(0, 190);
   }
 
+  if (op === "imprimirCupomPromocional") {
+    const cod = String(payload.codigo || "").trim().toUpperCase();
+    const clickId = String(payload.clickId || payload.click_id || "").trim();
+    // Cada clique imprime de novo (lote para distribuir); retry do mesmo clique não duplica.
+    if (!cod || !clickId) return null;
+    return `cupom-promo:${cod}:${clickId}`.slice(0, 190);
+  }
+
   if (op === "imprimirVasilhame" || op === "imprimirCrediario") {
     const codigo =
       payload.codigoTransacao ||

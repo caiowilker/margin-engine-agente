@@ -73,6 +73,18 @@ function validarAntesEnfileirar(op, args) {
     return { ok: true, args: [normalizado] };
   }
 
+  if (op === "imprimirCupomPromocional") {
+    if (!payload || typeof payload !== "object") {
+      throw new Error("Payload de cupom promocional inválido.");
+    }
+    const { normalizarCupomPromocionalPayload } = require("./cupomPromocionalAcbrTags");
+    const normalizado = normalizarCupomPromocionalPayload(payload);
+    if (!normalizado.codigo) {
+      throw new Error("Cupom promocional sem código válido (3 a 40 letras, números, - ou _).");
+    }
+    return { ok: true, args: [normalizado] };
+  }
+
   if (op === "imprimirCrediario") {
     if (!payload || typeof payload !== "object") {
       throw new Error("Payload de crediário inválido.");

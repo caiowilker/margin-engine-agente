@@ -22,6 +22,7 @@ const OPS_FAST_NATIVE = new Set([
   "imprimirPedido",
   "imprimirRelatorio",
   "imprimirVasilhame",
+  "imprimirCupomPromocional",
   "imprimirCrediario",
 ]);
 

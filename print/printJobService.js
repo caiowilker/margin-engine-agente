@@ -56,6 +56,7 @@ function isTipoRapido(tipo) {
     tipo === "suprimento" ||
     tipo === "pedido_comanda" ||
     tipo === "vasilhame_emprestimo" ||
+    tipo === "cupom_promocional" ||
     tipo === "crediario_recebimento" ||
     tipo === "relatorio" ||
     tipo === "etiqueta_termica" ||
@@ -84,6 +85,7 @@ function prioridadeParaJob(tipo, payload) {
     tipo === "sangria" ||
     tipo === "suprimento" ||
     tipo === "vasilhame_emprestimo" ||
+    tipo === "cupom_promocional" ||
     tipo === "crediario_recebimento" ||
     tipo === "relatorio" ||
     tipo === "etiqueta_termica"

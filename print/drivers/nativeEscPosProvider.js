@@ -30,6 +30,7 @@ module.exports = {
   },
   imprimirRelatorio: (p) => core.imprimirRelatorio(p),
   imprimirVasilhame: (p) => core.imprimirVasilhame(p),
+  imprimirCupomPromocional: (p) => core.imprimirCupomPromocional(p),
   imprimirCrediario: (p) => core.imprimirCrediario(p),
   /** ZPL/PPLA — bytes raw, nunca ACBr tags. */
   imprimirRaw: (p) => require("../rawLabelPrint").imprimirRaw(p),

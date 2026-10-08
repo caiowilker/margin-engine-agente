@@ -3082,6 +3082,48 @@ function imprimirVasilhame(payload) {
   });
 }
 
+function imprimirCupomPromocional(payload) {
+  const { normalizarCupomPromocionalPayload } = require("../cupomPromocionalAcbrTags");
+  const p = normalizarCupomPromocionalPayload(payload);
+  return imprimirRender(async (printer) => {
+    for (let i = 0; i < p.copias; i++) {
+      await renderCupomPromocional(printer, p);
+    }
+  });
+}
+
+async function renderCupomPromocional(printer, payload) {
+  const { sep: linha } = helpers();
+  const { quebrar } = require("../cupomPromocionalAcbrTags");
+  const cols = getThermalCols();
+
+  printer.font("a").align("ct");
+  await imprimirLogoCupomEscpos(printer, payload);
+  require("../empresaCabecalhoTermico").aplicarCabecalhoEmpresaEscpos(printer, payload.empresa, cols);
+
+  printer.text(linha()).style("b").text("CUPOM DE DESCONTO").style("normal");
+  if (payload.nome) printer.text(tx(payload.nome).slice(0, cols));
+  printer.text(linha());
+  for (const l of quebrar(payload.regra, cols)) printer.text(l);
+  printer
+    .text("Use o codigo:")
+    .style("b")
+    .size(1, 1)
+    .text(tx(payload.codigo))
+    .size(0, 0)
+    .style("normal");
+  if (payload.link) {
+    await imprimirQrNfce(printer, payload.link);
+    printer.text("Aponte a camera para pedir");
+  }
+  if (payload.validade) printer.text("Valido ate " + tx(payload.validade));
+  printer
+    .text(linha())
+    .text("Apresente no caixa ou digite no cardapio")
+    .text("Documento nao fiscal");
+  require("../cupomLayoutShared").applyEscposCut(printer);
+}
+
 function imprimirCrediario(payload) {
   const { normalizarCrediarioPayload } = require("../crediarioAcbrTags");
   const p = normalizarCrediarioPayload(payload);
@@ -3456,6 +3498,7 @@ module.exports = {
   imprimirPedido,
   imprimirRelatorio,
   imprimirVasilhame,
+  imprimirCupomPromocional,
   imprimirCrediario,
   /** Bytes crus (ZPL/PPLA) — sem ESC/POS/ACBr. */
   enviarBuffer,

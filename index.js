@@ -4057,6 +4057,32 @@ function iniciarServidor() {
     }
   });
 
+  app.post("/impressora/cupom-promocional", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
+    try {
+      const resultado = await impressora.imprimirCupomPromocional(req.body);
+      if (resultado?.queued || resultado?.async) {
+        return res.status(202).json({
+          ok: true,
+          fila: true,
+          status: "ENFILEIRADO",
+          impresso: false,
+          mensagem: resultado.message || "Impressão na fila — será reenviada automaticamente.",
+          jobId: resultado.jobId,
+          deduplicado: !!resultado.deduplicado,
+          job: resultado.job ? { id: resultado.job.id } : undefined,
+        });
+      }
+      res.json({
+        ok: true,
+        jobId: resultado.jobId,
+        deduplicado: !!resultado.deduplicado,
+        job: resultado.job ? { id: resultado.job.id } : undefined,
+      });
+    } catch (err) {
+      responderErroImpressao(res, err);
+    }
+  });
+
   app.post("/impressora/crediario", privateNetworkHeaders, exigirAgentToken, async (req, res) => {
     try {
       const resultado = await impressora.imprimirCrediario(req.body);

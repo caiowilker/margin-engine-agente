@@ -548,6 +548,12 @@ module.exports = {
       p,
       native.imprimirVasilhame,
     ),
+  imprimirCupomPromocional: (p) =>
+    imprimirViaTags(
+      loadAcbrTags("cupomPromocionalAcbrTags").renderCupomPromocionalTags,
+      p,
+      native.imprimirCupomPromocional,
+    ),
   imprimirCrediario: (p) =>
     imprimirViaTags(
       loadAcbrTags("crediarioAcbrTags").renderCrediarioTags,
