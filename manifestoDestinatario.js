@@ -461,11 +461,14 @@ function avaliarPaginaDist(dist) {
     return { parar: false, erro: null };
   }
   if (cStat === "138" || cStat === "139") {
+    const secoes = (dist?.secoes || []).slice(0, 10).join(",") || "nenhuma";
+    const naoReconhecidas = (dist?.naoClassificados || []).slice(0, 10).join(",") || "—";
     return {
       parar: true,
       erro:
-        xMotivo ||
-        `DistDFe cStat ${cStat} sem nfeProc/resNFe parseáveis — NSU não avançará nesta execução.`,
+        `DistDFe cStat ${cStat} sem NF-e/resumo/evento reconhecível — NSU não avançará nesta execução ` +
+        `(seções=${secoes}; não reconhecidas=${naoReconhecidas})` +
+        (xMotivo ? `. SEFAZ: ${xMotivo}` : ""),
       naoAvancarNsu: true,
     };
   }

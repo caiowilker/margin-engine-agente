@@ -1,14 +1,14 @@
 {
-  "versao": "1.0.65",
-  "geradoEm": "2026-10-07T21:53:35.723Z",
+  "versao": "1.0.66",
+  "geradoEm": "2026-10-08T20:02:14.678Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
-      "sha256": "ad0062046f773dc93105253fd1e4817f933f691306d4ba6104e684ba3e89adf0"
+      "sha256": "9d8510d600cedec6006e5da2cd81f7c94acb8af2d270ac21252f25a893dcbb56"
     },
     {
       "arquivo": "acbrLibResposta.js",
-      "sha256": "022002118468393d7a7105224f6c5e8167dae904a7e308e5885bb5ff36c71d39"
+      "sha256": "845bbdae06a26d9f8fd28ca38e42e515861ce910e369e2ce6c94898a41ed767c"
     },
     {
       "arquivo": "acbrNfceSetup.js",
@@ -2856,7 +2856,7 @@
     },
     {
       "arquivo": "manifestoDestinatario.js",
-      "sha256": "b0f02221ed3963b1cece77701d1ca941b65f87765954e8a8388d205562bd5cc7"
+      "sha256": "2ad3e9255b7252e535c63872c08417ab79d78b475baaf8b52a163753adb5b4d3"
     },
     {
       "arquivo": "manifestUpdater.js",
@@ -2872,7 +2872,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "ff9d2a0fab15ab9b61d71efe22c8677c9b93856e6f780425a6726c5d4bf1864a"
+      "sha256": "68ebd3a7e2a34337cd94aa178fa5cf4b1385050a54554362cfb2c1cdf9e7da1e"
     },
     {
       "arquivo": "print/acbrPosExports.js",

@@ -6,6 +6,56 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.66] - 2026-10-08
+
+### Added — Relatório Financeiro Completo
+
+- Nova tela **Financeiro › Relatório Financeiro Completo** (R118). Tem as abas Visão geral, DRE gerencial, Centro × Categoria, Orçado × Realizado e Fluxo de caixa.
+  - Os filtros por loja, centro e categoria têm o mesmo comportamento em todas as abas.
+  - As despesas podem ser vistas por **competência** (padrão) ou por **caixa**.
+- DRE gerencial por mês, centro ou loja, com análise vertical e horizontal. Cada grupo do DRE abre nas suas categorias. Compras de mercadoria (NF de entrada) e investimentos aparecem fora do resultado.
+- Categorias de custo ganham o campo **Grupo no DRE** (pessoal, ocupação, administrativas, comerciais, impostos, financeiras, investimento, compra de mercadoria…).
+- Orçamento por categoria pode ser dividido por **centro de custo**.
+
+### Added — Contas a pagar
+
+- **Pagamento parcial**: o título continua aberto com o saldo restante, e a lista mostra "Parcial · saldo".
+- **Juros, multa e desconto obtido** separados na baixa. O valor pago acompanha automaticamente o que falta para quitar.
+- **Histórico de pagamentos** do título, com **estorno** de baixas pagas pela conta da tesouraria. O estorno exige motivo, devolve o valor para a conta e reabre o título.
+- **Competência** (mês do DRE) no título.
+- **Rateio** por centro e/ou categoria, em percentual ou em valor, com botão "Completar última linha".
+- Editar o valor de um título já aprovado manda para nova aprovação. Não é possível reduzir o valor abaixo do que já foi pago.
+
+### Changed — Fluxo de caixa
+
+- Granularidade **mensal**.
+- **Saldo acumulado** a partir de um saldo inicial, com atalho para usar o saldo atual da tesouraria e aviso do primeiro período em que o saldo fica negativo.
+- Recorrências de custo ainda não lançadas entram como **saída prevista**.
+- Cartão de crédito entra em D+30 ("Cartão a receber"). Crediário entra só quando é recebido. Transferências entre caixa e tesouraria não contam como entrada nem saída.
+
+### Fixed
+
+- DRE e relatórios não contam mais a compra de mercadoria (pagamento de NF de entrada) como despesa, em dobro com o CMV.
+- Fluxo de caixa não duplica vendas no crediário e no cartão.
+- DRE por centro de custo passa a incluir centros que só têm despesa. O rateio é aplicado de forma consistente.
+- Posição de contas a pagar: "pago" usa a data de cada pagamento, e "aberto/vencido" usa o saldo restante.
+- Orçado × Realizado: atingimento ponderado (Σ realizado ÷ Σ orçado), margem em %, e cor conforme a natureza (em custo, abaixo do orçado é bom). O Orçado × Categoria passa a exportar (R119).
+- Relatório de Estoque: produto com estoque negativo aparece como **Negativo** (não "Zerado") e não reduz o valor total do estoque.
+- Manifesto (DistDFe): o agente passa a reconhecer os documentos de lotes com cStat 138/139 em todos os formatos que a ACBrLib devolve: JSON, seções INI, docZip em gzip+base64 e caminho de arquivo. Antes, esses lotes caíam em erro de parse e o NSU ficava travado (ex.: `ultNsu=4095`). Quando um lote ainda não é reconhecido, o erro lista as seções recebidas para facilitar o diagnóstico.
+- Manifesto: o mesmo XML não é mais extraído em duplicidade (com escape quebrado), e o resumo de uma nota que já veio com XML completo é descartado.
+
+### Performance
+
+- Catálogo do PDV (`GET /pdv/produtos`):
+  - Quando o cache expira e vários caixas pedem ao mesmo tempo, o catálogo é montado uma única vez, e os demais aguardam o mesmo resultado.
+  - Em catálogos grandes (mais de 500 produtos), imagens e apresentações de venda são lidas em uma consulta do tenant, sem listas `IN` com milhares de ids.
+  - Montagens lentas (≥ 1,5 s) registram `pdv_catalogo_lento` com o tempo de consulta e de montagem.
+- Importação de NF-e (manifesto, XML e consulta por chave): a confirmação carrega o catálogo de produtos uma vez só, em vez de duas, o que reduz consultas e tempo por nota importada.
+- Toda request autenticada deixa de ler a empresa no banco duas vezes: uma no filtro de ativação e outra no filtro de plano. Agora um snapshot em cache de 30 s guarda status, plano e add-ons.
+  - O cache só serve para liberar o acesso. Um bloqueio (conta inativa ou recurso fora do plano) é sempre confirmado no banco, então ativação e upgrade valem na hora.
+  - A expiração da assinatura é verificada no momento de cada request.
+- Preparar emissão de NFC-e (checkout e conversão) e de NF-e: o emitente vem do cache fiscal, que é limpo quando a configuração fiscal ou o CRT mudam, sem nova leitura da empresa no banco. No total são cerca de 3 consultas a menos por emissão (~600 ms com a latência atual do banco).
+
 ## [1.0.65] - 2026-10-07
 
 ### Changed — Ficha técnica que ensina a medir cada ingrediente

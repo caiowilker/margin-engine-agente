@@ -94,7 +94,7 @@ async function run() {
     const raw =
       `cStat=138\nxMotivo=Documento localizado\nultNSU=5\nmaxNSU=9\n` +
       `<nfeProc><NFe Id="NFe${chave}"></NFe></nfeProc>` +
-      `<resNFe><chNFe>${chave}</chNFe><CNPJ>12345678000190</CNPJ></resNFe>`;
+      `<resNFe><chNFe>${chave.slice(0, 43)}9</chNFe><CNPJ>12345678000190</CNPJ></resNFe>`;
     const parsed = acbr.parseDistribuicaoDFeUltNsuResposta(raw, "0");
     assert.strictEqual(parsed.cStat, "138");
     assert.strictEqual(parsed.xmls.length, 1);

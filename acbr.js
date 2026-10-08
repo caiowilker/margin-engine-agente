@@ -2465,31 +2465,52 @@ function parseDistribuicaoDFeUltNsuResposta(resposta, nsuInicial) {
   const docs = require("./documentosFiscais");
   const libResp = require("./acbrLibResposta");
   const raw = String(resposta || "");
+  const ehJson = /^\s*[{[]/.test(raw);
   const xmls = [];
-  const reProc = /<nfeProc[\s\S]*?<\/nfeProc>/gi;
-  let m;
-  while ((m = reProc.exec(raw)) !== null) {
-    xmls.push(m[0]);
+  const resumos = [];
+  const chavesXml = new Set();
+  const chavesResumo = new Set();
+  const chaveDe = (x) =>
+    x.match(/Id="NFe(\d{44})"/i)?.[1] || x.match(/<chNFe>(\d{44})<\/chNFe>/i)?.[1] || null;
+  const addXml = (x) => {
+    const ch = chaveDe(x);
+    if (ch ? chavesXml.has(ch) : xmls.includes(x)) return;
+    if (ch) chavesXml.add(ch);
+    xmls.push(x);
+  };
+  const addResumo = (r) => {
+    const ch = chaveDe(r);
+    if (ch ? chavesResumo.has(ch) || chavesXml.has(ch) : resumos.includes(r)) return;
+    if (ch) chavesResumo.add(ch);
+    resumos.push(r);
+  };
+
+  const estruturado = libResp.extrairDocsDistribuicaoDFe(raw);
+  for (const x of estruturado.xmls) addXml(x);
+
+  // Em JSON o XML vem escapado dentro de strings: regex no texto bruto geraria cópia quebrada.
+  if (!ehJson) {
+    let m;
+    const reProc = /<nfeProc[\s\S]*?<\/nfeProc>/gi;
+    while ((m = reProc.exec(raw)) !== null) addXml(m[0]);
   }
   if (xmls.length === 0) {
     const unico = docs.extrairXmlDaResposta(raw);
-    if (unico && /<NFe[\s>]/i.test(unico)) xmls.push(unico);
+    if (unico && /<NFe[\s>]/i.test(unico)) addXml(unico);
   }
 
-  const resumos = [];
-  const reRes = /<resNFe[\s\S]*?<\/resNFe>/gi;
-  while ((m = reRes.exec(raw)) !== null) {
-    resumos.push(m[0]);
+  for (const r of estruturado.resumos) addResumo(r);
+  if (!ehJson) {
+    let m;
+    const reRes = /<resNFe[\s\S]*?<\/resNFe>/gi;
+    while ((m = reRes.exec(raw)) !== null) addResumo(m[0]);
   }
+  const resumosFinais = resumos.filter((r) => {
+    const ch = chaveDe(r);
+    return !ch || !chavesXml.has(ch);
+  });
 
-  const fromJsonDocs = libResp.extrairDocsDistribuicaoDFe(raw);
-  for (const x of fromJsonDocs.xmls || []) {
-    if (!xmls.includes(x)) xmls.push(x);
-  }
-  for (const r of fromJsonDocs.resumos || []) {
-    if (!resumos.includes(r)) resumos.push(r);
-  }
-  const eventos = libResp.contarEventosDistribuicaoDFe(raw);
+  const eventos = Math.max(libResp.contarEventosDistribuicaoDFe(raw), estruturado.eventos || 0);
 
   const p = libResp.parseRespostaLib(raw);
   const ultNsuFinal =
@@ -2511,8 +2532,10 @@ function parseDistribuicaoDFeUltNsuResposta(resposta, nsuInicial) {
     ultNsuFinal,
     maxNsu,
     xmls,
-    resumos,
+    resumos: resumosFinais,
     eventos,
+    naoClassificados: estruturado.naoClassificados,
+    secoes: estruturado.secoes,
     raw,
   };
 }
