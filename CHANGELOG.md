@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.71] - 2026-10-08
+
+### Added
+
+- Impressão de cupom promocional (`POST /impressora/cupom-promocional`, tipo `cupom_promocional`): código grande, regra, validade e QR do link de resgate, uma ou mais cópias com corte entre elas, em ESC/POS nativo e ACBr. Documento não fiscal; código e link validados antes de enfileirar; cada clique é um lote (retry não duplica).
+
 ## [1.0.70] - 2026-10-08
 
 ### Added

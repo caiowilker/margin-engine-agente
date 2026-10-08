@@ -1,6 +1,6 @@
 {
-  "versao": "1.0.70",
-  "geradoEm": "2026-10-08T23:00:12.152Z",
+  "versao": "1.0.71",
+  "geradoEm": "2026-10-08T23:57:10.629Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -2836,7 +2836,7 @@
     },
     {
       "arquivo": "index.js",
-      "sha256": "5581fe5eb777fe3942cb27cbf1b18d1dbbb577f1798e98208cf4c342ab855cbf"
+      "sha256": "591cbd10d01822e67a5b49d681da701badcb3252bbf3c30a785a0341484033cb"
     },
     {
       "arquivo": "install-service.js",
@@ -2872,7 +2872,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "e02781b05088ae95d8a5806ff5de56d5f1c6dc2c8e9f2a3cf32aa78100f37a94"
+      "sha256": "46916bd93722bc8192068abdc8b4e6a6f68687dc726cf5c8057ee99bb1931f91"
     },
     {
       "arquivo": "print/acbrPosExports.js",
@@ -2908,7 +2908,7 @@
     },
     {
       "arquivo": "print/contract.js",
-      "sha256": "276d42f6d9413bccf42bf8b5defca72fb2952a313e0bc789ffb80d24d1ccc9fc"
+      "sha256": "3995b2812db920ab4537e7dde4fc4206fe1635204e8755eb7dc68f4f4c62eb31"
     },
     {
       "arquivo": "print/crediarioAcbrTags.js",
@@ -2927,6 +2927,10 @@
       "sha256": "f711189da627f34f76226818e28a9ad92fd7a0dd6b760f9d56d373ec9cc1156c"
     },
     {
+      "arquivo": "print/cupomPromocionalAcbrTags.js",
+      "sha256": "ac37769938c4aedc64ce230e0c57d8fae9b9b0ee12011222ab37f94dd1165023"
+    },
+    {
       "arquivo": "print/cupomValidate.js",
       "sha256": "a375c89bcdac086fa19fce130c23fb1cef58a4f736b83a4a72a16ba31f9a89ea"
     },
@@ -2940,15 +2944,15 @@
     },
     {
       "arquivo": "print/drivers/acbrPosPrinterProvider.js",
-      "sha256": "e777d642cfb39dbd86cde08337c3818f17cdefcd3524d463edcc6d3a4dd9b0ba"
+      "sha256": "83f26b3f4a73b6bc43fe9b82fbcd55560c062bc6fa519a519775ace52800c7d4"
     },
     {
       "arquivo": "print/drivers/mockPrinterProvider.js",
-      "sha256": "cd93097adc2b48f56eb3c86ba157a84e3a53d570d9b2feeac4ce094986e438d5"
+      "sha256": "75aa718a83a24eecffcef03c184a1e4818a4e2b7e3f740d696404cc97b61d88f"
     },
     {
       "arquivo": "print/drivers/nativeEscPosProvider.js",
-      "sha256": "6a60333646a097abbe972a974abcab3accf287fa08c4064a5d85226d470d1002"
+      "sha256": "a366234736e657add1e26fa7be41ffaf075277c94969e4906779f5b1ae2b0383"
     },
     {
       "arquivo": "print/empresaCabecalhoTermico.js",
@@ -2956,7 +2960,7 @@
     },
     {
       "arquivo": "print/escpos/impressoraCore.js",
-      "sha256": "57b1fb3029f47478201c4aa6426802a4f85e9a3b4c200d52dbe574cde32e5849"
+      "sha256": "5f85eecb81212033f7f2514b1197c0d7a09b96bb2b8bf6d8e3bb56ce70186adb"
     },
     {
       "arquivo": "print/factory.js",
@@ -3012,7 +3016,7 @@
     },
     {
       "arquivo": "print/printFiscalCoordination.js",
-      "sha256": "e668df264988f922d8d71a63ad7ad34b810165d797ec31f5c00122293a7983c4"
+      "sha256": "b52a95767f304a6ba9459ed9c2cb168c76f47657b5582ce6a5e4643367f690dc"
     },
     {
       "arquivo": "print/printHttpResposta.js",
@@ -3020,7 +3024,7 @@
     },
     {
       "arquivo": "print/printIdempotency.js",
-      "sha256": "87a4fb17fb341e2114430c6d9461eafeb1a8c065785655a2884e0325a3c60b33"
+      "sha256": "d3e4ba014f5681d9e64e75458dd84c71a8f404cba663137e6942be25e0b7922c"
     },
     {
       "arquivo": "print/printJobLog.js",
@@ -3028,7 +3032,7 @@
     },
     {
       "arquivo": "print/printJobService.js",
-      "sha256": "8c10b9c01c70c99434444a3f1e55f7fc8414c5e859fc66060365124c7c6a4e78"
+      "sha256": "04ab8427781ba8cf622756f9d421f916f65805ee58bb6eef5ba2d5b606d84083"
     },
     {
       "arquivo": "print/printJobStore.js",
@@ -3036,7 +3040,7 @@
     },
     {
       "arquivo": "print/printJobTypes.js",
-      "sha256": "0615661df859270172ff7c5007e8bd4cb1e674a502513dc3a096a19b6227c6e4"
+      "sha256": "5c02bc938d5eb0e5d98cc1c0d843bd8e340b034e9be2be15fb2854a2a42fa3a5"
     },
     {
       "arquivo": "print/printMetrics.js",
@@ -3048,7 +3052,7 @@
     },
     {
       "arquivo": "print/printValidate.js",
-      "sha256": "aa76ffea3447bc1581a77cd853d08802e8fd806a7356b8f8d02946c94966b5c9"
+      "sha256": "dfd34e59b0622f67481c4813edc98797ec8eaf45288bc8e2b67bfad369e45431"
     },
     {
       "arquivo": "print/qrCodeAcbrBmp.js",
@@ -3104,7 +3108,7 @@
     },
     {
       "arquivo": "printerService.js",
-      "sha256": "0a537b9a7220646a5604b6dad3b683b3d33058b8326378847c615888e04e3e1f"
+      "sha256": "0ea9140505fb7aab90715da5fcaf9b5e762441f9f4c77ad8efae8a39483369cb"
     },
     {
       "arquivo": "reconciliacaoFiscal.js",
