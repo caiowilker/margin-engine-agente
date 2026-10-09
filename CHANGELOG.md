@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.75] - 2026-10-08
+
+### Changed
+
+- Versão alinhada ao release 1.0.75 do Margin Engine (rotas de entrega, despacho automático e análise de entregas); sem mudança no agente.
+
 ## [1.0.74] - 2026-10-08
 
 ### Changed
