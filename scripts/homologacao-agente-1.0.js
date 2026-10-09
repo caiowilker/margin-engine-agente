@@ -71,7 +71,7 @@ async function runOfflineChecks() {
 
   items.push(
     item("H1-01", "H1", "Arquivos do agente presentes", !!report.version, report.version || "ausente", true),
-    item("H1-02", "H1", "Node.js >= 18", report.checks.node?.ok === true, report.checks.node?.version),
+    item("H1-02", "H1", "Node.js >= 20.9", report.checks.node?.ok === true, report.checks.node?.version),
     item("H1-03", "H1", "Dependências instaladas", report.checks.dependencies?.ok === true, null, true),
     item("H1-04", "H1", "SQLite nativo (better-sqlite3)", report.checks.sqlite?.ok === true, null, true),
     item("H1-05", "H1", "Diretórios Margin Engine", report.checks.directories?.ok === true, report.checks.directories?.root),

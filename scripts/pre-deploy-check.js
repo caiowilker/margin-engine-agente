@@ -205,8 +205,9 @@ function checkPorta() {
 function checkNode() {
   console.log("\n[Node.js]");
   const major = parseInt(process.versions.node.split(".")[0], 10);
-  if (major >= 18) ok(`Node ${process.versions.node}`);
-  else fail(`Node ${process.versions.node} — requer >= 18`);
+  const minor = parseInt(process.versions.node.split(".")[1], 10);
+  if (major > 20 || (major === 20 && minor >= 9)) ok(`Node ${process.versions.node}`);
+  else fail(`Node ${process.versions.node} — requer >= 20.9 (sharp 0.35)`);
 }
 
 function checkWebhookUrl() {

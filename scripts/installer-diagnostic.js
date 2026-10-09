@@ -107,9 +107,11 @@ async function runDiagnostic() {
   }
 
   const env = readEnvFile();
-  const nodeMajor = parseInt(String(process.version).split(".")[0].replace("v", ""), 10);
-  report.checks.node = { version: process.version, ok: nodeMajor >= 18 };
-  if (nodeMajor < 18) {
+  // sharp 0.35 (logo/imagens) exige Node >= 20.9; o instalador traz o Node portátil 20.x.
+  const [nodeMajor, nodeMinor] = String(process.version).replace("v", "").split(".").map((n) => parseInt(n, 10));
+  const nodeOk = nodeMajor > 20 || (nodeMajor === 20 && nodeMinor >= 9);
+  report.checks.node = { version: process.version, ok: nodeOk };
+  if (!nodeOk) {
     addIssue(
       report,
       "error",

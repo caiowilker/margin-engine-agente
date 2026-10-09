@@ -1,0 +1,14 @@
+{
+  "name": "get-pixels",
+  "version": "3.3.3-margin.1",
+  "description": "Substituto local do get-pixels para o escpos: só arquivo/Buffer, decodificado pelo sharp (sem request).",
+  "main": "index.js",
+  "files": [
+    "index.js"
+  ],
+  "peerDependencies": {
+    "sharp": ">=0.33.0"
+  },
+  "license": "MIT",
+  "private": true
+}
