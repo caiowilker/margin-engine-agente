@@ -339,6 +339,7 @@ async function lerConfig() {
     dispositivoId: pub.dispositivoId || creds?.dispositivoId || null,
     agentToken: pub.agentToken || null,
     frontendOrigin: pub.frontendOrigin || null,
+    segredoRenovacao: pub.segredoRenovacao || null,
     ativado:
       pub.ativado === true ||
       !!(backendUrl && backendToken) ||
@@ -367,6 +368,7 @@ function lerConfigSync() {
     dispositivoId: pub.dispositivoId || null,
     agentToken: pub.agentToken || null,
     frontendOrigin: pub.frontendOrigin || null,
+    segredoRenovacao: pub.segredoRenovacao || null,
     ativado: !!(process.env.BACKEND_URL && process.env.BACKEND_TOKEN),
   };
 }
@@ -376,7 +378,7 @@ function lerConfigSync() {
  * (comum após restart/reparo — evita reinstalar só para reativar).
  */
 async function recuperarCredenciaisSeNecessario(cfg) {
-  if (cfg?.backendToken) return cfg;
+  if (cfg?.backendToken) return garantirSegredoRenovacao(cfg);
   const dispositivoId = cfg?.dispositivoId || cfg?.pdvId;
   const tenantId = cfg?.tenantId;
   const backendUrl = cfg?.backendUrl || process.env.BACKEND_URL;
@@ -390,6 +392,7 @@ async function recuperarCredenciaisSeNecessario(cfg) {
       body: JSON.stringify({
         dispositivoId: String(dispositivoId),
         tenantId: String(tenantId),
+        ...(cfg?.segredoRenovacao ? { segredo: cfg.segredoRenovacao } : {}),
       }),
       timeout: 15000,
     });
@@ -401,12 +404,46 @@ async function recuperarCredenciaisSeNecessario(cfg) {
     }
     const dados = await resp.json();
     if (!dados?.token) return cfg;
-    const atualizado = { ...cfg, backendToken: dados.token, ativado: true };
+    const atualizado = {
+      ...cfg,
+      backendToken: dados.token,
+      ativado: true,
+      segredoRenovacao: dados.segredoRenovacao || cfg.segredoRenovacao || null,
+    };
     await salvarConfig(atualizado);
     console.log("[Boot] Credenciais JWT recuperadas do backend (terminal já ativo).");
     return atualizado;
   } catch (err) {
     console.warn("[Boot] Recuperação automática de credenciais:", err.message);
+    return cfg;
+  }
+}
+
+/**
+ * Terminal ativado antes da 1.0.81 não tem segredo de renovação: pede um com o JWT atual.
+ * Sem ele, se o cofre falhar, a renovação é recusada e o terminal precisa de novo código.
+ */
+async function garantirSegredoRenovacao(cfg) {
+  if (!cfg?.backendToken || cfg.segredoRenovacao) return cfg;
+  const backendUrl = cfg.backendUrl || process.env.BACKEND_URL;
+  if (!backendUrl) return cfg;
+  try {
+    const fetch = require("node-fetch");
+    const base = String(backendUrl).replace(/\/$/, "");
+    const resp = await fetch(`${base}/pdv/ativar/segredo`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${cfg.backendToken}` },
+      timeout: 15000,
+    });
+    if (!resp.ok) return cfg;
+    const dados = await resp.json();
+    if (!dados?.segredoRenovacao) return cfg;
+    const atualizado = { ...cfg, segredoRenovacao: dados.segredoRenovacao };
+    await salvarConfig(atualizado);
+    console.log("[Boot] Segredo de renovação do terminal registrado.");
+    return atualizado;
+  } catch (err) {
+    console.warn("[Boot] Segredo de renovação:", err.message);
     return cfg;
   }
 }
@@ -2620,6 +2657,7 @@ function iniciarServidor() {
         dispositivoId: dados.pdvId || dados.dispositivoId || null,
         agentToken,
         frontendOrigin,
+        segredoRenovacao: dados.segredoRenovacao || null,
         ativado: true,
       };
 
