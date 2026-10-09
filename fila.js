@@ -57,6 +57,19 @@ function mascararToken(token) {
   return `${token.slice(0, 4)}...${token.slice(-4)} (${token.length} chars)`;
 }
 
+/** 401 do backend traz `{ code, erro }` (token expirado/revogado); fora disso devolve o texto bruto. */
+function mensagemRecusaToken(status, texto) {
+  try {
+    const corpo = JSON.parse(texto);
+    if (corpo && typeof corpo.erro === "string" && corpo.erro) {
+      return corpo.code ? `${corpo.code}: ${corpo.erro}` : corpo.erro;
+    }
+  } catch {
+    /* corpo não-JSON */
+  }
+  return `HTTP ${status}: ${texto}`;
+}
+
 function statusAuth() {
   return {
     backendUrl: BACKEND_URL || null,
@@ -486,7 +499,7 @@ async function tentarBackend(payload) {
       const texto = await resp.text().catch(() => `HTTP ${resp.status}`);
       if (resp.status === 401 || resp.status === 403) {
         authState.tokenInvalido = true;
-        authState.ultimoErro = `HTTP ${resp.status}: ${texto}`;
+        authState.ultimoErro = mensagemRecusaToken(resp.status, texto);
         console.warn(
           `[Fila] ❌ Backend rejeitou o token (HTTP ${resp.status}) ao enviar venda online. ` +
             `Token atual: ${mascararToken(token)}. Reative o agente pelo painel para obter um token novo.`,
@@ -614,7 +627,7 @@ async function sincronizarInterno(url, token, opts = {}) {
       const erro = await resp.text().catch(() => `HTTP ${resp.status}`);
       if (resp.status === 401 || resp.status === 403) {
         authState.tokenInvalido = true;
-        authState.ultimoErro = `HTTP ${resp.status}: ${erro}`;
+        authState.ultimoErro = mensagemRecusaToken(resp.status, erro);
         console.warn(
           `[Fila] ❌ Backend rejeitou token no sync (HTTP ${resp.status}). Reative o agente.`,
         );
@@ -888,6 +901,7 @@ function purgeAntigos(dias = 30) {
 
 module.exports = {
   inicializar,
+  mensagemRecusaToken,
   getDatabase: () => db || null,
   atualizarConfig,
   enfileirar,
