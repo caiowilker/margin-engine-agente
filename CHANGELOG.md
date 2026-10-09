@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.79] - 2026-10-09
+
+### Changed
+
+- Versão alinhada à release 1.0.79 do Margin Engine (integração iFood e conectores de marketplace). Sem mudança no agente.
+
 ## [1.0.78] - 2026-10-09
 
 ### Changed
