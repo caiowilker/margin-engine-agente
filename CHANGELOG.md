@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.80] - 2026-10-09
+
+### Changed
+
+- Versão alinhada à release 1.0.80 do Margin Engine (Central de Pedidos em lista — beta, etapa 1). Sem mudança no agente.
+
 ## [1.0.79] - 2026-10-09
 
 ### Changed
