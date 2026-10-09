@@ -6,6 +6,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.82] - 2026-10-09
+
+### Security
+
+- `npm audit` zerado: o `escpos` passa a usar um `get-pixels` local que só lê arquivo/Buffer pelo `sharp` e recusa URL (sai a cadeia `request`/`form-data`/`qs`/`tough-cookie`); `sharp` 0.35.5, que exige Node ≥ 20.9 (o instalador já traz 20.18.1). `nodemon` removido.
+
+### Changed
+
+- Quando o servidor recusa o token do terminal, o caixa mostra o motivo vindo do servidor (token vencido ou revogado) e o passo de reativação, em vez de uma mensagem genérica.
+
 ## [1.0.81] - 2026-10-09
 
 ### Security

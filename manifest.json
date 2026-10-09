@@ -1,6 +1,6 @@
 {
-  "versao": "1.0.81",
-  "geradoEm": "2026-10-09T09:15:31.984Z",
+  "versao": "1.0.82",
+  "geradoEm": "2026-10-09T13:08:09.121Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -84,7 +84,7 @@
     },
     {
       "arquivo": "fila.js",
-      "sha256": "4d512e0de35b92feda6d36aaebcb61c953f73d78f23ddc5732326499b31a9ad7"
+      "sha256": "4522a717b1d896caf543c2f0b9a60d6a056b056b05ce69579dd499def498fd2c"
     },
     {
       "arquivo": "filaFiscal.js",
@@ -2872,7 +2872,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "09c373a8b11d4620a6b10ad5b4ef6d643e1c00cee5616028be6d39b9aa00b70b"
+      "sha256": "dcc2bc621575fd139964a308b991de93bfbe13a533b0b1735ac45949f1e087dc"
     },
     {
       "arquivo": "print/acbrPosExports.js",
