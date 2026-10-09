@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.84] - 2026-10-09
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.84 (Central em lista, etapas 4 a 6, no servidor e no painel).
+
 ## [1.0.83] - 2026-10-09
 
 ### Changed
