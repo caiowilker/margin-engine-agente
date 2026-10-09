@@ -1,6 +1,6 @@
 {
-  "versao": "1.0.80",
-  "geradoEm": "2026-10-09T06:26:49.596Z",
+  "versao": "1.0.81",
+  "geradoEm": "2026-10-09T09:15:31.984Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -2836,7 +2836,7 @@
     },
     {
       "arquivo": "index.js",
-      "sha256": "591cbd10d01822e67a5b49d681da701badcb3252bbf3c30a785a0341484033cb"
+      "sha256": "0ad4f8a356308266799d3107486d13ff2e174fd8152f4b4a001866bae056c198"
     },
     {
       "arquivo": "install-service.js",
@@ -2872,7 +2872,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "20ec24b6fc0eb7f40e3d5922d8d141db19f042a9022b09fbd7079f73ffdb2f49"
+      "sha256": "09c373a8b11d4620a6b10ad5b4ef6d643e1c00cee5616028be6d39b9aa00b70b"
     },
     {
       "arquivo": "print/acbrPosExports.js",

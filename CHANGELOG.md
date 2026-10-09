@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.81] - 2026-10-09
+
+### Security
+
+- Renovação do token do terminal com segredo de renovação: o agente obtém o segredo com o token ainda válido (`/pdv/ativar/segredo`), guarda em `config.json` e envia na renovação; a resposta traz o segredo trocado. Atualize o agente antes do backend 1.0.81 — agentes antigos precisam de uma reativação quando o token vencer.
+
 ## [1.0.80] - 2026-10-09
 
 ### Changed
