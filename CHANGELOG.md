@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.78] - 2026-10-09
+
+### Changed
+
+- Versão alinhada à release 1.0.78 do Margin Engine (painel ao vivo do dono). Sem mudança no agente.
+
 ## [1.0.77] - 2026-10-09
 
 ### Changed
