@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.86] - 2026-10-09
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.86 (frente de caixa mostra o total em destaque quando o
+  valor é exato, sem "Troco a devolver R$ 0,00").
+
 ## [1.0.85] - 2026-10-09
 
 ### Changed
