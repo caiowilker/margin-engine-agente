@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.72] - 2026-10-08
+
+### Changed
+
+- Versão alinhada ao release 1.0.72 do Margin Engine (programa de fidelidade); sem mudança no agente.
+
 ## [1.0.71] - 2026-10-08
 
 ### Added
