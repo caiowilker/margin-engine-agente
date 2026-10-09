@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.85] - 2026-10-09
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.85 (Central em lista e loja do pedido ligadas por padrão no
+  servidor).
+
 ## [1.0.84] - 2026-10-09
 
 ### Changed
