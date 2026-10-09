@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.77] - 2026-10-09
+
+### Changed
+
+- Versão alinhada à release 1.0.77 (PDV de salão: comandas, reservas, taxa de serviço, senha e app do garçom). Sem mudança no agente.
+
 ## [1.0.76] - 2026-10-08
 
 ### Changed
