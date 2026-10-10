@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.89] - 2026-10-10
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.89 (média de preparo arredondada em 2 casas na Central
+  e "Pedir de novo" do acompanhamento leva ao cardápio em vez de dar erro).
+
 ## [1.0.88] - 2026-10-10
 
 ### Changed
