@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.88] - 2026-10-10
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.88 (Central em lista com tela cheia, KDS compacto,
+  avaliações com filtros, novo cupom e correções de carregamento).
+
 ## [1.0.87] - 2026-10-09
 
 ### Changed
