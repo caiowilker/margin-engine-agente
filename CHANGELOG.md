@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.87] - 2026-10-09
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.87 (redesenho do painel: Central Kanban limpa, zonas de
+  entrega com cidade/UF por seleção, comandas, cartões, fidelidade e marketing).
+
 ## [1.0.86] - 2026-10-09
 
 ### Changed
