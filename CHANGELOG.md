@@ -6,6 +6,19 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.135] - 2026-10-13
+
+### Fixed
+
+- Alinhamento 1.0.135: abertura de caixa com fundo da loja (sem 422) + backoff do
+  health do agente offline.
+
+## [1.0.134] - 2026-10-13
+
+### Fixed
+
+- Alinhamento 1.0.134: jobs `@Scheduled` em platform threads + alerta fiscal resiliente.
+
 ## [1.0.133] - 2026-10-13
 
 ### Fixed
