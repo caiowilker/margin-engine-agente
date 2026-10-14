@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.147] - 2026-10-14
+
+### Added
+
+- Release alignment 1.0.147 — Contrato A4 do crediário pela venda no frente
+  (sem abrir Contas). Sem mudança de runtime no agente.
+
 ## [1.0.146] - 2026-10-14
 
 ### Fixed
