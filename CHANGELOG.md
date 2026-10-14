@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.153] - 2026-10-14
+
+### Removed
+
+- Release alignment 1.0.153 — remove oferta/modal Contrato A4 pós-venda no frente.
+  Contrato volta a ser gerado em Crediário › Contas. Sem mudança de runtime no agente.
+
 ## [1.0.152] - 2026-10-14
 
 ### Changed
@@ -1231,6 +1238,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - Alinha agente/instalador à versão do front 1.0.41 (temas Suave/Sol + F2).
 
 ## [Unreleased]
+
+## [1.0.153] - 2026-10-14
+
+### Removed
+
+- Release alignment 1.0.153 — remove oferta/modal Contrato A4 pós-venda no frente.
+  Contrato volta a ser gerado em Crediário › Contas. Sem mudança de runtime no agente.
 
 ## [1.0.152] - 2026-10-14
 
