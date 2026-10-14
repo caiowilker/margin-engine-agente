@@ -208,11 +208,12 @@ async function processarSombra(lote, cfg, arquivos) {
   } catch (err) {
     return { status: "ERRO", detalhe: `SOMBRA falhou: ${err.message}`, evidenciasBak: [] };
   }
+  // DIAGNOSTICO_OK libera o slot no backend (IMPORTED) — ENTREGUE deixava DELIVERED eterno.
   return {
-    status: "ENTREGUE",
+    status: "DIAGNOSTICO_OK",
     detalhe: `SOMBRA: arquivos gravados em ${loteDir} (pasta MGV não foi tocada)`,
-    evidenciasBak: [],
-    statusUi: STATUS_UI.AGUARDANDO_CONFIRMACAO,
+    evidenciasBak: ["SOMBRA"],
+    statusUi: STATUS_UI.CONFIRMADO,
   };
 }
 

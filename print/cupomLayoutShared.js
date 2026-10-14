@@ -261,6 +261,161 @@ function imprimirBarcodesEscpos(printer, payload, opts = {}) {
   return total;
 }
 
+/**
+ * Linhas de rodapé compacto (não usar no PADRAO — PADRAO fica no código legado).
+ * Compacto: obrigado+volte + PDV. Ultra: uma linha.
+ */
+function footerTextLinesCompact(profile) {
+  const mode = profile?.compactFooter;
+  if (mode === "single_line") {
+    return [`${FOOTER.obrigado} ${FOOTER.volte}`];
+  }
+  return [`${FOOTER.obrigado} ${FOOTER.volte}`, FOOTER.pdv];
+}
+
+/**
+ * Tags ACBr do rodapé COMPACTO/ULTRA (sem </linha_simples> prévia).
+ * @param {*} profile
+ * @param {{ ceCorpo: (s: string) => string }} tags
+ */
+function footerAcbrTagsCompact(profile, tags) {
+  return footerTextLinesCompact(profile).map((t) => tags.ceCorpo(t));
+}
+
+/**
+ * Rodapé ESC/POS COMPACTO/ULTRA — sem sepEq prévio nem feeds vazios.
+ */
+function applyFooterEscposCompact(printer, profile) {
+  const texts = footerTextLinesCompact(profile);
+  printer.align("ct");
+  texts.forEach((t, i) => {
+    if (i === 0) printer.style("b").text(t).style("normal");
+    else printer.text(t);
+  });
+  return printer;
+}
+
+/**
+ * Linhas de identificação do documento (nNF/série ± protocolo).
+ * Compacto/Ultra: junta protocolo na mesma linha se couber — mesmo texto.
+ * @returns {string[]}
+ */
+function linhasIdDocumentoFiscal(opts = {}) {
+  const {
+    linhaNumeroSerie,
+    protocolo,
+    cols = 48,
+    compact = false,
+  } = opts;
+  const base = String(linhaNumeroSerie || "").trim();
+  const protRaw = protocolo != null ? String(protocolo).trim() : "";
+  const prot = protRaw ? `Protocolo: ${protRaw.slice(0, 30)}` : "";
+  if (!compact || !prot) {
+    return [base, prot].filter(Boolean);
+  }
+  const joined = `${base}  ${prot}`;
+  if (joined.length <= cols) return [joined];
+  return [base, prot];
+}
+
+/**
+ * Bloco qr_mensagens compacto — remove divisores/labels redundantes.
+ * Mantém portal + QR (conteúdo/tamanho). Não altera URL do QR.
+ *
+ * @param {*} profile
+ * @param {{ portalLine?: string, qrContent: string }} ctx
+ * @returns {{ portalLine: string|null, qrLabelBefore: null, qrLabelAfter: null, omitSeps: boolean }}
+ */
+function resolveQrMensagensCompact(profile, ctx = {}) {
+  const mode = profile?.compactQrMensagens;
+  const portalLine = ctx.portalLine || null;
+  if (!mode) {
+    return {
+      portalLine,
+      qrLabelBefore: "Consulta via QR Code",
+      qrLabelAfter: "Consulte pela chave ou QR Code",
+      omitSeps: false,
+    };
+  }
+  // tight: sem labels redundantes; portal permanece (consulta SEFAZ).
+  return {
+    portalLine,
+    qrLabelBefore: null,
+    qrLabelAfter: null,
+    omitSeps: true,
+  };
+}
+
+/**
+ * Extrai campos fiscais obrigatórios do dump de tags (ordem estável).
+ * Cobre MET DANFE III/IV/V/VI/VII: consulta+URL, chave, protocolo,
+ * qtde itens (Volumes), total, pagamentos, pago/troco, consumidor.
+ */
+function extrairCamposFiscaisObrigatorios(tags) {
+  const text = String(tags || "");
+  const digits = (text.match(/\b(\d{44})\b/) || [])[1]
+    || (text.replace(/\D/g, "").match(/\d{44}/) || [])[0]
+    || "";
+  // chave pode estar quebrada em grupos de 4
+  let chaveGrouped = "";
+  const chaveBlock = text.match(
+    /Chave de acesso[\s\S]*?(?=Consulte em|Consulta via|\{\{ME_QR_BMP\}\}|<\/corte|$)/i,
+  );
+  if (chaveBlock) {
+    chaveGrouped = (chaveBlock[0].match(/\d{4}(?:\s+\d{4})*/g) || []).join(" ");
+  }
+  const chaveDigits = (chaveGrouped.replace(/\D/g, "") || digits).slice(0, 44);
+  const protocolo = (text.match(/Protocolo:\s*([0-9A-Za-z]+)/i) || [])[1] || "";
+  const nfe = (text.match(/NFC-e:\s*(\d+)/i) || [])[1] || "";
+  const serie = (text.match(/Serie:\s*(\d+)/i) || [])[1] || "";
+  const consultaLine =
+    (text.match(/Consulte em\s+[^\n<]+/i) || [])[0]?.replace(/<\/?[^>]+>/g, "").trim() ||
+    "";
+  const portalRaw = (text.match(/Consulte em\s+([^\s<]+)/i) || [])[1] || "";
+  const portal = portalRaw.replace(/<\/?[^>]+>/g, "").trim();
+  const qrPlaceholder = /\{\{ME_QR_BMP\}\}/.test(text);
+  const qrTag = (text.match(/<qrcode[^>]*>([^<]*)<\/qrcode>/i) || [])[1] || "";
+  const titulo = /CUPOM FISCAL NFC-e|DOCUMENTO FISCAL NFC-e/i.test(text);
+  const total =
+    (text.match(/TOTAL:\s*R?\$?\s*([0-9.,]+)/i) || [])[1] || "";
+  const volumes =
+    (text.match(/Volumes:\s*([0-9]+)\s*item/i) || [])[1] || "";
+  const troco =
+    (text.match(/TROCO:\s*R?\$?\s*([0-9.,]+)/i) || [])[1] || "";
+  const recebido =
+    (text.match(/Recebido:\s*R?\$?\s*([0-9.,]+)/i) || [])[1] || "";
+  const pagamentos = [];
+  const pgRe = /Pagamento:\s*([^\n<]+)/gi;
+  let m;
+  while ((m = pgRe.exec(text)) !== null) {
+    pagamentos.push(m[1].replace(/<\/?[^>]+>/g, "").trim());
+  }
+  const cliente =
+    (text.match(/Cliente:\s*([^\n<]+)/i) || [])[1]?.replace(/<\/?[^>]+>/g, "").trim() ||
+    "";
+  const cpf =
+    (text.match(/CPF:\s*([^\n<]+)/i) || [])[1]?.replace(/<\/?[^>]+>/g, "").trim() ||
+    "";
+  return {
+    chaveDigits,
+    protocolo,
+    numeroNfe: nfe,
+    serieNfe: serie,
+    consultaLine,
+    portal,
+    qrPlaceholder,
+    qrTag,
+    temTitulosFiscais: titulo,
+    total,
+    volumes,
+    troco,
+    recebido,
+    pagamentos,
+    cliente,
+    cpf,
+  };
+}
+
 module.exports = {
   FOOTER,
   BANNER,
@@ -274,4 +429,10 @@ module.exports = {
   encodeCode128ForEscPos,
   sanitizeCode39,
   imprimirBarcodesEscpos,
+  footerTextLinesCompact,
+  footerAcbrTagsCompact,
+  applyFooterEscposCompact,
+  linhasIdDocumentoFiscal,
+  resolveQrMensagensCompact,
+  extrairCamposFiscaisObrigatorios,
 };

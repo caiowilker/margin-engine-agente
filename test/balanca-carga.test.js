@@ -222,7 +222,7 @@ test("modo sombra não toca pasta MGV e ACK indica SOMBRA", async () => {
       intervaloPollingBakMs: 50,
     },
   );
-  assert.equal(r.status, "ENTREGUE");
+  assert.equal(r.status, "DIAGNOSTICO_OK");
   assert.match(r.detalhe, /SOMBRA/);
   assert.equal(fs.existsSync(path.join(mgv, "ITENSMGV.TXT")), false);
   assert.equal(fs.existsSync(path.join(mgv, "ARQSOK.TXT")), false);
@@ -434,7 +434,7 @@ test("gatilho por data rejeita path fora da pasta (traversal)", async () => {
   assert.match(r.detalhe, /path rejeitado|fora da pasta/i);
 });
 
-test("dois lotes seguidos com mesmo conteúdo em sombra — ambos ENTREGUE", async () => {
+test("dois lotes seguidos com mesmo conteúdo em sombra — ambos DIAGNOSTICO_OK", async () => {
   const mgv = path.join(tmpRoot, "mgv-dup");
   fs.mkdirSync(mgv, { recursive: true });
   const body = Buffer.from("mesmo\r\n");
@@ -457,7 +457,7 @@ test("dois lotes seguidos com mesmo conteúdo em sombra — ambos ENTREGUE", asy
   };
   const r1 = await processarLote({ ...lote, loteId: "dup-1" }, cfg);
   const r2 = await processarLote({ ...lote, loteId: "dup-2" }, cfg);
-  assert.equal(r1.status, "ENTREGUE");
-  assert.equal(r2.status, "ENTREGUE");
+  assert.equal(r1.status, "DIAGNOSTICO_OK");
+  assert.equal(r2.status, "DIAGNOSTICO_OK");
   assert.equal(fs.existsSync(path.join(mgv, "CADTXT.TXT")), false);
 });

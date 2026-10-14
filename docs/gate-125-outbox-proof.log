@@ -1,0 +1,9 @@
+PASS | login
+PASS | cancel com lock ocupado → HTTP 200
+PASS | outbox PENDENTE=1 enquanto lock ativo
+PASS | sem evento na cadeia até liberar lock
+PASS | após liberar: evento com registrado_com_atraso=true, ocorrido_em preservado
+PASS | hash_anterior = tip anterior (encadeamento OK)
+PASS | evento atrasado NÃO aparece em quebras de integridade
+NOTE | tenant tem 29 quebras pré-existentes (hash diverge) — não causadas pela outbox
+PASS | GET /pdv/auditoria/outbox/pendentes → 0 após drenar

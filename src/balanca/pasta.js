@@ -167,10 +167,68 @@ function limparTemporariosOrfaos(pasta) {
   return n;
 }
 
+/**
+ * Após TIMEOUT_IMPORTACAO: move nomes de ocupação (ITENSMGV/ARQSOK/…) para
+ * subpasta `_margin_orphan/` para o próximo envio não ficar eterno em PASTA_OCUPADA.
+ * Não apaga — o operador pode inspecionar.
+ * @returns {{ movidos: string[], pastaOrphan: string|null }}
+ */
+function quarentenarResiduaisAposTimeout(pastaCarga) {
+  const pasta = String(pastaCarga || "").trim();
+  if (!pasta || !fs.existsSync(pasta)) {
+    return { movidos: [], pastaOrphan: null };
+  }
+  const presentes = listarPresentes(pasta);
+  if (presentes.length === 0) {
+    return { movidos: [], pastaOrphan: null };
+  }
+  const orphanDir = path.join(pasta, "_margin_orphan");
+  try {
+    fs.mkdirSync(orphanDir, { recursive: true });
+  } catch (err) {
+    log.warn({ err: err.message, pasta }, "Não criou _margin_orphan");
+    return { movidos: [], pastaOrphan: null };
+  }
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const movidos = [];
+  for (const nome of presentes) {
+    const src = path.join(pasta, nome);
+    const dest = path.join(orphanDir, `${stamp}__${nome}`);
+    try {
+      comRetry(() => {
+        fs.renameSync(src, dest);
+      });
+      movidos.push(nome);
+    } catch (err) {
+      // Fallback: copia + remove se rename falhar (cross-device)
+      try {
+        comRetry(() => {
+          fs.copyFileSync(src, dest);
+          fs.unlinkSync(src);
+        });
+        movidos.push(nome);
+      } catch (err2) {
+        log.warn(
+          { nome, err: err2.message || err.message },
+          "Não quarentenou residual MGV",
+        );
+      }
+    }
+  }
+  if (movidos.length) {
+    log.info(
+      { pasta, movidos, orphanDir },
+      "Residuais MGV movidos para _margin_orphan após timeout",
+    );
+  }
+  return { movidos, pastaOrphan: orphanDir };
+}
+
 module.exports = {
   diagnosticarPasta,
   listarPresentes,
   limparTemporariosOrfaos,
+  quarentenarResiduaisAposTimeout,
   comRetry,
   enriquecerErroRede,
   RETRY_CODES,

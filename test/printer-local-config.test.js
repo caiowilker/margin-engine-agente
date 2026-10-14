@@ -36,6 +36,40 @@ test("ler — defaults quando INI ausente", () => {
   const l = cfg.ler();
   assert.strictEqual(l.provider, "acbr-posprinter");
   assert.ok(l.iniPath);
+  assert.strictEqual(l.cupomLayoutPerfil || "PADRAO", "PADRAO");
+});
+
+test("salvar — cupomLayoutPerfil Compacto em sidecar (80mm)", () => {
+  cfg.salvar({
+    porta: "RAW:POSPrinter POS80",
+    modelo: "1",
+    colunas: "48",
+  });
+  const saved = cfg.salvar({ cupomLayoutPerfil: "COMPACTO" });
+  assert.strictEqual(saved.cupomLayoutPerfil, "COMPACTO");
+  assert.strictEqual(saved.unchanged, true);
+  assert.strictEqual(saved.perfilChanged, true);
+  const side = cfg.resolveCupomLayoutPerfilPath();
+  assert.ok(fs.existsSync(side));
+  const back = cfg.salvar({ cupomLayoutPerfil: "PADRAO" });
+  assert.strictEqual(back.cupomLayoutPerfil, "PADRAO");
+});
+
+test("salvar — Compacto bloqueado em 58mm", () => {
+  cfg.salvar({
+    porta: "RAW:POS58",
+    modelo: "1",
+    colunas: "32",
+  });
+  let threw = false;
+  try {
+    cfg.salvar({ cupomLayoutPerfil: "COMPACTO" });
+  } catch (e) {
+    threw = true;
+    assert.strictEqual(e.code, "CUPOM_PERFIL_58MM_BLOQUEADO");
+  }
+  assert.ok(threw);
+  cfg.salvar({ colunas: "48", cupomLayoutPerfil: "PADRAO" });
 });
 
 test("salvar — persiste porta e modelo no INI", () => {

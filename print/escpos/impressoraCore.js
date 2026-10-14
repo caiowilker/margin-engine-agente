@@ -2476,7 +2476,40 @@ async function renderCupomConteudo(printer, payload) {
     applyEscposCut,
     seriePadraoCupom,
     imprimirBarcodesEscpos,
+    applyFooterEscposCompact,
+    linhasIdDocumentoFiscal,
+    resolveQrMensagensCompact,
   } = require("../cupomLayoutShared");
+  const { resolveCupomLayoutProfile } = require("../cupomLayoutProfile");
+  let paperMmEsc = 80;
+  let fontBEsc = false;
+  let espacoEsc = null;
+  try {
+    const lcEsc = require("../printerLocalConfig").ler();
+    paperMmEsc = Number(lcEsc?.paperMm) || 80;
+    fontBEsc = lcEsc?.cupomLayoutFontB === true;
+    espacoEsc = lcEsc?.cupomLayoutEspacoEntreLinhas;
+  } catch (_) {}
+  const perfilCfgEsc =
+    payload.cupomLayoutPerfil ||
+    (() => {
+      try {
+        return require("../printerLocalConfig").ler()?.cupomLayoutPerfil;
+      } catch (_) {
+        return null;
+      }
+    })();
+  const profile = resolveCupomLayoutProfile({
+    perfil: perfilCfgEsc,
+    isFiscal,
+    paperMm: paperMmEsc,
+    fontB: fontBEsc,
+    espacoEntreLinhas: espacoEsc,
+  });
+  const compacto = profile.id !== "PADRAO";
+  // Font B / EspacoEntreLinhas: override terminal only (default off) — não forçar.
+  void profile.fontB;
+  void profile.espacoEntreLinhas;
 
   const LABEL_PGTO = {
     dinheiro: "DINHEIRO",
@@ -2640,10 +2673,16 @@ async function renderCupomConteudo(printer, payload) {
   // ── TOTAL — destaque com bold, tamanho normal para respeitar largura do papel ─
   // size(0,0) = tamanho padrão — evita quebra de linha em papel estreito (58/80 mm)
   // O destaque visual vem do bold + separadores ===
-  printer.text(sepEq());
+  if (!(compacto && profile.collapseTotalSeps)) {
+    printer.text(sepEq());
+  }
   const totalStr = "TOTAL: " + fmtR$(totalFinal);
   printer.align("ct").style("b").size(0, 0).text(totalStr).style("normal");
-  printer.align("lt").text(sepEq());
+  if (!(compacto && profile.collapseTotalSeps)) {
+    printer.align("lt").text(sepEq());
+  } else {
+    printer.align("lt").text(sepDash());
+  }
 
   // ── Pagamento ────────────────────────────────────────────────────────────────
   const pagamentosCupom =
@@ -2691,7 +2730,9 @@ async function renderCupomConteudo(printer, payload) {
 
   // Volumes
   const totalVols = itens.reduce((s, i) => s + Number(i.quantidade || 0), 0);
-  printer.text(col2("Volumes:", Math.round(totalVols) + " item(ns)"));
+  if (!(compacto && profile.omitVolumes)) {
+    printer.text(col2("Volumes:", Math.round(totalVols) + " item(ns)"));
+  }
 
   const { resolverIbptCupom, formatarTextoIbptCupom } = require("../../fiscalIbpt");
   // IBPT só no documento fiscal (Lei 12.741) — nunca no cupom auxiliar.
@@ -2704,47 +2745,85 @@ async function renderCupomConteudo(printer, payload) {
 
   // ── 6. NFC-e ─────────────────────────────────────────────────────────────────
   if (isFiscal) {
-    printer.text(sepDash());
-    const tituloFiscal = tituloBlocoDocumentoFiscal(payload.chaveNfe);
-    printer
-      .align("ct")
-      .style("b")
-      .text(tituloFiscal)
-      .style("normal")
-      .align("ct")
-      .style("b")
-      .text(
-        linhaNumeroSerieDocumento(payload.chaveNfe, payload.numeroNfe, payload.serieNfe, {
-          seriePadrao: seriePadraoCupom(),
-        }),
-      )
-      .style("normal")
-      .align("lt");
-    if (payload.protocolo) {
-      printer.text(`Protocolo: ${String(payload.protocolo).slice(0, 30)}`);
-    }
-    const chaveLines = formatChaveLines(payload.chaveNfe, getThermalCols());
-    if (chaveLines.length) {
-      printer.align("ct").text("Chave de acesso");
-      chaveLines.forEach((line) => printer.text(line));
-    }
     const qrConteudo = resolverQrCodeNfce(payload);
-    printer
-      .align("ct")
-      .text(`Consulte em ${portalConsultaDocumento(payload.chaveNfe, qrConteudo)}`);
+    const tituloFiscal = tituloBlocoDocumentoFiscal(payload.chaveNfe);
+    const linhaNs = linhaNumeroSerieDocumento(
+      payload.chaveNfe,
+      payload.numeroNfe,
+      payload.serieNfe,
+      { seriePadrao: seriePadraoCupom() },
+    );
+    const chaveLines = formatChaveLines(payload.chaveNfe, getThermalCols());
+    const portal =
+      qrConteudo != null
+        ? `Consulte em ${portalConsultaDocumento(payload.chaveNfe, qrConteudo)}`
+        : null;
 
-    if (qrConteudo && IMPRIMIR_QR_NFCE && isNfceModelo65(payload.chaveNfe)) {
-      printer.text("Consulta via QR Code");
-      await imprimirQrNfce(printer, qrConteudo);
-      printer.align("ct").text("Consulte pela chave ou QR Code");
-    } else if (
-      IMPRIMIR_QR_NFCE &&
-      isNfceModelo65(payload.chaveNfe) &&
-      !payload.permitirSemQr
-    ) {
-      throw new Error(
-        "NFC-e autorizada sem URL de QR Code — aguarde sincronização do XML ou reimprima via DANFC-e",
-      );
+    if (compacto && profile.compactChaveProtocolo) {
+      // Compacto/Ultra — aparência apenas; mesmos textos/QR.
+      if (!(profile.collapseTotalSeps)) printer.text(sepDash());
+      printer.align("ct").style("b").text(tituloFiscal).style("normal");
+      for (const idLine of linhasIdDocumentoFiscal({
+        linhaNumeroSerie: linhaNs,
+        protocolo: payload.protocolo,
+        cols: getThermalCols(),
+        compact: true,
+      })) {
+        printer.align("ct").text(idLine);
+      }
+      if (chaveLines.length) {
+        printer.align("ct").text("Chave de acesso");
+        chaveLines.forEach((line) => printer.text(line));
+      }
+      const qrMsg = resolveQrMensagensCompact(profile, { portalLine: portal });
+      if (qrMsg.portalLine) printer.align("ct").text(qrMsg.portalLine);
+      if (qrConteudo && IMPRIMIR_QR_NFCE && isNfceModelo65(payload.chaveNfe)) {
+        if (qrMsg.qrLabelBefore) printer.align("ct").text(qrMsg.qrLabelBefore);
+        await imprimirQrNfce(printer, qrConteudo);
+        if (qrMsg.qrLabelAfter) printer.align("ct").text(qrMsg.qrLabelAfter);
+      } else if (
+        IMPRIMIR_QR_NFCE &&
+        isNfceModelo65(payload.chaveNfe) &&
+        !payload.permitirSemQr
+      ) {
+        throw new Error(
+          "NFC-e autorizada sem URL de QR Code — aguarde sincronização do XML ou reimprima via DANFC-e",
+        );
+      }
+    } else {
+      // PADRAO — sequência histórica (não alterar).
+      printer.text(sepDash());
+      printer
+        .align("ct")
+        .style("b")
+        .text(tituloFiscal)
+        .style("normal")
+        .align("ct")
+        .style("b")
+        .text(linhaNs)
+        .style("normal")
+        .align("lt");
+      if (payload.protocolo) {
+        printer.text(`Protocolo: ${String(payload.protocolo).slice(0, 30)}`);
+      }
+      if (chaveLines.length) {
+        printer.align("ct").text("Chave de acesso");
+        chaveLines.forEach((line) => printer.text(line));
+      }
+      printer.align("ct").text(portal || `Consulte em ${portalConsultaDocumento(payload.chaveNfe, qrConteudo)}`);
+      if (qrConteudo && IMPRIMIR_QR_NFCE && isNfceModelo65(payload.chaveNfe)) {
+        printer.text("Consulta via QR Code");
+        await imprimirQrNfce(printer, qrConteudo);
+        printer.align("ct").text("Consulte pela chave ou QR Code");
+      } else if (
+        IMPRIMIR_QR_NFCE &&
+        isNfceModelo65(payload.chaveNfe) &&
+        !payload.permitirSemQr
+      ) {
+        throw new Error(
+          "NFC-e autorizada sem URL de QR Code — aguarde sincronização do XML ou reimprima via DANFC-e",
+        );
+      }
     }
   }
 
@@ -2764,18 +2843,23 @@ async function renderCupomConteudo(printer, payload) {
   }
 
   // ── 8. Rodapé — paridade ACBr ───────────────────────────────────────────────
-  printer.align("lt").text(sepEq());
-  printer
-    .align("ct")
-    .style("b")
-    .text(FOOTER.obrigado)
-    .style("normal")
-    .text(FOOTER.volte)
-    .text("")
-    .text(FOOTER.pdv)
-    .text("")
-    .text("")
-    .text("");
+  if (compacto && profile.compactFooter) {
+    applyFooterEscposCompact(printer, profile);
+  } else {
+    // PADRAO — sequência histórica (não alterar).
+    printer.align("lt").text(sepEq());
+    printer
+      .align("ct")
+      .style("b")
+      .text(FOOTER.obrigado)
+      .style("normal")
+      .text(FOOTER.volte)
+      .text("")
+      .text(FOOTER.pdv)
+      .text("")
+      .text("")
+      .text("");
+  }
   applyEscposCut(printer);
   phases.bodyMs = performance.now() - tBody;
   const totalRenderMs = performance.now() - t0RenderCupom;

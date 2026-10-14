@@ -3,7 +3,11 @@
 const fs = require("fs");
 const path = require("path");
 const { exigirPermitido } = require("./allowlist");
-const { diagnosticarPasta, limparTemporariosOrfaos } = require("./pasta");
+const {
+  diagnosticarPasta,
+  limparTemporariosOrfaos,
+  quarentenarResiduaisAposTimeout,
+} = require("./pasta");
 const {
   validarSha256,
   escreverAtomico,
@@ -63,9 +67,14 @@ async function entregarPastaMonitorada(lote, cfg, arquivos, hooks = {}) {
       }
       await new Promise((r) => setTimeout(r, cfg.intervaloPollingBakMs || 1000));
     }
+    const q = quarentenarResiduaisAposTimeout(pasta);
+    const extra =
+      q.movidos.length > 0
+        ? ` Residuais movidos para _margin_orphan: ${q.movidos.join(", ")}.`
+        : "";
     return {
       status: "TIMEOUT_IMPORTACAO",
-      detalhe: "Arquivos ainda na pasta após timeout (estratégia CONSUMIDO)",
+      detalhe: `Arquivos ainda na pasta após timeout (estratégia CONSUMIDO).${extra}`,
       evidenciasBak: [],
     };
   }
@@ -83,9 +92,15 @@ async function entregarPastaMonitorada(lote, cfg, arquivos, hooks = {}) {
       evidenciasBak: poll.evidencias.map((e) => path.basename(e.bak)),
     };
   }
+  // Evita PASTA_OCUPADA eterna no próximo lote — quarentena residual (não apaga).
+  const q = quarentenarResiduaisAposTimeout(pasta);
+  const extra =
+    q.movidos.length > 0
+      ? ` Residuais movidos para _margin_orphan: ${q.movidos.join(", ")}.`
+      : "";
   return {
     status: "TIMEOUT_IMPORTACAO",
-    detalhe: `${poll.mensagem} Pendentes: ${(poll.pendentes || []).join(", ")}. Causa: ${poll.causaProvavel}`,
+    detalhe: `${poll.mensagem} Pendentes: ${(poll.pendentes || []).join(", ")}. Causa: ${poll.causaProvavel}.${extra}`,
     evidenciasBak: (poll.evidencias || []).map((e) => path.basename(e.bak)),
   };
 }

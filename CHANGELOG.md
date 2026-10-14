@@ -6,6 +6,331 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.128] - 2026-10-13
+
+### Changed
+
+- Tela Lojas sem botão de numerário; toggle só em Configurações do PDV (produção).
+
+
+## [1.0.127] - 2026-10-13
+
+### Fixed
+
+- Toggle de controle de numerário em **Configurações do PDV** (`/configuracoes/pdv-operacional`),
+  tela acessível a ADMIN/OWNER em qualquer plano com PDV (Lojas exige ERP_RETAIL e não aparece
+  em MERCADO/ESSENTIAL).
+
+
+## [1.0.126] - 2026-10-13
+
+### Fixed
+
+- Controle de numerário disponível em todos os planos com PDV (MERCADO/ESSENTIAL):
+  toggle via `/pdv/caixa/lojas` + exceção estreita em `/retail/lojas/{id}/controle-numerario`
+  (sem enfraquecer o restante de `/retail/`). Front Lojas não bloqueia mais o botão por ERP_RETAIL.
+
+
+## [1.0.125] - 2026-10-13
+
+### Fixed
+
+- Auditoria de cancelamento: outbox em TX `REQUIRES_NEW` quando lock/timeout falha;
+  reenvio preserva `ocorrido_em`, marca "registrado com atraso", entra na cadeia de
+  hash sem quebrar integridade; alerta de pendentes na tela de auditoria.
+- Lojas: botão de numerário não dispara PUT sem `ERP_RETAIL` (mensagem clara;
+  planos REDE / REDE_PLUS / ENTERPRISE).
+
+### Changed
+
+- Smoke completo na versão FINAL antes do pacote.
+
+## [1.0.124] - 2026-10-13
+
+### Fixed
+
+- Paridade produção: finalização offline volta **ON** por padrão (Etapa 13 tinha
+  reportado OFF incorretamente). Dinheiro/cartão offline seguem funcionando;
+  só crediário permanece bloqueado offline. Kill switch `pdv-finalizar-offline=0`
+  continua disponível.
+- Defaults novos desta entrega ligados: cache local do catálogo e UI otimista
+  leve (kill switches `=0` desligam).
+
+### Changed
+
+- Cupom fiscal Compacto/Ultra permanece bloqueado; PADRAO default (inalterado).
+
+## [1.0.123] - 2026-10-13
+
+### Changed
+
+- Defaults de deploy: cupom fiscal Compacto/Ultra permanece bloqueado; PADRAO default.
+- Pacote gerado após smoke HTTP real (baseline + numerário piloto).
+
+
+## [1.0.122] - 2026-10-13
+
+### Added
+
+- Etapa 11-C/E: endpoint `GET /pdv/frente/cliente-contexto/{doc}` (1 RTT,
+  payload mínimo); índices hot path V20261139; query crediário por documento
+  reescrita; medição real cache ON + RTT 50/150/300; k6 multi-caixa;
+  evidência em `ETAPA11C-E-performance-evidencia.md`.
+
+## [1.0.121] - 2026-10-13
+
+### Changed
+
+- Etapa 13 condições 1–5: Compacto/Ultra fiscal **bloqueado** até
+  `PRINT_CUPOM_FISCAL_COMPACTO` + prova MET; `omitVolumes` revertido no
+  fiscal; kill switch suspensas servidor (loja/env/terminal → localStorage);
+  bench FOR UPDATE `gerarParcelas`; baseline documentado (sempre-on vs flag);
+  harness E2E HTTP.
+
+## [1.0.120] - 2026-10-13
+
+### Changed
+
+- Solidez produção (Etapa 13): kill switch `pdv-frente-otimista`; trava
+  `FOR UPDATE` em `gerarParcelas` (11-D); gate CI `test:pdv-gate` com
+  orçamento de latência de busca local (11-E); SQL read-only
+  `numerario-conferir-invariante.sql`; 12-3b/13 documentados como baseline
+  GA com features opt-in.
+
+## [1.0.119] - 2026-10-13
+
+### Changed
+
+- Etapa 13 (portão): cache local do catálogo e finalização offline nascem
+  **desligados** (opt-in por terminal); relatório de produção em
+  `docs/etapa13-portao-producao.md`.
+
+## [1.0.118] - 2026-10-13
+
+### Added
+
+- Etapa 12-3b: Compacto/Ultra no cupom fiscal NFC-e (aparência: qr_mensagens,
+  chave/protocolo, rodapé, Volumes, seps) sem alterar conteúdo/ordem fiscal nem
+  QR; Compacto reforçado com cortes seguros do Ultra; Font B/EspacoEntreLinhas
+  opt-in desligados por padrão.
+
+## [1.0.117] - 2026-10-13
+
+### Added
+
+- Etapa 12-3a: perfis de layout do cupom (Padrão / Compacto / Ultra) com Padrão
+  golden-idêntico aos `ANTES-*.tags.txt`; Compacto/Ultra opt-in só 80 mm no
+  cupom não fiscal; fiscal permanece Padrão até 12-3b; QR sem encolher;
+  métricas oficiais em linhas/dots (`print/cupomLayoutMetrics.js`).
+
+## [1.0.116] - 2026-10-13
+
+### Fixed
+
+- Transferir Numerário: caixa do próprio turno (também por caixaId, sem
+  terminal) usa TRANSFERIR_CAIXA — não exige mais Gerenciar Tesouraria nem
+  supervisor indevido; gestão continua só para conta↔conta / caixa alheio.
+
+## [1.0.115] - 2026-10-13
+
+### Fixed
+
+- Minhas vendas: não lista mais a mesma venda repetida (espelho local provisório
+  + cupom do servidor) — merge prioriza API, dedupe por vendaId/chaveNFe e
+  casa pix/PIX sem exigir operador idêntico.
+
+## [1.0.114] - 2026-10-13
+
+### Fixed
+
+- Frente de caixa: desconto/acréscimo não pedem mais senha de supervisor indevida
+  quando o operador já tem permissão (cache stale-while-revalidate + limite
+  desconhecido não tratado como 0% + permissão ao vivo na confirmação).
+
+## [1.0.113] - 2026-10-13
+
+### Changed
+
+- Cardápio Digital no cadastro: UI premium com seções claras, chips de
+  dias/horário, flags com save imediato sem apagar rascunho, e catálogo
+  (listas/canais/KDS) alinhado ao mesmo padrão visual.
+
+## [1.0.112] - 2026-10-13
+
+### Added
+
+- Exportação completa de produtos (XLSX): abas Produtos (schema da
+  importação), Apresentacoes e Extra — botão no cadastro PDV.
+
+## [1.0.111] - 2026-10-13
+
+### Changed
+
+- Simples Nacional não recebe mais o e-mail "Não foi possível gerar o arquivo
+  fiscal" (FISCAL_SPED_BLOQUEADO) — alerta só para regimes normais.
+
+## [1.0.110] - 2026-10-13
+
+### Changed
+
+- Etapa 11-A (condições): lápides hard-delete, cursor servidor+overlap,
+  kill switch de cache, isolamento tenant/usuário, bloqueio de finalização
+  offline não planejada, resiliência IndexedDB schema v3.
+- Etapa 11-B: UI otimista + revalidação em segundo plano (seq/debounce),
+  finalização/estorno/dinheiro/razão sempre no servidor.
+
+## [1.0.109] - 2026-10-13
+
+### Changed
+
+- Alinhamento de release: Kardex com LIMIT no banco e filtro de período
+  (corrige timeout/erro com alto volume de movimentos).
+
+## [1.0.108] - 2026-10-13
+
+### Changed
+
+- Alinhamento de release: histórico de fechamento de caixa enriquecido
+  (cards + detalhe completo por turno no relatório Fechamento).
+
+## [1.0.107] - 2026-10-13
+
+### Changed
+
+- Alinhamento de release com margin-engine / front: correção de vínculo de
+  produto na NF-e de entrada (alterar vínculo + memória cProd).
+
+## [1.0.106] - 2026-10-13
+
+### Added
+
+- Receber crediário: chip com total das parcelas selecionadas e botão
+  Recarregar (atualiza limite/saldo/parcelas sem fechar o modal).
+
+## [1.0.105] - 2026-10-13
+
+### Fixed
+
+- Carga de balança: slot travado em "Lote em andamento" com fila 0 (PENDING
+  órfãos / TIMEOUT / PASTA_OCUPADA infinito). Auto-recupera ao listar lotes;
+  botão "Liberar slot"; ACK sem confirmação e max PASTA_OCUPADA → TIMEOUT;
+  quarentena de residuais MGV em `_margin_orphan` após timeout; sombra ACK
+  DIAGNOSTICO_OK.
+
+## [1.0.104] - 2026-10-13
+
+### Added
+
+- Etapa 11-A (performance): cache local do catálogo com sync incremental
+  (`/pdv/produtos/sync-caixa`), índice de busca &lt; 30 ms, cache de
+  crediário/regras e indicadores claros de sincronizando/offline+cache.
+  Comportamento visível inalterado; etapas B–E pendentes de aprovação.
+
+## [1.0.103] - 2026-10-13
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.103 (Etapa 10:
+  instrumentação de latência do frente — só medição, sem otimizar regras).
+
+## [1.0.102] - 2026-10-13
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.102 (performance do
+  balcão: cache SWR de gaveta/resumo, fechamento instantâneo, suspender
+  otimista com rollback).
+
+## [1.0.101] - 2026-10-13
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.101 (QA final do
+  numerário: idempotência de fechamento, bloqueio de desligar mid-turn, job
+  de invariante e docs de ativação).
+
+## [1.0.100] - 2026-10-13
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.100 (auditoria de caixa
+  enriquecida, identidade estável, hash chain e alertas).
+
+## [1.0.99] - 2026-10-13
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.99 (vendas suspensas no
+  servidor, ligadas ao caixa; localStorage deixa de ser fonte da verdade).
+
+## [1.0.98] - 2026-10-13
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.98 (telas de fechamento em
+  4 passos com numerário, conciliação SSOT da gaveta e passagem com contagem
+  alinhada; fluxo legado com flag FALSE intacto).
+
+## [1.0.97] - 2026-10-13
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.97 (abertura com saldo do
+  operador + aceite/divergência/disputa de TRANSITO quando numerário efetivo;
+  abertura legada inalterada com flag FALSE).
+
+## [1.0.96] - 2026-10-13
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.96 (razão de numerário + destinos
+  no fechamento quando o controle está efetivo; legado com flag FALSE intacto).
+
+## [1.0.95] - 2026-10-13
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.95 (fundação controle de numerário +
+  SSOT da gaveta no backend; proposta do razão aguarda confirmação).
+
+## [1.0.94] - 2026-10-13
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.94 (cancelamento de venda
+  cancela crediário órfão / bloqueia se já houver pagamento).
+
+
+## [1.0.93] - 2026-10-13
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.93 (diagnóstico READ-ONLY de
+  crediário órfão de venda cancelada no backend).
+
+
+## [1.0.92] - 2026-10-13
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.92 (escrituração de NF-e importada não
+  falha mais com "Atestação SEFAZ expirada ou futura (TTL 120s)" — backend prefere protocolo
+  do XML e tolera clock skew leve).
+
+## [1.0.91] - 2026-10-13
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.91 (fechamento de caixa no frente mostra
+  dinheiro em caixa/gaveta com valores corretos e placeholders mais escuros).
+
+## [1.0.90] - 2026-10-13
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.90 (frente de caixa varejo não mostra
+  mais o modal de upgrade de Food Service).
+
 ## [1.0.89] - 2026-10-10
 
 ### Changed
@@ -715,6 +1040,68 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - Alinha agente/instalador à versão do front 1.0.41 (temas Suave/Sol + F2).
 
 ## [Unreleased]
+
+## [1.0.125] - 2026-10-13
+
+### Fixed
+
+- Auditoria de cancelamento: outbox em TX `REQUIRES_NEW` quando lock/timeout falha;
+  reenvio preserva `ocorrido_em`, marca "registrado com atraso", entra na cadeia de
+  hash sem quebrar integridade; alerta de pendentes na tela de auditoria.
+- Lojas: botão de numerário não dispara PUT sem `ERP_RETAIL` (mensagem clara;
+  planos REDE / REDE_PLUS / ENTERPRISE).
+
+### Changed
+
+- Smoke completo na versão FINAL antes do pacote.
+
+## [1.0.113] - 2026-10-13
+
+### Changed
+
+- Cardápio Digital no cadastro: UI premium com seções claras, chips de
+  dias/horário, flags com save imediato sem apagar rascunho, e catálogo
+  (listas/canais/KDS) alinhado ao mesmo padrão visual.
+
+## [1.0.112] - 2026-10-13
+
+### Added
+
+- Exportação completa de produtos (XLSX): abas Produtos (schema da
+  importação), Apresentacoes e Extra — botão no cadastro PDV.
+
+## [1.0.106] - 2026-10-13
+
+### Added
+
+- Receber crediário: chip com total das parcelas selecionadas e botão
+  Recarregar (atualiza limite/saldo/parcelas sem fechar o modal).
+
+## [1.0.105] - 2026-10-13
+
+### Fixed
+
+- Carga de balança: slot travado em "Lote em andamento" com fila 0 (PENDING
+  órfãos / TIMEOUT / PASTA_OCUPADA infinito). Auto-recupera ao listar lotes;
+  botão "Liberar slot"; ACK sem confirmação e max PASTA_OCUPADA → TIMEOUT;
+  quarentena de residuais MGV em `_margin_orphan` após timeout; sombra ACK
+  DIAGNOSTICO_OK.
+
+## [1.0.104] - 2026-10-13
+
+### Added
+
+- Etapa 11-A (performance): cache local do catálogo com sync incremental
+  (`/pdv/produtos/sync-caixa`), índice de busca &lt; 30 ms, cache de
+  crediário/regras e indicadores claros de sincronizando/offline+cache.
+  Comportamento visível inalterado; etapas B–E pendentes de aprovação.
+
+## [1.0.100] - 2026-10-13
+
+### Changed
+
+- Sem mudança no agente; versão alinhada à release 1.0.100 (auditoria de caixa
+  enriquecida, identidade estável, hash chain e alertas).
 
 ## [1.0.40] - 2026-10-04
 

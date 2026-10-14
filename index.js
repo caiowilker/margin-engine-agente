@@ -2293,13 +2293,23 @@ function iniciarServidor() {
       const printerLocalConfig = require("./print/printerLocalConfig");
       const saved = printerLocalConfig.salvar(req.body || {});
       // reset já feito em salvar() quando mudou; evita thrash no idempotente
+      // perfilChanged (sidecar) não reseta provider ACBr
       if (!saved.unchanged) {
         impressora.resetPrintProvider?.();
         impressora.invalidateProbeCache?.();
       }
-      res.json({ ok: true, unchanged: !!saved.unchanged, config: saved });
+      res.json({
+        ok: true,
+        unchanged: !!saved.unchanged,
+        perfilChanged: !!saved.perfilChanged,
+        config: saved,
+      });
     } catch (e) {
-      const status = e?.code === "PRINTER_PORTA_INVALIDA" ? 422 : 400;
+      const status =
+        e?.code === "PRINTER_PORTA_INVALIDA" ||
+        e?.code === "CUPOM_PERFIL_58MM_BLOQUEADO"
+          ? 422
+          : 400;
       res.status(status).json({
         erro: e.message || "Erro ao salvar config impressora",
         code: e?.code || null,

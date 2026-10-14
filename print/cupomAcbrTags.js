@@ -108,7 +108,45 @@ function renderCupomTags(rawPayload) {
     !payload.naoFiscal &&
     !payload.cupomSemFiscal &&
     !!(payload.chaveNfe && String(payload.chaveNfe).trim());
-  const { FOOTER, bannersStatusCupom, seriePadraoCupom } = require("./cupomLayoutShared");
+  const {
+    FOOTER,
+    bannersStatusCupom,
+    seriePadraoCupom,
+    footerAcbrTagsCompact,
+    linhasIdDocumentoFiscal,
+    resolveQrMensagensCompact,
+  } = require("./cupomLayoutShared");
+  const { resolveCupomLayoutProfile } = require("./cupomLayoutProfile");
+  let paperMm = 80;
+  let fontBCfg = false;
+  let espacoCfg = null;
+  try {
+    const lc = require("./printerLocalConfig").ler();
+    paperMm = Number(lc?.paperMm) || 80;
+    fontBCfg = lc?.cupomLayoutFontB === true;
+    espacoCfg = lc?.cupomLayoutEspacoEntreLinhas;
+  } catch (_) {}
+  const perfilCfg =
+    payload.cupomLayoutPerfil ||
+    (() => {
+      try {
+        return require("./printerLocalConfig").ler()?.cupomLayoutPerfil;
+      } catch (_) {
+        return null;
+      }
+    })();
+  const profile = resolveCupomLayoutProfile({
+    perfil: perfilCfg,
+    isFiscal,
+    paperMm,
+    fontB: fontBCfg,
+    espacoEntreLinhas: espacoCfg,
+  });
+  const compacto = profile.id !== "PADRAO";
+  // Font B / EspacoEntreLinhas: só se override terminal (default off). ACBr:
+  // <c> condensado — NÃO emitir até cliente validar em papel (profile.fontB).
+  void profile.fontB;
+  void profile.espacoEntreLinhas;
   const lines = [];
 
   lines.push("</zera>");
@@ -233,9 +271,15 @@ function renderCupomTags(rawPayload) {
     lines.push(corpo(col2("Subtotal:", fmtR$(subtotal))));
     lines.push(destaque(col2("Desconto:", "- " + fmtR$(desconto))));
   }
-  lines.push(sepEq());
+  if (!(compacto && profile.collapseTotalSeps)) {
+    lines.push(sepEq());
+  }
   lines.push(ceDestaque(`TOTAL: ${fmtR$(totalFinal)}`));
-  lines.push(sepEq());
+  if (!(compacto && profile.collapseTotalSeps)) {
+    lines.push(sepEq());
+  } else {
+    lines.push(sepDash());
+  }
 
   for (const pg of pagamentos) {
     const label = LABEL_PGTO[pg.forma] || String(pg.forma || "").toUpperCase();
@@ -257,7 +301,9 @@ function renderCupomTags(rawPayload) {
   }
 
   const totalVols = itens.reduce((s, i) => s + Number(i.quantidade || 0), 0);
-  lines.push(corpo(col2("Volumes:", `${Math.round(totalVols)} item(ns)`)));
+  if (!(compacto && profile.omitVolumes)) {
+    lines.push(corpo(col2("Volumes:", `${Math.round(totalVols)} item(ns)`)));
+  }
 
   if (isFiscal) {
     try {
@@ -269,36 +315,46 @@ function renderCupomTags(rawPayload) {
         lines.push(ceCorpo(textoIbpt));
       }
     } catch (_) {}
-    lines.push(sepDash());
+    if (!(compacto && profile.compactChaveProtocolo)) {
+      lines.push(sepDash());
+    } else if (!profile.collapseTotalSeps) {
+      lines.push(sepDash());
+    }
     lines.push(ceDestaque(tituloBlocoDocumentoFiscal(payload.chaveNfe)));
-    if (payload.numeroNfe) {
-      lines.push(
-        corpo(
-          linhaNumeroSerieDocumento(payload.chaveNfe, payload.numeroNfe, payload.serieNfe, {
-            seriePadrao: seriePadraoCupom(),
-          }),
-        ),
-      );
+    const linhaNs = payload.numeroNfe
+      ? linhaNumeroSerieDocumento(payload.chaveNfe, payload.numeroNfe, payload.serieNfe, {
+          seriePadrao: seriePadraoCupom(),
+        })
+      : "";
+    for (const idLine of linhasIdDocumentoFiscal({
+      linhaNumeroSerie: linhaNs,
+      protocolo: payload.protocolo,
+      cols: COLS,
+      compact: !!(compacto && profile.compactChaveProtocolo),
+    })) {
+      lines.push(corpo(idLine));
     }
-    if (payload.protocolo) {
-      lines.push(corpo(`Protocolo: ${String(payload.protocolo).slice(0, 30)}`));
+    if (!(compacto && profile.compactChaveProtocolo)) {
+      lines.push("</linha_simples>");
     }
-    lines.push("</linha_simples>");
     lines.push(ceCorpo("Chave de acesso"));
     for (const line of formatChaveLines(payload.chaveNfe, COLS)) {
       lines.push(ceCorpo(line));
     }
 
     const qr = resolverQrCodeNfce(payload);
-    if (qr) {
-      lines.push(ceCorpo(`Consulte em ${portalConsultaDocumento(payload.chaveNfe, qr)}`));
-    }
+    const portal =
+      qr != null
+        ? `Consulte em ${portalConsultaDocumento(payload.chaveNfe, qr)}`
+        : null;
+    const qrMsg = resolveQrMensagensCompact(profile, { portalLine: portal });
+    if (qrMsg.portalLine) lines.push(ceCorpo(qrMsg.portalLine));
     if (qr && isNfceModelo65(payload.chaveNfe)) {
-      lines.push("</linha_simples>");
-      lines.push(ceCorpo("Consulta via QR Code"));
+      if (!qrMsg.omitSeps) lines.push("</linha_simples>");
+      if (qrMsg.qrLabelBefore) lines.push(ceCorpo(qrMsg.qrLabelBefore));
       lines.push(tagQrCodeSeguro(qr));
-      lines.push("</linha_simples>");
-      lines.push(ceCorpo("Consulte pela chave ou QR Code"));
+      if (!qrMsg.omitSeps) lines.push("</linha_simples>");
+      if (qrMsg.qrLabelAfter) lines.push(ceCorpo(qrMsg.qrLabelAfter));
     }
     renderBarcodesPayload(payload).forEach((bc) => lines.push(bc));
   } else {
@@ -309,10 +365,17 @@ function renderCupomTags(rawPayload) {
     }
   }
 
-  lines.push("</linha_simples>");
-  lines.push(ceCorpo(FOOTER.obrigado));
-  lines.push(ceCorpo(FOOTER.volte));
-  lines.push(ceCorpo(FOOTER.pdv));
+  if (compacto && profile.compactFooter) {
+    for (const t of footerAcbrTagsCompact(profile, { ceCorpo })) {
+      lines.push(t);
+    }
+  } else {
+    // PADRAO — sequência histórica (não alterar).
+    lines.push("</linha_simples>");
+    lines.push(ceCorpo(FOOTER.obrigado));
+    lines.push(ceCorpo(FOOTER.volte));
+    lines.push(ceCorpo(FOOTER.pdv));
+  }
 
   lines.push(tagCorte());
 
@@ -330,6 +393,8 @@ function renderPaginaTeste() {
   const factory = require("./factory");
   const driver = factory.getDriverInfo?.() || {};
   const { modoContraste } = require("./cupomContraste");
+  const perfil = cfg.cupomLayoutPerfil || "PADRAO";
+  const pageCode = cfg.pageCode != null ? String(cfg.pageCode) : "?";
   return `</zera>
 </linha_dupla>
 ${tagLogoHeader()}${ceDestaque("TESTE IMPRESSORA")}
@@ -340,6 +405,8 @@ Modelo: ${cfg.modelo}
 Porta: ${cfg.porta}
 Contraste: ${modoContraste()}
 Largura: ${cfg.colunas || getThermalCols()} colunas (${Number(cfg.colunas) <= 32 ? "58mm" : "80mm"})
+Perfil cupom: ${perfil}
+PaginaDeCodigo: ${pageCode}
 ${logoLine}
 </linha_simples>
 Texto corpo — Ç Ã Á É Ê Ó Ú ° R$ acentuação UTF-8

@@ -31,6 +31,102 @@ function resolveIniPath() {
   return runtime().resolveIniPath();
 }
 
+/** Sidecar JSON — perfil de layout do cupom (não misturar no INI ACBr). */
+function resolveCupomLayoutPerfilPath() {
+  const ini = resolveIniPath();
+  if (ini) return path.join(path.dirname(ini), "cupom-layout-perfil.json");
+  return path.join(AGENT_ROOT, "data", "cupom-layout-perfil.json");
+}
+
+function lerCupomLayoutSidecar() {
+  try {
+    const p = resolveCupomLayoutPerfilPath();
+    if (p && fs.existsSync(p)) {
+      return JSON.parse(fs.readFileSync(p, "utf8"));
+    }
+  } catch (_) {}
+  return {};
+}
+
+function lerCupomLayoutPerfil() {
+  const { normalizarPerfilId } = require("./cupomLayoutProfile");
+  if (process.env.PRINT_CUPOM_LAYOUT_PERFIL) {
+    return normalizarPerfilId(process.env.PRINT_CUPOM_LAYOUT_PERFIL);
+  }
+  const j = lerCupomLayoutSidecar();
+  return normalizarPerfilId(j.perfil || j.cupomLayoutPerfil || "PADRAO");
+}
+
+/** Font B / EspacoEntreLinhas — default off; ativar só após teste impresso. */
+function lerCupomLayoutExtras() {
+  const j = lerCupomLayoutSidecar();
+  const fontB =
+    String(process.env.PRINT_CUPOM_FONT_B || "").toLowerCase() === "true" ||
+    j.fontB === true;
+  let espacoEntreLinhas = null;
+  const espacoRaw =
+    process.env.PRINT_CUPOM_ESPACO_ENTRE_LINHAS != null &&
+    String(process.env.PRINT_CUPOM_ESPACO_ENTRE_LINHAS).trim() !== ""
+      ? process.env.PRINT_CUPOM_ESPACO_ENTRE_LINHAS
+      : j.espacoEntreLinhas;
+  if (espacoRaw != null && String(espacoRaw).trim() !== "") {
+    const n = Number(espacoRaw);
+    if (Number.isFinite(n) && n >= 0) espacoEntreLinhas = n;
+  }
+  const shrinkQr =
+    String(process.env.PRINT_CUPOM_SHRINK_QR || "").toLowerCase() === "true" ||
+    j.shrinkQr === true;
+  return { fontB, espacoEntreLinhas, shrinkQr };
+}
+
+function salvarCupomLayoutPerfil(perfilId, extras = {}) {
+  const { normalizarPerfilId, listarPerfisPublico } = require("./cupomLayoutProfile");
+  const id = normalizarPerfilId(perfilId);
+  const paperMm = paperMmFromColunas(lerIniValores(resolveIniPath()).colunas);
+  if (paperMm <= 58 && id !== "PADRAO") {
+    const err = new Error(
+      "Compacto/Ultra em 58 mm estão DESATIVADOS (sem validação em papel). Use Padrão.",
+    );
+    err.code = "CUPOM_PERFIL_58MM_BLOQUEADO";
+    throw err;
+  }
+  const prev = lerCupomLayoutSidecar();
+  const file = resolveCupomLayoutPerfilPath();
+  const fontB =
+    extras.fontB != null ? extras.fontB === true : prev.fontB === true;
+  const shrinkQr =
+    extras.shrinkQr != null ? extras.shrinkQr === true : prev.shrinkQr === true;
+  let espacoEntreLinhas =
+    extras.espacoEntreLinhas !== undefined
+      ? extras.espacoEntreLinhas
+      : prev.espacoEntreLinhas;
+  if (espacoEntreLinhas != null && String(espacoEntreLinhas).trim() !== "") {
+    const n = Number(espacoEntreLinhas);
+    espacoEntreLinhas = Number.isFinite(n) && n >= 0 ? n : null;
+  } else {
+    espacoEntreLinhas = null;
+  }
+  writeFileAtomic(
+    file,
+    JSON.stringify(
+      {
+        perfil: id,
+        fontB: !!fontB,
+        shrinkQr: !!shrinkQr,
+        espacoEntreLinhas,
+        atualizadoEm: new Date().toISOString(),
+        perfis: listarPerfisPublico(),
+        nota:
+          "fontB/espacoEntreLinhas/shrinkQr default false — ativar só após teste impresso.",
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+  invalidateLerCache();
+  return id;
+}
+
 function resolveEnvPath() {
   if (process.env.PRINTER_LOCAL_ENV_OVERRIDE) {
     return process.env.PRINTER_LOCAL_ENV_OVERRIDE;
@@ -249,6 +345,12 @@ function ler(opts = {}) {
     logo = require("./printerLogo").ler();
   } catch (_) {}
   const paperMm = paperMmFromColunas(ini.colunas);
+  const cupomLayoutPerfil = lerCupomLayoutPerfil();
+  const layoutExtras = lerCupomLayoutExtras();
+  let cupomLayoutPerfis = [];
+  try {
+    cupomLayoutPerfis = require("./cupomLayoutProfile").listarPerfisPublico();
+  } catch (_) {}
   const value = {
     provider: process.env.PRINTER_PROVIDER || "acbr-posprinter",
     fallback: process.env.PRINTER_FALLBACK || "native",
@@ -257,6 +359,13 @@ function ler(opts = {}) {
     cut: process.env.PRINTER_CUT || ini.cut || "partial",
     drawer: (process.env.PRINTER_DRAWER || "true").toLowerCase() !== "false",
     modelo: ini.modelo,
+    cupomLayoutPerfil,
+    cupomLayoutPerfis,
+    /** Default false — ativar por terminal só após teste impresso. */
+    cupomLayoutFontB: layoutExtras.fontB === true,
+    cupomLayoutEspacoEntreLinhas: layoutExtras.espacoEntreLinhas,
+    cupomLayoutShrinkQr: layoutExtras.shrinkQr === true,
+    pageCode: ini.pageCode,
     barcodeDialect:
       process.env.PRINTER_BARCODE_DIALECT ||
       require("./barcodeDialect").resolveBarcodeDialect({
@@ -650,17 +759,45 @@ function sanitizarConfigPersistida() {
 function salvar(updates) {
   if (!updates || typeof updates !== "object") throw new Error("Payload inválido");
 
+  let perfilChanged = false;
+  const layoutUpdate =
+    updates.cupomLayoutPerfil != null ||
+    updates.cupomLayoutFontB != null ||
+    updates.cupomLayoutEspacoEntreLinhas !== undefined ||
+    updates.cupomLayoutShrinkQr != null;
+  if (layoutUpdate) {
+    const beforePerfil = lerCupomLayoutPerfil();
+    const beforeExtras = JSON.stringify(lerCupomLayoutExtras());
+    const afterPerfil = salvarCupomLayoutPerfil(
+      updates.cupomLayoutPerfil != null
+        ? updates.cupomLayoutPerfil
+        : beforePerfil,
+      {
+        fontB: updates.cupomLayoutFontB,
+        espacoEntreLinhas: updates.cupomLayoutEspacoEntreLinhas,
+        shrinkQr: updates.cupomLayoutShrinkQr,
+      },
+    );
+    perfilChanged =
+      beforePerfil !== afterPerfil ||
+      beforeExtras !== JSON.stringify(lerCupomLayoutExtras());
+  }
+
   const iniPath = resolveIniPath();
   const valsBefore = lerIniValores(iniPath);
   const { vals, envPatch } = projetarSalvar(updates, valsBefore);
 
   // Poll/detect repetido: não regravar INI/.env nem resetPrintProvider.
+  // Perfil de layout muda em sidecar — não conta como mudança de provider.
   if (iniSemMudanca(valsBefore, vals) && envPatchSemMudanca(envPatch)) {
     log.debug(
-      { porta: vals.porta, modelo: vals.modelo },
-      "[PrinterLocalConfig] Sem mudança — skip save/reset",
+      { porta: vals.porta, modelo: vals.modelo, perfilChanged },
+      "[PrinterLocalConfig] Sem mudança INI — skip save/reset",
     );
-    return Object.assign(ler({ fresh: true }), { unchanged: true });
+    return Object.assign(ler({ fresh: true }), {
+      unchanged: true,
+      perfilChanged,
+    });
   }
 
   invalidateLerCache();
@@ -673,7 +810,10 @@ function salvar(updates) {
     { porta: vals.porta, modelo: vals.modelo, paperMm: paperMmFromColunas(vals.colunas) },
     "[PrinterLocalConfig] Configuração salva",
   );
-  return Object.assign(ler({ fresh: true }), { unchanged: false });
+  return Object.assign(ler({ fresh: true }), {
+    unchanged: false,
+    perfilChanged,
+  });
 }
 
 function salvarSemPorta(updates) {
@@ -769,6 +909,9 @@ module.exports = {
   patchEnvPublic,
   resolveIniPath,
   resolveEnvPath,
+  resolveCupomLayoutPerfilPath,
+  lerCupomLayoutPerfil,
+  salvarCupomLayoutPerfil,
   invalidateLerCache,
   writeFileAtomic,
   paperMmFromColunas,
