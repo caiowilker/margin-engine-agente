@@ -6,6 +6,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.136] - 2026-10-14
+
+### Fixed
+
+- Alinhamento 1.0.136: abertura com R$ 0 quando operador e loja sem saldo.
+
 ## [1.0.135] - 2026-10-13
 
 ### Fixed
