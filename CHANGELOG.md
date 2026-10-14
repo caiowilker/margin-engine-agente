@@ -6,6 +6,21 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.152] - 2026-10-14
+
+### Changed
+
+- Release alignment 1.0.152 — Contrato A4 crediário mais completo (loja, totais,
+  itens nas duas vias, juros/multa, assinaturas) em 1 folha com corte.
+  Sem mudança de runtime no agente.
+
+## [1.0.151] - 2026-10-14
+
+### Fixed
+
+- Release alignment 1.0.151 — receber crediário: abort de carga, reload
+  preserva cliente, fallback CPF após falha por id. Sem mudança de runtime no agente.
+
 ## [1.0.150] - 2026-10-14
 
 ### Fixed
@@ -1216,6 +1231,21 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - Alinha agente/instalador à versão do front 1.0.41 (temas Suave/Sol + F2).
 
 ## [Unreleased]
+
+## [1.0.152] - 2026-10-14
+
+### Changed
+
+- Release alignment 1.0.152 — Contrato A4 crediário mais completo (loja, totais,
+  itens nas duas vias, juros/multa, assinaturas) em 1 folha com corte.
+  Sem mudança de runtime no agente.
+
+## [1.0.151] - 2026-10-14
+
+### Fixed
+
+- Release alignment 1.0.151 — receber crediário: abort de carga, reload
+  preserva cliente, fallback CPF após falha por id. Sem mudança de runtime no agente.
 
 ## [1.0.125] - 2026-10-13
 
