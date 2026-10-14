@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.137] - 2026-10-14
+
+### Fixed
+
+- Alinhamento 1.0.137: fechamento UX (,00 travado, cédulas, operadores sem e-mail)
+  + chave idempotência tesouraria.
+
 ## [1.0.136] - 2026-10-14
 
 ### Fixed
