@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.133] - 2026-10-13
+
+### Fixed
+
+- Numerário empresa produção: efetiva sem `loja_id` no terminal; efetivo imediato se
+  não houver caixa aberto; recuperação de “ligado sem efetivo”.
+
 ## [1.0.132] - 2026-10-13
 
 ### Fixed
