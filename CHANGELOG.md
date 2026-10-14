@@ -6,6 +6,32 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.140] - 2026-10-14
+
+### Fixed
+
+- Numerário operacional produção: idempotência com fingerprint (reuso de chave com
+  payload diferente rejeitado), auditoria no depósito, chave estável no modal
+  (anti double-click), listagem de pendências em batch, validação de período no extrato.
+
+## [1.0.139] - 2026-10-14
+
+### Added
+
+- Tesouraria › **Numerário operacional**: saldos de “Ficar comigo” (operador),
+  fundo do caixa e trânsito — com extrato e depósito para banco/cofre
+  (`GET/POST /pdv/numerario/contas-operacionais`, extrato, depositar-tesouraria).
+
+## [1.0.138] - 2026-10-14
+
+### Changed
+
+- Extrato de conta da tesouraria: tela sólida com KPIs, filtro de período,
+  entradas/saídas, busca, paginação completa e exportação CSV.
+- Fechamento numerário: lista **todas** as contas ativas da tesouraria como
+  destino (antes cortava em 6), com busca quando há muitas; cache de contas
+  atualiza após criar/editar/ativar e após fechar caixa.
+
 ## [1.0.137] - 2026-10-14
 
 ### Fixed

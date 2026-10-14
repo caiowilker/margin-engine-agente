@@ -1,6 +1,6 @@
 {
-  "versao": "1.0.137",
-  "geradoEm": "2026-10-14T03:34:15.097Z",
+  "versao": "1.0.140",
+  "geradoEm": "2026-10-14T04:13:32.594Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -3204,7 +3204,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "5b84421fb7f1e64c03d6d24200ef02c8c79cc457947b4746e63c85b63ae69913"
+      "sha256": "c5c968a7d5b593ba19b182d1c192fb14a7de5e5906618fe162d521e77774993b"
     },
     {
       "arquivo": "print/acbrPosExports.js",
