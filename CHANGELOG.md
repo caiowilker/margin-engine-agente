@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.148] - 2026-10-14
+
+### Added
+
+- Release alignment 1.0.148 — oferta Contrato A4 opt-in + PDF 1 folha.
+  Sem mudança de runtime no agente.
+
 ## [1.0.147] - 2026-10-14
 
 ### Added
