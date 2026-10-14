@@ -1,6 +1,6 @@
 {
-  "versao": "1.0.141",
-  "geradoEm": "2026-10-14T14:23:31.114Z",
+  "versao": "1.0.143",
+  "geradoEm": "2026-10-14T15:12:34.803Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -84,7 +84,7 @@
     },
     {
       "arquivo": "fila.js",
-      "sha256": "4522a717b1d896caf543c2f0b9a60d6a056b056b05ce69579dd499def498fd2c"
+      "sha256": "9ec924f4db683ab28d9cdc695196141072672e32fec13cee4283d9a35b0ffef4"
     },
     {
       "arquivo": "filaFiscal.js",
@@ -3168,7 +3168,7 @@
     },
     {
       "arquivo": "index.js",
-      "sha256": "740b6762843fe77bc7f3d38783a92573425b55d8111596fdfde50914e2e3f3df"
+      "sha256": "c844cfded36c37fbb3d2d53c232d35e9d712b5db5c23b1cb4577f614e4c5a9e4"
     },
     {
       "arquivo": "install-service.js",
@@ -3204,7 +3204,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "c249765a55dc47072c18d8b6005596beddc62fdc2f024b634377f4ae574b750e"
+      "sha256": "afe2ab0002a228de53ea517ccb64335e1d7c225891857a83c5252385e206f3ef"
     },
     {
       "arquivo": "print/acbrPosExports.js",

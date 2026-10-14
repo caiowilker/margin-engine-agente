@@ -6,6 +6,29 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.143] - 2026-10-14
+
+### Fixed
+
+- Frente › cliente/crediário: ao selecionar o cliente (mesmo sem documento),
+  limite/saldo carregam na hora (hot path por `clienteId` + prefetch na busca +
+  cache). Se o operador sair rápido e clicar Crediário / Finalizar, o PDV espera
+  o fetch em voo e reavalia com snapshot fresco — sem “sem conta” falso nem
+  forçar re-seleção.
+
+## [1.0.142] - 2026-10-14
+
+### Added
+
+- Frente › fila offline: botão **Limpar falhas** ao lado de Reenviar — descarta
+  `FALHA_PERMANENTE` (e erros do browser) sem reenviar, quando a venda já está no
+  servidor e o alerta ficava preso (`POST /fila/limpar-falhas`).
+
+### Fixed
+
+- Caixa instalado: gate “Caixa não está aberto” após fechar / com cache fechado
+  (preserva dispositivoId no status local).
+
 ## [1.0.141] - 2026-10-14
 
 ### Fixed

@@ -207,6 +207,26 @@ const payload = {
     assert.strictEqual(row.status, "PENDENTE");
   });
 
+  await test("limparFalhas — remove FALHA_PERMANENTE sem reenviar", async () => {
+    const numero = "PDV-TEST-LIMPAR-FALHA";
+    await fila.registrarLocalFirst({
+      ...payload,
+      numeroVendaCliente: numero,
+    });
+    const db = require("better-sqlite3")(dbPath);
+    db.prepare(
+      "UPDATE fila_vendas SET status = 'FALHA_PERMANENTE', ultimo_erro = ? WHERE numero_venda = ?",
+    ).run("duplicidade", numero);
+    db.close();
+    const antes = fila.contadores();
+    assert.ok(antes.falhas >= 1);
+    const r = fila.limparFalhas([numero]);
+    assert.strictEqual(r.removidos, 1);
+    const row = fila.listar().find((x) => x.numero_venda === numero);
+    assert.strictEqual(row, undefined);
+    assert.ok(fila.contadores().falhas < antes.falhas);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
 })();

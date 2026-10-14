@@ -882,6 +882,37 @@ function resetarFalhas(numeros) {
   }
 }
 
+/**
+ * Remove FALHA_PERMANENTE da fila (não reenvia).
+ * Uso: venda já está no servidor / duplicidade — limpa o alerta do frente.
+ */
+function limparFalhas(numeros) {
+  try {
+    if (!db) return { removidos: 0 };
+    let result;
+    if (numeros && numeros.length > 0) {
+      const placeholders = numeros.map(() => "?").join(",");
+      result = db
+        .prepare(
+          `DELETE FROM fila_vendas
+           WHERE status = 'FALHA_PERMANENTE'
+           AND numero_venda IN (${placeholders})`,
+        )
+        .run(...numeros.map(String));
+    } else {
+      result = db
+        .prepare(`DELETE FROM fila_vendas WHERE status = 'FALHA_PERMANENTE'`)
+        .run();
+    }
+    console.log(`[Fila] ${result.changes} falha(s) permanente(s) removida(s) da fila.`);
+    avaliarLimitesFila(metricas());
+    return { removidos: result.changes };
+  } catch (err) {
+    console.warn("[Fila] Erro ao limpar falhas:", err.message);
+    return { removidos: 0 };
+  }
+}
+
 function purgeAntigos(dias = 30) {
   try {
     if (!db) inicializar();
@@ -915,6 +946,7 @@ module.exports = {
   listar,
   consultarVenda,
   resetarFalhas,
+  limparFalhas,
   statusAuth,
   purgeAntigos,
   recuperarEnviandoPresos,

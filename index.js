@@ -4738,6 +4738,17 @@ function iniciarServidor() {
     res.json({ ok: true, ...resultado });
   });
 
+  /**
+   * Descarta FALHA_PERMANENTE sem reenviar — quando a venda já está no servidor
+   * (reenvio rejeita por duplicidade) e o alerta no frente não pode sumir sozinho.
+   */
+  app.post("/fila/limpar-falhas", exigirAgentToken, (req, res) => {
+    const numeros = Array.isArray(req.body?.numeros) ? req.body.numeros : [];
+    auditLog.registrar("FILA_LIMPAR_FALHAS", { numeros }, req);
+    const resultado = fila.limparFalhas(numeros.length > 0 ? numeros : null);
+    res.json({ ok: true, ...resultado, ...fila.contadores() });
+  });
+
   // ── Página raiz (sem frontend-dist) ─────────────────────────────────────────
   const FRONTEND_INDEX = path.join(__dirname, "frontend-dist", "index.html");
   const STATUS_HTML = path.join(__dirname, "status.html");
