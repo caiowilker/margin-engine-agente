@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.150] - 2026-10-14
+
+### Fixed
+
+- Release alignment 1.0.150 — receber crediário: busca limpa + carga race-safe.
+  Sem mudança de runtime no agente.
+
 ## [1.0.149] - 2026-10-14
 
 ### Added
