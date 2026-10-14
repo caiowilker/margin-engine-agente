@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.141] - 2026-10-14
+
+### Fixed
+
+- Fechamento de caixa: centavos no dinheiro contado (exibe 571,85), conciliação
+  da gaveta/resumo liberados para operador (incl. sem e-mail; sem 403), e saldo
+  negativo permitido em conta BANCO (back + front Contas a pagar).
+
 ## [1.0.140] - 2026-10-14
 
 ### Fixed
