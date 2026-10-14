@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.145] - 2026-10-14
+
+### Fixed
+
+- Release alignment 1.0.145 — frente: crediário não reutiliza conta de outro
+  cliente na troca rápida; backend valida `clienteCentralId` no checkout.
+
 ## [1.0.144] - 2026-10-14
 
 ### Added
