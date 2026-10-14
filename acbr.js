@@ -751,6 +751,137 @@ function crtUsaSimples(crt) {
   return c === "1" || c === "4";
 }
 
+/** CRT oficial 3 = Regime Normal (Presumido ou Real). */
+function crtUsaRegimeNormal(crt) {
+  return String(crt || "").trim() === "3";
+}
+
+/**
+ * Alíquotas PIS/COFINS para CRT 3 — sem default silencioso Presumido.
+ * Aceita pPis/pCofins no item ou regime explícito no payload/empresa.
+ * @returns {{ pPis: number, pCofins: number, regime: string }}
+ */
+function resolverAliquotasPisCofinsCrt3(item, empresa, payload) {
+  const pItem = item?.pPis != null ? Number(item.pPis) : NaN;
+  const cItem = item?.pCofins != null ? Number(item.pCofins) : NaN;
+  if (Number.isFinite(pItem) && Number.isFinite(cItem) && pItem >= 0 && cItem >= 0) {
+    return { pPis: pItem, pCofins: cItem, regime: "ITEM" };
+  }
+
+  const raw = String(
+    item?.regimePisCofins ||
+      item?.regimeTributarioStorage ||
+      payload?.regimeTributarioStorage ||
+      empresa?.regimeTributarioStorage ||
+      empresa?.regimePisCofins ||
+      "",
+  )
+    .trim()
+    .toUpperCase();
+
+  if (raw === "LUCRO_PRESUMIDO" || raw === "PRESUMIDO" || raw === "CUMULATIVO") {
+    return { pPis: 0.65, pCofins: 3.0, regime: "LUCRO_PRESUMIDO" };
+  }
+  if (raw === "LUCRO_REAL" || raw === "REAL" || raw === "NAO_CUMULATIVO" || raw === "NÃO_CUMULATIVO") {
+    return { pPis: 1.65, pCofins: 7.6, regime: "LUCRO_REAL" };
+  }
+
+  const err = new Error(
+    "CRT 3 exige regime de PIS/COFINS (LUCRO_PRESUMIDO ou LUCRO_REAL) " +
+      "em empresa.regimeTributarioStorage / payload.regimeTributarioStorage, " +
+      "ou pPis e pCofins em cada item. Default Presumido foi removido (auditoria 14/10/2026).",
+  );
+  err.permanente = true;
+  throw err;
+}
+
+/**
+ * Recalcula ST pelo oráculo MVA (frete na base própria, IPI só na ST) e compara com o payload.
+ * Só roda se o item for claramente calculado por MVA — pauta/PMPF/preço sugerido são ignorados
+ * (falso alarme). Emissão continua passthrough.
+ *
+ * Modo: FISCAL_ICMS_ST_EMISSAO_CONSISTENCIA=OFF|AVISAR|BLOQUEAR (default AVISAR).
+ * Política: manter AVISAR 2–4 semanas e só considerar BLOQUEAR depois, e apenas para MVA.
+ */
+function verificarConsistenciaStEmissao(item, n) {
+  const mva = Number(item?.mvaPercentual ?? item?.mvaSt ?? NaN);
+  const vICMSST = Math.max(0, Number(item?.vICMSST || item?.vIcmsSt || 0));
+  if (!Number.isFinite(mva) || mva <= 0 || vICMSST <= 0) {
+    return null;
+  }
+  // Não aplicar oráculo MVA a bases de pauta / PMPF / preço sugerido.
+  const baseStTipo = String(
+    item?.baseStTipo || item?.modalidadeBaseSt || item?.modBCST || item?.tipoBaseSt || "",
+  )
+    .trim()
+    .toUpperCase();
+  if (
+    item?.pautaSt ||
+    item?.pmpf ||
+    item?.precoSugeridoSt ||
+    item?.valorPauta ||
+    /PAUTA|PMPF|PRECO_SUGERIDO|PREÇO_SUGERIDO|SUGERID/.test(baseStTipo) ||
+    baseStTipo === "0" || // modBCST 0 = preço tabelado/pauta (MOC)
+    baseStTipo === "1" || // lista negativa / positiva — não é MVA %
+    baseStTipo === "2" ||
+    baseStTipo === "3"
+  ) {
+    return null;
+  }
+  // modBCST 4 = MVA (%); se vier explícito e não for 4, não oracula.
+  if (/^\d+$/.test(baseStTipo) && baseStTipo !== "4") {
+    return null;
+  }
+
+  const modo = String(process.env.FISCAL_ICMS_ST_EMISSAO_CONSISTENCIA || "AVISAR")
+    .trim()
+    .toUpperCase();
+  if (modo === "OFF") return null;
+
+  const qtd = Number(item.quantidade) || 0;
+  const pu = Number(item.precoUnitario) || 0;
+  const total = Number(item.total ?? qtd * pu);
+  const desc = Number(item.desconto || 0);
+  const vProd = desc > 0 ? total + desc : total;
+  const frete = Math.max(0, Number(item.vFrete || item.frete || 0));
+  const seguro = Math.max(0, Number(item.vSeg || item.seguro || 0));
+  const outras = Math.max(0, Number(item.vOutro || item.outro || 0));
+  const ipi = Math.max(0, Number(item.vIPI || item.vIpi || item.ipi || 0));
+  const aliqInter = Math.max(
+    0,
+    Number(item.aliquotaIcmsInter || item.pICMSInter || item.aliquotaIcms || 0),
+  );
+  const aliqInt = Math.max(
+    0,
+    Number(item.aliquotaInternaSt || item.pICMSST || item.aliquotaInterna || 0),
+  );
+  if (aliqInter <= 0 || aliqInt <= 0) {
+    return null;
+  }
+
+  const baseProp = Math.max(0, vProd - desc + frete + seguro + outras);
+  const proprio = Math.round((baseProp * aliqInter) / 100 * 100) / 100;
+  const baseStOp = Math.max(0, vProd - desc + frete + seguro + outras + ipi);
+  const bcSt = Math.round(baseStOp * (1 + mva / 100) * 100) / 100;
+  const stEsp = Math.max(0, Math.round((bcSt * aliqInt) / 100 * 100) / 100 - proprio);
+  const diff = Math.abs(stEsp - vICMSST);
+  if (diff <= 0.01) {
+    return { ok: true, esperado: stEsp, informado: vICMSST };
+  }
+
+  const msg =
+    `Item "${item.nome || n}": ICMS-ST informado ${vICMSST.toFixed(2)} diverge do oráculo ` +
+    `${stEsp.toFixed(2)} (Δ ${diff.toFixed(2)}; MVA ${mva}%; frete na base própria, IPI só na ST). ` +
+    `Emissão não altera o valor em silêncio.`;
+  if (modo === "BLOQUEAR") {
+    const err = new Error(msg);
+    err.permanente = true;
+    throw err;
+  }
+  console.warn(`[FISCAL_ICMS_ST_EMISSAO_CONSISTENCIA] ${msg}`);
+  return { ok: false, esperado: stEsp, informado: vICMSST, aviso: msg };
+}
+
 function fmtMoney(n) {
   return Number(n).toFixed(2);
 }
@@ -873,7 +1004,7 @@ function montarBlocoTotalIni({
   return bloco;
 }
 
-function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
+function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0, ctx = {}) {
   const usaSimples = crtUsaSimples(crt);
   const nn = String(n).padStart(3, "0");
   const qtd = Number(item.quantidade);
@@ -886,6 +1017,7 @@ function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
   const vBCST = Math.max(0, Number(item.vBCST || item.vBcSt || 0));
   const pICMSST = Math.max(0, Number(item.pICMSST || item.pIcmsSt || 0));
   const vICMSST = Math.max(0, Number(item.vICMSST || item.vIcmsSt || 0));
+  verificarConsistenciaStEmissao(item, n);
   const un = unidadeFiscalDoItem(item);
   const gtin = resolverGtin(item);
   const ncmDigits = String(item.ncm || "").replace(/\D/g, "");
@@ -1006,18 +1138,39 @@ function montarSecaoTributosItem(item, n, crt, vTotTribItem = 0) {
   }
   bloco += `\n`;
 
+  let aliqPc = null;
+  if (!usaSimples) {
+    // CRT 2/3: sem default silencioso Presumido (auditoria 14/10/2026).
+    aliqPc = resolverAliquotasPisCofinsCrt3(item, ctx.empresa, ctx.payload);
+  }
+  const basePc = Math.max(0, brutoLinha - desc);
+
   bloco += `[PIS${nn}]\n`;
   if (usaSimples) {
     bloco += `CST=99\nvBC=0.00\npPIS=0.00\nvPIS=0.00\n\n`;
   } else {
-    bloco += `CST=01\nvBC=0.00\npPIS=0.65\nvPIS=0.00\n\n`;
+    const vPisInf = item.vPis != null ? Number(item.vPis) : NaN;
+    const vPis = Number.isFinite(vPisInf)
+      ? vPisInf
+      : Math.round((basePc * aliqPc.pPis) / 100 * 100) / 100;
+    bloco += `CST=${String(item.cstPis || "01").replace(/\D/g, "").padStart(2, "0").slice(-2)}\n`;
+    bloco += `vBC=${fmtMoney(basePc)}\n`;
+    bloco += `pPIS=${fmtMoney(aliqPc.pPis)}\n`;
+    bloco += `vPIS=${fmtMoney(vPis)}\n\n`;
   }
 
   bloco += `[COFINS${nn}]\n`;
   if (usaSimples) {
     bloco += `CST=99\nvBC=0.00\npCOFINS=0.00\nvCOFINS=0.00\n\n`;
   } else {
-    bloco += `CST=01\nvBC=0.00\npCOFINS=3.00\nvCOFINS=0.00\n\n`;
+    const vCofInf = item.vCofins != null ? Number(item.vCofins) : NaN;
+    const vCof = Number.isFinite(vCofInf)
+      ? vCofInf
+      : Math.round((basePc * aliqPc.pCofins) / 100 * 100) / 100;
+    bloco += `CST=${String(item.cstCofins || "01").replace(/\D/g, "").padStart(2, "0").slice(-2)}\n`;
+    bloco += `vBC=${fmtMoney(basePc)}\n`;
+    bloco += `pCOFINS=${fmtMoney(aliqPc.pCofins)}\n`;
+    bloco += `vCOFINS=${fmtMoney(vCof)}\n\n`;
   }
 
   return {
@@ -1289,7 +1442,10 @@ function montarIniNfce(payload, numeracao) {
         ibptAcum += vTotTribItem;
       }
     }
-    const linha = montarSecaoTributosItem(item, i + 1, crt, vTotTribItem);
+    const linha = montarSecaoTributosItem(item, i + 1, crt, vTotTribItem, {
+      empresa,
+      payload,
+    });
     blocoItens += linha.bloco;
     // vProd = soma dos brutos das linhas (paridade schema / Java_NFe); desconto em vDesc.
     vProd += Number(linha.total) || 0;
@@ -1532,6 +1688,7 @@ function montarIniNfe(payload, numeracao, destinatario) {
       i + 1,
       crt,
       ibptPorItem[i] || 0,
+      { empresa, payload },
     );
     blocoItens += linha.bloco;
     vProd += Number(linha.total) || 0;
@@ -3033,4 +3190,8 @@ module.exports = {
   resolverTpAmbAcbr,
   ambienteSefazEfetivo,
   montarSecaoDestinatarioNfe,
+  /** @internal testes auditoria fiscal 14/10/2026 */
+  resolverAliquotasPisCofinsCrt3,
+  verificarConsistenciaStEmissao,
+  crtUsaRegimeNormal,
 };

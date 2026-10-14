@@ -28,7 +28,11 @@ function empresaSimples() {
 }
 
 function empresaNormal() {
-  return { ...empresaSimples(), regimeTributario: "3" };
+  return {
+    ...empresaSimples(),
+    regimeTributario: "3",
+    regimeTributarioStorage: "LUCRO_PRESUMIDO",
+  };
 }
 
 function secao(ini, nome) {
