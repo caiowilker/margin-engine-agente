@@ -1,6 +1,6 @@
 {
   "versao": "1.0.152",
-  "geradoEm": "2026-10-14T22:58:22.149Z",
+  "geradoEm": "2026-10-14T23:00:51.178Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -288,7 +288,7 @@
     },
     {
       "arquivo": "frontend-dist/api-backend.json",
-      "sha256": "32b2b1b4b246eeb825c07b479b8693f56d861a9871ecf715ef4db9b89b3f91a6"
+      "sha256": "46f406ccde86f9dcc1ac813e579598179003a135847bcb15d7b0f62d8fe669ce"
     },
     {
       "arquivo": "frontend-dist/apple-touch-icon.png",
@@ -3144,7 +3144,7 @@
     },
     {
       "arquivo": "frontend-dist/version.json",
-      "sha256": "cd7ef0216b21e6da872e28c22b0674ad3c5cb16b10bbda10831873fc8f2abec9"
+      "sha256": "a778234ec07ab50a5551590844d3f55e4fb5a4a37cce00833456ccfdc3e2f299"
     },
     {
       "arquivo": "frontend-dist/workbox-3147e214.js",
