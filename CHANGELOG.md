@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.144] - 2026-10-14
+
+### Added
+
+- Configurações › Impressão: política **abertura/fechamento de caixa**
+  (SEMPRE / PERGUNTAR / MANUAL), igual ao cupom — pergunta com o mesmo diálogo.
+
 ## [1.0.143] - 2026-10-14
 
 ### Fixed
