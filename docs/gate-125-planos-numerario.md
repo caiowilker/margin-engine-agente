@@ -11,21 +11,25 @@ em MERCADO/ESSENTIAL. Efeito colateral de path, não regra de produto.
 1. **Exceção estreita** no filter: só
    `/retail/lojas/{id}/controle-numerario` e `.../auditoria` ficam sem gate de plano.
    Demais `/retail/**` (listagem CRUD, etc.) continuam exigindo `ERP_RETAIL`.
-2. **Caminho PDV canônico**: `GET/PUT /pdv/caixa/lojas[...]` — listagem operacional +
-   toggle/status/auditoria. Front usa este path.
+2. **Caminho PDV canônico (empresa)**: `GET/PUT /pdv/caixa/controle-numerario` —
+   um toggle da **empresa (tenant)**; propaga para todas as lojas. Front usa este path.
+   Paths legados `/pdv/caixa/lojas/{id}/controle-numerario` ainda funcionam e também
+   aplicam à empresa inteira (não por loja).
 3. **UX canônica**: toggle **somente** em **Configurações do PDV**
    (`/configuracoes/pdv-operacional`) — ADMIN/OWNER em qualquer plano com PDV.
-   A tela **Lojas** não tem mais o botão de numerário (só CRUD de filiais / ERP).
-4. Lojas com flag OFF permanecem no fluxo antigo.
+   Escopo **empresa**, não lista por loja. A tela **Lojas** não tem botão de numerário.
+4. Empresa com flag OFF permanece no fluxo antigo em todas as lojas.
 
 ## Requisitos de plano por endpoint do fluxo
 
 | Endpoint | Feature de plano |
 |---|---|
-| `PUT/GET /pdv/caixa/lojas/{id}/controle-numerario` | nenhuma (core PDV) |
+| `PUT/GET /pdv/caixa/controle-numerario` | nenhuma (core PDV, escopo empresa) |
+| `GET /pdv/caixa/controle-numerario/auditoria` | nenhuma |
+| `PUT/GET /pdv/caixa/lojas/{id}/controle-numerario` | nenhuma (compat → empresa) |
 | `GET /pdv/caixa/lojas/{id}/controle-numerario/auditoria` | nenhuma |
 | `GET /pdv/caixa/lojas` | nenhuma |
-| `PUT/GET /retail/lojas/{id}/controle-numerario[+ /auditoria]` | nenhuma (exceção) |
+| `PUT/GET /retail/lojas/{id}/controle-numerario[+ /auditoria]` | nenhuma (exceção; → empresa) |
 | `GET/POST/PUT /retail/lojas` (CRUD) | **ERP_RETAIL** (Rede+) |
 | `GET /pdv/tesouraria/contas` | nenhuma |
 | `POST /pdv/caixa/abrir` / `fechar` (destinos OPERADOR) | nenhuma |

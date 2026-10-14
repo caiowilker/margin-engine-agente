@@ -6,6 +6,43 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.132] - 2026-10-13
+
+### Fixed
+
+- Auditoria Interna (`GET /pdv/auditoria`): filtro de operador sem `lower(bytea)` —
+  bind vazio tipado como texto (PostgreSQL/Hibernate).
+- Sync catálogo caixa (`/pdv/produtos/sync-caixa`): `CAST(produto_id AS text)` nas
+  lápides (o `::text` quebrava o named parameter e gerava 500/rollback-only).
+- Worker de carga de balança: `flush` do lote antes do claim do outbox (FK
+  `fk_balanca_carga_outbox_lote`).
+- “Total geral” oculto só no modal de fechamento do Frente de Caixa; permanece no
+  fechamento pela tela Caixa e no painel de meios (Dinheiro, PIX, etc.).
+
+
+## [1.0.131] - 2026-10-13
+
+### Changed
+
+- Conciliação da gaveta: UX refinada (formas e saldo físico esperado com valores exatos).
+
+
+## [1.0.130] - 2026-10-13
+
+### Changed
+
+- Controle de numerário por **empresa** (não por loja): ligar na matriz vale para
+  todas as lojas do cliente; UI em Config PDV com um único toggle.
+
+
+## [1.0.129] - 2026-10-13
+
+### Fixed
+
+- Checkout com desconto/cupom/preço negociado libera o caixa na hora (sem “Processando…”),
+  como venda sem ajuste — registro segue em background (front).
+
+
 ## [1.0.128] - 2026-10-13
 
 ### Changed
