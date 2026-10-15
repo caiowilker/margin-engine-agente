@@ -6,6 +6,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.157] - 2026-10-15
+
+### Fixed
+
+- Crediário: numeração atômica de conta (`CC-{ano}-{seq}`) com seed no MAX
+  (vendas/contas legadas importadas) e FOR UPDATE — evita rejeitar venda do
+  FrenteCash por colisão `uk_crediario_conta_numero`. Sync offline trata
+  conflito de integridade / TX abortada (`25P02`) como retry (não erro
+  permanente). Somente UNIQUE de venda continua idempotente. Sem mudança
+  de runtime no agente.
+
 ## [1.0.156] - 2026-10-14
 
 ### Changed
