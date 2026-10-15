@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.158] - 2026-10-15
+
+### Performance
+
+- Retomar venda suspensa (backend): claim atomic + alertas em lote — alinhamento
+  de versão. Sem mudança de runtime no agente.
+
 ## [1.0.157] - 2026-10-15
 
 ### Fixed
