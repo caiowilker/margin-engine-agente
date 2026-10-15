@@ -6,6 +6,31 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.156] - 2026-10-14
+
+### Changed
+
+- Release alignment 1.0.156 — Auditoria interna: trilha de atividade com
+  lastro legível (o que aconteceu, valores, detalhe expandido) e payloads
+  mais ricos em venda/crediário. Sem mudança de runtime no agente.
+
+## [1.0.155] - 2026-10-14
+
+### Added
+
+- Release alignment 1.0.155 — Crediário: aba Recebimentos completa (período,
+  datas, busca, forma, destino, total/lastro por lançamento e exportação).
+  KPIs Recebido hoje/mês abrem a aba com filtro pronto. Sem mudança de
+  runtime no agente.
+
+## [1.0.154] - 2026-10-14
+
+### Added
+
+- Release alignment 1.0.154 — Crediário: KPI Recebido hoje/mês abre lastro
+  detalhado (lançamentos com cliente, parcela, forma, destino e operador;
+  total reconciliável com o dashboard). Sem mudança de runtime no agente.
+
 ## [1.0.153] - 2026-10-14
 
 ### Removed
