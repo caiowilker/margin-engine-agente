@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.161] — 2026-10-15
+
+### Fixed / hardened
+- Preview da faixa com gap/perfuração proporcional (rolo duplo/triplo).
+- Calibração ZPL com molduras + marca no meio; botões Calibrar/Teste 1× em destaque.
+- Ajuste fino L×A/colunas (personalizado); presets duplo alinhados a rolos reais.
+
 ## [1.0.160] — 2026-10-15
 
 ### Fixed
