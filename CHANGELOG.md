@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.160] — 2026-10-15
+
+### Fixed
+- Presets 2 e 3 colunas exclusivos (seleção por `id`, não por mm).
+- Inputs numéricos permitem apagar/digitar sem forçar 0 no meio da edição.
+- Rolo duplo com presets maiores (40×30, 50×25, 50×40); UX Central e avulsa.
+
 ## [1.0.159] — 2026-10-15
 
 ### Added
