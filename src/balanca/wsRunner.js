@@ -7,7 +7,6 @@
 const { criarClienteWs } = require("./wsClient");
 const { enfileirarSerial } = require("./wsQueue");
 const balancaSecrets = require("./balancaSecrets");
-const { resolverModoSombra } = require("./tipoEscrita");
 const log = require("../../logger").child({ modulo: "balanca_ws_runner" });
 
 /**
@@ -31,18 +30,6 @@ async function processarLoteWs(lote, cfg, deps = {}) {
   const ws = lote.ws || {};
   const itens = Array.isArray(ws.itens) ? ws.itens : [];
   const precos = Array.isArray(ws.precos) ? ws.precos : [];
-
-  if (resolverModoSombra(lote, cfg)) {
-    log.info(
-      { loteId: lote.loteId, itens: itens.length, precos: precos.length },
-      "WS SOMBRA — não chama MGV",
-    );
-    return {
-      status: "ENTREGUE",
-      detalhe: `SOMBRA WS: enviaria ${itens.length} itens e ${precos.length} preços para ${baseUrl}`,
-      evidenciasBak: [],
-    };
-  }
 
   return enfileirarSerial(baseUrl, async () => {
     const client = criarClienteWs({

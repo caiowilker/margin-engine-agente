@@ -35,7 +35,7 @@ DELETE /gerenciadores/{id}/logs
 
 ## Pasta (agente + install)
 
-- Inno + DirectoryManager: `balanca\`, `balanca\carga\`, `balanca\sombra\` (`uninsneveruninstall`, espelho `cert`)
+- Inno + DirectoryManager: `balanca\`, `balanca\carga\`, `balanca\manual\` (`uninsneveruninstall`, espelho `cert`; `manual` = entrega MANUAL)
 - `pastaCarga` vazia no JSON → runtime resolve default; **não** grava default de volta (UNC preservada em update)
 - Falha de escrita → ACK/erro em PT (sem hex)
 

@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 
 /**
- * Mantém apenas os N diretórios de lote mais recentes em pasta de auditoria/sombra.
+ * Mantém apenas os N diretórios de lote mais recentes em pasta de auditoria (MANUAL).
  */
 function aplicarRetencaoSnapshots(pastaAudit, retencao) {
   const n = Math.max(1, Math.min(50, Number(retencao) || 5));

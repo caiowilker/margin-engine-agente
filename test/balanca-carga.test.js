@@ -34,7 +34,7 @@ after(() => {
 
 test("schema rejeita gerenciador inválido com enabled", () => {
   assert.throws(
-    () => config.validar({ enabled: true, gerenciadorId: "x", pastaCarga: "C:\\x", modoSombra: false }),
+    () => config.validar({ enabled: true, gerenciadorId: "x", pastaCarga: "C:\\x" }),
     /UUID/,
   );
 });
@@ -45,7 +45,6 @@ test("C7: pastaCarga vazia resolve default ProgramData/balanca/carga", () => {
     enabled: true,
     gerenciadorId: gid,
     pastaCarga: "",
-    modoSombra: false,
   });
   assert.equal(cfg.pastaCarga, "");
   const efetivo = config.efetivar(cfg);
@@ -125,7 +124,6 @@ test("fluxo completo com simulador MGV → IMPORTADO", async () => {
     encoding: "windows-1252",
     timeoutImportacaoSeg: 5,
     intervaloPollingBakMs: 50,
-    modoSombra: false,
   };
   const r = await processarLote(lote, cfg);
   sim.stop();
@@ -159,7 +157,6 @@ test("simulador nunca importa → TIMEOUT_IMPORTACAO", async () => {
     encoding: "windows-1252",
     timeoutImportacaoSeg: 1,
     intervaloPollingBakMs: 50,
-    modoSombra: false,
   });
   sim.stop();
   assert.equal(r.status, "TIMEOUT_IMPORTACAO");
@@ -187,45 +184,19 @@ test("pasta ocupada → PASTA_OCUPADA sem escrever", async () => {
       encoding: "windows-1252",
       timeoutImportacaoSeg: 2,
       intervaloPollingBakMs: 50,
-      modoSombra: false,
     },
   );
   assert.equal(r.status, "PASTA_OCUPADA");
   assert.equal(fs.existsSync(path.join(dir, "PRECOMGV.TXT")), false);
 });
 
-test("modo sombra não toca pasta MGV e ACK indica SOMBRA", async () => {
-  const mgv = path.join(tmpRoot, "mgv-sombra");
-  fs.mkdirSync(mgv, { recursive: true });
-  const body = Buffer.from("sombra\r\n");
-  const r = await processarLote(
-    {
-      loteId: "44444444-4444-4444-4444-444444444444",
-      arquivos: [
-        {
-          nome: "ITENSMGV.TXT",
-          sha256: crypto.createHash("sha256").update(body).digest("hex"),
-          conteudoBase64: body.toString("base64"),
-        },
-        {
-          nome: "ARQSOK.TXT",
-          sha256: crypto.createHash("sha256").update(Buffer.alloc(0)).digest("hex"),
-          conteudoBase64: "",
-        },
-      ],
-    },
-    {
-      pastaCarga: mgv,
-      encoding: "windows-1252",
-      modoSombra: true,
-      timeoutImportacaoSeg: 2,
-      intervaloPollingBakMs: 50,
-    },
-  );
-  assert.equal(r.status, "DIAGNOSTICO_OK");
-  assert.match(r.detalhe, /SOMBRA/);
-  assert.equal(fs.existsSync(path.join(mgv, "ITENSMGV.TXT")), false);
-  assert.equal(fs.existsSync(path.join(mgv, "ARQSOK.TXT")), false);
+test("config legado modoSombra é ignorado e não persiste", () => {
+  const gid = "22222222-2222-4222-8222-222222222222";
+  const v = config.validar({ enabled: false, gerenciadorId: gid, modoSombra: true });
+  assert.equal(v.modoSombra, undefined);
+  config.salvar({ enabled: false, gerenciadorId: gid, modoSombra: true });
+  const lido = config.ler();
+  assert.equal(lido.modoSombra, undefined);
 });
 
 test("limpa tmp órfãos na inicialização", () => {
@@ -240,7 +211,6 @@ test("limpa tmp órfãos na inicialização", () => {
 test("diagnostico expõe campos esperados", () => {
   config.salvar({
     enabled: false,
-    modoSombra: true,
     pastaCarga: path.join(tmpRoot, "diag"),
   });
   fs.mkdirSync(path.join(tmpRoot, "diag"), { recursive: true });
@@ -254,7 +224,7 @@ test("heartbeat payload aceita balanca sem quebrar filaFiscal", () => {
   const { montarPayloadHeartbeat, normalizarFilaFiscal } = require("../heartbeatPayload");
   const fila = { pendentes: 1, pausada: false };
   const p = montarPayloadHeartbeat(fila, {
-    balanca: { enabled: true, modoSombra: true },
+    balanca: { enabled: true },
   });
   assert.deepEqual(p.filaFiscal, normalizarFilaFiscal(fila));
   assert.equal(p.balanca.enabled, true);
@@ -291,7 +261,6 @@ test("simulador importa parcialmente → TIMEOUT com pendentes", async () => {
       encoding: "windows-1252",
       timeoutImportacaoSeg: 1,
       intervaloPollingBakMs: 40,
-      modoSombra: false,
     },
   );
   sim.stop();
@@ -326,7 +295,6 @@ test("simulador trava arquivo → TIMEOUT_IMPORTACAO", async () => {
       encoding: "windows-1252",
       timeoutImportacaoSeg: 1,
       intervaloPollingBakMs: 40,
-      modoSombra: false,
     },
   );
   sim.stop();
@@ -388,13 +356,12 @@ test("PASTA com evidencia NENHUMA → ENTREGUE_SEM_CONFIRMACAO", async () => {
       encoding: "windows-1252",
       timeoutImportacaoSeg: 5,
       intervaloPollingBakMs: 50,
-      modoSombra: false,
     },
   );
   assert.equal(r.status, "ENTREGUE_SEM_CONFIRMACAO");
 });
 
-test("retencao remove lotes antigos na sombra", () => {
+test("retencao remove lotes antigos na pasta MANUAL", () => {
   const { aplicarRetencaoSnapshots } = require("../src/balanca/retencao");
   const audit = path.join(tmpRoot, "ret-audit");
   fs.mkdirSync(audit, { recursive: true });
@@ -432,32 +399,4 @@ test("gatilho por data rejeita path fora da pasta (traversal)", async () => {
   );
   assert.equal(r.status, "ERRO");
   assert.match(r.detalhe, /path rejeitado|fora da pasta/i);
-});
-
-test("dois lotes seguidos com mesmo conteúdo em sombra — ambos DIAGNOSTICO_OK", async () => {
-  const mgv = path.join(tmpRoot, "mgv-dup");
-  fs.mkdirSync(mgv, { recursive: true });
-  const body = Buffer.from("mesmo\r\n");
-  const lote = {
-    arquivos: [
-      {
-        nome: "CADTXT.TXT",
-        sha256: crypto.createHash("sha256").update(body).digest("hex"),
-        conteudoBase64: body.toString("base64"),
-      },
-    ],
-  };
-  const cfg = {
-    pastaCarga: mgv,
-    encoding: "windows-1252",
-    modoSombra: true,
-    timeoutImportacaoSeg: 2,
-    intervaloPollingBakMs: 40,
-    retencaoSnapshots: 5,
-  };
-  const r1 = await processarLote({ ...lote, loteId: "dup-1" }, cfg);
-  const r2 = await processarLote({ ...lote, loteId: "dup-2" }, cfg);
-  assert.equal(r1.status, "DIAGNOSTICO_OK");
-  assert.equal(r2.status, "DIAGNOSTICO_OK");
-  assert.equal(fs.existsSync(path.join(mgv, "CADTXT.TXT")), false);
 });

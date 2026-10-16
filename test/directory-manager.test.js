@@ -62,7 +62,7 @@ test("ensureAll cria estrutura completa", () => {
   assert.ok(fs.existsSync(dm.PATHS.acbrXml));
   assert.ok(fs.existsSync(dm.dir("balanca")));
   assert.ok(fs.existsSync(dm.dir("balancaCarga")));
-  assert.ok(fs.existsSync(dm.dir("balancaSombra")));
+  assert.ok(fs.existsSync(dm.dir("balancaManual")));
 });
 
 test("file() resolve caminhos do agente", () => {

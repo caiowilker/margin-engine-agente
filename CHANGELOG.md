@@ -1,3 +1,12 @@
+# Changelog
+
+## [1.0.168] — 2026-10-16
+
+- Carga de Balança: remove modo sombra por completo (assistente só produção, ACK DIAGNOSTICO rejeitado, SPEC_DERIVADA só MANUAL com aviso).
+- Migration limpa hashes de gerenciadores que estavam em sombra; Reenviar tudo ignora hash.
+- Status: Pendente → Enviando → Aguardando confirmação → Confirmado (.BAK) / Falhou (motivo).
+- ITENSMGV ACBr-150: campo Lote (pos. 90–101) vazio grava zeros (não espaços) — corrige "Lote inválido" no MGV6.
+
 ## [1.0.167] — 2026-10-16
 
 - Release alignment (copy MGV6 importação auto/MT1 no front).
@@ -21,8 +30,6 @@
 ## [1.0.162] — 2026-10-16
 
 - Carga MGV6: quarentena de TXITENS residual ao gravar ITENSMGV na pasta (evita import falho no MGV).
-
-# Changelog
 
 ## [1.0.161] — 2026-10-15
 

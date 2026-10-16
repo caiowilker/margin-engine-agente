@@ -15,7 +15,6 @@ const DEFAULTS = Object.freeze({
   encoding: "windows-1252",
   timeoutImportacaoSeg: 120,
   intervaloPollingBakMs: 1000,
-  modoSombra: false,
   pollBackendMs: 15000,
   modoEntrega: "PASTA",
   wsBaseUrl: "",
@@ -37,10 +36,10 @@ function pastaCargaDefault() {
   return dm.ensurePath(dm.dir("balancaCarga"), "balancaCarga");
 }
 
-/** Default sombra: %ProgramData%\MarginEngine\balanca\sombra */
-function pastaSombraDefault() {
+/** Default entrega MANUAL: %ProgramData%\MarginEngine\balanca\manual */
+function pastaManualDefault() {
   const dm = getDirectoryManager();
-  return dm.ensurePath(dm.dir("balancaSombra"), "balancaSombra");
+  return dm.ensurePath(dm.dir("balancaManual"), "balancaManual");
 }
 
 /**
@@ -57,13 +56,13 @@ function resolvePastaCarga(pastaOuCfg) {
   return pastaCargaDefault();
 }
 
+/** Pasta de cópias para modo MANUAL (download na UI) — não grava na pasta MGV. */
 function auditDir(pastaCarga) {
   const configured = pastaCarga && String(pastaCarga).trim();
   if (configured) {
-    // Pasta custom/UNC: sombra ao lado, sem sobrescrever a pasta MGV.
-    return path.join(configured, "_margin_balanca_sombra");
+    return path.join(configured, "_margin_balanca_manual");
   }
-  return pastaSombraDefault();
+  return pastaManualDefault();
 }
 
 /** Runtime: config + pastaCarga já resolvida (default se vazia). */
@@ -82,8 +81,7 @@ function validar(raw) {
   const cfg = { ...DEFAULTS, ...(raw && typeof raw === "object" ? raw : {}) };
   cfg.schemaVersion = SCHEMA_VERSION;
   cfg.enabled = cfg.enabled === true;
-  // Default produção = flat (false). Só true quando explicitamente ligado.
-  cfg.modoSombra = cfg.modoSombra === true;
+  delete cfg.modoSombra;
   cfg.pastaCarga = cfg.pastaCarga == null ? "" : String(cfg.pastaCarga).trim();
   cfg.encoding = (cfg.encoding && String(cfg.encoding).trim()) || "windows-1252";
   cfg.gerenciadorId =
@@ -147,9 +145,9 @@ function validar(raw) {
       "gerenciadorId é obrigatório quando enabled=true. Informe o UUID do gerenciador no backend.",
     );
   }
-  if (cfg.enabled && cfg.modoEntrega === "WS_MGV7" && !cfg.modoSombra && !cfg.wsBaseUrl) {
+  if (cfg.enabled && cfg.modoEntrega === "WS_MGV7" && !cfg.wsBaseUrl) {
     throw new Error(
-      "wsBaseUrl é obrigatória quando modoEntrega=WS_MGV7 e modoSombra=false.",
+      "wsBaseUrl é obrigatória quando modoEntrega=WS_MGV7.",
     );
   }
   // pastaCarga vazia é válida: runtime resolve %ProgramData%\MarginEngine\balanca\carga.
@@ -204,7 +202,7 @@ module.exports = {
   configPath,
   auditDir,
   pastaCargaDefault,
-  pastaSombraDefault,
+  pastaManualDefault,
   resolvePastaCarga,
   efetivar,
   validar,

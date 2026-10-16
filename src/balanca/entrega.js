@@ -169,7 +169,7 @@ async function entregarGatilhoPorData(lote, cfg, arquivos, hooks = {}) {
 }
 
 async function entregarManual(lote, cfg, arquivos) {
-  // MANUAL: não grava na pasta MGV — só auditoria/sombra local para download na UI
+  // MANUAL: não grava na pasta MGV — cópias locais para download na UI
   const pastaAudit = auditDir(cfg.pastaCarga || process.cwd());
   fs.mkdirSync(pastaAudit, { recursive: true });
   const loteDir = path.join(pastaAudit, String(lote.loteId || Date.now()));

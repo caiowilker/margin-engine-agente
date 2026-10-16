@@ -204,7 +204,6 @@ test("processarLoteWs sucesso via mock", async () => {
       },
     },
     {
-      modoSombra: false,
       wsBaseUrl: "http://mgv.test",
       wsLojaCodigo: 1,
       timeoutImportacaoSeg: 5,

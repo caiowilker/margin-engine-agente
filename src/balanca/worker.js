@@ -20,7 +20,6 @@ function health() {
   const cfg = safeCfg();
   return {
     enabled: cfg.enabled === true,
-    modoSombra: cfg.modoSombra === true,
     gerenciadorId: cfg.gerenciadorId || null,
     pastaCarga: cfg.pastaCarga || null,
     pastaCargaConfigurada: cfg.pastaCargaConfigurada || "",
@@ -108,16 +107,14 @@ async function tick() {
     log.info({ loteId: lote.loteId }, "Lote de balança recebido");
 
     const resultado = await processarLote(lote, cfg, {
-      onEscrito: cfg.modoSombra
-        ? undefined
-        : async () => {
-            // ENTREGUE somente após escrita atômica (estende lease durante poll .BAK)
-            await enviarAck(backendUrl, backendToken, lote.loteId, {
-              status: "ENTREGUE",
-              detalhe: "Arquivos gravados na pasta de carga; aguardando .BAK",
-              evidenciasBak: [],
-            });
-          },
+      onEscrito: async () => {
+        // ENTREGUE somente após escrita atômica (estende lease durante poll .BAK)
+        await enviarAck(backendUrl, backendToken, lote.loteId, {
+          status: "ENTREGUE",
+          detalhe: "Arquivos gravados na pasta de carga; aguardando .BAK",
+          evidenciasBak: [],
+        });
+      },
     });
     await enviarAck(backendUrl, backendToken, lote.loteId, {
       status: resultado.status,

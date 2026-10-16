@@ -17,16 +17,12 @@ const { version: AGENT_VERSION } = require("../../package.json");
 
 function getDiagnostico() {
   const cfg = efetivar(ler());
-  const pasta = cfg.modoSombra ? auditDir(cfg.pastaCargaConfigurada) : cfg.pastaCarga;
+  const pasta = cfg.pastaCarga;
   let diag = { ok: false, erro: "Pasta de carga não resolvível." };
   try {
     if (pasta) {
       fs.mkdirSync(pasta, { recursive: true });
       diag = diagnosticarPasta(pasta);
-      if (cfg.modoSombra && cfg.pastaCarga) {
-        const mgv = diagnosticarPasta(cfg.pastaCarga);
-        diag.mgv = mgv;
-      }
     }
   } catch (err) {
     diag = {
@@ -51,7 +47,6 @@ function getDiagnostico() {
       encoding: cfg.encoding,
       timeoutImportacaoSeg: cfg.timeoutImportacaoSeg,
       intervaloPollingBakMs: cfg.intervaloPollingBakMs,
-      modoSombra: cfg.modoSombra,
       pollBackendMs: cfg.pollBackendMs,
       modoEntrega: cfg.modoEntrega,
       wsBaseUrl: cfg.wsBaseUrl,
@@ -78,6 +73,12 @@ async function getDiagnosticoAsync() {
     }
   }
   return base;
+}
+
+function stripLegacyConfigFields(body) {
+  const b = body && typeof body === "object" ? { ...body } : {};
+  delete b.modoSombra;
+  return b;
 }
 
 function registerRoutes(app, { privateNetworkHeaders, exigirAgentToken }) {
@@ -151,7 +152,7 @@ function registerRoutes(app, { privateNetworkHeaders, exigirAgentToken }) {
     exigirAgentToken,
     (req, res) => {
       try {
-        const saved = salvar(req.body || {});
+        const saved = salvar(stripLegacyConfigFields(req.body || {}));
         // reinicia worker com novo intervalo
         worker.iniciarWorker();
         res.json(saved);
@@ -171,7 +172,10 @@ function registerRoutes(app, { privateNetworkHeaders, exigirAgentToken }) {
     (req, res) => {
       const cfg = efetivar(ler());
       const n1 = limparTemporariosOrfaos(cfg.pastaCarga);
-      const n2 = limparTemporariosOrfaos(auditDir(cfg.pastaCargaConfigurada));
+      const n2 =
+        String(cfg.modoEntrega || "").toUpperCase() === "MANUAL"
+          ? limparTemporariosOrfaos(auditDir(cfg.pastaCargaConfigurada))
+          : 0;
       res.json({ removidos: n1 + n2 });
     },
   );
@@ -213,7 +217,9 @@ function boot(opts = {}) {
   try {
     const cfg = efetivar(ler());
     if (cfg.pastaCarga) limparTemporariosOrfaos(cfg.pastaCarga);
-    limparTemporariosOrfaos(auditDir(cfg.pastaCargaConfigurada));
+    if (String(cfg.modoEntrega || "").toUpperCase() === "MANUAL") {
+      limparTemporariosOrfaos(auditDir(cfg.pastaCargaConfigurada));
+    }
   } catch {
     /* ignore */
   }

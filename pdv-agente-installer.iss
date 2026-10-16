@@ -15,7 +15,7 @@
 ; ============================================================
 
 #define MyAppName "Margin Engine"
-#define MyAppVersion "1.0.167"
+#define MyAppVersion "1.0.168"
 #define MyAppPublisher "Margin Engine"
 #define MyAppCompany "Margin Engine"
 #define MyAppURL "https://marginengine.com.br"
@@ -111,7 +111,7 @@ Name: "{#MarginDataRoot}"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\cert"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\balanca"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\balanca\carga"; Permissions: users-modify; Flags: uninsneveruninstall
-Name: "{#MarginDataRoot}\balanca\sombra"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{#MarginDataRoot}\balanca\manual"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\Logs"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\Config"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#MarginDataRoot}\Backup"; Permissions: users-modify; Flags: uninsneveruninstall

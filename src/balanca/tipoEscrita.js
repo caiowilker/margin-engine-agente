@@ -12,16 +12,6 @@ function tipoEscritaDeNome(nome) {
 }
 
 /**
- * Resolve modoSombra: claim do lote (backend) > config local.
- * @param {object} lote
- * @param {object} cfg
- */
-function resolverModoSombra(lote, cfg) {
-  if (lote && typeof lote.modoSombra === "boolean") return lote.modoSombra;
-  return cfg && cfg.modoSombra === true;
-}
-
-/**
  * Enum de status UI — mesmo contrato do backend BalancaEntregaStatusUi.
  */
 const STATUS_UI = Object.freeze({
@@ -41,7 +31,6 @@ function statusUiDeAck(status) {
       return STATUS_UI.AGUARDANDO_CONFIRMACAO;
     case "IMPORTADO":
     case "CONFIRMADO":
-    case "DIAGNOSTICO_OK":
       return STATUS_UI.CONFIRMADO;
     case "ENTREGUE_SEM_CONFIRMACAO":
     case "AGUARDANDO_CONFIRMACAO":
@@ -62,7 +51,6 @@ function statusUiDeAck(status) {
 
 module.exports = {
   tipoEscritaDeNome,
-  resolverModoSombra,
   STATUS_UI,
   statusUiDeAck,
 };

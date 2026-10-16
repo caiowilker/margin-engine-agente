@@ -28,7 +28,7 @@
 
 Smoke mínimo em Windows com MGV/pasta:
 
-1. Install fresco → pastas `balanca\carga` e `balanca\sombra` existem  
+1. Install fresco → pastas `balanca\carga` e `balanca\manual` existem (cópias modo MANUAL)  
 2. Config com UNC → repair/update **não** apaga UNC  
 3. 2 pendentes → envia 1 → outro fica PENDING  
 4. Lote DELIVERED → segundo envio mostra 409 / botão bloqueado  

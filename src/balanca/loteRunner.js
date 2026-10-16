@@ -5,34 +5,28 @@ const fs = require("fs");
 const { exigirPermitido } = require("./allowlist");
 const { limparTemporariosOrfaos } = require("./pasta");
 const { validarSha256, escreverAtomico, ordenarArquivos } = require("./atomicWrite");
-const { auditDir, efetivar } = require("./config");
+const { efetivar } = require("./config");
 const { processarLoteWs } = require("./wsRunner");
 const {
   entregarPastaMonitorada,
   entregarGatilhoPorData,
   entregarManual,
 } = require("./entrega");
-const { aplicarRetencaoSnapshots } = require("./retencao");
 const {
   tipoEscritaDeNome,
-  resolverModoSombra,
   STATUS_UI,
 } = require("./tipoEscrita");
 const log = require("../../logger").child({ modulo: "balanca_lote" });
 
 const INCREMENTAL_STATE_FILE = ".me-balanca-incremental-state.json";
 
-/**
- * Processa um lote do backend.
- * Prioridade modoSombra: lote (claim) > config local.
- */
+/** Processa um lote do backend (entrega sempre em produção: pasta MGV, WS ou MANUAL). */
 async function processarLote(lote, cfg, hooks = {}) {
   const cfgResolvido = efetivar(cfg || {});
   const modoEntrega = String(
     lote.modoEntrega || cfgResolvido.modoEntrega || "PASTA",
   ).toUpperCase();
-  const modoSombra = resolverModoSombra(lote, cfgResolvido);
-  const cfgEfetivo = { ...cfgResolvido, modoSombra };
+  const cfgEfetivo = cfgResolvido;
   if (!String(cfgEfetivo.pastaCarga || "").trim() && modoEntrega !== "WS_MGV7") {
     return {
       status: "ERRO",
@@ -54,10 +48,6 @@ async function processarLote(lote, cfg, hooks = {}) {
     if (!a.tipoEscrita) {
       a.tipoEscrita = tipoEscritaDeNome(a.nome);
     }
-  }
-
-  if (modoSombra) {
-    return processarSombra(lote, cfgEfetivo, arquivos);
   }
 
   // Gate incremental: não sobrescreve PRECOMGV/EXCLITEM sem confirmação/timeout
@@ -178,42 +168,6 @@ function avaliarGateIncremental(lote, cfg, arquivos) {
     aviso:
       `Incremental anterior não confirmado há ${Math.floor(idadeMin)} min ` +
       `(timeout ${timeoutMin} min) — enviando mesmo assim.`,
-  };
-}
-
-async function processarSombra(lote, cfg, arquivos) {
-  const pastaAudit = auditDir(cfg.pastaCarga);
-  fs.mkdirSync(pastaAudit, { recursive: true });
-  limparTemporariosOrfaos(pastaAudit);
-  const loteDir = path.join(pastaAudit, String(lote.loteId || Date.now()));
-  fs.mkdirSync(loteDir, { recursive: true });
-  const nomes = [];
-  try {
-    for (const a of ordenarArquivos(arquivos)) {
-      const buf = validarSha256(a.conteudoBase64, a.sha256);
-      escreverAtomico(loteDir, a.nome, buf, cfg.encoding);
-      nomes.push(a.nome);
-    }
-    fs.writeFileSync(
-      path.join(loteDir, "_meta.json"),
-      JSON.stringify({
-        loteId: lote.loteId,
-        em: new Date().toISOString(),
-        arquivos: nomes,
-        modo: "SOMBRA",
-      }, null, 2),
-      "utf8",
-    );
-    aplicarRetencaoSnapshots(pastaAudit, cfg.retencaoSnapshots || 5);
-  } catch (err) {
-    return { status: "ERRO", detalhe: `SOMBRA falhou: ${err.message}`, evidenciasBak: [] };
-  }
-  // DIAGNOSTICO_OK libera o slot no backend (IMPORTED) — ENTREGUE deixava DELIVERED eterno.
-  return {
-    status: "DIAGNOSTICO_OK",
-    detalhe: `SOMBRA: arquivos gravados em ${loteDir} (pasta MGV não foi tocada)`,
-    evidenciasBak: ["SOMBRA"],
-    statusUi: STATUS_UI.CONFIRMADO,
   };
 }
 
