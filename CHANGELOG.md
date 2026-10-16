@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.0.175] — 2026-10-16
+
+- Crediário › Receber: após gravar, sincroniza saldo/parcelas com o backend (sem depender de Recarregar); detalhe da conta aberta também atualiza.
+
+## [1.0.174] — 2026-10-16
+
+- Crediário › Receber: coluna **Data compra** ao lado do vencimento; ordenar por data da compra.
+
+## [1.0.173] — 2026-10-16
+
+- TXITENS clássico: layout oficial 320 bytes (D1/D2=25+25, T=0/1, VVV validado); validador estrito + CLI `validar-txitens`.
+- Isolamento de perfil: carga TXITENS quarentena residual ITENSMGV/DEPTO/ARQSOK (e o inverso já existente).
+- Fixture de campo: `docs/balanca/fixtures/teste_txitens_1_linha/` (+ variante D1/D2 50 para prova A/B).
+
+## [1.0.172] — 2026-10-16
+
+- Carga de balança: "Reenviar" / enviar-agora idempotente — não revive FAILED se já existe PENDING do mesmo dedupe (elimina 409 `uq_balanca_carga_outbox_pending_dedupe`).
+- Duplicatas ativas → `SUPERSEDED`; "Remover da fila" apaga todas as linhas do grupo; endpoint limpar falhas.
+- Migration V20261152: status SUPERSEDED + saneamento de duplicatas.
+
+## [1.0.171] — 2026-10-16
+
+- Frente de caixa: catálogo sincroniza a cada **15s** (antes ~5 min); ao focar a aba, sync imediato.
+- Mesma máquina / outra aba: salvar produto ou edição rápida dispara sync na frente na hora (BroadcastChannel).
+- Ao adicionar item: revalida preço no servidor (`obter`) e corrige o carrinho se o preço mudou.
+
+## [1.0.170] — 2026-10-16
+
+- Crediário: configuração **dias de vencimento após a compra** (padrão 30) em Configurações › Crediário; 1ª parcela = hoje+N dias.
+
+## [1.0.169] — 2026-10-16
+
+- Layout MGV6 byte a byte: Lote=12 zeros, DEPTO 43 bytes (E), EAN só em T=2/5, D1/D2 quebra por palavra, sanitização ASCII.
+- Validador estrito bloqueia entrega inválida; CLI `validar-itensmgv`; fixtures de teste G (1 linha vs espaços no L).
+
 ## [1.0.168] — 2026-10-16
 
 - Carga de Balança: remove modo sombra por completo (assistente só produção, ACK DIAGNOSTICO rejeitado, SPEC_DERIVADA só MANUAL com aviso).

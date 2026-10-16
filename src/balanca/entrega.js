@@ -27,12 +27,18 @@ async function entregarPastaMonitorada(lote, cfg, arquivos, hooks = {}) {
   const pasta = String(cfg.pastaCarga || "").trim();
   limparTemporariosOrfaos(pasta);
 
-  // MGV6: TXITENS residual não deve bloquear ITENSMGV — quarentena antes do diagnóstico de ocupação.
+  // Isolamento de perfil: residual do outro layout não pode ficar na pasta do MGV.
   const vaiItensMgv = (arquivos || []).some(
     (a) => a && String(a.nome || "").toUpperCase().startsWith("ITENSMGV"),
   );
+  const vaiTxItens = (arquivos || []).some(
+    (a) => a && String(a.nome || "").toUpperCase().startsWith("TXITENS"),
+  );
   if (vaiItensMgv) {
     quarentenarTxitensResidual(pasta);
+  }
+  if (vaiTxItens) {
+    quarentenarItensMgvResidual(pasta);
   }
 
   const diag = diagnosticarPasta(pasta);
@@ -201,14 +207,29 @@ async function entregarManual(lote, cfg, arquivos) {
  * Evita o MGV tentar importar o layout clássico e falhar o log.
  */
 function quarentenarTxitensResidual(pasta) {
+  quarentenarPorRegex(pasta, /^txitens\.txt$/i, "TXITENS residual quarentenado (carga ITENSMGV/MGV6)");
+}
+
+/**
+ * Move ITENSMGV.TXT (+ DEPTO/ARQSOK) residual quando a carga é TXITENS clássico.
+ */
+function quarentenarItensMgvResidual(pasta) {
+  quarentenarPorRegex(
+    pasta,
+    /^(itensmgv|depto|arqsok)\.txt$/i,
+    "ITENSMGV/DEPTO/ARQSOK residual quarentenado (carga TXITENS clássico)",
+  );
+}
+
+function quarentenarPorRegex(pasta, regex, msgOk) {
   const orphan = path.join(pasta, "_margin_orphan");
   let nomes = [];
   try {
     nomes = fs
       .readdirSync(pasta)
-      .filter((n) => typeof n === "string" && /^txitens\.txt$/i.test(n));
+      .filter((n) => typeof n === "string" && regex.test(n));
   } catch {
-    nomes = ["TXITENS.TXT", "Txitens.txt"];
+    nomes = [];
   }
   for (const nome of nomes) {
     const src = path.join(pasta, nome);
@@ -217,9 +238,9 @@ function quarentenarTxitensResidual(pasta) {
       if (!fs.existsSync(orphan)) fs.mkdirSync(orphan, { recursive: true });
       const dest = path.join(orphan, `${Date.now()}__${nome}`);
       fs.renameSync(src, dest);
-      log.info({ pasta, dest }, "TXITENS residual quarentenado (carga ITENSMGV/MGV6)");
+      log.info({ pasta, dest }, msgOk);
     } catch (err) {
-      log.warn({ err: err && err.message, pasta, nome }, "Falha ao quarentenar TXITENS");
+      log.warn({ err: err && err.message, pasta, nome }, "Falha ao quarentenar residual");
     }
   }
 }
@@ -229,4 +250,5 @@ module.exports = {
   entregarGatilhoPorData,
   entregarManual,
   quarentenarTxitensResidual,
+  quarentenarItensMgvResidual,
 };
