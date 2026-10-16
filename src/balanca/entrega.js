@@ -26,6 +26,15 @@ const log = require("../../logger").child({ modulo: "balanca_entrega" });
 async function entregarPastaMonitorada(lote, cfg, arquivos, hooks = {}) {
   const pasta = String(cfg.pastaCarga || "").trim();
   limparTemporariosOrfaos(pasta);
+
+  // MGV6: TXITENS residual não deve bloquear ITENSMGV — quarentena antes do diagnóstico de ocupação.
+  const vaiItensMgv = (arquivos || []).some(
+    (a) => a && String(a.nome || "").toUpperCase().startsWith("ITENSMGV"),
+  );
+  if (vaiItensMgv) {
+    quarentenarTxitensResidual(pasta);
+  }
+
   const diag = diagnosticarPasta(pasta);
   if (diag.ocupada) {
     return { status: "PASTA_OCUPADA", detalhe: diag.erro, evidenciasBak: [] };
@@ -187,8 +196,37 @@ async function entregarManual(lote, cfg, arquivos) {
   };
 }
 
+/**
+ * Move TXITENS.TXT residual para _margin_orphan quando a carga é ITENSMGV (MGV6).
+ * Evita o MGV tentar importar o layout clássico e falhar o log.
+ */
+function quarentenarTxitensResidual(pasta) {
+  const orphan = path.join(pasta, "_margin_orphan");
+  let nomes = [];
+  try {
+    nomes = fs
+      .readdirSync(pasta)
+      .filter((n) => typeof n === "string" && /^txitens\.txt$/i.test(n));
+  } catch {
+    nomes = ["TXITENS.TXT", "Txitens.txt"];
+  }
+  for (const nome of nomes) {
+    const src = path.join(pasta, nome);
+    try {
+      if (!fs.existsSync(src) || !fs.statSync(src).isFile()) continue;
+      if (!fs.existsSync(orphan)) fs.mkdirSync(orphan, { recursive: true });
+      const dest = path.join(orphan, `${Date.now()}__${nome}`);
+      fs.renameSync(src, dest);
+      log.info({ pasta, dest }, "TXITENS residual quarentenado (carga ITENSMGV/MGV6)");
+    } catch (err) {
+      log.warn({ err: err && err.message, pasta, nome }, "Falha ao quarentenar TXITENS");
+    }
+  }
+}
+
 module.exports = {
   entregarPastaMonitorada,
   entregarGatilhoPorData,
   entregarManual,
+  quarentenarTxitensResidual,
 };

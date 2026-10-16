@@ -1,3 +1,27 @@
+## [1.0.167] — 2026-10-16
+
+- Release alignment (copy MGV6 importação auto/MT1 no front).
+
+## [1.0.166] — 2026-10-16
+
+- Carga MGV6: quarentena TXITENS case-insensitive; follow-up campo (parcial → ITENSMGV).
+
+## [1.0.165] — 2026-10-16
+
+- Carga MGV6: copy pasta = só path (ITENSMGV, não TXITENS); alinhamento release.
+
+## [1.0.164] — 2026-10-16
+
+- Carga MGV6: TXITENS residual não bloqueia ITENSMGV (quarentena antes do diagnóstico); teste de ordem ITENSMGV→DEPTO→ARQSOK.
+
+## [1.0.163] — 2026-10-16
+
+- Carga MGV6: quarentena TXITENS residual **antes** do diagnóstico de pasta ocupada (não bloqueia ITENSMGV); testes de entrega + suite `test:balanca`.
+
+## [1.0.162] — 2026-10-16
+
+- Carga MGV6: quarentena de TXITENS residual ao gravar ITENSMGV na pasta (evita import falho no MGV).
+
 # Changelog
 
 ## [1.0.161] — 2026-10-15
