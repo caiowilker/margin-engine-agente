@@ -3218,16 +3218,34 @@ function imprimirCrediario(payload) {
 
 async function renderCrediario(printer, payload) {
   const { sep: linha, fmt } = helpers();
+  const cols = getThermalCols();
+  const {
+    labelForma,
+    quebrarObs,
+  } = require("../crediarioAcbrTags");
+
+  function kv(label, value) {
+    const left = String(label || "");
+    const right = tx(String(value ?? ""));
+    const gap = cols - left.length - right.length;
+    if (gap >= 1) return left + " ".repeat(gap) + right;
+    if (right.length >= cols) return right.slice(0, cols);
+    return (left + " " + right).slice(0, cols);
+  }
 
   printer.font("a").align("ct");
   await imprimirLogoCupomEscpos(printer, payload);
 
-  if (payload.empresa?.nome) {
-    printer.style("b").text(tx(payload.empresa.nome)).style("normal");
+  if (require("../segundaVia").deveExibirBannerSegundaVia(payload)) {
+    printer.style("b").size(1, 1).text("*** SEGUNDA VIA ***").style("normal").size(0, 0);
+    printer.feed(1);
   }
-  if (payload.empresa?.cnpj) {
-    printer.text("CNPJ: " + toThermalDoc(payload.empresa.cnpj));
-  }
+
+  require("../empresaCabecalhoTermico").aplicarCabecalhoEmpresaEscpos(
+    printer,
+    payload.empresa,
+    cols,
+  );
 
   printer
     .text(linha())
@@ -3241,48 +3259,68 @@ async function renderCrediario(printer, payload) {
   if (/parcial/i.test(String(payload.titulo || ""))) {
     printer.align("ct").style("b").text("*** PAGAMENTO PARCIAL ***").style("normal").align("lt");
   }
-  if (payload.reimpressao) {
-    printer.align("ct").style("b").text("*** SEGUNDA VIA ***").style("normal").align("lt");
-  }
 
-  if (payload.clienteNome) printer.text("Cliente : " + tx(payload.clienteNome));
+  if (payload.clienteNome) printer.text(kv("Cliente", payload.clienteNome));
   if (payload.clienteDocumento) {
-    printer.text("Doc     : " + toThermalDoc(payload.clienteDocumento));
+    printer.text(kv("Documento", toThermalDoc(payload.clienteDocumento)));
   }
   if (payload.numeroParcela != null && payload.totalParcelas != null) {
-    printer.text("Parcela : " + payload.numeroParcela + "/" + payload.totalParcelas);
+    printer.text(kv("Parcela", payload.numeroParcela + "/" + payload.totalParcelas));
   } else if (payload.parcelasQuitadas != null || payload.parcelasParciais != null) {
     const q = payload.parcelasQuitadas || 0;
     const partial = payload.parcelasParciais || 0;
     printer.text(
-      "Parcelas: " + q + " quitada(s)" + (partial > 0 ? ", " + partial + " parcial(is)" : ""),
+      kv(
+        "Parcelas",
+        q + " quitada(s)" + (partial > 0 ? ", " + partial + " parcial(is)" : ""),
+      ),
     );
   }
-  if (payload.vencimento) printer.text("Venc.   : " + tx(payload.vencimento));
-  if (payload.dataRecebimento) printer.text("Data/Hr : " + tx(payload.dataRecebimento));
-  if (payload.operador) printer.text("Operador: " + tx(payload.operador));
-  if (payload.formaPagamento) printer.text("Forma   : " + tx(payload.formaPagamento));
+  if (payload.vencimento) printer.text(kv("Vencimento", payload.vencimento));
+  if (payload.dataRecebimento) printer.text(kv("Data/hora", payload.dataRecebimento));
+  if (payload.operador) printer.text(kv("Operador", payload.operador));
+  if (payload.formaPagamento) {
+    printer.text(kv("Forma", labelForma(payload.formaPagamento)));
+  }
 
-  printer.text(linha());
-  printer.style("b").text("Recebido: " + fmt(Number(payload.valorRecebido || 0))).style("normal");
+  printer
+    .text(linha())
+    .align("ct")
+    .text("VALOR RECEBIDO")
+    .style("b")
+    .size(1, 1)
+    .text(fmt(Number(payload.valorRecebido || 0)))
+    .size(0, 0)
+    .style("normal")
+    .align("lt");
+
   if (Number(payload.jurosCalculado) > 0) {
-    printer.text("Juros   : " + fmt(Number(payload.jurosCalculado)));
+    printer.text(kv("Juros", fmt(Number(payload.jurosCalculado))));
   }
   if (Number(payload.multaCalculada) > 0) {
-    printer.text("Multa   : " + fmt(Number(payload.multaCalculada)));
+    printer.text(kv("Multa", fmt(Number(payload.multaCalculada))));
   }
-  printer.text("Saldo ant.: " + fmt(Number(payload.saldoAnterior || 0)));
-  printer.style("b").text("Saldo rem.: " + fmt(Number(payload.saldoRemanescente || 0))).style("normal");
+
+  printer.text(linha());
+  printer.text(kv("Saldo anterior", fmt(Number(payload.saldoAnterior || 0))));
+  printer
+    .style("b")
+    .text(kv("Saldo remanescente", fmt(Number(payload.saldoRemanescente || 0))))
+    .style("normal");
 
   if (payload.observacao) {
-    printer.text(linha()).text("Obs: " + tx(payload.observacao));
+    printer.text(linha()).style("b").text("Itens / obs.").style("normal");
+    for (const l of quebrarObs(payload.observacao, cols)) {
+      printer.text(l);
+    }
   }
 
   printer
     .align("ct")
     .text(linha())
     .text("Documento nao fiscal")
-    .text("Nao substitui NFC-e / cupom fiscal");
+    .text("Nao substitui NFC-e / cupom fiscal")
+    .text("Guarde este comprovante");
   require("../cupomLayoutShared").applyEscposCut(printer);
 }
 

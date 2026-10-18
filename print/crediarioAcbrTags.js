@@ -3,8 +3,10 @@
  * Isolado de cupom fiscal / pedido / caixa / vasilhame (mesmo padrão).
  */
 const { toThermalText, toThermalDoc } = require("../thermalText");
-const { tagLogoHeader, tagCorte } = require("./acbrTags");
+const { tagLogoHeader, tagCorte, tagSegundaViaBanner } = require("./acbrTags");
 const { sepEq, sepDash, getThermalCols } = require("./thermalCols");
+const { deveExibirBannerSegundaVia } = require("./segundaVia");
+const { linhasCabecalhoEmpresaTags } = require("./empresaCabecalhoTermico");
 
 function tx(v) {
   return toThermalText(v);
@@ -21,8 +23,49 @@ function fmtR$(reais) {
   );
 }
 
+/** Linha label + valor alinhada à direita (padrão cupom). */
+function linhaKV(label, value, cols) {
+  const left = String(label || "");
+  const right = tx(String(value ?? ""));
+  const gap = cols - left.length - right.length;
+  if (gap >= 1) return left + " ".repeat(gap) + right;
+  if (right.length >= cols) return right.slice(0, cols);
+  return (left + " " + right).slice(0, cols);
+}
+
+function quebrarObs(texto, cols) {
+  const raw = tx(String(texto || "")).trim();
+  if (!raw) return [];
+  const out = [];
+  let rest = raw;
+  while (rest.length > cols) {
+    let cut = rest.lastIndexOf(" ", cols);
+    if (cut < Math.floor(cols * 0.4)) cut = cols;
+    out.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) out.push(rest);
+  return out;
+}
+
+function labelForma(forma) {
+  const f = String(forma || "").trim().toUpperCase();
+  if (!f) return "";
+  if (f === "DINHEIRO") return "Dinheiro";
+  if (f === "PIX") return "PIX";
+  if (f === "DEBITO" || f === "CARTAO_DEBITO") return "Cartao debito";
+  if (f === "CREDITO" || f === "CARTAO_CREDITO") return "Cartao credito";
+  return tx(forma);
+}
+
 function normalizarCrediarioPayload(raw = {}) {
   const p = raw && typeof raw === "object" ? raw : {};
+  const clickId = String(p.clickId || p.click_id || "").trim();
+  const motivo = String(p.motivo || "").trim();
+  // clickId sozinho NÃO marca 2ª via (pode existir em 1ª via com dedupe).
+  const reimpressao =
+    p.reimpressao === true ||
+    /reimpress|segunda/.test(motivo.toLowerCase());
   return {
     ...p,
     naoFiscal: true,
@@ -47,8 +90,9 @@ function normalizarCrediarioPayload(raw = {}) {
     parcelasQuitadas: p.parcelasQuitadas != null ? Number(p.parcelasQuitadas) : null,
     parcelasParciais: p.parcelasParciais != null ? Number(p.parcelasParciais) : null,
     empresa: p.empresa || null,
-    reimpressao: !!p.reimpressao,
-    clickId: p.clickId || undefined,
+    reimpressao,
+    clickId: clickId || undefined,
+    motivo: reimpressao ? motivo || "reimpressao_crediario" : motivo || undefined,
   };
 }
 
@@ -57,12 +101,11 @@ function renderCrediarioTags(rawPayload = {}) {
   const COLS = getThermalCols();
   const lines = ["</zera>", tagLogoHeader(payload)];
 
-  if (payload.empresa?.nome) {
-    lines.push(`<ce><n>${tx(payload.empresa.nome)}</n></ce>`);
+  if (deveExibirBannerSegundaVia(payload)) {
+    lines.push(tagSegundaViaBanner());
   }
-  if (payload.empresa?.cnpj) {
-    lines.push(`CNPJ: ${toThermalDoc(payload.empresa.cnpj)}`);
-  }
+
+  lines.push(...linhasCabecalhoEmpresaTags(payload.empresa, COLS));
 
   lines.push(
     sepEq(),
@@ -74,55 +117,68 @@ function renderCrediarioTags(rawPayload = {}) {
   if (/parcial/i.test(String(payload.titulo || ""))) {
     lines.push("<ce><n>*** PAGAMENTO PARCIAL ***</n></ce>");
   }
-  if (payload.reimpressao) {
-    lines.push("<ce><n>*** SEGUNDA VIA ***</n></ce>");
-  }
 
   if (payload.clienteNome) {
-    lines.push(`Cliente : ${tx(payload.clienteNome)}`);
+    lines.push(linhaKV("Cliente", payload.clienteNome, COLS));
   }
   if (payload.clienteDocumento) {
-    lines.push(`Doc     : ${toThermalDoc(payload.clienteDocumento)}`);
+    lines.push(linhaKV("Documento", toThermalDoc(payload.clienteDocumento), COLS));
   }
   if (payload.numeroParcela != null && payload.totalParcelas != null) {
-    lines.push(`Parcela : ${payload.numeroParcela}/${payload.totalParcelas}`);
+    lines.push(linhaKV("Parcela", `${payload.numeroParcela}/${payload.totalParcelas}`, COLS));
   } else if (payload.parcelasQuitadas != null || payload.parcelasParciais != null) {
     const q = payload.parcelasQuitadas || 0;
     const partial = payload.parcelasParciais || 0;
-    lines.push(`Parcelas: ${q} quitada(s)${partial > 0 ? `, ${partial} parcial(is)` : ""}`);
+    lines.push(
+      linhaKV(
+        "Parcelas",
+        `${q} quitada(s)${partial > 0 ? `, ${partial} parcial(is)` : ""}`,
+        COLS,
+      ),
+    );
   }
   if (payload.vencimento) {
-    lines.push(`Venc.   : ${tx(payload.vencimento)}`);
+    lines.push(linhaKV("Vencimento", payload.vencimento, COLS));
   }
   if (payload.dataRecebimento) {
-    lines.push(`Data/Hr : ${tx(payload.dataRecebimento)}`);
+    lines.push(linhaKV("Data/hora", payload.dataRecebimento, COLS));
   }
   if (payload.operador) {
-    lines.push(`Operador: ${tx(payload.operador)}`);
+    lines.push(linhaKV("Operador", payload.operador, COLS));
   }
   if (payload.formaPagamento) {
-    lines.push(`Forma   : ${tx(payload.formaPagamento)}`);
+    lines.push(linhaKV("Forma", labelForma(payload.formaPagamento), COLS));
   }
 
   lines.push(sepDash());
-  lines.push(`<n>Recebido: ${fmtR$(payload.valorRecebido)}</n>`);
+  lines.push("<ce>VALOR RECEBIDO</ce>");
+  lines.push(`<ce><e><n>${fmtR$(payload.valorRecebido)}</n></e></ce>`);
+
   if (payload.jurosCalculado > 0) {
-    lines.push(`Juros   : ${fmtR$(payload.jurosCalculado)}`);
+    lines.push(linhaKV("Juros", fmtR$(payload.jurosCalculado), COLS));
   }
   if (payload.multaCalculada > 0) {
-    lines.push(`Multa   : ${fmtR$(payload.multaCalculada)}`);
+    lines.push(linhaKV("Multa", fmtR$(payload.multaCalculada), COLS));
   }
-  lines.push(`Saldo ant.: ${fmtR$(payload.saldoAnterior)}`);
-  lines.push(`<n>Saldo rem.: ${fmtR$(payload.saldoRemanescente)}</n>`);
+
+  lines.push(sepDash());
+  lines.push(linhaKV("Saldo anterior", fmtR$(payload.saldoAnterior), COLS));
+  lines.push(
+    `<n>${linhaKV("Saldo remanescente", fmtR$(payload.saldoRemanescente), COLS)}</n>`,
+  );
 
   if (payload.observacao) {
-    lines.push(sepDash(), `Obs: ${tx(payload.observacao).slice(0, COLS)}`);
+    lines.push(sepDash(), "<n>Itens / obs.</n>");
+    for (const l of quebrarObs(payload.observacao, COLS)) {
+      lines.push(l);
+    }
   }
 
   lines.push(
     sepEq(),
     "<ce>Documento nao fiscal</ce>",
     "<ce>Nao substitui NFC-e / cupom fiscal</ce>",
+    "<ce>Guarde este comprovante</ce>",
     tagCorte(),
   );
   return lines.filter(Boolean).join("\n") + "\n";
@@ -131,4 +187,6 @@ function renderCrediarioTags(rawPayload = {}) {
 module.exports = {
   normalizarCrediarioPayload,
   renderCrediarioTags,
+  labelForma,
+  quebrarObs,
 };

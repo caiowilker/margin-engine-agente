@@ -1715,12 +1715,24 @@ function montarIniNfe(payload, numeracao, destinatario) {
   const dhEmi = formatarDhEmi();
   const natOp = resolverNatOpNfe(payload);
   const finNFe = resolverFinNFeLocal(payload, /* nfce */ false);
+  const tipoEmissaoNfe = String(payload?.tipoEmissaoNfe || "").toUpperCase();
+  // Devolução venda = entrada (0); devolução compra = saída (1). Demais NF-e = saída.
   const tpNF =
     payload.tpNF != null
       ? String(payload.tpNF)
-      : finNFe === "4"
-        ? "0"
-        : "1";
+      : tipoEmissaoNfe.includes("DEVOLUCAO_COMPRA")
+        ? "1"
+        : finNFe === "4"
+          ? "0"
+          : "1";
+  const indFinalDev =
+    payload.indFinal != null
+      ? payload.indFinal
+      : tipoEmissaoNfe.includes("DEVOLUCAO_COMPRA")
+        ? 0
+        : finNFe === "4"
+          ? 1
+          : 0;
   const tpEmis = resolverTpEmisLocal(payload);
   const modFrete = resolverModFreteLocal(payload, /* nfce */ false);
 
@@ -1735,7 +1747,7 @@ function montarIniNfe(payload, numeracao, destinatario) {
   ini += `dhSaiEnt=${dhEmi}\n`;
   ini += `tpNF=${tpNF}\n`;
   ini += `idDest=${idDest}\n`;
-  ini += `indFinal=${payload.indFinal != null ? payload.indFinal : 0}\n`;
+  ini += `indFinal=${indFinalDev}\n`;
   ini += `indPres=${payload.indPres != null ? payload.indPres : 1}\n`;
   ini += `tpImp=1\n`;
   ini += `tpAmb=${tpAmb}\n`;
@@ -1811,28 +1823,34 @@ function montarIniNfe(payload, numeracao, destinatario) {
     voucher: "05",
     fiado: "99",
     outros: "99",
+    "90": "90",
   };
+  // finNFe=4: SEFAZ exige único detPag tPag=90 / vPag=0 (sem pagamento)
   const pagamentosLista =
-    Array.isArray(payload.pagamentos) && payload.pagamentos.length > 0
-      ? payload.pagamentos
-      : [
-          {
-            forma: payload.formaPagamento || "dinheiro",
-            valor: Number(payload.valorRecebido || totalVenda),
-            troco: Number(payload.troco || 0),
-          },
-        ];
+    finNFe === "4"
+      ? [{ forma: "90", valor: 0, troco: 0 }]
+      : Array.isArray(payload.pagamentos) && payload.pagamentos.length > 0
+        ? payload.pagamentos
+        : [
+            {
+              forma: payload.formaPagamento || "dinheiro",
+              valor: Number(payload.valorRecebido || totalVenda),
+              troco: Number(payload.troco || 0),
+            },
+          ];
 
   let vTrocoTotal = 0;
   pagamentosLista.forEach((pg, idx) => {
     const forma = (pg.forma || "dinheiro").toLowerCase();
-    const codigoForma = formaMap[forma] || "01";
+    const codigoForma = formaMap[forma] || (forma === "90" ? "90" : "01");
     const valorPg = Number(pg.valor || 0);
     const trocoPg = Number(pg.troco || 0);
     const vPagNum =
-      codigoForma === "01" && trocoPg > 0
-        ? valorPg
-        : Math.max(0, valorPg);
+      codigoForma === "90"
+        ? 0
+        : codigoForma === "01" && trocoPg > 0
+          ? valorPg
+          : Math.max(0, valorPg);
     const vTrocoNum = codigoForma === "01" ? trocoPg : 0;
     if (vTrocoNum > 0) vTrocoTotal += vTrocoNum;
 

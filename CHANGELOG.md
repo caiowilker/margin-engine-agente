@@ -1,5 +1,90 @@
 # Changelog
 
+## [1.0.195] — 2026-10-18
+
+- Fornecedor QA: validação endereço/IE/IBGE; dest devolução usa IE do cadastro; IBGE persistido após resolução.
+
+## [1.0.194] — 2026-10-18
+
+- Fornecedor: cadastro/edição com endereço+IE+IBGE; auto-fill do XML de entrada (`enderEmit`).
+
+## [1.0.193] — 2026-10-18
+
+- Devoluções legais: agente tpNF compra=1 / tPag=90; ST retido 5411; pacote/Contador com XMLs; indFinal/cMun/indIEDest alinhados MOC.
+
+## [1.0.192] — 2026-10-18
+
+- Devoluções: Ver NF-e (XML/DANFE) na compra; XML no ZIP Contador; rota PDF `DC-`.
+
+## [1.0.191] — 2026-10-18
+
+- Devolução compra (solidez): Focus/cloud saída correta; financeiro idempotente; endereço fornecedor obrigatório; testes + aviso lista truncada.
+
+## [1.0.190] — 2026-10-18
+
+- Devoluções produção: listagem Este mês/Mês passado/90 dias; copy anti-confusão venda vs compra; devolução de compra com emissão SEFAZ (finNFe=4), estoque pós-autorização e abate Conta a Pagar / crédito pendente.
+
+## [1.0.189] — 2026-10-18
+
+- Produção formação/RFQ: 404 tipados; opt-out portal; OC RFQ numerada; lembretes/expiração ShedLock; bounce Resend→contato; alíquota vigência no simular; front opt-out.
+
+## [1.0.188] — 2026-10-18
+
+- Solidez formação de preço + RFQ (reposicao NF, mapa, portal, reprec).
+
+
+## [1.0.187] — 2026-10-18
+
+- Formação de preço avançada + RFQ fornecedores (motor, aba, portal token, OC/reprecificação).
+
+
+## [1.0.186] — 2026-10-18
+
+- Escrituração NF entrada: se dataEntrada ficou em mês anterior (importou e só escriturou depois), avança para o momento da escrituração — entra no pacote do mês da escrituração e chega ao contador.
+
+
+## [1.0.185] — 2026-10-18
+
+- Pacote fiscal mensal: timeout extremo 45 min (configurável 15–120) para não cortar geração no envio automático ao contador; paralelismo 3 (2–4); pool drena até o mesmo teto.
+
+## [1.0.184] — 2026-10-18
+
+- Perf solidez: orçamento checkout em degraus (25 WARN / 45 ERROR); flush PEPS sem double-save; lote aninhado fail-closed; escriturar ERROR &gt;55 queries.
+
+## [1.0.183] — 2026-10-18
+
+- Perf caixa/escriturar: orçamento `POST /pdv/vendas` ≤800 ms / ≤25 queries; escriturar ≤3 s; log `request_p95_budget` com topSql; alertas Grafana; lote PEPS/custo/CIAP + balança afterCommit.
+
+## [1.0.182] — 2026-10-18
+
+- Crediário › venda (solidez): `gerarParcelas` sempre aplica SSOT (compra+prazo); recusa duplicata da mesma venda, valor ≤0 e vendaId nulo; renegociação valida janela do 1º vencimento.
+
+## [1.0.181] — 2026-10-18
+
+- Crediário › venda: 1º vencimento SSOT no servidor = data da compra (fuso loja) + prazo do tenant (default 30 dias); preview do front ignorado se divergir; defesa contra vencimento no passado.
+
+## [1.0.180] — 2026-10-18
+
+- Crediário produção (fecho): receber/quitar fail-closed sem conta (antes de caixa/encargos); status de conta trata CANCELADA como encerrada; sync pós-recebimento e Ver itens respeitam gen-gate (não sobrescrevem Trocar cliente); migration V20261153 com backfill de saldo; comprovante: clickId sozinho não marca 2ª via.
+
+## [1.0.179] — 2026-10-18
+
+- Crediário › Ver itens: query leve (só colunas exibidas, sem EntityGraph da venda); prefetch no hover/foco; timeout 8s; cache anti-duplo-fetch.
+
+## [1.0.178] — 2026-10-18
+
+- Crediário (solidez): status de conta não marca PAGA em lista vazia; flush+idempotência no quitar; saldo lido do trigger após flush; posição por documento em 1 TX; comprovante não marca 2ª via só por clickId.
+
+## [1.0.177] — 2026-10-18
+
+- Crediário › Receber: posição/consulta bem mais rápida (sem COUNT extra, filtro de venda cancelada no SQL, índice de parcelas abertas).
+- Crediário › Receber/quitar: trava só as parcelas alvo, flush em lote, status de contas em 1 query; trigger de saldo só soma ABERTA/ATRASADA.
+
+## [1.0.176] — 2026-10-18
+
+- Crediário › Receber › Ver itens: botão **2ª via da compra** (reimprime o cupom da venda).
+- Comprovante térmico de recebimento/quitação: cabeçalho completo da empresa, valor recebido em destaque, alinhamento e banner de segunda via.
+
 ## [1.0.175] — 2026-10-16
 
 - Crediário › Receber: após gravar, sincroniza saldo/parcelas com o backend (sem depender de Recarregar); detalhe da conta aberta também atualiza.

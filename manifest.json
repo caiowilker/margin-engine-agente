@@ -1,10 +1,10 @@
 {
-  "versao": "1.0.175",
-  "geradoEm": "2026-10-16T21:30:03.918Z",
+  "versao": "1.0.195",
+  "geradoEm": "2026-10-18T15:45:43.751Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
-      "sha256": "a1e804bca6625fbaf9e737390b319a4e4a9234b2961f30ea6a6dc2ebfe6a6156"
+      "sha256": "3746ef6ae5c9c776c1c7c79828a21b5a8e45f4b7d123c6efb566d0b06caf46a1"
     },
     {
       "arquivo": "acbrLibResposta.js",
@@ -3216,7 +3216,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "ee08b8612cc53a01b26747f4035a5f5693db13392d517226e1949afaaf5728a8"
+      "sha256": "bcef4ffc1f7bb380a1ceee7f34fc7d5330c88ab1b646530a0111338728cbd8d4"
     },
     {
       "arquivo": "print/acbrPosExports.js",
@@ -3256,7 +3256,7 @@
     },
     {
       "arquivo": "print/crediarioAcbrTags.js",
-      "sha256": "85d36f2c37765bc545170021053c83477903d4ee94743acc9cc0d71f87031d76"
+      "sha256": "9323a75a4386c998dd0eacdbf1249be68dab82976319e50fc78d7dfa3e37ad65"
     },
     {
       "arquivo": "print/cupomAcbrTags.js",
@@ -3312,7 +3312,7 @@
     },
     {
       "arquivo": "print/escpos/impressoraCore.js",
-      "sha256": "28fa52fab818cac919606ddbe01d6c0079937eade4445a79b88f72159e1adf66"
+      "sha256": "1dcd20e3ab124d4c776b266c5161bd5369d731d941a1018b66ffe69801ffc2ba"
     },
     {
       "arquivo": "print/factory.js",
@@ -3580,7 +3580,7 @@
     },
     {
       "arquivo": "VERSION",
-      "sha256": "6589383cbdd05175814aad3725cf98714388559dadee523d1c6ca300c226aa54"
+      "sha256": "a70712e7ce03a364661301a3e9a02f34e3383ec44bf71b998a57cb384c0f4180"
     },
     {
       "arquivo": "watchdog.js",
