@@ -1,3 +1,31 @@
+## [1.0.203] — 2026-10-18
+
+- Devolução venda/compra: paginação real, saldo em lote, histórico lean (sem LOB), React Query.
+
+## [1.0.202] — 2026-10-18
+
+- Etiquetas: uma tela central; preview proporcional ao rolo e quantidade sólida.
+
+## [1.0.201] — 2026-10-18
+
+- Fornecedor: preenchimento automático CEP/CNPJ de alta qualidade.
+
+## [1.0.200] — 2026-10-18
+
+- Inputs RFQ/cotação: padrão caixa (moeda/inteiro) sem travar no 0.
+
+## [1.0.199] — 2026-10-18
+
+- RFQ/cotação: polish UX/design extremo (buyer + portal + e-mail).
+
+## [1.0.198] — 2026-10-18
+
+- RFQ/cotação: telas buyer + portal público premium; alinhamento release.
+
+## [1.0.197] — 2026-10-18
+
+- Formação de preço mercado + devolução ST produção (vICMSSTRet, remap 60/500, NFref fail-closed).
+
 ## [1.0.196] — 2026-10-18
 
 - Build Windows: corrige tsc do front embarcado (RFQ await, token PDV, unused).
