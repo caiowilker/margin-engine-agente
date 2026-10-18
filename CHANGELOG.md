@@ -1,3 +1,7 @@
+## [1.0.196] — 2026-10-18
+
+- Build Windows: corrige tsc do front embarcado (RFQ await, token PDV, unused).
+
 # Changelog
 
 ## [1.0.195] — 2026-10-18
