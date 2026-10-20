@@ -1,3 +1,7 @@
+## [1.0.205] — 2026-10-20
+
+- Alinhamento 1.0.205: Frente offline sólido quando cai a internet (sem expulsar para login/spinner).
+
 ## [1.0.204] — 2026-10-20
 
 - Alinhamento 1.0.204: Contas a Pagar liberado paga à vista em dinheiro do terminal sem pedir sangria (respeita limite).
