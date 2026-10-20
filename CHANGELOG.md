@@ -1,3 +1,7 @@
+## [1.0.206] — 2026-10-20
+
+- Entrada do PDV: boot com me-cache na pane (sticky/histerese); watchdog 12s — não fica girando na abertura sem internet.
+
 ## [1.0.205] — 2026-10-20
 
 - Alinhamento 1.0.205: Frente offline sólido quando cai a internet (sem expulsar para login/spinner).
