@@ -1,3 +1,7 @@
+## [1.0.207] — 2026-10-20
+
+- Offline/entrada: SSOT `isPdvCloudDown` (Wi‑Fi + sticky + histerese); Login/boot/AUTH_EXPIRED alinhados — sem spinner na pane.
+
 ## [1.0.206] — 2026-10-20
 
 - Entrada do PDV: boot com me-cache na pane (sticky/histerese); watchdog 12s — não fica girando na abertura sem internet.
