@@ -1,3 +1,7 @@
+## [1.0.204] — 2026-10-20
+
+- Alinhamento 1.0.204: Contas a Pagar liberado paga à vista em dinheiro do terminal sem pedir sangria (respeita limite).
+
 ## [1.0.203] — 2026-10-18
 
 - Devolução venda/compra: paginação real, saldo em lote, histórico lean (sem LOB), React Query.
