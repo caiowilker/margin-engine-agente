@@ -15,6 +15,7 @@ Não é polish de tela: seleção ≡ lote ≡ ACK.
 | I6 | Remover/limpar logs mutam servidor |
 | I7 | Pasta: config preenchida > default `%ProgramData%\MarginEngine\balanca\carga` |
 | I8 | Zero acoplamento com checkout `src/scale` |
+| I9 | Perfil snapshot (MGV6): todo lote leva o catálogo completo de PLUs — o MGV importa em modo completo e apaga o que faltar; `produtoIds` define só o claim |
 
 ## API
 
