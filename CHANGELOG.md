@@ -1,3 +1,8 @@
+## [1.0.212] — 2026-10-26
+
+- **fix(front):** botão de impressora aparece agora para vendas canceladas no histórico — permite imprimir 2ª via ou comprovante de cancelamento; antes o ícone ficava oculto indevidamente em qualquer venda com status CANCELADA.
+- **fix(backend · 1.0.211):** limite de sangria R$ 0,00 não exige mais autorização de supervisor — zero agora significa "sem limite configurado" (operação liberada); corrige bloqueio indevido de operadores já autorizados (ex.: Tatiane, R$ 25,00).
+
 ## [1.0.208] — 2026-10-21
 
 - Carga de balança MGV6 sólida para importação completa: todo envio (inclusive "Enviar selecionados") leva o catálogo inteiro de produtos com PLU; item inválido bloqueia o lote em vez de sumir da balança; ITENSMGV byte a byte igual ao arquivo de campo do MGV6 (R=código, Z=0, DV/DE=1 com validade 000); DEPTO.TXT só com confirmação de que o software lê; PLU também para item vendido por unidade (cadastro, índice único e caixa); reenvio de FULL que falhou não vira no-op; envio manual do catálogo sempre entrega; primeira carga completa nunca sai sozinha (só por ação do operador); front antigo continua funcionando (envia o catálogo completo) e editar item por unidade nele não apaga o PLU.
