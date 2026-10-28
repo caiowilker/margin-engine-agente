@@ -551,6 +551,20 @@ async function sincronizar(opts = {}) {
   }
 }
 
+/**
+ * Payload de cada venda + quando ela foi feita (criado_em, relógio deste terminal) e o relógio do
+ * terminal agora: o backend corrige o desvio e põe a venda no turno em que ela aconteceu, mesmo
+ * que chegue depois do fechamento.
+ */
+function montarLoteSync(pendentes, agora = new Date()) {
+  const relogioTerminalEm = agora.toISOString();
+  return pendentes.map((row) => ({
+    ...JSON.parse(row.payload),
+    registradoOfflineEm: row.criado_em || null,
+    relogioTerminalEm,
+  }));
+}
+
 async function sincronizarInterno(url, token, opts = {}) {
   const fetch = require("node-fetch");
   const adiarVenda =
@@ -559,7 +573,7 @@ async function sincronizarInterno(url, token, opts = {}) {
   let pendentes = db
     .prepare(
       `
-    SELECT id, numero_venda, payload, tentativas
+    SELECT id, numero_venda, payload, tentativas, criado_em
     FROM   fila_vendas
     WHERE  status = 'PENDENTE'
     ORDER  BY id
@@ -592,7 +606,7 @@ async function sincronizarInterno(url, token, opts = {}) {
     mapaNumero[String(row.numero_venda)] = row;
   }
 
-  const lote = pendentes.map((row) => JSON.parse(row.payload));
+  const lote = montarLoteSync(pendentes);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS * 3);
 
@@ -940,6 +954,7 @@ module.exports = {
   registrarLocalFirst,
   registrarCloudFirst,
   montarRespostaVenda,
+  montarLoteSync,
   sincronizar,
   contadores,
   metricas,

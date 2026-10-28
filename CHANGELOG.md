@@ -1,3 +1,9 @@
+## [1.0.213] — 2026-10-27
+
+- **feat(front · backend 1.0.213):** pós-venda — devolução, troca (crédito de loja aplicado no caixa) e correção de forma de pagamento; fechamento, fita e gaveta consideram devoluções e correções em dinheiro.
+- **fix(fila):** `POST /fila/sincronizar` devolve `restantes` (pendentes + enviando + falhas) — o PDV bloqueia fechamento/passagem de turno enquanto houver venda offline fora do servidor.
+- **fix(fila):** lote de sync leva `registradoOfflineEm` (quando a venda foi feita) e `relogioTerminalEm` — o backend põe a venda no turno em que ela aconteceu, mesmo chegando depois do fechamento. Backend antigo ignora os campos.
+
 ## [1.0.212] — 2026-10-26
 
 - **fix(front):** botão de impressora aparece agora para vendas canceladas no histórico — permite imprimir 2ª via ou comprovante de cancelamento; antes o ícone ficava oculto indevidamente em qualquer venda com status CANCELADA.

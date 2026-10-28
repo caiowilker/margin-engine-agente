@@ -4726,7 +4726,10 @@ function iniciarServidor() {
     const vendas = await fila.sincronizar({
       adiarVenda: (numero) => mesaFila.deveAdiarVendaOrder(numero),
     });
-    res.json({ mesa, ...vendas, vendas });
+    // Vendas ainda fora do servidor — o PDV não fecha/passa o turno enquanto houver alguma.
+    const m = fila.metricas();
+    const restantes = (m.pendentes || 0) + (m.enviando || 0) + (m.falhas || 0);
+    res.json({ mesa, ...vendas, vendas, restantes });
   });
 
   app.post("/fila/reprocessar", exigirAgentToken, async (req, res) => {

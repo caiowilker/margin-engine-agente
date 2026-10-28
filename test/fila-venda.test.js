@@ -227,6 +227,34 @@ const payload = {
     assert.ok(fila.contadores().falhas < antes.falhas);
   });
 
+  await test("montarLoteSync — leva o horário da venda e o relógio do terminal (turno certo no backend)", () => {
+    const agora = new Date("2026-10-27T17:30:00.000Z");
+    const lote = fila.montarLoteSync(
+      [
+        {
+          payload: JSON.stringify({ ...payload, numeroVendaCliente: "PDV-LOTE-1" }),
+          criado_em: "2026-10-27T16:59:01.123Z",
+        },
+      ],
+      agora,
+    );
+    assert.strictEqual(lote.length, 1);
+    assert.strictEqual(lote[0].numeroVendaCliente, "PDV-LOTE-1");
+    assert.strictEqual(lote[0].total, payload.total);
+    assert.strictEqual(lote[0].registradoOfflineEm, "2026-10-27T16:59:01.123Z");
+    assert.strictEqual(lote[0].relogioTerminalEm, "2026-10-27T17:30:00.000Z");
+  });
+
+  await test("criado_em da fila é ISO UTC (formato que o backend lê como Instant)", async () => {
+    const numero = "PDV-TEST-CRIADO-EM";
+    await fila.registrarLocalFirst({ ...payload, numeroVendaCliente: numero });
+    const db = require("better-sqlite3")(dbPath);
+    const row = db.prepare("SELECT criado_em FROM fila_vendas WHERE numero_venda = ?").get(numero);
+    db.close();
+    assert.match(row.criado_em, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    assert.ok(Math.abs(Date.parse(row.criado_em) - Date.now()) < 60_000);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
 })();
