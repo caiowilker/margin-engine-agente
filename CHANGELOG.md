@@ -1,3 +1,7 @@
+## [1.0.214] — 2026-10-28
+
+- **feat(front · 1.0.214):** pós-venda redesenhado (valores em R$ estilo caixa, quantidades −/+, motivo em chips, rodapé com valor, celular).
+
 ## [1.0.213] — 2026-10-27
 
 - **feat(front · backend 1.0.213):** pós-venda — devolução, troca (crédito de loja aplicado no caixa) e correção de forma de pagamento; fechamento, fita e gaveta consideram devoluções e correções em dinheiro.
