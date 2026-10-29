@@ -1,3 +1,8 @@
+## [1.0.216] — 2026-10-28
+
+- **feat(front · backend 1.0.215–1.0.216):** pós-venda — corrigir valor cobrado errado: devolver a diferença cobrada a mais (acréscimo no lugar do desconto) e receber a cobrada a menos (desconto no lugar do acréscimo); fita com "DIFERENÇA RECEBIDA".
+- **fix(build):** `validate-build.ps1` acusava ".iss duplica Schemas XSD" por causa da linha de `Excludes`/`InstallDelete` — agora só falha se uma linha `Source:` copiar os XSD soltos (eles vão no `vendor\schemas.zip`).
+
 ## [1.0.214] — 2026-10-28
 
 - **feat(front · 1.0.214):** pós-venda redesenhado (valores em R$ estilo caixa, quantidades −/+, motivo em chips, rodapé com valor, celular).

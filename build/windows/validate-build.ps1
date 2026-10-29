@@ -93,7 +93,8 @@ if (Test-Path $iss) {
         Write-Host "[FALHA] Inno sem lzma2/fast"
         $fail++
     }
-    if ($issText -match 'acbrlib\\data\\Schemas') {
+    # Só linha Source: copiando os XSD soltos; Excludes e InstallDelete citam a pasta de propósito.
+    if ($issText -match '(?m)^\s*Source:\s*"[^"]*acbrlib\\data\\Schemas') {
         Write-Host "[FALHA] .iss duplica Schemas XSD"
         $fail++
     } else {
