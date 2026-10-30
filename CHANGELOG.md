@@ -1,3 +1,7 @@
+## [1.0.220] — 2026-10-30
+
+- **fix(front · backend 1.0.220):** venda não cai mais no turno de outro caixa quando o terminal não se identifica (quebra de caixa). Versão alinhada.
+
 ## [1.0.219] — 2026-10-30
 
 - **feat(front 1.0.219):** Kardex com filtro por data (presets, personalizado, dia a dia). Versão alinhada; `frontend-dist` do instalador só muda no próximo `sync:windows-build`.
