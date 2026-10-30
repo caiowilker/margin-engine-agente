@@ -1,3 +1,7 @@
+## [1.0.217] — 2026-10-30
+
+- **fix(front · backend 1.0.217):** Kardex filtra entradas, saídas, ajustes, perdas e busca no servidor (histórico todo) com "Carregar mais". Versão alinhada; `frontend-dist` do instalador só muda no próximo `sync:windows-build`.
+
 ## [1.0.216] — 2026-10-28
 
 - **feat(front · backend 1.0.215–1.0.216):** pós-venda — corrigir valor cobrado errado: devolver a diferença cobrada a mais (acréscimo no lugar do desconto) e receber a cobrada a menos (desconto no lugar do acréscimo); fita com "DIFERENÇA RECEBIDA".
