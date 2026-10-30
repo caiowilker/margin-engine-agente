@@ -1,3 +1,7 @@
+## [1.0.219] — 2026-10-30
+
+- **feat(front 1.0.219):** Kardex com filtro por data (presets, personalizado, dia a dia). Versão alinhada; `frontend-dist` do instalador só muda no próximo `sync:windows-build`.
+
 ## [1.0.218] — 2026-10-30
 
 - **fix/feat(front · backend 1.0.218):** Relatório de Estoque rola e a busca aparece; filtros por loja/depósito, categoria e negativos. Versão alinhada; `frontend-dist` do instalador só muda no próximo `sync:windows-build`.
