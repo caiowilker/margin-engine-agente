@@ -1,3 +1,7 @@
+## [1.0.218] — 2026-10-30
+
+- **fix/feat(front · backend 1.0.218):** Relatório de Estoque rola e a busca aparece; filtros por loja/depósito, categoria e negativos. Versão alinhada; `frontend-dist` do instalador só muda no próximo `sync:windows-build`.
+
 ## [1.0.217] — 2026-10-30
 
 - **fix(front · backend 1.0.217):** Kardex filtra entradas, saídas, ajustes, perdas e busca no servidor (histórico todo) com "Carregar mais". Versão alinhada; `frontend-dist` do instalador só muda no próximo `sync:windows-build`.
