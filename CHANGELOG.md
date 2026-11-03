@@ -1,3 +1,7 @@
+## [1.0.221] — 2026-10-30
+
+- **fix(backend · front 1.0.221):** etiqueta sempre encaixa — reduz tudo proporcionalmente até caber (nome não some mais na 30×20); ZPL com altura exata do layout. Versão alinhada; `frontend-dist` do instalador só muda no próximo `sync:windows-build`.
+
 ## [1.0.220] — 2026-10-30
 
 - **fix(front · backend 1.0.220):** venda não cai mais no turno de outro caixa quando o terminal não se identifica (quebra de caixa). Versão alinhada.
