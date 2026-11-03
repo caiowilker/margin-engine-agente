@@ -1,3 +1,7 @@
+## [1.0.225] — 2026-11-03
+
+- **fix(backend 1.0.225):** venda offline sincronizada sem terminal entra no turno da operadora (não some mais da fita). Versão alinhada.
+
 ## [1.0.224] — 2026-11-03
 
 - fix(etiquetas): `idempotencyKey` do payload de etiqueta raw preservada na validação da fila — retry do front não reimprime a mesma linha.
