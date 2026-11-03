@@ -1,3 +1,7 @@
+## [1.0.222] — 2026-11-03
+
+- **fix(backend · front 1.0.222):** etiquetas — QR Code com tamanho real, "..." no ZPL, preço longo cabe pela largura, pré-visualização sem reticências falsas. Versão alinhada; `frontend-dist` atualizado no `sync:windows-build`.
+
 ## [1.0.221] — 2026-10-30
 
 - **fix(backend · front 1.0.221):** etiqueta sempre encaixa — reduz tudo proporcionalmente até caber (nome não some mais na 30×20); ZPL com altura exata do layout. Versão alinhada; `frontend-dist` do instalador só muda no próximo `sync:windows-build`.
