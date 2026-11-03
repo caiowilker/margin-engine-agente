@@ -1,3 +1,7 @@
+## [1.0.227] — 2026-11-03
+
+- **fix(backend · front 1.0.227):** Histórico de Vendas obedece a todos os filtros no período inteiro (Pendente = sem nota autorizada); gráficos e Excel completos. Versão alinhada.
+
 ## [1.0.226] — 2026-11-03
 
 - **feat(backend · front 1.0.226):** Excel profissional nos relatórios (números, R$, datas, filtro, cabeçalho congelado, totais, Resumo). Versão alinhada.
