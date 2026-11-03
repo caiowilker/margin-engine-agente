@@ -1,3 +1,7 @@
+## [1.0.226] — 2026-11-03
+
+- **feat(backend · front 1.0.226):** Excel profissional nos relatórios (números, R$, datas, filtro, cabeçalho congelado, totais, Resumo). Versão alinhada.
+
 ## [1.0.225] — 2026-11-03
 
 - **fix(backend 1.0.225):** venda offline sincronizada sem terminal entra no turno da operadora (não some mais da fita). Versão alinhada.
