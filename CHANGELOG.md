@@ -1,3 +1,7 @@
+## [1.0.223] — 2026-11-03
+
+- **feat(front 1.0.223):** Central de Etiquetas redesenhada — conferência antes de imprimir, leitor de código seguro, prévia fiel e rápida. Versão alinhada; `frontend-dist` atualizado no `sync:windows-build`.
+
 ## [1.0.222] — 2026-11-03
 
 - **fix(backend · front 1.0.222):** etiquetas — QR Code com tamanho real, "..." no ZPL, preço longo cabe pela largura, pré-visualização sem reticências falsas. Versão alinhada; `frontend-dist` atualizado no `sync:windows-build`.
