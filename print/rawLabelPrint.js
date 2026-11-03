@@ -53,12 +53,16 @@ function normalizarPayloadRaw(payload = {}) {
     );
   }
 
+  // Chave por linha do lote: retry do front após timeout não imprime a mesma linha duas vezes.
+  const chave = String(payload.idempotencyKey ?? payload.idempotency_key ?? "").trim();
+
   return {
     data: payload.base64 ? String(payload.base64) : data,
     encoding: payload.base64 ? "base64" : encoding,
     copies,
     porta,
     formato,
+    ...(chave ? { idempotencyKey: chave.slice(0, 190) } : {}),
   };
 }
 

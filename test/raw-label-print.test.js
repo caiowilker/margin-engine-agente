@@ -10,6 +10,21 @@ const {
 } = require("../print/rawLabelPrint");
 
 describe("rawLabelPrint", () => {
+  it("chave por linha sobrevive à validação da fila (retry não reimprime)", () => {
+    const { validarAntesEnfileirar } = require("../print/printValidate");
+    const { resolveIdempotencyKey } = require("../print/printIdempotency");
+    const payload = {
+      data: "^XA^FDx^FS^XZ",
+      formato: "zpl",
+      porta: "RAW:ELGIN L42 PRO",
+      idempotencyKey: "etq:lote1:0:abc",
+    };
+    const { args } = validarAntesEnfileirar("imprimirRaw", [payload]);
+    assert.equal(resolveIdempotencyKey("imprimirRaw", args, {}), "etq:lote1:0:abc");
+    const semChave = validarAntesEnfileirar("imprimirRaw", [{ ...payload, idempotencyKey: undefined }]);
+    assert.equal(resolveIdempotencyKey("imprimirRaw", semChave.args, {}), null);
+  });
+
   it("normaliza ZPL utf8 com cópias", () => {
     const n = normalizarPayloadRaw({
       data: "^XA^FO50,50^FDTest^FS^XZ",

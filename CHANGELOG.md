@@ -1,3 +1,8 @@
+## [1.0.224] — 2026-11-03
+
+- fix(etiquetas): `idempotencyKey` do payload de etiqueta raw preservada na validação da fila — retry do front não reimprime a mesma linha.
+- test: `raw-label-print.test.js` agora no `npm test` (+1 caso da chave).
+
 ## [1.0.223] — 2026-11-03
 
 - **feat(front 1.0.223):** Central de Etiquetas redesenhada — conferência antes de imprimir, leitor de código seguro, prévia fiel e rápida. Versão alinhada; `frontend-dist` atualizado no `sync:windows-build`.
