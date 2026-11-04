@@ -2807,7 +2807,7 @@ function iniciarServidor() {
     } catch (err) {
       const body = { erro: err.message, permanente: !!err.permanente };
       const cStat =
-        err.cStat || String(err.message || "").match(/cStat\s*(\d{3})/i)?.[1];
+        err.cStat || String(err.message || "").match(/cStat\s*(\d{3,4})/i)?.[1];
       if (cStat) body.cStat = cStat;
       if (cStat === "999" || err.sefazIntermitente) {
         body.sefazIntermitente = true;
@@ -2853,7 +2853,7 @@ function iniciarServidor() {
       const status = err.permanente ? 400 : 500;
       const body = { erro: err.message, camposFaltando: err.camposFaltando || undefined, permanente: !!err.permanente };
       const cStat =
-        err.cStat || String(err.message || "").match(/cStat\s*(\d{3})/i)?.[1];
+        err.cStat || String(err.message || "").match(/cStat\s*(\d{3,4})/i)?.[1];
       if (cStat) body.cStat = cStat;
       if (cStat === "999" || err.sefazIntermitente) {
         body.sefazIntermitente = true;
@@ -2933,7 +2933,7 @@ function iniciarServidor() {
       res.json(resultado);
     } catch (err) {
       const body = { erro: err.message };
-      const cStat = err.cStat || String(err.message || "").match(/cStat\s*(\d{3})/i)?.[1];
+      const cStat = err.cStat || String(err.message || "").match(/cStat\s*(\d{3,4})/i)?.[1];
       if (cStat) body.cStat = cStat;
       res.status(500).json(body);
     }

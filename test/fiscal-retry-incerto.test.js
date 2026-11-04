@@ -29,3 +29,16 @@ describe("fiscalRetry — timeout emissão = INCERTO (não reemitir)", () => {
     assert.equal(fiscalRetry.isTransient(err), false);
   });
 });
+
+describe("fiscalRetry — extrairCStat", () => {
+  it("cStat de 4 dígitos (reforma) não é truncado", () => {
+    const err = new Error(
+      "NFC-e rejeitada (cStat 1026): Rejeição: Alíquota do IBS da UF inválida[nItem: 1]",
+    );
+    assert.equal(fiscalRetry.extrairCStat(err), "1026");
+  });
+
+  it("cStat de 3 dígitos continua igual", () => {
+    assert.equal(fiscalRetry.extrairCStat(new Error("NFC-e rejeitada (cStat 539): Duplicidade")), "539");
+  });
+});

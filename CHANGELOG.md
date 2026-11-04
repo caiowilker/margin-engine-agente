@@ -1,3 +1,8 @@
+## [1.0.235] — 2026-11-04
+
+- fix(fiscal): código da SEFAZ com 4 dígitos (rejeições da reforma tributária, ex.: 1026, 1074) era lido só com 3 — "cStat 1026" virava 102, a venda ia para pendência de cadastro e o agente aplicava espera de 60 s em vez de mostrar a rejeição.
+- test: `fiscal-retry-incerto.test.js` (+2).
+
 ## [1.0.234] — 2026-11-04
 
 - fix(fiscal): cancelamento de NFC-e lê a resposta da SEFAZ corretamente. A ACBrLib devolve o resultado no bloco "Cancelamento" e o agente só conhecia Envio/Status/Consulta — o cStat vinha vazio e o cancelamento era tratado como sucesso mesmo quando a SEFAZ recusava, e o backend nunca era avisado do cancelamento aceito.

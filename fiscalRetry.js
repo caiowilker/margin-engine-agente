@@ -47,7 +47,7 @@ function extrairCStat(err) {
   if (!err) return null;
   if (err.cStat) return String(err.cStat);
   const msg = err.message || String(err);
-  const m = msg.match(/cStat[=:]?\s*(\d{3})/i);
+  const m = msg.match(/cStat[=:]?\s*(\d{3,4})/i);
   return m ? m[1] : null;
 }
 
@@ -78,7 +78,7 @@ function isErroDuplicidade539(errOrText) {
   const cs =
     typeof errOrText === "object"
       ? extrairCStat(errOrText)
-      : String(errOrText || "").match(/cStat[=:\s]*(\d{3})/i)?.[1];
+      : String(errOrText || "").match(/cStat[=:\s]*(\d{3,4})/i)?.[1];
   if (cs === "539" || cs === "204") return true;
   const msg =
     typeof errOrText === "object"

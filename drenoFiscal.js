@@ -42,7 +42,7 @@ function resetParaTestes() {
 function classificarFalha(erro) {
   const msg = String(erro || "");
   if (/ACBr_OFFLINE_TIMEOUT/.test(msg)) return "consulta_esgotada";
-  const cStat = msg.match(/cStat[=:]?\s*(\d{3})/i)?.[1] || null;
+  const cStat = msg.match(/cStat[=:]?\s*(\d{3,4})/i)?.[1] || null;
   if (cStat === "539" || cStat === "204" || /duplicidade/i.test(msg)) return "duplicidade";
   if (/cancelad/i.test(msg)) return "definitiva";
   if (cStat && CSTAT_TRANSITORIO.has(cStat)) return "transitoria";
