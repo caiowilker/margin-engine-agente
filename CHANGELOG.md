@@ -1,3 +1,7 @@
+## [1.0.229] — 2026-11-03
+
+- **feat(backend · front 1.0.229):** relatórios Custo das entradas por produto (R122) e Notas de entrada detalhado (R123); composição do custo e FCP-ST nas notas de entrada. Versão alinhada.
+
 ## [1.0.228] — 2026-11-03
 
 - **feat(backend · front 1.0.228):** Relatório Dinâmico com filtro de status fiscal (Todos/Pendente/Concluído/Cancelada) e Excel tipado. Versão alinhada.
