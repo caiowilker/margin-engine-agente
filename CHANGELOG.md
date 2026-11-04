@@ -1,3 +1,7 @@
+## [1.0.230] — 2026-11-03
+
+- **feat(backend · front 1.0.230):** relatório Contas a pagar completo (R124) e títulos de NF com observação completa. Versão alinhada.
+
 ## [1.0.229] — 2026-11-03
 
 - **feat(backend · front 1.0.229):** relatórios Custo das entradas por produto (R122) e Notas de entrada detalhado (R123); composição do custo e FCP-ST nas notas de entrada. Versão alinhada.
