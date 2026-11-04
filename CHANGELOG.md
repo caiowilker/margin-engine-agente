@@ -1,3 +1,7 @@
+## [1.0.231] — 2026-11-03
+
+- **feat(backend · front 1.0.231):** Excel tipado nas telas mais usadas e filtros completos no Contas a pagar completo. Versão alinhada; `frontend-dist` atualizado no `sync:windows-build`.
+
 ## [1.0.230] — 2026-11-03
 
 - **feat(backend · front 1.0.230):** relatório Contas a pagar completo (R124) e títulos de NF com observação completa. Versão alinhada.
