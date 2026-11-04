@@ -1,3 +1,7 @@
+## [1.0.233] — 2026-11-03
+
+- **fix/feat(backend · front 1.0.233):** total do Excel visível ao abrir o arquivo; PDF nos relatórios de entradas e contas a pagar. Versão alinhada; `frontend-dist` atualizado no `sync:windows-build`.
+
 ## [1.0.232] — 2026-11-03
 
 - **fix/feat(backend · front 1.0.232):** Contas a pagar completo — pago correto e Excel refinado. Versão alinhada; `frontend-dist` atualizado no `sync:windows-build`.
