@@ -1648,40 +1648,96 @@ async function obterXmlDocumento(chave, numeroVenda) {
   };
 }
 
+/** Espera entre tentativas de avisar o backend do cancelamento (antes de cair na fila). */
+const ESPERAS_CALLBACK_CANCELAMENTO_MS = [0, 800, 2500];
+
+function payloadCancelamentoBackend(res, motivo) {
+  return {
+    protocolo: res.protocolo || null,
+    cStat: res.cStat || null,
+    xMotivo: res.xMotivo || motivo || null,
+    // Em "já cancelada" (573/218/420) o XML é o da rejeição do evento repetido — não é o do cancelamento.
+    xmlContent: res.jaCancelada ? null : res.xml || res.xmlContent || null,
+    jaCancelada: Boolean(res.jaCancelada),
+  };
+}
+
+async function enviarCancelamentoBackend(cfg, numeroVenda, correlationId, corpo) {
+  await httpRequest(
+    `${cfg.backendUrl.replace(/\/$/, "")}/pdv/vendas/${encodeURIComponent(numeroVenda)}/fiscal/cancelamento`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${cfg.backendToken}`,
+        "X-Correlation-Id": correlationId || "",
+      },
+    },
+    JSON.stringify(corpo),
+  );
+}
+
+/**
+ * SEFAZ disse que o cancelamento já existe (573/218/420): confirma pela consulta da chave. Nota que a
+ * consulta mostra autorizada é inconsistência — falha. Consulta indisponível não bloqueia: a resposta do
+ * evento já basta (duplicidade só existe se o cancelamento foi registrado).
+ */
+async function confirmarJaCancelada(driver, chave, res) {
+  if (typeof driver.consultarChave !== "function") return;
+  let consulta;
+  try {
+    consulta = await driver.consultarChave(chave);
+  } catch (err) {
+    console.warn(`[Fiscal] Cancelamento já registrado (cStat ${res.cStat}) — consulta da chave indisponível: ${err.message}`);
+    return;
+  }
+  const cs = String(consulta?.cStat ?? "");
+  if (consulta?.situacao === "CANCELADA" || ["101", "151", "155"].includes(cs)) return;
+  if (["100", "150"].includes(cs)) {
+    const err = new Error(
+      `SEFAZ respondeu cStat ${res.cStat} (${res.xMotivo || "cancelamento já registrado"}), mas a consulta mostra a nota autorizada — tente de novo em instantes.`,
+    );
+    err.permanente = false;
+    err.cStat = res.cStat;
+    throw err;
+  }
+}
+
 async function cancelarCompleto(cfg, body) {
   const { chave, motivo, numeroVenda, correlationId } = body;
   const driver = resolverDriverFiscal(body);
+  // Recusa da SEFAZ (ou resposta sem cStat) lança erro — nunca segue como cancelada.
   const res = await driver.cancelarNfce(chave, motivo);
-  if (res.xml) docs.salvarXmlCancelamento(chave, res.xml);
+  if (res.jaCancelada) {
+    await confirmarJaCancelada(driver, chave, res);
+  } else if (res.xml) {
+    docs.salvarXmlCancelamento(chave, res.xml);
+  }
+  let backendSincronizado = false;
   if (numeroVenda && cfg.backendUrl) {
-    try {
-      await httpRequest(
-        `${cfg.backendUrl.replace(/\/$/, "")}/pdv/vendas/${encodeURIComponent(numeroVenda)}/fiscal/cancelamento`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${cfg.backendToken}`,
-            "X-Correlation-Id": correlationId || "",
-          },
-        },
-        JSON.stringify({
-          protocolo: res.protocolo,
-          cStat: res.cStat,
-          xMotivo: res.xMotivo || motivo,
-          xmlContent: res.xml || null,
-        }),
-      );
-    } catch {
+    const corpo = payloadCancelamentoBackend(res, motivo);
+    let ultimoErro = null;
+    for (const espera of ESPERAS_CALLBACK_CANCELAMENTO_MS) {
+      if (espera > 0) await new Promise((r) => setTimeout(r, espera));
+      try {
+        await enviarCancelamentoBackend(cfg, numeroVenda, correlationId, corpo);
+        backendSincronizado = true;
+        break;
+      } catch (err) {
+        ultimoErro = err;
+      }
+    }
+    if (!backendSincronizado) {
+      console.warn(`[Fiscal] Cancelamento de ${numeroVenda} não chegou ao backend — vai para a fila: ${ultimoErro?.message}`);
       filaFiscal.enfileirar(
         "CANCELAMENTO",
-        { chave, motivo, numeroVenda, correlationId, backendOnly: true, ...res },
+        { chave, motivo, numeroVenda, correlationId, backendOnly: true, ...corpo },
         correlationId,
         numeroVenda,
       );
     }
   }
-  return res;
+  return { ...res, backendSincronizado };
 }
 
 async function enviarEventoCompleto(cfg, body) {
@@ -2013,22 +2069,11 @@ function registrarHandlersFila(lerConfigFn) {
   filaFiscal.registrarHandler("CANCELAMENTO", async (payload) => {
     const cfg = await lerConfigFn();
     if (payload.backendOnly) {
-      await httpRequest(
-        `${cfg.backendUrl.replace(/\/$/, "")}/pdv/vendas/${encodeURIComponent(payload.numeroVenda)}/fiscal/cancelamento`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${cfg.backendToken}`,
-          },
-        },
-        JSON.stringify({
-          protocolo: payload.protocolo,
-          cStat: payload.cStat,
-          xMotivo: payload.motivo,
-          xmlContent: payload.xmlContent || null,
-        }),
-      );
+      // Jobs antigos guardavam o retorno cru (xml, sem xMotivo/jaCancelada): normaliza aqui.
+      await enviarCancelamentoBackend(cfg, payload.numeroVenda, payload.correlationId, {
+        ...payloadCancelamentoBackend(payload, payload.motivo),
+        xmlContent: payload.jaCancelada ? null : payload.xmlContent || payload.xml || null,
+      });
     } else {
       await cancelarCompleto(cfg, payload);
     }
@@ -2069,6 +2114,7 @@ function registrarHandlersFila(lerConfigFn) {
 }
 
 module.exports = {
+  _testCancelamento: { confirmarJaCancelada, payloadCancelamentoBackend },
   emitirCompleto,
   enfileirarEmissao,
   enfileirarEmissaoNfe,

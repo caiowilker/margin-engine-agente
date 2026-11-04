@@ -474,21 +474,68 @@ async function enviarNfeComandos(comandos, timeoutMs = ACBR_TIMEOUT) {
   }, lista[0]?.split("(")[0] || "NFE");
 }
 
+/**
+ * Bloco da resposta JSON da ACBrLib com o resultado da SEFAZ. Emissão vem em "Envio", status em "Status",
+ * consulta em "Consulta"; cancelamento em "Cancelamento", eventos em "Evento", inutilização em
+ * "Inutilizacao". Sem bloco conhecido: o primeiro objeto de 1º nível que traga CStat.
+ */
+function blocoRespostaJson(j) {
+  if (!j || typeof j !== "object") return null;
+  const conhecidos = [
+    "Envio", "envio", "Status", "status", "Consulta", "consulta",
+    "Cancelamento", "cancelamento", "Evento", "evento", "Inutilizacao", "inutilizacao",
+  ];
+  for (const k of conhecidos) {
+    if (j[k] && typeof j[k] === "object") return j[k];
+  }
+  for (const v of Object.values(j)) {
+    if (v && typeof v === "object" && !Array.isArray(v) && (v.CStat != null || v.cStat != null)) {
+      return v;
+    }
+  }
+  return null;
+}
+
+/** Cancelamento aceito pela SEFAZ: evento registrado (135) ou homologado fora de prazo (155). */
+const CSTAT_CANCELAMENTO_OK = new Set(["135", "155"]);
+/**
+ * Nota já cancelada na SEFAZ: duplicidade do evento de cancelamento (573), NF-e já cancelada (218)
+ * e cancelamento de NF-e já cancelada (420). O cancelamento anterior vale — não é falha.
+ */
+const CSTAT_CANCELAMENTO_JA_FEITO = new Set(["573", "218", "420"]);
+
+/**
+ * Interpreta a resposta da SEFAZ ao cancelamento. Sucesso ou "já cancelada" retornam o resultado;
+ * qualquer outro cStat (ou cStat ausente) lança erro permanente com o motivo da SEFAZ — nunca tratar
+ * resposta sem cStat como cancelada.
+ */
+function avaliarCancelamento(p) {
+  const cStat = String(p?.cStat ?? "").trim();
+  const xMotivo = p?.xMotivo ? String(p.xMotivo) : "";
+  if (CSTAT_CANCELAMENTO_OK.has(cStat)) {
+    return { cStat, xMotivo, protocolo: p.protocolo || null, jaCancelada: false };
+  }
+  if (CSTAT_CANCELAMENTO_JA_FEITO.has(cStat)) {
+    return { cStat, xMotivo, protocolo: p.protocolo || null, jaCancelada: true };
+  }
+  const err = new Error(
+    cStat
+      ? `SEFAZ recusou o cancelamento (cStat ${cStat})${xMotivo ? `: ${xMotivo}` : ""}`
+      : "Resposta da SEFAZ ao cancelamento sem código (cStat) — consulte a nota antes de tentar de novo.",
+  );
+  err.permanente = Boolean(cStat);
+  err.cStat = cStat || null;
+  err.xMotivo = xMotivo || null;
+  throw err;
+}
+
 function parseResposta(resposta) {
   const docs = require("./documentosFiscais");
   const bruto = coalescerRespostaAcbr(resposta);
 
   let jsonEnvio = null;
   try {
-    const j = JSON.parse(bruto);
-    jsonEnvio =
-      j?.Envio ||
-      j?.envio ||
-      j?.Status ||
-      j?.status ||
-      j?.Consulta ||
-      j?.consulta ||
-      null;
+    jsonEnvio = blocoRespostaJson(JSON.parse(bruto));
   } catch (_) {
     jsonEnvio = null;
   }
@@ -2318,11 +2365,13 @@ async function cancelarNfce(chaveNfeOuChave, motivo, cnpj) {
   const resposta = await enviarNfe(
     `NFE.CancelarNFe(${qAcbr(chave)},${qAcbr(motivoTexto)},${qAcbr(cnpjEmit)})`,
   );
-  const p = parseResposta(resposta);
+  const r = avaliarCancelamento(parseResposta(resposta));
   return {
     ok: true,
-    protocolo: p.protocolo,
-    cStat: p.cStat,
+    protocolo: r.protocolo,
+    cStat: r.cStat,
+    xMotivo: r.xMotivo,
+    jaCancelada: r.jaCancelada,
     xml: require("./documentosFiscais").extrairXmlDaResposta(resposta),
     raw: resposta,
   };
@@ -3192,6 +3241,8 @@ module.exports = {
     return getEmissaoFiscalAtivo();
   },
   parseResposta,
+  avaliarCancelamento,
+  blocoRespostaJson,
   montarIniNfce,
   enriquecerEmpresa,
   validarEmpresaFiscal,

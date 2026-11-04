@@ -3146,7 +3146,10 @@ function iniciarServidor() {
       const resultado = await fiscalService.cancelarCompleto(cfg, req.body);
       res.json(resultado);
     } catch (err) {
-      res.status(500).json({ erro: err.message });
+      // Recusa da SEFAZ: 400 com o motivo (o PDV mostra e não segue para o cancelamento da venda).
+      res
+        .status(err.permanente ? 400 : 500)
+        .json({ erro: err.message, cStat: err.cStat || null, xMotivo: err.xMotivo || null });
     }
   });
 
@@ -3177,7 +3180,9 @@ function iniciarServidor() {
       }
       res.json(await fiscalDriver.cancelarNfce(chave, req.body?.motivo));
     } catch (err) {
-      res.status(500).json({ erro: err.message });
+      res
+        .status(err.permanente ? 400 : 500)
+        .json({ erro: err.message, cStat: err.cStat || null, xMotivo: err.xMotivo || null });
     }
   });
 

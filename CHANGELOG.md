@@ -1,3 +1,11 @@
+## [1.0.234] — 2026-11-04
+
+- fix(fiscal): cancelamento de NFC-e lê a resposta da SEFAZ corretamente. A ACBrLib devolve o resultado no bloco "Cancelamento" e o agente só conhecia Envio/Status/Consulta — o cStat vinha vazio e o cancelamento era tratado como sucesso mesmo quando a SEFAZ recusava, e o backend nunca era avisado do cancelamento aceito.
+  - 135/155: cancelada. 573/218/420: já estava cancelada (confirmado pela consulta da chave). Qualquer outro código: erro com o motivo da SEFAZ (HTTP 400). Resposta sem cStat nunca conta como cancelada.
+  - Aviso ao backend com 3 tentativas antes da fila; a fila reenvia com XML e motivo corretos.
+  - Leitura dos blocos Evento e Inutilizacao também corrigida.
+- test: `fiscal-cancelamento.test.js` (resposta real da SEFAZ MG) no `npm test`.
+
 ## [1.0.233] — 2026-11-03
 
 - **fix/feat(backend · front 1.0.233):** total do Excel visível ao abrir o arquivo; PDF nos relatórios de entradas e contas a pagar. Versão alinhada; `frontend-dist` atualizado no `sync:windows-build`.

@@ -1846,11 +1846,13 @@ async function cancelarNfceLib(chaveNfeOuChave, motivo, cnpj) {
   const resposta = await withNativeLib("cancelar", (inst) =>
     inst.cancelar(chave, motivoTexto, cnpjEmit, 1),
   );
-  const p = acbr.parseResposta(resposta);
+  const r = acbr.avaliarCancelamento(acbr.parseResposta(resposta));
   return {
     ok: true,
-    protocolo: p.protocolo,
-    cStat: p.cStat,
+    protocolo: r.protocolo,
+    cStat: r.cStat,
+    xMotivo: r.xMotivo,
+    jaCancelada: r.jaCancelada,
     xml: require("../../documentosFiscais").extrairXmlDaResposta(resposta),
     raw: resposta,
     native: true,
