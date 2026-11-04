@@ -2,10 +2,6 @@
 
 - **feat(backend · front 1.0.228):** Relatório Dinâmico com filtro de status fiscal (Todos/Pendente/Concluído/Cancelada) e Excel tipado. Versão alinhada.
 
-## [1.0.228] — 2026-11-03
-
-- **feat(backend · front 1.0.228):** Relatório Dinâmico com filtro de status fiscal (Todos/Pendente/Concluído/Cancelada) e Excel tipado. Versão alinhada.
-
 ## [1.0.227] — 2026-11-03
 
 - **fix(backend · front 1.0.227):** Histórico de Vendas obedece a todos os filtros no período inteiro (Pendente = sem nota autorizada); gráficos e Excel completos. Versão alinhada.
