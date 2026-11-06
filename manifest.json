@@ -1,6 +1,6 @@
 {
-  "versao": "1.0.235",
-  "geradoEm": "2026-11-04T17:56:40.722Z",
+  "versao": "1.0.236",
+  "geradoEm": "2026-11-06T19:57:48.150Z",
   "arquivos": [
     {
       "arquivo": "acbr.js",
@@ -288,7 +288,7 @@
     },
     {
       "arquivo": "frontend-dist/api-backend.json",
-      "sha256": "4fefbf75af2e22ae0e00b931fc53a58b64ed5b00cd69f604678cb422156b72d5"
+      "sha256": "94f07503531807385d1b3a4d198946fed0bba83594f0619176aa240440411e75"
     },
     {
       "arquivo": "frontend-dist/apple-touch-icon.png",
@@ -3220,7 +3220,7 @@
     },
     {
       "arquivo": "frontend-dist/version.json",
-      "sha256": "becefafa6aa911beb211d516bfe160355b6a80d547d37f7afa2c9dbc0ac9d203"
+      "sha256": "0f35c9933dec6805dbb7314d7f8ef8fe54147aa8048f8ca3f39ee4ae1162a3d5"
     },
     {
       "arquivo": "frontend-dist/workbox-3147e214.js",
@@ -3288,7 +3288,7 @@
     },
     {
       "arquivo": "package.json",
-      "sha256": "65c7fc8bf105da458d78980628d6d8a818e95c06e9b0467c9ddb7682d210ffff"
+      "sha256": "3198550d1e4adc0dad9cfef463cf0cc0e0f43ed650b2a26b1daab269432deecc"
     },
     {
       "arquivo": "print/acbrPosExports.js",
@@ -3652,7 +3652,7 @@
     },
     {
       "arquivo": "VERSION",
-      "sha256": "d07d84ea6cbae379855a29a7b520ba761f8a8109b02dfc4efe06b6ccc3b00f22"
+      "sha256": "468e119d087e162238ee894cea9b32ee76081180ceee2d06e728a4f93f06d023"
     },
     {
       "arquivo": "watchdog.js",
