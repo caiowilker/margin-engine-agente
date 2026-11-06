@@ -1,3 +1,7 @@
+## [1.0.236] — 2026-11-06
+
+- chore: versão alinhada ao backend (estabilidade e desempenho do servidor).
+
 ## [1.0.235] — 2026-11-04
 
 - fix(fiscal): código da SEFAZ com 4 dígitos (rejeições da reforma tributária, ex.: 1026, 1074) era lido só com 3 — "cStat 1026" virava 102, a venda ia para pendência de cadastro e o agente aplicava espera de 60 s em vez de mostrar a rejeição.
