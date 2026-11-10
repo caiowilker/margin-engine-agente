@@ -1,3 +1,7 @@
+## [1.0.237] — 2026-11-10
+
+- chore: versão alinhada ao backend e ao front — o `frontend-dist` do PDV traz: cancelamento de NF-e 55 pelo modo de emissão (nuvem sem agente local), etiqueta modelo Loja, selo de devolução no histórico, rolagem da Central de Etiquetas e busca do caixa sempre com o preço atual.
+
 ## [1.0.236] — 2026-11-06
 
 - chore: versão alinhada ao backend (estabilidade e desempenho do servidor).
