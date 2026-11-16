@@ -58,3 +58,9 @@ C:\\ProgramData/
 *.swp
 *.swo
 *.pfx
+
+# Cópias locais de diagnóstico/build preservadas fora do fluxo de release.
+*.off/
+tmp/
+ITENSMGV.TXT
+TXITENS.TXT

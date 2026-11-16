@@ -1,0 +1,12 @@
+QR payload (referência ANTES — amostra sintética SP modelo 65)
+URL:
+https://www.nfce.fazenda.sp.gov.br/qrcode?p=35261012345678000199650010000001231000001234|2|1|1|A1B2C3D4E5F6789012345678901234567890ABCD
+
+chave44=35261012345678000199650010000001231000001234
+modelo=65
+ufIBGE=35
+portal=www.nfce.fazenda.sp.gov.br
+png=docs/etapa12-amostras/ANTES-qr-baseline.png
+
+Decode automático: ver ANTES-qr-decode.json
+Decode celular: apontar câmera/app NFC-e para ANTES-qr-baseline.png impresso ou na tela.

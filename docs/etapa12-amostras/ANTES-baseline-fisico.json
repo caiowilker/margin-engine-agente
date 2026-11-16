@@ -1,0 +1,200 @@
+{
+  "whenJobsEnqueued": "2026-10-13T21:51:46.110Z",
+  "status": "IMPRESSO_AGUARDA_REGUA_E_FOTO",
+  "passo0": {
+    "reguaMmReal": "DISPENSADO_CLIENTE",
+    "fotos": "DISPENSADO_CLIENTE",
+    "qrCelular": "DISPENSADO_CLIENTE",
+    "compactacaoLiberada": true,
+    "nota": "Passo 0 dispensado por decisão do cliente (2026-10-13). Métrica oficial = linhas/dots; mm só ESTIMADO. Ver docs/etapa12-3a-naofiscal.md."
+  },
+  "impressoras": {
+    "80mm": {
+      "disponivel": true,
+      "modelo": "POSPrinter POS80",
+      "driver": "POSPrinter POS80",
+      "porta": "USB001",
+      "portaAcbr": "RAW:POSPrinter POS80",
+      "paperMm": 80,
+      "colsFontA": 48,
+      "fonteUsada": "A",
+      "paginaDeCodigoAcbrIni": 5,
+      "paginaDeCodigoAcbrIniNota": "Lido de C:\\ProgramData\\MarginEngine\\Config\\posprinter.ini (PaginaDeCodigo=5). Amostras/docs 12-2 citavam 2 — registrar divergência; não mudar página na 12-3.",
+      "encodingEscpos": "CP860",
+      "dpiAssumido": 203,
+      "fontADotsPorLinha": 24,
+      "mmPorLinhaTeorico": 3.0,
+      "notaTeorico": "24 dots / 203 dpi × 25,4 mm/in ≈ 3,00 mm/linha (Font A).",
+      "densidade": null,
+      "velocidade": null,
+      "densidadeVelocidadeNota": "posprinter.ini instalado NÃO define Densidade/Velocidade/EspacoEntreLinhas — defaults do driver/ACBr. EspacoEntreLinhas efetivo assumido 0 até medição.",
+      "iniKeysPresentes": {
+        "Modelo": 1,
+        "PaginaDeCodigo": 5,
+        "ColunasFonteNormal": 48,
+        "CortaPapel": 1,
+        "TipoCorte": 1,
+        "LinhasBuffer": 0,
+        "EspacoEntreLinhas": "ausente→default",
+        "Densidade": "ausente→default driver",
+        "Velocidade": "ausente→default driver"
+      }
+    },
+    "58mm": {
+      "disponivel": false,
+      "motivo": "Get-Printer no Windows host não lista impressora 58 mm (apenas POSPrinter POS80 + PDF/OneNote/EPSON L4260).",
+      "colsFontAPlanejado": 32,
+      "status": "N_A_SEM_HARDWARE",
+      "perfisCompactoUltra": "NAO_VALIDADO_DESATIVADO",
+      "notaPerfis": "Compacto/Ultra @58 mm ficam DESATIVADOS até teste em papel real. Só Padrão (tags) permitido como referência textual — nunca liberar Compacto/Ultra 58 mm só com .tags.txt."
+    }
+  },
+  "perfisImpressao": {
+    "PADRAO": {
+      "status": "ATIVO_DEFAULT",
+      "descricao": "Idêntico ao layout atual (byte/tag a tag). Default até aprovação explícita de troca."
+    },
+    "COMPACTO": {
+      "status": "OPT_IN_80MM_NAOFISCAL_12_3A",
+      "larguras": {
+        "80mm": "opt_in_naofiscal",
+        "58mm": "NAO_VALIDADO_DESATIVADO"
+      }
+    },
+    "ULTRA": {
+      "status": "OPT_IN_80MM_NAOFISCAL_12_3A",
+      "larguras": {
+        "80mm": "opt_in_naofiscal",
+        "58mm": "NAO_VALIDADO_DESATIVADO"
+      }
+    }
+  },
+  "jobs80mm": [
+    {
+      "cenario": "fiscal-1item",
+      "bin": "ANTES-print-fiscal-1item-80mm.bin",
+      "bytes": 1674,
+      "writePrinter": "ok=True written=1674",
+      "linhasEst": 46,
+      "mmEst3mm": 166,
+      "mmReal": null,
+      "mmRealBlocos": {
+        "emitente_meta": null,
+        "itens": null,
+        "totais_pagamentos": null,
+        "chave_protocolo": null,
+        "qr_mensagens": null,
+        "rodape_sistema": null,
+        "divisores_outros": null
+      },
+      "foto": null,
+      "nota": "Inclui QR raster ESC/POS (caminho native gerarBuffer)."
+    },
+    {
+      "cenario": "fiscal-5itens",
+      "bin": "ANTES-print-fiscal-5itens-80mm.bin",
+      "bytes": 1873,
+      "writePrinter": "ok=True written=1873",
+      "linhasEst": 51,
+      "mmEst3mm": 181,
+      "mmReal": null,
+      "mmRealBlocos": {
+        "emitente_meta": null,
+        "itens": null,
+        "totais_pagamentos": null,
+        "chave_protocolo": null,
+        "qr_mensagens": null,
+        "rodape_sistema": null,
+        "divisores_outros": null
+      },
+      "foto": null
+    },
+    {
+      "cenario": "fiscal-20itens",
+      "bin": "ANTES-print-fiscal-20itens-80mm.bin",
+      "bytes": 2549,
+      "writePrinter": "ok=True written=2549",
+      "linhasEst": 69,
+      "mmEst3mm": 235,
+      "mmReal": null,
+      "mmRealBlocos": {
+        "emitente_meta": null,
+        "itens": null,
+        "totais_pagamentos": null,
+        "chave_protocolo": null,
+        "qr_mensagens": null,
+        "rodape_sistema": null,
+        "divisores_outros": null
+      },
+      "foto": null
+    },
+    {
+      "cenario": "naofiscal-1item",
+      "bin": "ANTES-print-naofiscal-1item-80mm.bin",
+      "bytes": 1158,
+      "writePrinter": "ok=True written=1158",
+      "linhasEst": 30,
+      "mmEst3mm": 90,
+      "mmReal": null,
+      "mmRealBlocos": {
+        "emitente_meta": null,
+        "itens": null,
+        "totais_pagamentos": null,
+        "chave_protocolo": null,
+        "qr_mensagens": null,
+        "rodape_sistema": null,
+        "divisores_outros": null
+      },
+      "foto": null
+    },
+    {
+      "cenario": "naofiscal-5itens",
+      "bin": "ANTES-print-naofiscal-5itens-80mm.bin",
+      "bytes": 1357,
+      "writePrinter": "ok=True written=1357",
+      "linhasEst": 35,
+      "mmEst3mm": 105,
+      "mmReal": null,
+      "mmRealBlocos": {
+        "emitente_meta": null,
+        "itens": null,
+        "totais_pagamentos": null,
+        "chave_protocolo": null,
+        "qr_mensagens": null,
+        "rodape_sistema": null,
+        "divisores_outros": null
+      },
+      "foto": null
+    },
+    {
+      "cenario": "naofiscal-20itens",
+      "bin": "ANTES-print-naofiscal-20itens-80mm.bin",
+      "bytes": 2033,
+      "writePrinter": "ok=True written=2033",
+      "linhasEst": 55,
+      "mmEst3mm": 165,
+      "mmReal": null,
+      "mmRealBlocos": {
+        "emitente_meta": null,
+        "itens": null,
+        "totais_pagamentos": null,
+        "chave_protocolo": null,
+        "qr_mensagens": null,
+        "rodape_sistema": null,
+        "divisores_outros": null
+      },
+      "foto": null
+    }
+  ],
+  "fatorMmLinha": {
+    "estimadoAntes": 3.0,
+    "medido80mm": null,
+    "medido58mm": null,
+    "comoMedir": "Régua milimétrica: do topo da 1ª linha impressa até a linha do corte parcial = mmReal (total). Para fator: preferir cupom NÃO FISCAL (sem QR grande) → mmReal / linhasEst. Com fiscal: (mmReal − mmQrMedido) / linhasTexto. Espaçamento real costuma ser > altura da fonte.",
+    "correcaoAplicada": false,
+    "motivoSemCorrecao": "mmReal ainda não preenchido pelo operador (agente não tem acesso óptico à bobina)."
+  },
+  "protocoloFoto": "Salvar JPEG/PNG em docs/etapa12-amostras/fotos/ANTES-{cenario}-80mm.jpg e preencher campo foto acima.",
+  "tagsParidade": "Amostras texto em ANTES-*-{58,80}mm.tags.txt (ACBr tags). Bins = caminho ESC/POS native (paridade layout).",
+  "checklistOperador": "docs/etapa12-3-passo0-checklist.md"
+}

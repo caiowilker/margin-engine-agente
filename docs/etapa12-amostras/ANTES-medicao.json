@@ -1,0 +1,127 @@
+{
+  "mmPerLine": 3,
+  "qrMm": 28,
+  "rows": [
+    {
+      "name": "fiscal-1item-58mm",
+      "cols": 32,
+      "lines": 47,
+      "blank": 1,
+      "hasQr": true,
+      "mm": 169
+    },
+    {
+      "name": "fiscal-1item-80mm",
+      "cols": 48,
+      "lines": 46,
+      "blank": 1,
+      "hasQr": true,
+      "mm": 166
+    },
+    {
+      "name": "fiscal-20itens-58mm",
+      "cols": 32,
+      "lines": 89,
+      "blank": 1,
+      "hasQr": true,
+      "mm": 295
+    },
+    {
+      "name": "fiscal-20itens-80mm",
+      "cols": 48,
+      "lines": 69,
+      "blank": 1,
+      "hasQr": true,
+      "mm": 235
+    },
+    {
+      "name": "fiscal-5-crediario-80mm",
+      "cols": 48,
+      "lines": 50,
+      "blank": 1,
+      "hasQr": true,
+      "mm": 178
+    },
+    {
+      "name": "fiscal-5-desconto-80mm",
+      "cols": 48,
+      "lines": 51,
+      "blank": 1,
+      "hasQr": true,
+      "mm": 181
+    },
+    {
+      "name": "fiscal-5-multipag-80mm",
+      "cols": 48,
+      "lines": 51,
+      "blank": 1,
+      "hasQr": true,
+      "mm": 181
+    },
+    {
+      "name": "fiscal-5itens-58mm",
+      "cols": 32,
+      "lines": 56,
+      "blank": 1,
+      "hasQr": true,
+      "mm": 196
+    },
+    {
+      "name": "fiscal-5itens-80mm",
+      "cols": 48,
+      "lines": 51,
+      "blank": 1,
+      "hasQr": true,
+      "mm": 181
+    },
+    {
+      "name": "naofiscal-1item-80mm",
+      "cols": 48,
+      "lines": 30,
+      "blank": 1,
+      "hasQr": false,
+      "mm": 90
+    },
+    {
+      "name": "naofiscal-20itens-80mm",
+      "cols": 48,
+      "lines": 55,
+      "blank": 1,
+      "hasQr": false,
+      "mm": 165
+    },
+    {
+      "name": "naofiscal-5-crediario-80mm",
+      "cols": 48,
+      "lines": 36,
+      "blank": 1,
+      "hasQr": false,
+      "mm": 108
+    },
+    {
+      "name": "naofiscal-5-desconto-80mm",
+      "cols": 48,
+      "lines": 37,
+      "blank": 1,
+      "hasQr": false,
+      "mm": 111
+    },
+    {
+      "name": "naofiscal-5-multipag-80mm",
+      "cols": 48,
+      "lines": 37,
+      "blank": 1,
+      "hasQr": false,
+      "mm": 111
+    },
+    {
+      "name": "naofiscal-5itens-80mm",
+      "cols": 48,
+      "lines": 35,
+      "blank": 1,
+      "hasQr": false,
+      "mm": 105
+    }
+  ],
+  "nota": "QR via placeholder {{ME_QR_BMP}}. Est. Font A ~3mm/linha + QR~28mm. Sem logo. Papel real na 12-4."
+}

@@ -1,0 +1,49 @@
+</zera>
+<ce>
+<e><n>LOJA DEMO</n></e>
+LOJA DEMO LTDA
+CNPJ: 12.345.678/0001-99
+RUA EXEMPLO, 100
+SAO PAULO - SP
+</ce>
+</linha_dupla>
+<ce><n>CUPOM NAO FISCAL</n></ce>
+================================================
+Nro:                                   PDV123456
+Data:                        13/10/2026 18:00:00
+Operador:                               CAIXA 01
+------------------------------------------------
+<n>DESCRICAO                     UNIT   TOTAL</n>
+------------------------------------------------
+01 Produto Teste 1            10,50    10,50
+02 Produto Teste 2            11,00    11,00
+03 Produto Teste 3            11,50    23,00
+   2 un x R$ 11,50
+04 Produto Teste 4            12,00    12,00
+05 Produto Teste 5            12,50    12,50
+06 Produto Teste 6            13,00    26,00
+   2 un x R$ 13,00
+07 Produto Teste 7            13,50    13,50
+08 Produto Teste 8            14,00    14,00
+09 Produto Teste 9            14,50    29,00
+   2 un x R$ 14,50
+10 Produto Teste 10           15,00    15,00
+11 Produto Teste 11           15,50    15,50
+12 Produto Teste 12           16,00    32,00
+   2 un x R$ 16,00
+13 Produto Teste 13           16,50    16,50
+14 Produto Teste 14           17,00    17,00
+15 Produto Teste 15           17,50    35,00
+   2 un x R$ 17,50
+16 Produto Teste 16           18,00    18,00
+17 Produto Teste 17           18,50    18,50
+18 Produto Teste 18           19,00    38,00
+   2 un x R$ 19,00
+19 Produto Teste 19           19,50    19,50
+20 Produto Teste 20           20,00    20,00
+------------------------------------------------
+<ce><n>TOTAL: R$ 396,50</n></ce>
+------------------------------------------------
+Pagamento:                    DINHEIRO R$ 396,50
+<ce><n>Obrigado pela preferencia! Volte sempre!</n></ce>
+</corte_parcial>

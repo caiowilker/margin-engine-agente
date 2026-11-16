@@ -1,0 +1,1337 @@
+{
+  "ANTES-fiscal-1item-58mm.tags.txt": {
+    "linhasVisiveis": 37,
+    "hasQr": true,
+    "mmEst": 139,
+    "blocos": [
+      {
+        "id": "emitente",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "LOJA DEMO",
+          "LOJA DEMO LTDA"
+        ]
+      },
+      {
+        "id": "titulo_modo",
+        "linhas": 2,
+        "qr": 0,
+        "mmEst": 6,
+        "sample": [
+          "CUPOM FISCAL NFC-e",
+          "================================"
+        ]
+      },
+      {
+        "id": "meta_venda",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "Nro:                   PDV123456",
+          "Data:        13/10/2026 18:00:00"
+        ]
+      },
+      {
+        "id": "itens",
+        "linhas": 6,
+        "qr": 0,
+        "mmEst": 18,
+        "sample": [
+          "--------------------------------",
+          "ITEM                       TOTAL"
+        ]
+      },
+      {
+        "id": "totais",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "================================",
+          "TOTAL: R$ 10,50"
+        ]
+      },
+      {
+        "id": "pagamentos",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "Pagamento:     DINHEIRO R$ 10,50",
+          "Volumes:              1 item(ns)"
+        ]
+      },
+      {
+        "id": "chave_protocolo",
+        "linhas": 7,
+        "qr": 0,
+        "mmEst": 21,
+        "sample": [
+          "DOCUMENTO FISCAL NFC-e",
+          "NFC-e: 123  Serie: 1"
+        ]
+      },
+      {
+        "id": "qr_mensagens",
+        "linhas": 2,
+        "qr": 1,
+        "mmEst": 34,
+        "sample": [
+          "Consulta via QR Code",
+          "Consulte pela chave ou QR Code"
+        ]
+      },
+      {
+        "id": "rodape",
+        "linhas": 4,
+        "qr": 0,
+        "mmEst": 12,
+        "sample": [
+          "Obrigado pela preferencia!",
+          "Volte sempre!"
+        ]
+      }
+    ]
+  },
+  "ANTES-fiscal-1item-80mm.tags.txt": {
+    "linhasVisiveis": 36,
+    "hasQr": true,
+    "mmEst": 136,
+    "blocos": [
+      {
+        "id": "emitente",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "LOJA DEMO",
+          "LOJA DEMO LTDA"
+        ]
+      },
+      {
+        "id": "titulo_modo",
+        "linhas": 2,
+        "qr": 0,
+        "mmEst": 6,
+        "sample": [
+          "CUPOM FISCAL NFC-e",
+          "================================================"
+        ]
+      },
+      {
+        "id": "meta_venda",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "Nro:                                   PDV123456",
+          "Data:                        13/10/2026 18:00:00"
+        ]
+      },
+      {
+        "id": "itens",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "------------------------------------------------",
+          "DESCRICAO                     UNIT   TOTAL"
+        ]
+      },
+      {
+        "id": "totais",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "================================================",
+          "TOTAL: R$ 10,50"
+        ]
+      },
+      {
+        "id": "pagamentos",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "Pagamento:                     DINHEIRO R$ 10,50",
+          "Volumes:                              1 item(ns)"
+        ]
+      },
+      {
+        "id": "chave_protocolo",
+        "linhas": 7,
+        "qr": 0,
+        "mmEst": 21,
+        "sample": [
+          "DOCUMENTO FISCAL NFC-e",
+          "NFC-e: 123  Serie: 1"
+        ]
+      },
+      {
+        "id": "qr_mensagens",
+        "linhas": 2,
+        "qr": 1,
+        "mmEst": 34,
+        "sample": [
+          "Consulta via QR Code",
+          "Consulte pela chave ou QR Code"
+        ]
+      },
+      {
+        "id": "rodape",
+        "linhas": 4,
+        "qr": 0,
+        "mmEst": 12,
+        "sample": [
+          "Obrigado pela preferencia!",
+          "Volte sempre!"
+        ]
+      }
+    ]
+  },
+  "ANTES-fiscal-20itens-58mm.tags.txt": {
+    "linhasVisiveis": 79,
+    "hasQr": true,
+    "mmEst": 265,
+    "blocos": [
+      {
+        "id": "emitente",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "LOJA DEMO",
+          "LOJA DEMO LTDA"
+        ]
+      },
+      {
+        "id": "titulo_modo",
+        "linhas": 2,
+        "qr": 0,
+        "mmEst": 6,
+        "sample": [
+          "CUPOM FISCAL NFC-e",
+          "================================"
+        ]
+      },
+      {
+        "id": "meta_venda",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "Nro:                   PDV123456",
+          "Data:        13/10/2026 18:00:00"
+        ]
+      },
+      {
+        "id": "itens",
+        "linhas": 50,
+        "qr": 0,
+        "mmEst": 150,
+        "sample": [
+          "--------------------------------",
+          "ITEM                       TOTAL"
+        ]
+      },
+      {
+        "id": "totais",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "================================",
+          "TOTAL: R$ 396,50"
+        ]
+      },
+      {
+        "id": "pagamentos",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "Pagamento:    DINHEIRO R$ 396,50",
+          "Volumes:             26 item(ns)"
+        ]
+      },
+      {
+        "id": "chave_protocolo",
+        "linhas": 7,
+        "qr": 0,
+        "mmEst": 21,
+        "sample": [
+          "DOCUMENTO FISCAL NFC-e",
+          "NFC-e: 123  Serie: 1"
+        ]
+      },
+      {
+        "id": "qr_mensagens",
+        "linhas": 2,
+        "qr": 1,
+        "mmEst": 34,
+        "sample": [
+          "Consulta via QR Code",
+          "Consulte pela chave ou QR Code"
+        ]
+      },
+      {
+        "id": "rodape",
+        "linhas": 4,
+        "qr": 0,
+        "mmEst": 12,
+        "sample": [
+          "Obrigado pela preferencia!",
+          "Volte sempre!"
+        ]
+      }
+    ]
+  },
+  "ANTES-fiscal-20itens-80mm.tags.txt": {
+    "linhasVisiveis": 59,
+    "hasQr": true,
+    "mmEst": 205,
+    "blocos": [
+      {
+        "id": "emitente",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "LOJA DEMO",
+          "LOJA DEMO LTDA"
+        ]
+      },
+      {
+        "id": "titulo_modo",
+        "linhas": 2,
+        "qr": 0,
+        "mmEst": 6,
+        "sample": [
+          "CUPOM FISCAL NFC-e",
+          "================================================"
+        ]
+      },
+      {
+        "id": "meta_venda",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "Nro:                                   PDV123456",
+          "Data:                        13/10/2026 18:00:00"
+        ]
+      },
+      {
+        "id": "itens",
+        "linhas": 30,
+        "qr": 0,
+        "mmEst": 90,
+        "sample": [
+          "------------------------------------------------",
+          "DESCRICAO                     UNIT   TOTAL"
+        ]
+      },
+      {
+        "id": "totais",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "================================================",
+          "TOTAL: R$ 396,50"
+        ]
+      },
+      {
+        "id": "pagamentos",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "Pagamento:                    DINHEIRO R$ 396,50",
+          "Volumes:                             26 item(ns)"
+        ]
+      },
+      {
+        "id": "chave_protocolo",
+        "linhas": 7,
+        "qr": 0,
+        "mmEst": 21,
+        "sample": [
+          "DOCUMENTO FISCAL NFC-e",
+          "NFC-e: 123  Serie: 1"
+        ]
+      },
+      {
+        "id": "qr_mensagens",
+        "linhas": 2,
+        "qr": 1,
+        "mmEst": 34,
+        "sample": [
+          "Consulta via QR Code",
+          "Consulte pela chave ou QR Code"
+        ]
+      },
+      {
+        "id": "rodape",
+        "linhas": 4,
+        "qr": 0,
+        "mmEst": 12,
+        "sample": [
+          "Obrigado pela preferencia!",
+          "Volte sempre!"
+        ]
+      }
+    ]
+  },
+  "ANTES-fiscal-5-crediario-80mm.tags.txt": {
+    "linhasVisiveis": 40,
+    "hasQr": true,
+    "mmEst": 148,
+    "blocos": [
+      {
+        "id": "emitente",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "LOJA DEMO",
+          "LOJA DEMO LTDA"
+        ]
+      },
+      {
+        "id": "titulo_modo",
+        "linhas": 2,
+        "qr": 0,
+        "mmEst": 6,
+        "sample": [
+          "CUPOM FISCAL NFC-e",
+          "================================================"
+        ]
+      },
+      {
+        "id": "meta_venda",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "Nro:                                   PDV123456",
+          "Data:                        13/10/2026 18:00:00"
+        ]
+      },
+      {
+        "id": "itens",
+        "linhas": 10,
+        "qr": 0,
+        "mmEst": 30,
+        "sample": [
+          "------------------------------------------------",
+          "DESCRICAO                     UNIT   TOTAL"
+        ]
+      },
+      {
+        "id": "totais",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "================================================",
+          "TOTAL: R$ 69,00"
+        ]
+      },
+      {
+        "id": "pagamentos",
+        "linhas": 4,
+        "qr": 0,
+        "mmEst": 12,
+        "sample": [
+          "Pagamento:                     DINHEIRO R$ 20,00",
+          "Pagamento:                    CREDIARIO R$ 49,00"
+        ]
+      },
+      {
+        "id": "chave_protocolo",
+        "linhas": 7,
+        "qr": 0,
+        "mmEst": 21,
+        "sample": [
+          "DOCUMENTO FISCAL NFC-e",
+          "NFC-e: 123  Serie: 1"
+        ]
+      },
+      {
+        "id": "qr_mensagens",
+        "linhas": 2,
+        "qr": 1,
+        "mmEst": 34,
+        "sample": [
+          "Consulta via QR Code",
+          "Consulte pela chave ou QR Code"
+        ]
+      },
+      {
+        "id": "rodape",
+        "linhas": 4,
+        "qr": 0,
+        "mmEst": 12,
+        "sample": [
+          "Obrigado pela preferencia!",
+          "Volte sempre!"
+        ]
+      }
+    ]
+  },
+  "ANTES-fiscal-5-desconto-80mm.tags.txt": {
+    "linhasVisiveis": 41,
+    "hasQr": true,
+    "mmEst": 151,
+    "blocos": [
+      {
+        "id": "emitente",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "LOJA DEMO",
+          "LOJA DEMO LTDA"
+        ]
+      },
+      {
+        "id": "titulo_modo",
+        "linhas": 2,
+        "qr": 0,
+        "mmEst": 6,
+        "sample": [
+          "CUPOM FISCAL NFC-e",
+          "================================================"
+        ]
+      },
+      {
+        "id": "meta_venda",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "Nro:                                   PDV123456",
+          "Data:                        13/10/2026 18:00:00"
+        ]
+      },
+      {
+        "id": "itens",
+        "linhas": 10,
+        "qr": 0,
+        "mmEst": 30,
+        "sample": [
+          "------------------------------------------------",
+          "DESCRICAO                     UNIT   TOTAL"
+        ]
+      },
+      {
+        "id": "totais",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "Subtotal:                               R$ 69,00",
+          "Desconto:                             - R$ 15,00"
+        ]
+      },
+      {
+        "id": "pagamentos",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "Pagamento:                     DINHEIRO R$ 54,00",
+          "Volumes:                              6 item(ns)"
+        ]
+      },
+      {
+        "id": "chave_protocolo",
+        "linhas": 7,
+        "qr": 0,
+        "mmEst": 21,
+        "sample": [
+          "DOCUMENTO FISCAL NFC-e",
+          "NFC-e: 123  Serie: 1"
+        ]
+      },
+      {
+        "id": "qr_mensagens",
+        "linhas": 2,
+        "qr": 1,
+        "mmEst": 34,
+        "sample": [
+          "Consulta via QR Code",
+          "Consulte pela chave ou QR Code"
+        ]
+      },
+      {
+        "id": "rodape",
+        "linhas": 4,
+        "qr": 0,
+        "mmEst": 12,
+        "sample": [
+          "Obrigado pela preferencia!",
+          "Volte sempre!"
+        ]
+      }
+    ]
+  },
+  "ANTES-fiscal-5-multipag-80mm.tags.txt": {
+    "linhasVisiveis": 41,
+    "hasQr": true,
+    "mmEst": 151,
+    "blocos": [
+      {
+        "id": "emitente",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "LOJA DEMO",
+          "LOJA DEMO LTDA"
+        ]
+      },
+      {
+        "id": "titulo_modo",
+        "linhas": 2,
+        "qr": 0,
+        "mmEst": 6,
+        "sample": [
+          "CUPOM FISCAL NFC-e",
+          "================================================"
+        ]
+      },
+      {
+        "id": "meta_venda",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "Nro:                                   PDV123456",
+          "Data:                        13/10/2026 18:00:00"
+        ]
+      },
+      {
+        "id": "itens",
+        "linhas": 10,
+        "qr": 0,
+        "mmEst": 30,
+        "sample": [
+          "------------------------------------------------",
+          "DESCRICAO                     UNIT   TOTAL"
+        ]
+      },
+      {
+        "id": "totais",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "================================================",
+          "TOTAL: R$ 69,00"
+        ]
+      },
+      {
+        "id": "pagamentos",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "Pagamento:                     DINHEIRO R$ 20,00",
+          "Pagamento:                          PIX R$ 15,00"
+        ]
+      },
+      {
+        "id": "chave_protocolo",
+        "linhas": 7,
+        "qr": 0,
+        "mmEst": 21,
+        "sample": [
+          "DOCUMENTO FISCAL NFC-e",
+          "NFC-e: 123  Serie: 1"
+        ]
+      },
+      {
+        "id": "qr_mensagens",
+        "linhas": 2,
+        "qr": 1,
+        "mmEst": 34,
+        "sample": [
+          "Consulta via QR Code",
+          "Consulte pela chave ou QR Code"
+        ]
+      },
+      {
+        "id": "rodape",
+        "linhas": 4,
+        "qr": 0,
+        "mmEst": 12,
+        "sample": [
+          "Obrigado pela preferencia!",
+          "Volte sempre!"
+        ]
+      }
+    ]
+  },
+  "ANTES-fiscal-5itens-58mm.tags.txt": {
+    "linhasVisiveis": 46,
+    "hasQr": true,
+    "mmEst": 166,
+    "blocos": [
+      {
+        "id": "emitente",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "LOJA DEMO",
+          "LOJA DEMO LTDA"
+        ]
+      },
+      {
+        "id": "titulo_modo",
+        "linhas": 2,
+        "qr": 0,
+        "mmEst": 6,
+        "sample": [
+          "CUPOM FISCAL NFC-e",
+          "================================"
+        ]
+      },
+      {
+        "id": "meta_venda",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "Nro:                   PDV123456",
+          "Data:        13/10/2026 18:00:00"
+        ]
+      },
+      {
+        "id": "itens",
+        "linhas": 15,
+        "qr": 0,
+        "mmEst": 45,
+        "sample": [
+          "--------------------------------",
+          "ITEM                       TOTAL"
+        ]
+      },
+      {
+        "id": "totais",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "================================",
+          "TOTAL: R$ 69,00"
+        ]
+      },
+      {
+        "id": "pagamentos",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "Pagamento:     DINHEIRO R$ 69,00",
+          "Volumes:              6 item(ns)"
+        ]
+      },
+      {
+        "id": "chave_protocolo",
+        "linhas": 7,
+        "qr": 0,
+        "mmEst": 21,
+        "sample": [
+          "DOCUMENTO FISCAL NFC-e",
+          "NFC-e: 123  Serie: 1"
+        ]
+      },
+      {
+        "id": "qr_mensagens",
+        "linhas": 2,
+        "qr": 1,
+        "mmEst": 34,
+        "sample": [
+          "Consulta via QR Code",
+          "Consulte pela chave ou QR Code"
+        ]
+      },
+      {
+        "id": "rodape",
+        "linhas": 4,
+        "qr": 0,
+        "mmEst": 12,
+        "sample": [
+          "Obrigado pela preferencia!",
+          "Volte sempre!"
+        ]
+      }
+    ]
+  },
+  "ANTES-fiscal-5itens-80mm.tags.txt": {
+    "linhasVisiveis": 41,
+    "hasQr": true,
+    "mmEst": 151,
+    "blocos": [
+      {
+        "id": "emitente",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "LOJA DEMO",
+          "LOJA DEMO LTDA"
+        ]
+      },
+      {
+        "id": "titulo_modo",
+        "linhas": 2,
+        "qr": 0,
+        "mmEst": 6,
+        "sample": [
+          "CUPOM FISCAL NFC-e",
+          "================================================"
+        ]
+      },
+      {
+        "id": "meta_venda",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "Nro:                                   PDV123456",
+          "Data:                        13/10/2026 18:00:00"
+        ]
+      },
+      {
+        "id": "itens",
+        "linhas": 10,
+        "qr": 0,
+        "mmEst": 30,
+        "sample": [
+          "------------------------------------------------",
+          "DESCRICAO                     UNIT   TOTAL"
+        ]
+      },
+      {
+        "id": "totais",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "================================================",
+          "TOTAL: R$ 69,00"
+        ]
+      },
+      {
+        "id": "pagamentos",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "Pagamento:                     DINHEIRO R$ 69,00",
+          "Volumes:                              6 item(ns)"
+        ]
+      },
+      {
+        "id": "chave_protocolo",
+        "linhas": 7,
+        "qr": 0,
+        "mmEst": 21,
+        "sample": [
+          "DOCUMENTO FISCAL NFC-e",
+          "NFC-e: 123  Serie: 1"
+        ]
+      },
+      {
+        "id": "qr_mensagens",
+        "linhas": 2,
+        "qr": 1,
+        "mmEst": 34,
+        "sample": [
+          "Consulta via QR Code",
+          "Consulte pela chave ou QR Code"
+        ]
+      },
+      {
+        "id": "rodape",
+        "linhas": 4,
+        "qr": 0,
+        "mmEst": 12,
+        "sample": [
+          "Obrigado pela preferencia!",
+          "Volte sempre!"
+        ]
+      }
+    ]
+  },
+  "ANTES-naofiscal-1item-80mm.tags.txt": {
+    "linhasVisiveis": 24,
+    "hasQr": false,
+    "mmEst": 72,
+    "blocos": [
+      {
+        "id": "emitente",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "LOJA DEMO",
+          "LOJA DEMO LTDA"
+        ]
+      },
+      {
+        "id": "titulo_modo",
+        "linhas": 2,
+        "qr": 0,
+        "mmEst": 6,
+        "sample": [
+          "CUPOM NAO FISCAL",
+          "================================================"
+        ]
+      },
+      {
+        "id": "meta_venda",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "Nro:                                   PDV123456",
+          "Data:                        13/10/2026 18:00:00"
+        ]
+      },
+      {
+        "id": "itens",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "------------------------------------------------",
+          "DESCRICAO                     UNIT   TOTAL"
+        ]
+      },
+      {
+        "id": "totais",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "================================================",
+          "TOTAL: R$ 10,50"
+        ]
+      },
+      {
+        "id": "pagamentos",
+        "linhas": 2,
+        "qr": 0,
+        "mmEst": 6,
+        "sample": [
+          "Pagamento:                     DINHEIRO R$ 10,50",
+          "Volumes:                              1 item(ns)"
+        ]
+      },
+      {
+        "id": "rodape",
+        "linhas": 4,
+        "qr": 0,
+        "mmEst": 12,
+        "sample": [
+          "Obrigado pela preferencia!",
+          "Volte sempre!"
+        ]
+      }
+    ]
+  },
+  "ANTES-naofiscal-20itens-80mm.tags.txt": {
+    "linhasVisiveis": 49,
+    "hasQr": false,
+    "mmEst": 147,
+    "blocos": [
+      {
+        "id": "emitente",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "LOJA DEMO",
+          "LOJA DEMO LTDA"
+        ]
+      },
+      {
+        "id": "titulo_modo",
+        "linhas": 2,
+        "qr": 0,
+        "mmEst": 6,
+        "sample": [
+          "CUPOM NAO FISCAL",
+          "================================================"
+        ]
+      },
+      {
+        "id": "meta_venda",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "Nro:                                   PDV123456",
+          "Data:                        13/10/2026 18:00:00"
+        ]
+      },
+      {
+        "id": "itens",
+        "linhas": 30,
+        "qr": 0,
+        "mmEst": 90,
+        "sample": [
+          "------------------------------------------------",
+          "DESCRICAO                     UNIT   TOTAL"
+        ]
+      },
+      {
+        "id": "totais",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "================================================",
+          "TOTAL: R$ 396,50"
+        ]
+      },
+      {
+        "id": "pagamentos",
+        "linhas": 2,
+        "qr": 0,
+        "mmEst": 6,
+        "sample": [
+          "Pagamento:                    DINHEIRO R$ 396,50",
+          "Volumes:                             26 item(ns)"
+        ]
+      },
+      {
+        "id": "rodape",
+        "linhas": 4,
+        "qr": 0,
+        "mmEst": 12,
+        "sample": [
+          "Obrigado pela preferencia!",
+          "Volte sempre!"
+        ]
+      }
+    ]
+  },
+  "ANTES-naofiscal-5-crediario-80mm.tags.txt": {
+    "linhasVisiveis": 30,
+    "hasQr": false,
+    "mmEst": 90,
+    "blocos": [
+      {
+        "id": "emitente",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "LOJA DEMO",
+          "LOJA DEMO LTDA"
+        ]
+      },
+      {
+        "id": "titulo_modo",
+        "linhas": 2,
+        "qr": 0,
+        "mmEst": 6,
+        "sample": [
+          "CUPOM NAO FISCAL",
+          "================================================"
+        ]
+      },
+      {
+        "id": "meta_venda",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "Nro:                                   PDV123456",
+          "Data:                        13/10/2026 18:00:00"
+        ]
+      },
+      {
+        "id": "itens",
+        "linhas": 10,
+        "qr": 0,
+        "mmEst": 30,
+        "sample": [
+          "------------------------------------------------",
+          "DESCRICAO                     UNIT   TOTAL"
+        ]
+      },
+      {
+        "id": "totais",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "================================================",
+          "TOTAL: R$ 69,00"
+        ]
+      },
+      {
+        "id": "pagamentos",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "Pagamento:                     DINHEIRO R$ 20,00",
+          "Pagamento:                    CREDIARIO R$ 49,00"
+        ]
+      },
+      {
+        "id": "rodape",
+        "linhas": 4,
+        "qr": 0,
+        "mmEst": 12,
+        "sample": [
+          "Obrigado pela preferencia!",
+          "Volte sempre!"
+        ]
+      }
+    ]
+  },
+  "ANTES-naofiscal-5-desconto-80mm.tags.txt": {
+    "linhasVisiveis": 31,
+    "hasQr": false,
+    "mmEst": 93,
+    "blocos": [
+      {
+        "id": "emitente",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "LOJA DEMO",
+          "LOJA DEMO LTDA"
+        ]
+      },
+      {
+        "id": "titulo_modo",
+        "linhas": 2,
+        "qr": 0,
+        "mmEst": 6,
+        "sample": [
+          "CUPOM NAO FISCAL",
+          "================================================"
+        ]
+      },
+      {
+        "id": "meta_venda",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "Nro:                                   PDV123456",
+          "Data:                        13/10/2026 18:00:00"
+        ]
+      },
+      {
+        "id": "itens",
+        "linhas": 10,
+        "qr": 0,
+        "mmEst": 30,
+        "sample": [
+          "------------------------------------------------",
+          "DESCRICAO                     UNIT   TOTAL"
+        ]
+      },
+      {
+        "id": "totais",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "Subtotal:                               R$ 69,00",
+          "Desconto:                             - R$ 15,00"
+        ]
+      },
+      {
+        "id": "pagamentos",
+        "linhas": 2,
+        "qr": 0,
+        "mmEst": 6,
+        "sample": [
+          "Pagamento:                     DINHEIRO R$ 54,00",
+          "Volumes:                              6 item(ns)"
+        ]
+      },
+      {
+        "id": "rodape",
+        "linhas": 4,
+        "qr": 0,
+        "mmEst": 12,
+        "sample": [
+          "Obrigado pela preferencia!",
+          "Volte sempre!"
+        ]
+      }
+    ]
+  },
+  "ANTES-naofiscal-5-multipag-80mm.tags.txt": {
+    "linhasVisiveis": 31,
+    "hasQr": false,
+    "mmEst": 93,
+    "blocos": [
+      {
+        "id": "emitente",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "LOJA DEMO",
+          "LOJA DEMO LTDA"
+        ]
+      },
+      {
+        "id": "titulo_modo",
+        "linhas": 2,
+        "qr": 0,
+        "mmEst": 6,
+        "sample": [
+          "CUPOM NAO FISCAL",
+          "================================================"
+        ]
+      },
+      {
+        "id": "meta_venda",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "Nro:                                   PDV123456",
+          "Data:                        13/10/2026 18:00:00"
+        ]
+      },
+      {
+        "id": "itens",
+        "linhas": 10,
+        "qr": 0,
+        "mmEst": 30,
+        "sample": [
+          "------------------------------------------------",
+          "DESCRICAO                     UNIT   TOTAL"
+        ]
+      },
+      {
+        "id": "totais",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "================================================",
+          "TOTAL: R$ 69,00"
+        ]
+      },
+      {
+        "id": "pagamentos",
+        "linhas": 4,
+        "qr": 0,
+        "mmEst": 12,
+        "sample": [
+          "Pagamento:                     DINHEIRO R$ 20,00",
+          "Pagamento:                          PIX R$ 15,00"
+        ]
+      },
+      {
+        "id": "rodape",
+        "linhas": 4,
+        "qr": 0,
+        "mmEst": 12,
+        "sample": [
+          "Obrigado pela preferencia!",
+          "Volte sempre!"
+        ]
+      }
+    ]
+  },
+  "ANTES-naofiscal-5itens-80mm.tags.txt": {
+    "linhasVisiveis": 29,
+    "hasQr": false,
+    "mmEst": 87,
+    "blocos": [
+      {
+        "id": "emitente",
+        "linhas": 5,
+        "qr": 0,
+        "mmEst": 15,
+        "sample": [
+          "LOJA DEMO",
+          "LOJA DEMO LTDA"
+        ]
+      },
+      {
+        "id": "titulo_modo",
+        "linhas": 2,
+        "qr": 0,
+        "mmEst": 6,
+        "sample": [
+          "CUPOM NAO FISCAL",
+          "================================================"
+        ]
+      },
+      {
+        "id": "meta_venda",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "Nro:                                   PDV123456",
+          "Data:                        13/10/2026 18:00:00"
+        ]
+      },
+      {
+        "id": "itens",
+        "linhas": 10,
+        "qr": 0,
+        "mmEst": 30,
+        "sample": [
+          "------------------------------------------------",
+          "DESCRICAO                     UNIT   TOTAL"
+        ]
+      },
+      {
+        "id": "totais",
+        "linhas": 3,
+        "qr": 0,
+        "mmEst": 9,
+        "sample": [
+          "================================================",
+          "TOTAL: R$ 69,00"
+        ]
+      },
+      {
+        "id": "pagamentos",
+        "linhas": 2,
+        "qr": 0,
+        "mmEst": 6,
+        "sample": [
+          "Pagamento:                     DINHEIRO R$ 69,00",
+          "Volumes:                              6 item(ns)"
+        ]
+      },
+      {
+        "id": "rodape",
+        "linhas": 4,
+        "qr": 0,
+        "mmEst": 12,
+        "sample": [
+          "Obrigado pela preferencia!",
+          "Volte sempre!"
+        ]
+      }
+    ]
+  }
+}

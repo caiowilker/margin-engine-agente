@@ -1,0 +1,12 @@
+{
+  "when": "2026-10-13T21:50:45.263Z",
+  "printer": "POSPrinter POS80",
+  "porta": "RAW:POSPrinter POS80",
+  "paperMm": 80,
+  "cols": 48,
+  "pageCode": 2,
+  "scenario": "fiscal-5itens",
+  "ok": false,
+  "error": "Nenhuma impressora disponivel.\n  - usb: usb.getDeviceList is not a function\n  - network: Impressora de rede inacessivel.\n  - windows: Nenhuma impressora Windows encontrada.\nDica: salve a impressora correta em Configuração → Impressão (RAW ou TCP com IP com pontos).",
+  "nota58mm": "Nenhuma impressora 58 mm listada no Windows (Get-Printer). Baseline 58 mm fica só em .tags.txt até haver hardware."
+}

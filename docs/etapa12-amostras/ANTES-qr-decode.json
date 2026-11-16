@@ -1,0 +1,32 @@
+{
+  "metodo": "geracao_deterministica_qr-image + payload canônico das amostras ANTES",
+  "payloadEsperado": "https://www.nfce.fazenda.sp.gov.br/qrcode?p=35261012345678000199650010000001231000001234|2|1|1|A1B2C3D4E5F6789012345678901234567890ABCD",
+  "pngBytes": 1010,
+  "pngPath": "docs/etapa12-amostras/ANTES-qr-baseline.png",
+  "txtPath": "docs/etapa12-amostras/ANTES-qr-baseline.txt",
+  "decodeAutomatico": {
+    "ok": true,
+    "resultado": "https://www.nfce.fazenda.sp.gov.br/qrcode?p=35261012345678000199650010000001231000001234|2|1|1|A1B2C3D4E5F6789012345678901234567890ABCD",
+    "ferramenta": "round-trip qr-image → PNG (mesmo payload dos .tags.txt / ESC/POS). Ambiente sem jsqr/zbarimg para OCR óptico do PNG.",
+    "matchPayloadEsperado": true
+  },
+  "decodeCelular": {
+    "status": "PENDENTE_OPERADOR",
+    "bloqueiaReducaoQr": true,
+    "instrucao": "Ler QR no PAPEL fiscal impresso (POS80), não só o PNG. Informar URL de ≥2 celulares diferentes antes de qualquer redução de módulo QR na 12-3b.",
+    "resultado": null,
+    "celular1": { "modelo": null, "resultado": null, "ok": null },
+    "celular2": { "modelo": null, "resultado": null, "ok": null },
+    "impressaoFisicaEnfileirada": true,
+    "jobs": [
+      "ANTES-print-fiscal-1item-80mm.bin",
+      "ANTES-print-fiscal-5itens-80mm.bin",
+      "ANTES-print-fiscal-20itens-80mm.bin"
+    ]
+  },
+  "referenciaAntes": {
+    "chave": "35261012345678000199650010000001231000001234",
+    "ufPortal": "SP",
+    "nota": "Baseline ANTES — não alterar payload na compactação 12-3; só apresentação."
+  }
+}

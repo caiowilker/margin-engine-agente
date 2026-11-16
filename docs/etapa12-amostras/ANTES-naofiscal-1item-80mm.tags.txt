@@ -1,0 +1,29 @@
+</zera>
+<ce>
+<e><n>LOJA DEMO</n></e>
+LOJA DEMO LTDA
+CNPJ: 12.345.678/0001-99
+RUA EXEMPLO, 100
+SAO PAULO - SP
+</ce>
+</linha_dupla>
+<ce><n>CUPOM NAO FISCAL</n></ce>
+================================================
+Nro:                                   PDV123456
+Data:                        13/10/2026 18:00:00
+Operador:                               CAIXA 01
+------------------------------------------------
+<n>DESCRICAO                     UNIT   TOTAL</n>
+------------------------------------------------
+01 Produto Teste 1            10,50    10,50
+------------------------------------------------
+================================================
+<ce><n>TOTAL: R$ 10,50</n></ce>
+================================================
+Pagamento:                     DINHEIRO R$ 10,50
+Volumes:                              1 item(ns)
+</linha_simples>
+<ce><n>Obrigado pela preferencia!</n></ce>
+<ce><n>Volte sempre!</n></ce>
+<ce><n>PDV Margin Engine</n></ce>
+</corte_parcial>

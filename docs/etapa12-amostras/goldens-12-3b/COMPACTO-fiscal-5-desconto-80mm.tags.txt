@@ -1,0 +1,40 @@
+</zera>
+<ce>
+<e><n>LOJA DEMO</n></e>
+LOJA DEMO LTDA
+CNPJ: 12.345.678/0001-99
+RUA EXEMPLO, 100
+SAO PAULO - SP
+</ce>
+</linha_dupla>
+<ce><n>CUPOM FISCAL NFC-e</n></ce>
+================================================
+Nro:                                   PDV123456
+Data:                        13/10/2026 18:00:00
+Operador:                               CAIXA 01
+------------------------------------------------
+<n>DESCRICAO                     UNIT   TOTAL</n>
+------------------------------------------------
+01 Produto Teste 1            10,50    10,50
+02 Produto Teste 2            11,00    11,00
+03 Produto Teste 3            11,50    23,00
+   2 un x R$ 11,50
+04 Produto Teste 4            12,00    12,00
+05 Produto Teste 5            12,50    12,50
+------------------------------------------------
+Subtotal:                               R$ 69,00
+<n>Desconto:                             - R$ 15,00</n>
+<ce><n>TOTAL: R$ 54,00</n></ce>
+------------------------------------------------
+Pagamento:                     DINHEIRO R$ 54,00
+Volumes:                              6 item(ns)
+<ce><n>DOCUMENTO FISCAL NFC-e</n></ce>
+NFC-e: 123  Serie: 1  Protocolo: 135260000012345
+<ce><n>Chave de acesso</n></ce>
+<ce><n>3526 1012 3456 7800 0199 6500 1000 0001 2310</n></ce>
+<ce><n>0000 1234</n></ce>
+<ce><n>Consulte em www.nfce.fazenda.sp.gov.br</n></ce>
+{{ME_QR_BMP}}
+<ce><n>Obrigado pela preferencia! Volte sempre!</n></ce>
+<ce><n>PDV Margin Engine</n></ce>
+</corte_parcial>

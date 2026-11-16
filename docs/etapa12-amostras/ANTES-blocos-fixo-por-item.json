@@ -1,0 +1,115 @@
+{
+  "mmPerLine": 3,
+  "qrMm": 28,
+  "nota": "Derivado de ANTES-blocos.json (linhas visíveis + QR). Consumidor está embutido em meta_venda quando Cliente/CPF presentes. Tributos/IBPT ausentes nestas amostras (sem vTotTrib no payload).",
+  "fiscal80mm": {
+    "1item": {
+      "fixaLinhas": 31,
+      "fixaMm": 93,
+      "itensLinhas": 5,
+      "itensMm": 15,
+      "qrMm": 28,
+      "totalMmEst": 136,
+      "linhasPorItemAprox": 1,
+      "overheadCabecalhoItens": 3
+    },
+    "5itens": {
+      "fixaLinhas": 31,
+      "fixaMm": 93,
+      "itensLinhas": 10,
+      "itensMm": 30,
+      "qrMm": 28,
+      "totalMmEst": 151,
+      "linhasPorItemAprox": 1.4,
+      "nota": "Item com qty>1 gera linha extra 'N un x R$'."
+    },
+    "20itens": {
+      "fixaLinhas": 29,
+      "fixaMm": 87,
+      "itensLinhas": 30,
+      "itensMm": 90,
+      "qrMm": 28,
+      "totalMmEst": 205,
+      "linhasPorItemAprox": 1.35
+    }
+  },
+  "fiscal58mm": {
+    "1item": {
+      "fixaLinhas": 31,
+      "fixaMm": 93,
+      "itensLinhas": 6,
+      "itensMm": 18,
+      "qrMm": 28,
+      "totalMmEst": 139,
+      "linhasPorItemAprox": 2
+    },
+    "5itens": {
+      "fixaLinhas": 31,
+      "fixaMm": 93,
+      "itensLinhas": 15,
+      "itensMm": 45,
+      "qrMm": 28,
+      "totalMmEst": 166,
+      "linhasPorItemAprox": 2.4
+    },
+    "20itens": {
+      "fixaLinhas": 29,
+      "fixaMm": 87,
+      "itensLinhas": 50,
+      "itensMm": 150,
+      "qrMm": 28,
+      "totalMmEst": 265,
+      "linhasPorItemAprox": 2.35
+    }
+  },
+  "rankingDesperdicioFixo_ref5itens80mm": [
+    {
+      "bloco": "qr_mensagens",
+      "mmEst": 34,
+      "motivo": "QR ~28 mm + 2 linhas texto redundantes ('Consulta via QR Code' / 'Consulte pela chave ou QR Code')"
+    },
+    {
+      "bloco": "chave_protocolo",
+      "mmEst": 21,
+      "motivo": "Título DOCUMENTO FISCAL + nNF/série + protocolo + rótulo chave + 2 linhas chave + portal"
+    },
+    {
+      "bloco": "emitente",
+      "mmEst": 15,
+      "motivo": "Fantasia expandida + razão + CNPJ + endereço + cidade (sem IE)"
+    },
+    {
+      "bloco": "meta_venda_consumidor",
+      "mmEst": 15,
+      "motivo": "Nro/Data/Operador + Cliente/CPF (consumidor embutido)"
+    },
+    {
+      "bloco": "rodape",
+      "mmEst": 12,
+      "motivo": "3 mensagens sistema + respiro — só sistema"
+    },
+    {
+      "bloco": "totais_divisores",
+      "mmEst": 9,
+      "motivo": "Linhas = + TOTAL"
+    },
+    {
+      "bloco": "pagamentos",
+      "mmEst": 9,
+      "motivo": "Pagamento + Volumes (Volumes não é Divisão III do manual)"
+    },
+    {
+      "bloco": "titulo_modo",
+      "mmEst": 6,
+      "motivo": "CUPOM FISCAL NFC-e + divisor (texto canônico DANFE ausente)"
+    }
+  ],
+  "prioridadeCompactacao12_3": [
+    "1. qr_mensagens (texto duplicado; QR ≥25×25 mm NÃO reduzir abaixo do mínimo legal)",
+    "2. chave_protocolo (rótulos/duplicidade — preservar chave 11×4, portal, protocolo)",
+    "3. rodape sistema (candidato forte a remoção/encolhimento — não fiscal)",
+    "4. divisores =/- e Volumes",
+    "5. itens só via Font B/condensado/espaçamento (sem remover campos obrigatórios Div II)",
+    "6. emitente/meta só após confirmação contador (IE, texto 'Documento Auxiliar…')"
+  ]
+}

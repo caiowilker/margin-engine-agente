@@ -1,0 +1,47 @@
+{
+  "when": "2026-10-13T21:51:46.110Z",
+  "printer": "POSPrinter POS80",
+  "driver": "POSPrinter POS80",
+  "port": "USB001",
+  "paperMm": 80,
+  "cols": 48,
+  "font": "A",
+  "pageCodeAcbr": 2,
+  "encodingEscpos": "CP860",
+  "dpiAssumed": 203,
+  "fontADotsPerLine": 24,
+  "mmPerLineTheoretical": 3,
+  "jobs": [
+    {
+      "name": "fiscal-1item",
+      "bytes": 1674,
+      "print": "ok=True written=1674"
+    },
+    {
+      "name": "fiscal-5itens",
+      "bytes": 1873,
+      "print": "ok=True written=1873"
+    },
+    {
+      "name": "fiscal-20itens",
+      "bytes": 2549,
+      "print": "ok=True written=2549"
+    },
+    {
+      "name": "naofiscal-1item",
+      "bytes": 1158,
+      "print": "ok=True written=1158"
+    },
+    {
+      "name": "naofiscal-5itens",
+      "bytes": 1357,
+      "print": "ok=True written=1357"
+    },
+    {
+      "name": "naofiscal-20itens",
+      "bytes": 2033,
+      "print": "ok=True written=2033"
+    }
+  ],
+  "rulerProtocol": "Com régua milimétrica, medir do topo da 1ª linha impressa até a linha do corte parcial. Anotar em ANTES-baseline-fisico.json campo mmReal. Tirar foto do papel e salvar em docs/etapa12-amostras/fotos/."
+}
