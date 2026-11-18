@@ -342,7 +342,7 @@ function writeDefaultConfigs() {
   };
 
   const printCfg = {
-    provider: "acbr-posprinter",
+    provider: "native",
     fallback: "native",
     autoDetect: true,
     porta: "",

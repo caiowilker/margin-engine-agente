@@ -93,7 +93,7 @@ function aplicarConfigInstalador(cfg = {}) {
   const printerLocalConfig = require("./printerLocalConfig");
   const portaInformada = String(cfg.porta || "").trim();
   const payload = {
-    provider: cfg.provider || "acbr-posprinter",
+    provider: cfg.provider || "native",
     tipo: "auto",
     encoding: cfg.encoding || "UTF8",
     cut: cfg.cut || "partial",
@@ -305,8 +305,8 @@ function noBoot(delayMs = 2500) {
 
     // Continue with auto-detection after delay
     setTimeout(async () => {
-      const tipo = String(process.env.PRINTER_PROVIDER || "acbr-posprinter").toLowerCase();
-      if (!tipo.includes("acbr") && tipo !== "posprinter") {
+      const tipo = String(process.env.PRINTER_PROVIDER || "native").toLowerCase();
+      if (tipo === "mock") {
         resolve();
         return;
       }

@@ -177,7 +177,7 @@ Defaults: `print/posPrinterIniDefaults.js`.
 
 | Variável | Descrição |
 |----------|-----------|
-| `PRINTER_PROVIDER` | `acbr-posprinter` (padrão) |
+| `PRINTER_PROVIDER` | `native` (padrão do sistema); `acbr-posprinter` opcional |
 | `ACBR_POSPRINTER_LIB_PATH` | `ACBrPosPrinter64.dll` |
 | `ACBR_POSPRINTER_INI` | SSOT `%ProgramData%\MarginEngine\Config\posprinter.ini` |
 | `ACBR_POS_WORKER` | `true` = FFI no worker (padrão) |

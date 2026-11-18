@@ -361,7 +361,7 @@ function ler(opts = {}) {
     cupomLayoutPerfis = require("./cupomLayoutProfile").listarPerfisPublico();
   } catch (_) {}
   const value = {
-    provider: process.env.PRINTER_PROVIDER || "acbr-posprinter",
+    provider: process.env.PRINTER_PROVIDER || "native",
     fallback: process.env.PRINTER_FALLBACK || "native",
     tipo: process.env.PRINTER_TYPE || "auto",
     encoding: process.env.PRINTER_ENCODING || "UTF8",
@@ -834,7 +834,7 @@ function salvarSemPorta(updates) {
   if (!updates || typeof updates !== "object") throw new Error("Payload inválido");
 
   const envPatch = {
-    PRINTER_PROVIDER: String(updates.provider || "acbr-posprinter"),
+    PRINTER_PROVIDER: String(updates.provider || "native"),
     PRINTER_TYPE: "auto",
     PRINTER_ENCODING: updates.encoding || "UTF8",
     PRINTER_CUT: updates.cut || "partial",

@@ -25,7 +25,7 @@ let cachedName = null;
 let cachedEffectiveName = null;
 
 function normalizeProviderName(raw) {
-  const key = String(raw || "acbr-posprinter")
+  const key = String(raw || "native")
     .trim()
     .toLowerCase();
   return ALIASES[key] || key;
@@ -36,7 +36,7 @@ function resolveProviderName() {
     process.env.PRINTER_PROVIDER ||
     process.env.PRINT_DRIVER ||
     process.env.PRINTER_DRIVER ||
-    "acbr-posprinter";
+    "native";
   return normalizeProviderName(fromEnv);
 }
 

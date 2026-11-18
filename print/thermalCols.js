@@ -64,6 +64,20 @@ function padL(txt, len) {
   return String(txt ?? "").slice(0, len).padStart(len);
 }
 
+/** Código e descrição com respiro curto e idêntico em ACBr e ESC/POS. */
+function buildCupomItemDescription(codigo, nome) {
+  const cod = String(codigo || "").trim();
+  const descricao = String(nome || "").trim();
+  if (
+    cod &&
+    descricao &&
+    cod.toLocaleUpperCase("pt-BR") !== descricao.toLocaleUpperCase("pt-BR")
+  ) {
+    return `${cod}  ${descricao}`;
+  }
+  return descricao || cod || "Item";
+}
+
 function col2(esq, dir, cols = getThermalCols()) {
   const e = String(esq ?? "");
   const d = String(dir ?? "");
@@ -112,20 +126,33 @@ function buildCupomItemLines(opts) {
   const num = String(idx + 1).padStart(2, "0");
 
   if (!isNarrowThermal(cols)) {
-    // 80mm: DESCRICAO(26) + UNIT(8) + TOTAL(8) = 42
-    return [num + " " + padR(nome, 23) + padL(valUnit, 9) + padL(valTotal, 9)];
+    // Duas colunas de respiro depois do número; valores permanecem alinhados.
+    const prefix = `${num}  `;
+    const unitWidth = 9;
+    const totalWidth = 10;
+    const nameWidth = Math.max(8, cols - prefix.length - unitWidth - totalWidth);
+    return [
+      prefix +
+        padR(nome, nameWidth) +
+        padL(valUnit, unitWidth) +
+        padL(valTotal, totalWidth),
+    ];
   }
 
   // 58mm: nome na 1ª linha; unit/total na 2ª.
-  const nameBudget = Math.max(8, cols - 3);
-  const lines = [`${num} ${nome.slice(0, nameBudget)}`];
+  const nameBudget = Math.max(8, cols - 4);
+  const lines = [`${num}  ${nome.slice(0, nameBudget)}`];
   lines.push(col2(`  ${valUnit}`, valTotal, cols));
   return lines;
 }
 
 function buildCupomItemHeader(cols = getThermalCols()) {
   if (!isNarrowThermal(cols)) {
-    return padR("DESCRICAO", 26) + padL("UNIT", 8) + padL("TOTAL", 8);
+    const unitWidth = 9;
+    const totalWidth = 10;
+    return padR("DESCRICAO", cols - unitWidth - totalWidth)
+      + padL("UNIT", unitWidth)
+      + padL("TOTAL", totalWidth);
   }
   return col2("ITEM", "TOTAL", cols);
 }
@@ -151,6 +178,7 @@ module.exports = {
   sepDash,
   padR,
   padL,
+  buildCupomItemDescription,
   col2,
   formatChaveLines,
   buildCupomItemLines,

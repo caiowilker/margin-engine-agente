@@ -9,6 +9,7 @@ const {
   isNarrowThermal,
   formatChaveLines,
   buildCupomItemLines,
+  buildCupomItemDescription,
   buildCupomItemHeader,
   col2,
   sepEq,
@@ -75,6 +76,11 @@ describe("thermalCols", () => {
     for (const line of narrow) {
       assert.ok(line.length <= 32, line);
     }
+  });
+
+  it("separa código e descrição sem desperdiçar papel", () => {
+    assert.equal(buildCupomItemDescription("0000111", "PEQUI"), "0000111  PEQUI");
+    assert.equal(buildCupomItemDescription("", "PEQUI"), "PEQUI");
   });
 
   it("header e sep respeitam cols", () => {

@@ -542,10 +542,10 @@ const CATALOGO = {
   printerProvider: {
     env: "PRINTER_PROVIDER",
     tipo: "string",
-    default: "acbr-posprinter",
+    default: "native",
     enum: ["acbr-posprinter", "native", "mock"],
     grupo: "impressora",
-    label: "Provider de impressão (ACBr PosPrinter / ESC/POS)",
+    label: "Impressão (sistema / ACBr PosPrinter)",
   },
   printerFallback: {
     env: "PRINTER_FALLBACK",

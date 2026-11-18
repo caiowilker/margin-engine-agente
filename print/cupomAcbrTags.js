@@ -28,6 +28,7 @@ const {
   formatChaveLines,
   buildCupomItemLines,
   buildCupomItemHeader,
+  buildCupomItemDescription,
 } = require("./thermalCols");
 
 const LABEL_PGTO = {
@@ -213,7 +214,7 @@ function renderCupomTags(rawPayload) {
   lines.push(sepDash());
 
   itens.forEach((item, idx) => {
-    const nome = tx(String(item.nome || item.codigo || "Item"));
+    const nome = tx(buildCupomItemDescription(item.codigo, item.nome));
     const total = item.total ?? Number(item.precoUnitario) * Number(item.quantidade);
     const valUnit = Number(item.precoUnitario).toLocaleString("pt-BR", {
       minimumFractionDigits: 2,

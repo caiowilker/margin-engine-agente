@@ -2158,6 +2158,7 @@ const {
   col2: thermalCol2,
   formatChaveLines,
   buildCupomItemLines,
+  buildCupomItemDescription,
   buildCupomItemHeader,
 } = require("../thermalCols");
 
@@ -2619,7 +2620,7 @@ async function renderCupomConteudo(printer, payload) {
   printer.text(sepDash());
 
   itens.forEach((item, idx) => {
-    const nome = tx(String(item.nome || item.codigo || "Item"));
+    const nome = tx(buildCupomItemDescription(item.codigo, item.nome));
     const total = item.total ?? item.precoUnitario * item.quantidade;
     const valUnit = Number(item.precoUnitario).toLocaleString("pt-BR", {
       minimumFractionDigits: 2,
