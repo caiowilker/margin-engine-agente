@@ -54,7 +54,11 @@ function lerCupomLayoutPerfil() {
     return normalizarPerfilId(process.env.PRINT_CUPOM_LAYOUT_PERFIL);
   }
   const j = lerCupomLayoutSidecar();
-  return normalizarPerfilId(j.perfil || j.cupomLayoutPerfil || "PADRAO");
+  if (j.perfil || j.cupomLayoutPerfil) {
+    return normalizarPerfilId(j.perfil || j.cupomLayoutPerfil);
+  }
+  const paperMm = paperMmFromColunas(lerIniValores(resolveIniPath()).colunas);
+  return paperMm <= 58 ? "PADRAO" : "COMPACTO";
 }
 
 /** Font B / EspacoEntreLinhas — default off; ativar só após teste impresso. */
@@ -76,7 +80,8 @@ function lerCupomLayoutExtras() {
   const shrinkQr =
     String(process.env.PRINT_CUPOM_SHRINK_QR || "").toLowerCase() === "true" ||
     j.shrinkQr === true;
-  return { fontB, espacoEntreLinhas, shrinkQr };
+  const cupomFiscalCompactoLiberado = j.cupomFiscalCompactoLiberado !== false;
+  return { fontB, espacoEntreLinhas, shrinkQr, cupomFiscalCompactoLiberado };
 }
 
 function salvarCupomLayoutPerfil(perfilId, extras = {}) {
@@ -113,6 +118,10 @@ function salvarCupomLayoutPerfil(perfilId, extras = {}) {
         perfil: id,
         fontB: !!fontB,
         shrinkQr: !!shrinkQr,
+        cupomFiscalCompactoLiberado:
+          extras.cupomFiscalCompactoLiberado !== undefined
+            ? extras.cupomFiscalCompactoLiberado === true
+            : prev.cupomFiscalCompactoLiberado !== false,
         espacoEntreLinhas,
         atualizadoEm: new Date().toISOString(),
         perfis: listarPerfisPublico(),
@@ -365,6 +374,7 @@ function ler(opts = {}) {
     cupomLayoutFontB: layoutExtras.fontB === true,
     cupomLayoutEspacoEntreLinhas: layoutExtras.espacoEntreLinhas,
     cupomLayoutShrinkQr: layoutExtras.shrinkQr === true,
+    cupomFiscalCompactoLiberado: layoutExtras.cupomFiscalCompactoLiberado === true,
     pageCode: ini.pageCode,
     barcodeDialect:
       process.env.PRINTER_BARCODE_DIALECT ||
@@ -764,8 +774,10 @@ function salvar(updates) {
     updates.cupomLayoutPerfil != null ||
     updates.cupomLayoutFontB != null ||
     updates.cupomLayoutEspacoEntreLinhas !== undefined ||
-    updates.cupomLayoutShrinkQr != null;
+    updates.cupomLayoutShrinkQr != null ||
+    updates.cupomFiscalCompactoLiberado != null;
   if (layoutUpdate) {
+    const beforePerfilFileExists = fs.existsSync(resolveCupomLayoutPerfilPath());
     const beforePerfil = lerCupomLayoutPerfil();
     const beforeExtras = JSON.stringify(lerCupomLayoutExtras());
     const afterPerfil = salvarCupomLayoutPerfil(
@@ -776,9 +788,11 @@ function salvar(updates) {
         fontB: updates.cupomLayoutFontB,
         espacoEntreLinhas: updates.cupomLayoutEspacoEntreLinhas,
         shrinkQr: updates.cupomLayoutShrinkQr,
+        cupomFiscalCompactoLiberado: updates.cupomFiscalCompactoLiberado,
       },
     );
     perfilChanged =
+      !beforePerfilFileExists ||
       beforePerfil !== afterPerfil ||
       beforeExtras !== JSON.stringify(lerCupomLayoutExtras());
   }

@@ -120,11 +120,13 @@ function renderCupomTags(rawPayload) {
   let paperMm = 80;
   let fontBCfg = false;
   let espacoCfg = null;
+  let fiscalCompactoCfg = false;
   try {
     const lc = require("./printerLocalConfig").ler();
     paperMm = Number(lc?.paperMm) || 80;
     fontBCfg = lc?.cupomLayoutFontB === true;
     espacoCfg = lc?.cupomLayoutEspacoEntreLinhas;
+    fiscalCompactoCfg = lc?.cupomFiscalCompactoLiberado === true;
   } catch (_) {}
   const perfilCfg =
     payload.cupomLayoutPerfil ||
@@ -141,6 +143,7 @@ function renderCupomTags(rawPayload) {
     paperMm,
     fontB: fontBCfg,
     espacoEntreLinhas: espacoCfg,
+    cupomFiscalCompactoLiberado: fiscalCompactoCfg,
   });
   const compacto = profile.id !== "PADRAO";
   // Font B / EspacoEntreLinhas: só se override terminal (default off). ACBr:
@@ -241,8 +244,14 @@ function renderCupomTags(rawPayload) {
   });
 
   const desconto = Number(payload.desconto || 0);
+  const encargos = Array.isArray(payload.encargos)
+    ? payload.encargos.filter((e) => Number(e?.valor || 0) > 0)
+    : [];
+  const acrescimo = encargos.length > 0
+    ? encargos.reduce((s, e) => s + Number(e.valor || 0), 0)
+    : Number(payload.acrescimo || 0);
   const totalFinal = Number(payload.total || 0);
-  const subtotal = totalFinal + desconto;
+  const subtotal = totalFinal + desconto - acrescimo;
   const pagamentos =
     Array.isArray(payload.pagamentos) && payload.pagamentos.length > 0
       ? payload.pagamentos
@@ -267,9 +276,18 @@ function renderCupomTags(rawPayload) {
   }
 
   lines.push(sepDash());
-  if (desconto > 0) {
+  if (desconto > 0 || acrescimo > 0) {
     lines.push(corpo(col2("Subtotal:", fmtR$(subtotal))));
+  }
+  if (desconto > 0) {
     lines.push(destaque(col2("Desconto:", "- " + fmtR$(desconto))));
+  }
+  if (encargos.length > 0) {
+    for (const e of encargos) {
+      lines.push(destaque(col2(`${String(e.descricao || "Acréscimo").slice(0, 28)}:`, "+ " + fmtR$(e.valor))));
+    }
+  } else if (acrescimo > 0) {
+    lines.push(destaque(col2("Acréscimo:", "+ " + fmtR$(acrescimo))));
   }
   if (!(compacto && profile.collapseTotalSeps)) {
     lines.push(sepEq());

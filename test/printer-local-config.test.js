@@ -36,7 +36,7 @@ test("ler — defaults quando INI ausente", () => {
   const l = cfg.ler();
   assert.strictEqual(l.provider, "acbr-posprinter");
   assert.ok(l.iniPath);
-  assert.strictEqual(l.cupomLayoutPerfil || "PADRAO", "PADRAO");
+  assert.strictEqual(l.cupomLayoutPerfil, "COMPACTO");
 });
 
 test("salvar — cupomLayoutPerfil Compacto em sidecar (80mm)", () => {

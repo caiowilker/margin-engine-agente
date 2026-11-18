@@ -2484,11 +2484,13 @@ async function renderCupomConteudo(printer, payload) {
   let paperMmEsc = 80;
   let fontBEsc = false;
   let espacoEsc = null;
+  let fiscalCompactoEsc = false;
   try {
     const lcEsc = require("../printerLocalConfig").ler();
     paperMmEsc = Number(lcEsc?.paperMm) || 80;
     fontBEsc = lcEsc?.cupomLayoutFontB === true;
     espacoEsc = lcEsc?.cupomLayoutEspacoEntreLinhas;
+    fiscalCompactoEsc = lcEsc?.cupomFiscalCompactoLiberado === true;
   } catch (_) {}
   const perfilCfgEsc =
     payload.cupomLayoutPerfil ||
@@ -2505,6 +2507,7 @@ async function renderCupomConteudo(printer, payload) {
     paperMm: paperMmEsc,
     fontB: fontBEsc,
     espacoEntreLinhas: espacoEsc,
+    cupomFiscalCompactoLiberado: fiscalCompactoEsc,
   });
   const compacto = profile.id !== "PADRAO";
   // Font B / EspacoEntreLinhas: override terminal only (default off) — não forçar.
@@ -2652,8 +2655,14 @@ async function renderCupomConteudo(printer, payload) {
 
   // ── 5. Totais ────────────────────────────────────────────────────────────────
   const desconto = Number(payload.desconto || 0);
+  const encargos = Array.isArray(payload.encargos)
+    ? payload.encargos.filter((e) => Number(e?.valor || 0) > 0)
+    : [];
+  const acrescimo = encargos.length > 0
+    ? encargos.reduce((s, e) => s + Number(e.valor || 0), 0)
+    : Number(payload.acrescimo || 0);
   const totalFinal = Number(payload.total || 0);
-  const subtotal = totalFinal + desconto;
+  const subtotal = totalFinal + desconto - acrescimo;
   const valorRecebido = Number(payload.valorRecebido || 0);
   const troco = Number(
     payload.troco ??
@@ -2662,12 +2671,21 @@ async function renderCupomConteudo(printer, payload) {
 
   printer.align("lt").text(sepDash());
 
-  if (desconto > 0) {
+  if (desconto > 0 || acrescimo > 0) {
     printer.text(col2("Subtotal:", fmtR$(subtotal)));
+  }
+  if (desconto > 0) {
     printer
       .style("b")
       .text(col2("Desconto:", "- " + fmtR$(desconto)))
       .style("normal");
+  }
+  if (encargos.length > 0) {
+    for (const e of encargos) {
+      printer.style("b").text(col2(`${String(e.descricao || "Acréscimo").slice(0, 28)}:`, "+ " + fmtR$(e.valor))).style("normal");
+    }
+  } else if (acrescimo > 0) {
+    printer.style("b").text(col2("Acréscimo:", "+ " + fmtR$(acrescimo))).style("normal");
   }
 
   // ── TOTAL — destaque com bold, tamanho normal para respeitar largura do papel ─
